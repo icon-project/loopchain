@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from enum import Enum
+
 import verboselogs
 
-from enum import Enum
 from loopchain import configure as conf
 from loopchain.utils.loggers.configuration import LogConfiguration
-
 
 develop = LogConfiguration()
 develop.log_format = conf.LOG_FORMAT

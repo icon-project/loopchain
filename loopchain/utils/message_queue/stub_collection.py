@@ -13,8 +13,8 @@
 # limitations under the License.
 
 import logging
+from typing import TYPE_CHECKING, Dict
 
-from typing import Dict, TYPE_CHECKING
 from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:

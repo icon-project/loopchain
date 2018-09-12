@@ -25,7 +25,6 @@ from loopchain import configure as conf
 from loopchain.baseservice import CommonThread, ObjectManager
 from loopchain.tools.grpc_helper import GRPCHelper
 
-
 # Changing the import location will cause a pickle error.
 
 

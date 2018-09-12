@@ -16,12 +16,11 @@ import json
 import logging
 
 import loopchain.utils as util
+# Changing the import location will cause a pickle error.
+import loopchain_pb2
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.protos import loopchain_pb2_grpc, message_code
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class AdminService(loopchain_pb2_grpc.RadioStationServicer):

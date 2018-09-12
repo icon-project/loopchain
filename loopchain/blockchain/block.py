@@ -25,11 +25,12 @@ from ordered_set import OrderedSet
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import TransactionStatus, Transaction
+from loopchain.baseservice import ObjectManager, ScoreResponse
+from loopchain.blockchain import Transaction, TransactionStatus
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
-from loopchain.blockchain.validator import get_tx_validator, get_genesis_tx_validator
+from loopchain.blockchain.validator import (get_genesis_tx_validator,
+                                            get_tx_validator)
 
 
 class BlockStatus(Enum):

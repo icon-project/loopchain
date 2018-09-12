@@ -21,6 +21,7 @@ import logging
 import pickle
 import re
 import traceback
+
 from secp256k1 import PrivateKey, PublicKey
 
 import loopchain.utils as util
@@ -30,6 +31,7 @@ from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 from loopchain.tools.signature_helper import PublicVerifierContainer
+
 from .. import HashGenerator
 
 

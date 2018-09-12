@@ -25,9 +25,7 @@ configure_user.py 는 git 에서는 관리하지 않는다.
 
 import os
 import sys
-
 from enum import IntEnum, IntFlag, auto
-
 
 LOOPCHAIN_ROOT_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 PATH_PROTO_BUFFERS = "loopchain/protos"

@@ -21,13 +21,13 @@ import json
 import logging
 import struct
 import time
-
 from enum import Enum
 from typing import Dict
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain import get_tx_hash_generator
+
 from . import TransactionInvalidParamError
 
 

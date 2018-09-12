@@ -15,21 +15,23 @@
 import json
 import logging
 import pickle
-import leveldb
 import signal
 import time
 import traceback
 
 from earlgrey import MessageQueueService
 
+import leveldb
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService, RestStubManager, Timer
+from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler,
+                                   CommonSubprocess, ObjectManager,
+                                   PeerManager, PeerStatus, RestStubManager,
+                                   StubManager, Timer, TimerService)
 from loopchain.blockchain import Block
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.consensus import Consensus, Acceptor, Proposer
+from loopchain.consensus import Acceptor, Consensus, Proposer
 from loopchain.peer import BlockManager
 from loopchain.peer.consensus_default import ConsensusDefault
 from loopchain.peer.consensus_lft import ConsensusLFT
@@ -37,10 +39,11 @@ from loopchain.peer.consensus_none import ConsensusNone
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.peer.icx_authorization import IcxAuthorization
 from loopchain.peer.peer_authorization import PeerAuthorization
-from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
-from loopchain.utils import loggers, command_arguments
+from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
+from loopchain.utils import command_arguments, loggers
+from loopchain.utils.icon_service import (ParamType, convert_params,
+                                          response_to_json_query)
 from loopchain.utils.message_queue import StubCollection
-from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 
 
 class ChannelService:

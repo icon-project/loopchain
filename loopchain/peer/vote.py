@@ -14,11 +14,10 @@
 """data object for peer votes to one block"""
 
 import logging
-
 from enum import Enum
 
-from loopchain.baseservice import PeerManager
 from loopchain import configure as conf
+from loopchain.baseservice import PeerManager
 
 
 class VoteType(Enum):

@@ -13,9 +13,10 @@
 # limitations under the License.
 """ A class for Manage Channels """
 
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, PeerManager
-from loopchain.container import CommonService
+from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler,
+                                   PeerManager)
 from loopchain.consensus import *
+from loopchain.container import CommonService
 
 
 class ChannelManager:

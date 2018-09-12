@@ -14,10 +14,10 @@
 """DB Proxy for tx state save before commit"""
 
 import copy
-import leveldb
 import logging
 from typing import Dict
 
+import leveldb
 from loopchain import utils
 from loopchain.blockchain import Block
 

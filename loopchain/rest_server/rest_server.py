@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A module for restful API server of Peer"""
-import _ssl
 import base64
 import json
 import logging
@@ -24,6 +23,7 @@ from grpc._channel import _Rendezvous
 from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
+import _ssl
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.components import SingletonMetaClass
@@ -391,4 +391,3 @@ class Disable(HTTPMethodView):
 
     async def post(self, request):
         return response.text("This api version not support any more!")
-

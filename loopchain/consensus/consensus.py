@@ -19,12 +19,11 @@ import time
 
 from loopchain import configure as conf
 from loopchain import utils as util
-
+from loopchain.baseservice import CommonThread, ObjectManager, Timer
+from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Block, TransactionStatusInQueue
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.consensus import Publisher, Epoch, EpochStatus
-from loopchain.baseservice import ObjectManager, CommonThread, Timer
-from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.consensus import Epoch, EpochStatus, Publisher
 
 
 class Consensus(CommonThread, Publisher):

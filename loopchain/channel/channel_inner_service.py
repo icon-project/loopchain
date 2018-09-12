@@ -19,12 +19,14 @@ import pickle
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
-from loopchain.blockchain import Transaction, get_tx_validator, Block, BlockType
+from loopchain.baseservice import BroadcastCommand, ScoreResponse, TimerService
+from loopchain.blockchain import (Block, BlockType, Transaction,
+                                  get_tx_validator)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Epoch, VoteMessage

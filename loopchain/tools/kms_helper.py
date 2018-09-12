@@ -1,8 +1,9 @@
 import logging
+import os
 
 import pkcs11
-from pkcs11 import Attribute, ObjectClass, Mechanism, KeyType
-import os
+from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass
+
 from loopchain import configure as conf
 from loopchain.components import SingletonMetaClass
 

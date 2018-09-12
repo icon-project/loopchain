@@ -15,8 +15,8 @@
 
 import logging
 import multiprocessing
-import time
 import threading
+import time
 from abc import abstractmethod
 
 from loopchain import configure as conf

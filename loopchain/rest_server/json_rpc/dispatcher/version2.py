@@ -15,6 +15,7 @@
 
 import json
 import logging
+
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
 from sanic import response as sanic_response
@@ -23,7 +24,8 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.protos import message_code
 from loopchain.rest_server import RestProperty
-from loopchain.utils.json_rpc import redirect_request_to_rs, get_block_by_params
+from loopchain.utils.json_rpc import (get_block_by_params,
+                                      redirect_request_to_rs)
 from loopchain.utils.message_queue import StubCollection
 
 config.log_requests = False

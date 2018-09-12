@@ -14,7 +14,7 @@
 """REST Service for Peer"""
 
 from loopchain import utils as util
-from loopchain.container import ServerType, Container
+from loopchain.container import Container, ServerType
 
 
 class RestService(Container):

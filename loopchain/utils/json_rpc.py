@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import json
-import aiohttp
 
+import aiohttp
 from jsonrpcclient.aiohttp_client import aiohttpClient
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.utils.message_queue import StubCollection
-from loopchain.utils.icon_service.converter_v2 import convert_params, ParamType
 from loopchain.protos import message_code
+from loopchain.utils.icon_service.converter_v2 import ParamType, convert_params
+from loopchain.utils.message_queue import StubCollection
 
 
 async def redirect_request_to_rs(message, rs_target, version=conf.ApiVersion.v3.name):

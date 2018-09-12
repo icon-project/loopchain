@@ -16,6 +16,7 @@
 import binascii
 import hashlib
 import logging
+
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -23,7 +24,7 @@ from secp256k1 import PrivateKey
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.tools.signature_helper import PublicVerifier, IcxVerifier
+from loopchain.tools.signature_helper import IcxVerifier, PublicVerifier
 
 
 def long_to_bytes (val, endianness='big'):

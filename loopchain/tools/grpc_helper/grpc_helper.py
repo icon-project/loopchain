@@ -15,9 +15,9 @@
 
 import logging
 
-from loopchain.tools.grpc_helper.grpc_secure_key import *
 from loopchain.components import SingletonMetaClass
 from loopchain.tools.grpc_helper.grpc_connector import *
+from loopchain.tools.grpc_helper.grpc_secure_key import *
 
 
 class GRPCHelper(metaclass=SingletonMetaClass):
@@ -76,4 +76,3 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         logging.info(f"Client Channel : {host}, secure level : {str(ssl_auth_type)}")
 
         return channel
-

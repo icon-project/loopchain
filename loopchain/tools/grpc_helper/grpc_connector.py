@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import abc
+
 import grpc
 
 from loopchain import configure as conf

@@ -13,7 +13,7 @@
 # limitations under the License.
 """Custom Dictionary type that has limit size"""
 
-from collections import OrderedDict, MutableMapping
+from collections import MutableMapping, OrderedDict
 
 
 # reference link : https://stackoverflow.com/a/44549081

@@ -19,7 +19,7 @@ import shutil
 import stat
 import zipfile
 
-from git import Repo, Git, GitCmdObjectDB
+from git import Git, GitCmdObjectDB, Repo
 from git.repo.fun import is_git_dir
 
 from loopchain.blockchain import *

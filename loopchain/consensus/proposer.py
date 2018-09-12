@@ -13,21 +13,19 @@
 # limitations under the License.
 """A Proposer module for block """
 
-import sys
 import logging
 import pickle
-
-from loopchain import configure as conf
-from loopchain.blockchain import *
-from loopchain.baseservice import ObjectManager
-from loopchain.consensus import Subscriber, Epoch
-from loopchain.baseservice.aging_cache import AgingCache
-
+import sys
+from typing import TYPE_CHECKING
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain import configure as conf
+from loopchain.baseservice import ObjectManager
+from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.blockchain import *
+from loopchain.consensus import Epoch, Subscriber
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
 

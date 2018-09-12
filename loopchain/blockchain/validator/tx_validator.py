@@ -15,15 +15,15 @@
 
 import logging
 import traceback
-
 from typing import Dict
-from loopchain import configure as conf
-from loopchain.blockchain import Transaction
-from . import TxValidateStrategy
-from .. import HashGenerator, get_tx_hash_generator
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain import configure as conf
+from loopchain.blockchain import Transaction
+
+from . import TxValidateStrategy
+from .. import HashGenerator, get_tx_hash_generator
 
 
 class TxValidator:

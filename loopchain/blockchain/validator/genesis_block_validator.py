@@ -18,10 +18,11 @@ import logging
 import re
 from typing import Dict
 
-from loopchain import utils, configure as conf
+from loopchain import configure as conf
+from loopchain import utils
 from loopchain.blockchain import Transaction
-from .. import HashGenerator, get_genesis_tx_hash_generator
 
+from .. import HashGenerator, get_genesis_tx_hash_generator
 
 # Changing the import location will cause a pickle error.
 

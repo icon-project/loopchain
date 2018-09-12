@@ -13,7 +13,6 @@
 # limitations under the License.
 """ A library module for development of Score"""
 
-import leveldb
 import logging
 import os
 import os.path as osp
@@ -21,8 +20,10 @@ import sqlite3
 from enum import Enum, IntEnum
 from typing import Dict
 
-from loopchain import configure as conf, utils
-from loopchain.baseservice import ObjectManager, Block
+import leveldb
+from loopchain import configure as conf
+from loopchain import utils
+from loopchain.baseservice import Block, ObjectManager
 from loopchain.components import SingletonMetaClass
 from loopchain.tools.score_helper.score_db_proxy import ScoreDbProxy
 

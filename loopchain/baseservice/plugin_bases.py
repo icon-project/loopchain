@@ -15,12 +15,11 @@
 """
 
 import abc
-import logging
 import importlib
+import logging
 from enum import IntEnum
+
 from loopchain import configure as conf
-
-
 from loopchain.components import SingletonMetaClass
 
 

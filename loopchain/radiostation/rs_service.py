@@ -20,17 +20,17 @@ import signal
 import timeit
 
 import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, TimerService
-from loopchain.container import RestServiceRS, CommonService
-from loopchain.peer import ChannelManager
-from loopchain.protos import loopchain_pb2_grpc
-from loopchain.radiostation import OuterService, AdminService, AdminManager
-from loopchain.utils import loggers
-from .certificate_authorization import CertificateAuthorization
-
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain import configure as conf
+from loopchain.baseservice import ObjectManager, TimerService
+from loopchain.container import CommonService, RestServiceRS
+from loopchain.peer import ChannelManager
+from loopchain.protos import loopchain_pb2_grpc
+from loopchain.radiostation import AdminManager, AdminService, OuterService
+from loopchain.utils import loggers
+
+from .certificate_authorization import CertificateAuthorization
 
 
 class RadioStationService:

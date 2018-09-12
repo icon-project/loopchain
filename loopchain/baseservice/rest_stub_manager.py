@@ -15,9 +15,9 @@
 This object has same interface with gRPC stub manager"""
 
 import logging
-import requests
-
 from concurrent.futures import ThreadPoolExecutor
+
+import requests
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 from jsonrpcclient.http_client import HTTPClient
 
@@ -127,4 +127,3 @@ class RestStubManager:
                 exception = e
 
         raise exception
-

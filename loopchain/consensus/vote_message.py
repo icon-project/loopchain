@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """data object for peer votes to a block"""
-import logging
 import json
-
+import logging
 from enum import IntEnum
 
 from loopchain.blockchain.hashing import get_vote_hash_generator

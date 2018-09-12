@@ -14,16 +14,18 @@
 
 import logging
 import logging.handlers
-import coloredlogs
-import verboselogs
 import os
 import sys
 import traceback
-
 from functools import partial, reduce
 from operator import or_
+
+import coloredlogs
+import verboselogs
 from fluent import sender
+
 from loopchain import configure as conf
+
 from .sized_timed_file_handler import SizedTimedRotatingFileHandler
 
 

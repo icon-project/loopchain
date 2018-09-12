@@ -13,7 +13,6 @@
 # limitations under the License.
 """A module for restful API server of Radio station"""
 
-import _ssl
 import base64
 import json
 import logging
@@ -26,9 +25,10 @@ import grpc
 from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
-from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerManager, PeerStatus
-from loopchain.baseservice import StubManager
+import _ssl
+from loopchain import configure as conf
+from loopchain import utils
+from loopchain.baseservice import PeerManager, PeerStatus, StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code

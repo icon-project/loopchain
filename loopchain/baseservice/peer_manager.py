@@ -15,17 +15,17 @@
 
 import json
 import logging
+import math
 import pickle
 import threading
-import math
 
 import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.protos import loopchain_pb2_grpc, message_code
-
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain import configure as conf
+from loopchain.baseservice import (BroadcastCommand, ObjectManager, PeerInfo,
+                                   PeerObject, PeerStatus, StubManager)
+from loopchain.protos import loopchain_pb2_grpc, message_code
 
 
 class PeerListData:

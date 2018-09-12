@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import asyncio
+
 from grpc._channel import _Rendezvous
 
 
@@ -34,5 +35,3 @@ def __await__(self: _Rendezvous):
     yield from future
 
     return future.result()
-
-

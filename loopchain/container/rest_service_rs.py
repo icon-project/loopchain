@@ -13,7 +13,7 @@
 # limitations under the License.
 """REST Service for Radio station"""
 
-from loopchain.container import ServerType, Container
+from loopchain.container import Container, ServerType
 
 
 class RestServiceRS(Container):

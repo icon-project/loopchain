@@ -18,14 +18,13 @@ import pickle
 import threading
 
 import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.baseservice import PeerStatus, PeerInfo, ObjectManager, \
-    TimerService, Timer
-from loopchain.configure_default import KeyLoadType
-from loopchain.protos import loopchain_pb2_grpc, message_code
-
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain import configure as conf
+from loopchain.baseservice import (ObjectManager, PeerInfo, PeerStatus, Timer,
+                                   TimerService)
+from loopchain.configure_default import KeyLoadType
+from loopchain.protos import loopchain_pb2_grpc, message_code
 
 
 class OuterService(loopchain_pb2_grpc.RadioStationServicer):
@@ -400,4 +399,3 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         channel_manager = ObjectManager().rs_service.channel_manager
 
         return loopchain_pb2.CommonReply(response_code=0, message="success")
-

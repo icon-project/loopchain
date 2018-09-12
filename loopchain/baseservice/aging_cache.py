@@ -13,9 +13,9 @@
 # limitations under the License.
 """Custom Dictionary type that has limit size by timestamp"""
 
-import time
 import threading
-from collections import OrderedDict, MutableMapping
+import time
+from collections import MutableMapping, OrderedDict
 
 
 class AgingCacheItem:

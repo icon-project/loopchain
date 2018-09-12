@@ -19,7 +19,7 @@ import logging
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding, ec, utils
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.x509 import Certificate
 
 import loopchain.utils as util

@@ -14,7 +14,7 @@
 
 
 import time
-from logging.handlers import TimedRotatingFileHandler, RotatingFileHandler
+from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
 
 class SizedTimedRotatingFileHandler(TimedRotatingFileHandler, RotatingFileHandler):

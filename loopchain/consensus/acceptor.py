@@ -15,20 +15,17 @@
 
 import logging
 import operator
-
-from loopchain.baseservice import ChannelProperty
-from loopchain.blockchain.block import *
-from loopchain.blockchain.validator import TxValidator, get_tx_validator
-from loopchain.consensus import Subscriber, Consensus
-from loopchain.consensus.epoch import *
-from loopchain.consensus.vote_message import *
-from loopchain.protos import loopchain_pb2_grpc
+from typing import TYPE_CHECKING
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
-
-from typing import TYPE_CHECKING
-
+from loopchain.baseservice import ChannelProperty
+from loopchain.blockchain.block import *
+from loopchain.blockchain.validator import TxValidator, get_tx_validator
+from loopchain.consensus import Consensus, Subscriber
+from loopchain.consensus.epoch import *
+from loopchain.consensus.vote_message import *
+from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 
 if TYPE_CHECKING:

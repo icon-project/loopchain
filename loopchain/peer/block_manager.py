@@ -17,22 +17,21 @@ import queue
 import shutil
 import traceback
 from collections import namedtuple
-from concurrent.futures import ThreadPoolExecutor, Future
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import requests
 from jsonrpcclient import HTTPClient
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler
+# Changing the import location will cause a pickle error.
+import loopchain_pb2
+from loopchain.baseservice import BlockGenerationScheduler, BroadcastCommand
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
 from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class BlockManager(CommonThread, Subscriber):

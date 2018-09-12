@@ -15,16 +15,16 @@
 
 import copy
 import json
-import leveldb
 import pickle
 import threading
 from enum import Enum
 
+import leveldb
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import BlockStatus, Block, Transaction, \
-    TransactionStatusInQueue
+from loopchain.baseservice import ObjectManager, ScoreResponse
+from loopchain.blockchain import (Block, BlockStatus, Transaction,
+                                  TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.validator import get_genesis_tx_validator

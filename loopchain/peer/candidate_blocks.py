@@ -20,8 +20,8 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import Block
-from loopchain.peer import Vote
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.peer import Vote
 
 
 class NoExistBlock(Exception):

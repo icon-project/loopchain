@@ -22,12 +22,15 @@ from sanic import response
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.rest_server import RestProperty
-from loopchain.rest_server.json_rpc.exception import GenericJsonRpcServerError, JsonError
-from loopchain.utils.message_queue import StubCollection
-from loopchain.utils.json_rpc import redirect_request_to_rs, get_block_by_params
-from loopchain.utils.icon_service import make_request, response_to_json_query, ParamType, convert_params
 from loopchain.protos import message_code
+from loopchain.rest_server import RestProperty
+from loopchain.rest_server.json_rpc.exception import (GenericJsonRpcServerError,
+                                                      JsonError)
+from loopchain.utils.icon_service import (ParamType, convert_params,
+                                          make_request, response_to_json_query)
+from loopchain.utils.json_rpc import (get_block_by_params,
+                                      redirect_request_to_rs)
+from loopchain.utils.message_queue import StubCollection
 
 config.log_requests = False
 config.log_responses = False

@@ -22,14 +22,15 @@ import time
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
-from loopchain.rest_server.rest_server import ServerComponents, PeerServiceStub
-from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
+from loopchain.rest_server.rest_server import PeerServiceStub, ServerComponents
+from loopchain.rest_server.rest_server_rs import \
+    ServerComponents as RSServerComponents
 from loopchain.scoreservice import ScoreService
-from loopchain.channel.channel_service import ChannelService
 from loopchain.tools.grpc_helper import grpc_patcher
-from loopchain.utils import loggers, command_arguments, async
+from loopchain.utils import async, command_arguments, loggers
 
 
 def main(argv):

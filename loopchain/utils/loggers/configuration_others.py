@@ -13,9 +13,11 @@
 # limitations under the License.
 
 import logging
+
 from loopchain import configure as conf
 from loopchain.utils.loggers.configuration import LogConfiguration
-from loopchain.utils.loggers.configuration_presets import PresetType, get_preset_type
+from loopchain.utils.loggers.configuration_presets import (PresetType,
+                                                           get_preset_type)
 
 preset_others = LogConfiguration()
 

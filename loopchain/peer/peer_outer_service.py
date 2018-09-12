@@ -17,15 +17,14 @@ import asyncio
 import datetime
 from functools import partial
 
-from loopchain.baseservice import ObjectManager, Monitor, TimerService
-from loopchain.blockchain import *
-from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code
-from loopchain.consensus.vote_message import *
-from loopchain.utils.message_queue import StubCollection
-
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
+from loopchain.baseservice import Monitor, ObjectManager, TimerService
+from loopchain.blockchain import *
+from loopchain.consensus.vote_message import *
+from loopchain.peer import status_code
+from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.utils.message_queue import StubCollection
 
 
 class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):

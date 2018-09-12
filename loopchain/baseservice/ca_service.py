@@ -14,18 +14,18 @@
 """ A module for issue certificate of CA and Peer """
 
 import datetime
-import logging
 import json
-
+import logging
 from enum import IntEnum
+from os import listdir, mkdir, remove
+from os.path import exists, isdir, isfile, join
+
 from cryptography import x509
-from cryptography.x509.oid import NameOID, ExtensionOID
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.exceptions import InvalidSignature
-from os import mkdir, listdir, remove
-from os.path import exists, join, isfile, isdir
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import ExtensionOID, NameOID
 
 
 class CertificatePurpose(IntEnum):

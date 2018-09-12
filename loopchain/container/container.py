@@ -15,15 +15,16 @@
 
 import logging
 import multiprocessing
-import setproctitle
 from concurrent import futures
 from enum import Enum
 
 import grpc
 
 import loopchain.utils as util
+import setproctitle
 from loopchain import configure as conf
-from loopchain.baseservice import CommonProcess, MonitorAdapter, ObjectManager, Monitor, CommonSubprocess
+from loopchain.baseservice import (CommonProcess, CommonSubprocess, Monitor,
+                                   MonitorAdapter, ObjectManager)
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import command_arguments

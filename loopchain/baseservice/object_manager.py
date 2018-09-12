@@ -13,8 +13,9 @@
 # limitations under the License.
 """Facade Class for interface of inner gRPC services"""
 
-from loopchain.components import SingletonMetaClass
 from typing import TYPE_CHECKING
+
+from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
     from loopchain.radiostation import RadioStationService

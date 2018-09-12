@@ -11,27 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import pickle
-
-import git
 import json
 import logging
+import pickle
 import random
 import threading
 import time
-
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict
-from earlgrey import message_queue_task, MessageQueueStub, MessageQueueService, MessageQueueType
+
+import git
+from earlgrey import (MessageQueueService, MessageQueueStub, MessageQueueType,
+                      message_queue_task)
+
+import loopchain_pb2
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import PeerScore, ScoreResponse
 from loopchain.baseservice.plugin_bases import PluginReturns
-from loopchain.blockchain import Block, Transaction, ScoreInvokeError
-from loopchain.protos import message_code, loopchain_pb2
+from loopchain.blockchain import Block, ScoreInvokeError, Transaction
+from loopchain.protos import loopchain_pb2, message_code
 from loopchain.tools.score_helper import ScoreHelper
-
-import loopchain_pb2
 
 if TYPE_CHECKING:
     from loopchain.scoreservice import ScoreService

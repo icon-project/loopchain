@@ -25,8 +25,9 @@ import grpc
 from grpc._channel import _Rendezvous
 
 from loopchain import configure as conf
-from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, \
-    RestStubManager, TimerService, Timer
+from loopchain.baseservice import (BroadcastCommand, CommonThread,
+                                   ObjectManager, PeerManager, RestStubManager,
+                                   StubManager, Timer, TimerService)
 from loopchain.baseservice.tx_item_helper import *
 from loopchain.blockchain import Transaction
 from loopchain.channel.channel_property import ChannelProperty

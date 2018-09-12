@@ -18,8 +18,8 @@ import subprocess
 import threading
 
 from loopchain import configure as conf
-from loopchain.baseservice import CommonThread
 from loopchain import utils as util
+from loopchain.baseservice import CommonThread
 from loopchain.utils import command_arguments
 
 

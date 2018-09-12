@@ -20,7 +20,7 @@ from enum import IntEnum
 from loopchain import configure as conf
 from loopchain.baseservice import StubManager
 from loopchain.protos import loopchain_pb2_grpc
-from loopchain.tools.signature_helper import PublicVerifier, IcxVerifier
+from loopchain.tools.signature_helper import IcxVerifier, PublicVerifier
 
 
 class PeerStatus(IntEnum):

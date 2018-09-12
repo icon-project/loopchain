@@ -14,17 +14,16 @@
 """ A class for gRPC service of Score service"""
 
 import logging
-import setproctitle
 import timeit
-
 from typing import TYPE_CHECKING
+
+import setproctitle
 from loopchain import configure as conf
 from loopchain.baseservice.plugin_bases import Plugins
 from loopchain.scoreservice import ScoreInnerService
 from loopchain.tools.score_helper import ScoreHelper
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
-
 
 if TYPE_CHECKING:
     from loopchain.baseservice import PeerScore
