@@ -1,0 +1,24 @@
+{
+  "loopchain_default": {
+    "score_package": "loopchain/default",
+    "peers": [
+      {
+        "peer_target": "1.1.1.1:1111"
+      },
+      {
+        "peer_target": "2.2.2.2:2222"
+      }
+    ]
+  },
+  "loopchain_test": {
+    "score_package": "loopchain/default",
+    "peers": [
+      {
+        "peer_target": "1.1.1.1:1111"
+      },
+      {
+        "peer_target": "3.3.3.3:3333"
+      }
+    ]
+  }
+}
