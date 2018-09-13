@@ -19,7 +19,6 @@ import asyncio
 import logging
 import unittest
 import multiprocessing
-import test_util
 
 from pika.exceptions import ChannelClosed
 from earlgrey import MessageQueueStub, MessageQueueService, MessageQueueType, message_queue_task
@@ -29,6 +28,7 @@ from loopchain.peer import PeerInnerService, PeerInnerStub
 from loopchain.scoreservice.score_inner_service import ScoreInnerService, ScoreInnerStub
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
+from testcase.unittest import test_util
 
 
 loggers.set_preset_type(loggers.PresetType.develop)

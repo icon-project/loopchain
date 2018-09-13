@@ -10,7 +10,13 @@ echo "Stopping iconrpcserver..."
 iconrpcserver stop -p 9000 -c conf/iconrpcserver_conf.json
 
 
-echo "Kill All python process"
+PID_FILE="loopchain.pid"
+if [ -f ${PID_FILE} ]; then
+    echo "Kill All python process"
+    PID=`cat ${PID_FILE}`
+    pgrep -P ${PID} | xargs -I ARG kill -9 ARG
+    kill ${PID}
+    rm -f loopchain.pid
+fi
 
-pgrep -f python | xargs kill -9
 pkill -f gunicorn

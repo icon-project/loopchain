@@ -32,7 +32,7 @@ from loopchain.blockchain import NID
 from loopchain.channel.channel_property import ChannelProperty
 from secp256k1 import PrivateKey, PublicKey
 
-from cli_tools.icx_test import IcxWallet
+from cli_tools.icx_test.icx_wallet import IcxWallet
 import loopchain.utils as util
 from loopchain.blockchain.validator import TxValidator, IconValidateStrategy, get_tx_hash_generator
 from loopchain import configure as conf

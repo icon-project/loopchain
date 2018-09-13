@@ -60,10 +60,13 @@ $ rabbitmq-plugins enable rabbitmq_management
 ```
 
 #### Install requirements
+
+```
 $ pip3 install git+ssh://git@github.com/icon-project/icon-service.git
 $ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git
 $ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git
 $ pip3 install -r requirements.txt
+```
 
 #### Run Test
 
@@ -80,7 +83,7 @@ $ mkdir -p resources/my_pki
 $ cd resources/my_pki
 $ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out my_private.pem    # generate private key
 $ openssl ec -in my_private.pem  -pubout -out my_public.pem                                # generate public key
-$ export PW_icon_dex={YOUR_PASSWORD}
+$ export PW_icon_dex={ENTER_MY_PASSWORD}
 $ cd ../../
 ```
 

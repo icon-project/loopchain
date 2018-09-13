@@ -24,7 +24,7 @@ import unittest
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
 
-from cli_tools.icx_test import IcxWallet
+from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.validator import tx_validator, IconValidateStrategy, get_tx_hash_generator
