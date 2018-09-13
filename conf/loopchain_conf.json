@@ -1,0 +1,25 @@
+{
+  "LOOPCHAIN_DEFAULT_CHANNEL": "icon_dex",
+  "CHANNEL_OPTION" : {
+    "icon_dex": {
+      "store_valid_transaction_only": true,
+      "send_tx_type": 2,
+      "load_cert": false,
+      "consensus_cert_use": false,
+      "tx_cert_use": false,
+      "tx_hash_version": 1,
+      "genesis_tx_hash_version": 0,
+      "key_load_type": 0,
+      "public_path": "./resources/my_pki/my_public.pem",
+      "private_path": "./resources/my_pki/my_private.pem"
+    }
+  },
+  "USE_EXTERNAL_SCORE": true,
+  "USE_EXTERNAL_REST": true,
+  "PORT_PEER": 7100,
+  "AMQP_KEY": "7100",
+  "DEFAULT_STORAGE_PATH": ".storage_test/",
+  "ALLOW_MAKE_EMPTY_BLOCK": false,
+  "SUBSCRIBE_USE_HTTPS": true,
+  "LOOPCHAIN_LOG_LEVEL": "INFO"
+}

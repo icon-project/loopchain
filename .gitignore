@@ -197,7 +197,7 @@ resources/test_score_repository/develop/test_score/deploy/
 resources/test_score_repository/develop/test_query_exception/deploy/
 resources/ssl_grpc_test_cert/ssl.crt
 resources/ssl_test_cert/ssl.crt
-resources/default_pki/*.der
+# resources/default_pki/*.der
 score/loopchain/
 score/develop/dev_score/deploy
 score/develop/test_score/deploy
