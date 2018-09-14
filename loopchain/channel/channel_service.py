@@ -537,7 +537,7 @@ class ChannelService:
         rs_rest_stub = kwargs.get("rs_rest_stub", None)
         response = dict()
         try:
-            response = rs_rest_stub.call("GetLastBlock", {})
+            response = rs_rest_stub.call("GetLastBlock")
         except Exception as e:
             response['response_code'] = message_code.Response.fail
 

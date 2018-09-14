@@ -98,7 +98,7 @@ class RestStubManager:
                 client = HTTPClient(url)
                 client.session.verify = conf.REST_SSL_VERIFY
                 if version == conf.ApiVersion.v2:
-                    response = client.request(method_name, message)
+                    response = client.request(method_name, message) if message else client.request(method_name)
                 else:
                     response = client.request(method_name=method_name, message=message)
 
