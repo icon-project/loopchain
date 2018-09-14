@@ -102,6 +102,8 @@ class TestCertificateAuthorization(unittest.TestCase):
                 signature=signature
             )
         )
+        unittest_path = os.path.join(os.path.dirname(__file__), '../../resources/unittest')
+        os.system(f"rm -rf {unittest_path}")
 
     def __generate_sign(self, pri_key, data):
         """
@@ -156,28 +158,6 @@ class TestCertificateAuthorization(unittest.TestCase):
 
         private_key = serialization.load_pem_private_key(cert_key, pw, default_backend())
         return {'cert': cert, 'private_key': private_key}
-
-    def test_load_cert(self):
-        """GIVEN conf.PEER_CERT_AUTH = True and GIVEN Sample ECDSA Certificate
-        WHEN PeerAuthorization create using cert set
-        THEN PeerAuthorization can create by cert
-        """
-        # GIVEN
-        channel_name = "cert_channel"
-        conf.CHANNEL_OPTION = {
-            channel_name: {
-                "load_cert": True,
-                "consensus_cert_use": False,
-                "tx_cert_use": False,
-                "key_load_type": KeyLoadType.FILE_LOAD,
-                "public_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_certs/cert.pem'),
-                "private_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_certs/key.pem'),
-                "private_password": None
-            }
-        }
-
-        # WHEN THEN
-        peer_auth = PeerAuthorization(channel_name)
 
 
 if __name__ == '__main__':

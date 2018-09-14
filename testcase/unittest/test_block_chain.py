@@ -18,6 +18,7 @@
 
 import leveldb
 import logging
+import os
 import random
 import unittest
 
@@ -54,6 +55,7 @@ class TestBlockChain(unittest.TestCase):
         # Blockchain을 삭제
         ObjectManager().peer_service = None
         leveldb.DestroyDB(self.db_name)
+        os.system("rm -rf ./blockchain_db*")
 
     def generate_test_block(self):
         """

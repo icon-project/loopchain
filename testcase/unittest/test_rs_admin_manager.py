@@ -23,12 +23,19 @@ import os
 from loopchain.radiostation import AdminManager
 from loopchain import configure as conf
 from loopchain.utils import loggers
+from testcase.unittest import test_util
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
 class TestRSAdminManager(unittest.TestCase):
+
+    def setUp(self):
+        test_util.print_testname(self._testMethodName)
+
+    def tearDown(self):
+        os.system("rm -rf ./.storage*")
 
     def test_get_channel_info_by_peer_target(self):
         # GIVEN

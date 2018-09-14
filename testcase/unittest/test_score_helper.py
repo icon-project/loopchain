@@ -15,18 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Score Helper"""
-
-import unittest
-from unittest.mock import patch
-import json
-import loopchain.utils as util
-import os.path as osp
+import os
 import shutil
+import unittest
+
+import os.path as osp
+
 import loopchain.configure as conf
-from loopchain.baseservice import ObjectManager
 from loopchain.tools.score_helper import ScoreHelper, ScoreDatabaseType
 from loopchain.utils import loggers
-
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
@@ -35,6 +32,7 @@ loggers.update_preset()
 class TestScoreHelper(unittest.TestCase):
     conf = None
     __repository_path = osp.join(osp.dirname(__file__), 'db_')
+
     @classmethod
     def setUpClass(cls):
         conf.DEFAULT_SCORE_REPOSITORY_PATH = cls.__repository_path
@@ -44,8 +42,7 @@ class TestScoreHelper(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        #shutil.rmtree(cls.__repository_path, True)
-        pass
+        os.system("rm -rf ./.storage*")
 
     def test_score_helper_load_databases(self):
         helper = ScoreHelper()

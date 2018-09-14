@@ -17,9 +17,8 @@
 """Test CA service"""
 
 import logging
+import os
 import unittest
-from os import mkdir
-from os.path import join, exists, dirname
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -42,7 +41,7 @@ class TestCAService(unittest.TestCase):
 
     def setUp(self):
         test_util.print_testname(self._testMethodName)
-        self.__CERT_DIR = join(dirname(__file__), "../../resources/unittest")
+        self.__CERT_DIR = os.path.join(os.path.dirname(__file__), "../../resources/unittest")
         self.__PASSWD = None
 
     def tearDown(self):
@@ -51,8 +50,8 @@ class TestCAService(unittest.TestCase):
     def test_ca_service(self):
         """CA 인증서 생성 및 검증
         """
-        if exists(self.__CERT_DIR) is False:
-            mkdir(self.__CERT_DIR, mode=0o0755)
+        if os.path.exists(self.__CERT_DIR) is False:
+            os.mkdir(self.__CERT_DIR, mode=0o0755)
             logging.debug("Create DEFAULT Path : %s", self.__CERT_DIR)
 
         # ########################## CA 인증서 신규 발급 시에만 아래 주석 제거 ########################
@@ -96,8 +95,8 @@ class TestCAService(unittest.TestCase):
 
         :return 인증서 검증 결과(True/False)
         """
-        cert_dir = join(self.__CERT_DIR, name)
-        if exists(cert_dir):
+        cert_dir = os.path.join(self.__CERT_DIR, name)
+        if os.path.exists(cert_dir):
             cert = self.__load_cert(cert_dir)
             if cert is None:
                 logging.error("Sign Cert/key loading... Fail : %s", cert_dir)
@@ -120,8 +119,8 @@ class TestCAService(unittest.TestCase):
         :return: X509 인증서
         """
         logging.debug("Cert/Key loading...")
-        cert_file = join(cert_dir, "cert.pem")
-        pri_file = join(cert_dir, "key.pem")
+        cert_file = os.path.join(cert_dir, "cert.pem")
+        pri_file = os.path.join(cert_dir, "key.pem")
 
         f = open(cert_file, "rb")
         cert_bytes = f.read()
