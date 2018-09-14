@@ -10,22 +10,22 @@ Details will be updated shortly.
 ## Install Requirements
 
 #### Make Virtual Env for Python 3.6.5 (recommended version, 3.7 is not supported, possible versions are 3.6.x)
- 
+
  * check your python version
- 
+
  ```
  $ python3 -V
  ```
- 
+
  * make virtual env and apply
- 
+
  ```
  $ virtualenv -p python3 ./venv
  $ source ./venv/bin/activate
  ```
- 
+
  * check virtual env python version
- 
+
  ```
  $ python -V
  ```

@@ -20,7 +20,7 @@ import logging
 import unittest
 import multiprocessing
 
-from pika.exceptions import ChannelClosed
+from aio_pika.pika.exceptions import ChannelClosed
 from earlgrey import MessageQueueStub, MessageQueueService, MessageQueueType, message_queue_task
 from loopchain import configure as conf
 from loopchain.channel.channel_inner_service import ChannelInnerService, ChannelInnerStub
@@ -33,6 +33,7 @@ from testcase.unittest import test_util
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
+loggers.update_other_loggers()
 
 
 class TestMessageQueue(unittest.TestCase):
@@ -68,19 +69,20 @@ class TestMessageQueue(unittest.TestCase):
         route_key = 'something same you want'
 
         def _run_server():
-            async def _run():
-                message_queue_service = Service(conf.AMQP_TARGET, route_key)
-                await message_queue_service.connect()
+            message_queue_service = Service(conf.AMQP_TARGET, route_key)
 
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            loop.create_task(_run())
+            loop.create_task(message_queue_service.connect())
             loop.run_forever()
 
+            loop.run_until_complete(message_queue_service._connection.close())
+
         def _run_client():
+            message_queue_stub = Stub(conf.AMQP_TARGET, route_key)
+
             async def _run():
-                message_queue_stub = Stub(conf.AMQP_TARGET, route_key)
                 await message_queue_stub.connect()
 
                 result = await message_queue_stub.async_task().sum(10, 20)
@@ -97,6 +99,7 @@ class TestMessageQueue(unittest.TestCase):
             asyncio.set_event_loop(loop)
 
             loop.run_until_complete(_run())
+            loop.run_until_complete(message_queue_stub._connection.close())
 
         server = multiprocessing.Process(target=_run_server)
         server.daemon = True
@@ -110,69 +113,77 @@ class TestMessageQueue(unittest.TestCase):
         client.join()
 
     def test_peer_task(self):
+        route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
+
+        service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+        service._callback_connection_lost_callback = lambda conn: None
+
+        stub = PeerInnerStub(conf.AMQP_TARGET, route_key)
+        stub._callback_connection_lost_callback = lambda conn: None
+
         async def _run():
-            route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
-
-            service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
-            stub = PeerInnerStub(conf.AMQP_TARGET, route_key)
-
-            await service.connect(exclusive=True)
-            await stub.connect()
-
-            result = await stub.async_task().hello()
-            self.assertEqual(result, 'peer_hello')
-
-            bad_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
             try:
-                await bad_service.connect()
-                raise RuntimeError('Peer inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                await service.connect(exclusive=True)
+                await stub.connect()
 
-            try:
-                await bad_service.connect(exclusive=True)
-                raise RuntimeError('Peer inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                result = await stub.async_task().hello()
+                self.assertEqual(result, 'peer_hello')
 
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_run())
-        except:
-            pass
+                bad_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+                try:
+                    await bad_service.connect()
+                    raise RuntimeError('Peer inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+
+                try:
+                    await bad_service.connect(exclusive=True)
+                    raise RuntimeError('Peer inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+            finally:
+                await service._connection.close()
+                await stub._connection.close()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_run())
 
     def test_channel_task(self):
+        route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
+            channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
+
+        service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
+        service._callback_connection_lost_callback = lambda conn: None
+
+        stub = ChannelInnerStub(conf.AMQP_TARGET, route_key)
+        stub._callback_connection_lost_callback = lambda conn: None
+
         async def _run():
-            route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
-                channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
-
-            service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
-            stub = ChannelInnerStub(conf.AMQP_TARGET, route_key)
-
-            await service.connect(exclusive=True)
-            await stub.connect()
-
-            result = await stub.async_task().hello()
-            self.assertEqual(result, 'channel_hello')
-
-            bad_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
             try:
-                await bad_service.connect()
-                raise RuntimeError('Channel inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                await service.connect(exclusive=True)
+                await stub.connect()
 
-            try:
-                await bad_service.connect(exclusive=True)
-                raise RuntimeError('Channel inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                result = await stub.async_task().hello()
+                self.assertEqual(result, 'channel_hello')
 
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_run())
-        except:
-            pass
+                bad_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
+                try:
+                    await bad_service.connect()
+                    raise RuntimeError('Channel inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+
+                try:
+                    await bad_service.connect(exclusive=True)
+                    raise RuntimeError('Channel inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+            finally:
+                await service._connection.close()
+                await stub._connection.close()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_run())
 
     def test_score_task(self):
         route_key = conf.SCORE_QUEUE_NAME_FORMAT.format(
@@ -181,43 +192,50 @@ class TestMessageQueue(unittest.TestCase):
             amqp_key=conf.AMQP_KEY)
 
         service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
+        service._callback_connection_lost_callback = lambda conn: None
+
         stub = ScoreInnerStub(conf.AMQP_TARGET, route_key)
+        stub._callback_connection_lost_callback = lambda conn: None
 
         async def _run():
-            await service.connect(exclusive=True)
-            await stub.connect()
-
-            result = await stub.async_task().hello()
-            self.assertEqual(result, 'score_hello')
-
-            bad_service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
             try:
-                await bad_service.connect()
-                raise RuntimeError('Score inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                await service.connect(exclusive=True)
+                await stub.connect()
 
-            try:
-                await bad_service.connect(exclusive=True)
-                raise RuntimeError('Score inner service is not exclusive.')
-            except ChannelClosed:
-                pass
+                result = await stub.async_task().hello()
+                self.assertEqual(result, 'score_hello')
 
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_run())
-        except:
-            pass
+                bad_service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
+                try:
+                    await bad_service.connect()
+                    raise RuntimeError('Score inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+
+                try:
+                    await bad_service.connect(exclusive=True)
+                    raise RuntimeError('Score inner service is not exclusive.')
+                except ChannelClosed:
+                    pass
+
+            finally:
+                await service._connection.close()
+                await stub._connection.close()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_run())
 
     def test_stub_collection(self):
         async def _run():
             route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
             peer_inner_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+            peer_inner_service._callback_connection_lost_callback = lambda conn: None
             await peer_inner_service.connect()
 
             route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
                 channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
             channel_inner_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
+            channel_inner_service ._callback_connection_lost_callback = lambda conn: None
             await channel_inner_service.connect()
 
             route_key = conf.SCORE_QUEUE_NAME_FORMAT.format(
@@ -225,6 +243,7 @@ class TestMessageQueue(unittest.TestCase):
                 channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL,
                 amqp_key=conf.AMQP_KEY)
             score_inner_service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
+            score_inner_service._callback_connection_lost_callback = lambda conn: None
             await score_inner_service.connect()
 
             StubCollection().amqp_target = conf.AMQP_TARGET
@@ -242,8 +261,9 @@ class TestMessageQueue(unittest.TestCase):
             result = await StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL].async_task().hello()
             self.assertEqual(result, 'score_hello')
 
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(_run())
-        except:
-            pass
+            await peer_inner_service._connection.close()
+            await channel_inner_service._connection.close()
+            await score_inner_service._connection.close()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(_run())

@@ -74,7 +74,7 @@ class TestConverter(unittest.TestCase):
                     "version": "0x3",
                     "from": "hxbe258ceb872e08851f1f59694dac2558708ece11",
                     "to": "hxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32",
-                    "value": "0x64",
+                    "value": "0x100",
                     "stepLimit": "0x3039",
                     "timestamp": "0x53eeb6",
                     "nonce": "0x1cc2",
