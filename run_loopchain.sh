@@ -1,7 +1,6 @@
 #!/bin/sh
 
 PID_FILE="loopchain.pid"
-#SPACE=" "
 
 if [ -f $PID_FILE ]; then
     echo "remove $PID_FILE"
@@ -11,7 +10,7 @@ fi
 touch $PID_FILE
 
 echo "Run loopchain for citizen start!"
-./loopchain.py citizen -r https://testwallet.icon.foundation -o ./conf/loopchain_conf.json &
+./loopchain.py citizen -r https://bicon.net.solidwallet.io -o ./conf/loopchain_conf.json &
 echo $! > $PID_FILE
 
 echo "Run iconservice for citizenstart!"
