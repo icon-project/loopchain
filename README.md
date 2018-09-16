@@ -62,10 +62,16 @@ $ rabbitmq-plugins enable rabbitmq_management
 #### Install requirements
 
 ```
-$ pip3 install git+ssh://git@github.com/icon-project/icon-service.git
-$ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git
-$ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git
+$ pip3 install git+https://github.com/icon-project/icon-service.git
+$ pip3 install git+https://github.com/icon-project/icon-commons.git
+$ pip3 install git+https://github.com/icon-project/icon-rpc-server.git
 $ pip3 install -r requirements.txt
+```
+
+#### Compile Protobufs
+
+```
+python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
 ```
 
 #### Run Test
