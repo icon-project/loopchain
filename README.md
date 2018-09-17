@@ -2,8 +2,8 @@
 
 This is the initial commit for the loopchain.
 
-It will be released in GitHub from now. 
-The development of loopchain will also be on Github soon.  
+It will be released in GitHub from now.
+The development of loopchain will also be on Github soon.
 
 Details will be updated shortly.
 
@@ -61,11 +61,25 @@ $ rabbitmq-plugins enable rabbitmq_management
 
 #### Install requirements
 
+If you have generated ssh key for github, you can install with below commands.
 ```
 $ pip3 install git+ssh://git@github.com/icon-project/icon-service.git
 $ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git
 $ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git
 $ pip3 install -r requirements.txt
+```
+
+Also, you can install with below commands too.
+```
+$ pip3 install git+https://github.com/icon-project/icon-service.git
+$ pip3 install git+https://github.com/icon-project/icon-commons.git
+$ pip3 install git+https://github.com/icon-project/icon-rpc-server.git
+$ pip3 install -r requirements.txt
+```
+
+#### generate gRPC code
+```
+$ ./generate_code.sh
 ```
 
 #### Run Test
