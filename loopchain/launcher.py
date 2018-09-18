@@ -178,7 +178,7 @@ def start_as_rs(args):
 def start_as_admin(args):
     print_prologue()
     try:
-        from cli_tools.loopchain_private_tools import gtool
+        from _tools.loopchain_private_tools import gtool
     except Exception as e:
         logging.error(f"admin service does not be provided. {e}")
     else:
@@ -191,7 +191,7 @@ def start_as_tool(args):
     print_prologue()
 
     try:
-        from cli_tools.loopchain_private_tools import demotool
+        from _tools.loopchain_private_tools import demotool
     except Exception as e:
         logging.error(f"tool service does not be provided. {e}")
     else:
