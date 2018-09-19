@@ -58,7 +58,8 @@ class IcxWallet:
         icx_origin["id"] = random.randrange(0, 100000)
         icx_origin["params"] = params
         self.__last_tx_hash = tx_hash
-        print(params)
+        if self.is_logging:
+            logging.debug(f"icx_sendTransaction params for v2: {params}")
 
         return icx_origin if is_raw_data else params
 
@@ -78,6 +79,8 @@ class IcxWallet:
 
         hash_for_sign = self.__hash_generator.generate_hash(params)
         params["signature"] = self.create_signature(hash_for_sign)
+        if self.is_logging:
+            logging.debug(f"icx_sendTransaction params for v3: {params}")
 
         icx_origin = dict()
         icx_origin["jsonrpc"] = "2.0"
@@ -97,15 +100,6 @@ class IcxWallet:
                                                               raw=True,
                                                               digest=hashlib.sha3_256)
         serialized_sig = self.__private_key.ecdsa_recoverable_serialize(signature)
-        if self.is_logging:
-            logging.debug(f"serialized_sig : {serialized_sig} "
-                          f"\n not_recover_msg size : {sys.getsizeof(serialized_sig[0])}"
-                          f"\n len {len(serialized_sig[0])}")
         sig_message = b''.join([serialized_sig[0], bytes([serialized_sig[1]])])
-        if self.is_logging:
-            logging.debug(f"sig message :{sig_message} "
-                          f"\n with_recover_msg size : {sys.getsizeof(sig_message)}"
-                          f"\n len {len(sig_message)}"
-                          f"\n {type(sig_message[-1])}")
         signature = base64.b64encode(sig_message).decode()
         return signature
