@@ -29,6 +29,7 @@ class RestStubManager:
     def __init__(self, target, for_rs_target=True):
         util.logger.spam(f"RestStubManager:init target({target})")
 
+        self.__should_update = True
         self.__target = target
 
         self.__version_urls = {}
@@ -63,7 +64,6 @@ class RestStubManager:
         }
 
         self.__executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
-        self.update_methods_version()
 
     @property
     def target(self):
@@ -86,6 +86,10 @@ class RestStubManager:
         logging.debug(f"update subscribe api version({method_name}) to: {self.__method_versions[method_name].name}")
 
     def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False):
+        if self.__should_update:
+            self.update_methods_version()
+            self.__should_update = False
+
         try:
             version = self.__method_versions[method_name]
             url = self.__version_urls[version]
