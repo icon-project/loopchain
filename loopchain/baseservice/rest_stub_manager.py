@@ -86,11 +86,11 @@ class RestStubManager:
         logging.debug(f"update subscribe api version({method_name}) to: {self.__method_versions[method_name].name}")
 
     def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False):
-        if self.__should_update:
-            self.update_methods_version()
-            self.__should_update = False
-
         try:
+            if self.__should_update:
+                self.update_methods_version()
+                self.__should_update = False
+
             version = self.__method_versions[method_name]
             url = self.__version_urls[version]
             method_name = self.__method_names[method_name]
