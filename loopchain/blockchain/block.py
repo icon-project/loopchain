@@ -432,9 +432,7 @@ class Block:
                 # When Grpc Connection Raise Exception
                 # save all result{'code': ScoreResponse.SCORE_CONTAINER_EXCEPTION, 'message': str(e)}
                 logging.error(f'This error occurred while Score_invoke has failed in verify block : {e}')
-                score_container_exception_result = {'code': ScoreResponse.SCORE_CONTAINER_EXCEPTION, 'message': str(e)}
-                invoke_results = util.create_invoke_result_specific_case(self.confirmed_transaction_list,
-                                                                         score_container_exception_result)
+                invoke_results = {}
 
         # util.logger.spam(f'Block::verify_through_score_invoke >>>>> invoke_results :: {invoke_results}')
 

@@ -271,7 +271,7 @@ class BlockChain:
             else:
                 need_to_commit = True
                 invoke_results = self.__invoke_results.get(block.block_hash, None)
-                if invoke_results is None:
+                if not invoke_results:
                     need_to_commit = self.__prevent_next_block_mismatch(block, is_commit_state_validation)
                     if need_to_commit:
                         invoke_results = self.__score_invoke_with_state_integrity(block, is_commit_state_validation)
