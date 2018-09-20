@@ -355,7 +355,7 @@ class BlockChain:
                                            f"Cannot find block({invoke_block_height}")
 
                     invoke_block_result = self.__score_invoke_with_state_integrity(
-                        is_commit_state_validation
+                        invoke_block, is_commit_state_validation
                     )
 
                     self.__add_tx_to_block_db(invoke_block, invoke_block_result)
