@@ -632,6 +632,9 @@ class BlockManager(CommonThread, Subscriber):
 
         logging.debug(f"block_manager:block_height_sync is complete.")
 
+        # Subscribe to block_sync_target_stub
+        self.__channel_service.subscribe_to_target_stub(target_peer_stub)
+
         self.__update_service_status(status_code.Service.online)
         return True
 

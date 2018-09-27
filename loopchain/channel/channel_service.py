@@ -210,7 +210,8 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.connect_to_radio_station()
         await self.set_peer_type_in_channel()
-        await self.subscribe_to_radio_station()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            await self.subscribe_to_radio_station()
 
         self.generate_genesis_block()
 
@@ -444,6 +445,9 @@ class ChannelService:
     async def subscribe_to_radio_station(self):
         await self.__subscribe_call_to_stub_by_method(self.__radio_station_stub, loopchain_pb2.PEER)
 
+    async def subscribe_to_target_stub(self, target_stub):
+        await self.__subscribe_call_to_stub_by_method(target_stub, loopchain_pb2.PEER)
+
     async def subscribe_to_peer(self, peer_id, peer_type):
         peer = self.peer_manager.get_peer(peer_id)
         peer_stub = self.peer_manager.get_peer_stub_manager(peer)
@@ -667,15 +671,9 @@ class ChannelService:
                 _, future = self.block_manager.block_height_sync(block_sync_target_stub)
                 await future
 
-                if block_sync_target_stub is None:
-                    util.exit_and_msg("Fail connect to leader!!")
-
                 self.show_peers()
 
-            if block_sync_target_stub is not None and self.is_support_node_function(conf.NodeFunction.Vote):
-                await self.__subscribe_call_to_stub_by_method(block_sync_target_stub, loopchain_pb2.BLOCK_GENERATOR)
-
-            if is_delay_announce_new_leader:
+            if is_delay_announce_new_leader and ChannelProperty().node_type == conf.NodeType.CommunityNode:
                 self.peer_manager.announce_new_leader(
                     peer_old_leader.peer_id,
                     peer_leader.peer_id,
