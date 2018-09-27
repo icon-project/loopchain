@@ -23,7 +23,7 @@ import requests
 from jsonrpcclient import HTTPClient
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler
+from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler, TimerService, Timer
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
@@ -430,7 +430,8 @@ class BlockManager(CommonThread, Subscriber):
                 }
             )
             max_height_result = rs_rest_stub.call("Status")
-
+            if max_height_result.status_code != 200:
+                raise ConnectionError
             block_data_str = json.dumps(get_block_result['block'])
             block = Block(self.__channel_name)
             block.deserialize_block(block_data_str.encode('utf-8'))
@@ -464,6 +465,8 @@ class BlockManager(CommonThread, Subscriber):
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
+        timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
+        timer_service: TimerService = self.__channel_service.timer_service
         self.__update_service_status(status_code.Service.block_height_sync)
         is_sync_complete = False
 
@@ -494,6 +497,9 @@ class BlockManager(CommonThread, Subscriber):
             if len(peer_stubs) == 0:
                 util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
                 return False
+            else:
+                if timer_key in timer_service.timer_list.keys():
+                    timer_service.stop_timer(timer_key)
 
             logging.info(f"You need block height sync to: {max_height} yours: {my_height}")
 
@@ -556,8 +562,20 @@ class BlockManager(CommonThread, Subscriber):
 
                         # update peer_stubs list
                         if len(peer_stubs) < 1:
-                            max_height, peer_stubs = self.__get_peer_stub_list()
+                            if timer_key not in timer_service.timer_list.keys():
+                                util.logger.spam(f"add timer for block_request_call to radiostation...")
+                                timer_service.add_timer(
+                                    timer_key,
+                                    Timer(
+                                        target=timer_key,
+                                        duration=conf.GET_LAST_BLOCK_TIMER,
+                                        is_repeat=True,
+                                        callback=self.__block_height_sync,
+                                        callback_kwargs={'target_peer_stub': target_peer_stub}
+                                    )
+                                )
                             util.logger.spam(f"set max_height by fail response:{max_height} -> {max_block_height}")
+                            return False
 
             if my_height >= max_height:
                 is_sync_complete = True

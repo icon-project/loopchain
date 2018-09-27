@@ -82,6 +82,8 @@ class RestStubManager:
         except ReceivedErrorResponse as e:
             self.__method_versions[method_name] = conf.ApiVersion.v2
             self.__method_names[method_name] = "icx_getBlockByHeight"
+        except Exception as e:
+            raise e
 
         logging.debug(f"update subscribe api version({method_name}) to: {self.__method_versions[method_name].name}")
 
