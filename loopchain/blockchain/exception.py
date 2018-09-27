@@ -146,7 +146,7 @@ class TransactionInvalidDuplicatedHash(TransactionInvalidError):
 
 
 class TransactionInvalidOutOfTimeBound(TransactionInvalidError):
-    message_code = message_code.Response.fain_tx_invalid_out_of_time_bound
+    message_code = message_code.Response.fail_tx_invalid_out_of_time_bound
 
     def __init__(self, tx_hash, tx_timestamp, cur_timestamp, message=''):
         super().__init__(tx_hash, message)

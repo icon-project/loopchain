@@ -81,7 +81,7 @@ class Response:
     fail_tx_invalid_signature = -106
     fail_tx_invalid_params = -107
     fail_tx_invalid_duplicated_hash = -108
-    fain_tx_invalid_out_of_time_bound = -109
+    fail_tx_invalid_out_of_time_bound = -109
     fail_tx_invalid_wrong_nid = -110
     fail_tx_not_invoked = -111
 
@@ -176,8 +176,8 @@ responseCodeMap = {
     Response.fail_tx_invalid_duplicated_hash:
         (Response.fail_tx_invalid_duplicated_hash, "fail tx invalid duplicated hash"),
 
-    Response.fain_tx_invalid_out_of_time_bound:
-        (Response.fain_tx_invalid_out_of_time_bound, "fain tx invalid out of time bound"),
+    Response.fail_tx_invalid_out_of_time_bound:
+        (Response.fail_tx_invalid_out_of_time_bound, "fail tx invalid out of time bound"),
 
     Response.fail_tx_invalid_wrong_nid:
         (Response.fail_tx_invalid_wrong_nid, "fail tx invalid no nid"),
