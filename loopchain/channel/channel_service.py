@@ -220,8 +220,6 @@ class ChannelService:
         elif conf.ALLOW_MAKE_EMPTY_BLOCK:
             self.block_manager.block_generation_scheduler.start()
 
-
-
     def __init_peer_auth(self):
         try:
             channel_use_icx = self.get_channel_option()["send_tx_type"] == conf.SendTxType.icx
