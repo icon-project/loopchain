@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A management class for blockchain."""
-
+import asyncio
 import queue
 import shutil
 import traceback
@@ -20,10 +20,9 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
 
 import requests
-from jsonrpcclient import HTTPClient
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler, TimerService, Timer
+from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler, TimerService
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
@@ -633,7 +632,9 @@ class BlockManager(CommonThread, Subscriber):
         logging.debug(f"block_manager:block_height_sync is complete.")
 
         # Subscribe to block_sync_target_stub
-        self.__channel_service.subscribe_to_target_stub(target_peer_stub)
+        loop = asyncio.new_event_loop()
+        loop.run_until_complete(self.__channel_service.subscribe_to_target_stub(target_peer_stub))
+        loop.close()
 
         self.__update_service_status(status_code.Service.online)
         return True
