@@ -210,8 +210,6 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.connect_to_radio_station()
         await self.set_peer_type_in_channel()
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            await self.subscribe_to_radio_station()
 
         self.generate_genesis_block()
 

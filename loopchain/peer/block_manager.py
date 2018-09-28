@@ -631,8 +631,10 @@ class BlockManager(CommonThread, Subscriber):
 
         logging.debug(f"block_manager:block_height_sync is complete.")
 
-        # Subscribe to block_sync_target_stub
+        # Subscribe to block_sync_target_stub and radiostation
         loop = self.__channel_service.timer_service.get_event_loop()
+        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_radio_station(), loop)
         asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_target_stub(target_peer_stub), loop)
 
         self.__update_service_status(status_code.Service.online)
