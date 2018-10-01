@@ -612,6 +612,7 @@ class ChannelService:
         if peer_type == loopchain_pb2.BLOCK_GENERATOR:
             self.block_manager.set_peer_type(peer_type)
             self.__ready_to_height_sync(True)
+            await self.subscribe_to_radio_station()
         elif peer_type == loopchain_pb2.PEER:
             self.__ready_to_height_sync(False)
             await self.__block_height_sync_channel()
