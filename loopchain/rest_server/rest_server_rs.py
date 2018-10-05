@@ -36,13 +36,7 @@ from loopchain.utils import loggers
 
 
 def get_channel_name_from_args(args) -> str:
-    """get channel name from args, if channel is None return conf.LOOPCHAIN_DEFAULT_CHANNEL
-
-    :param args: params
-    :return: channel name if args channel is None return conf.LOOPCHAIN_DEFAULT_CHANNEL
-    """
-
-    return conf.LOOPCHAIN_DEFAULT_CHANNEL if args.get('channel') is None else args.get('channel')
+    return args.get('channel', conf.LOOPCHAIN_DEFAULT_CHANNEL)
 
 
 class ServerComponents(metaclass=SingletonMetaClass):

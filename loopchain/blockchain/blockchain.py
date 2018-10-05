@@ -330,7 +330,7 @@ class BlockChain:
 
     def __prevent_next_block_mismatch(self, next_block: Block, is_commit_state_validation: bool) -> bool:
         logging.debug(f"prevent_block_mismatch...")
-        if conf.USE_EXTERNAL_SCORE:
+        if util.channel_use_icx(self.__channel_name):
             score_stub = StubCollection().icon_score_stubs[self.__channel_name]
             request = {
                 "method": "ise_getStatus",

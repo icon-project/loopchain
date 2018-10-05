@@ -207,6 +207,7 @@ def clean_up_temp_db_files(kill_process=True):
     os.system(f'rm -rf $(find {module_root_path} -name *_block)')
     os.system("rm -rf ./testcase/db_*")
     os.system("rm -rf ./.storage")
+    os.system("rm -rf ./log")
     os.system("rm -rf chaindb_*")
     os.system("rm -rf ./blockchain_db*")
     os.system("rm -rf ./block_confirm_db*")

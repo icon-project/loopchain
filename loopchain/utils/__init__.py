@@ -217,37 +217,57 @@ def request_server_wait_response(stub_method, message, time_out_seconds=None):
     return None
 
 
-def normalize_request_url(url_input, version):
+def normalize_request_url(url_input, version, channel=None):
     if 'http://' in url_input:
         url_input = url_input.split("http://")[1]
 
     if not url_input:  # ex) '' => http://localhost:9000/api/v3
-        url = generate_url_from_params(version=version)
+        url = generate_url_from_params(version=version, channel=channel)
     elif 'https://' in url_input and url_input.count(':') == 1:  # ex) https://testwallet.icon.foundation
-        url = generate_url_from_params(dns=url_input.split("https://")[1], version=version, use_https=True)
+        url = generate_url_from_params(dns=url_input.split("https://")[1],
+                                       version=version,
+                                       use_https=True,
+                                       channel=channel)
     elif 'https://' in url_input and url_input.count(':') == 2:  # ex) https://127.0.0.1:9000
         ip_port = url_input.split("https://")[1]
-        url = generate_url_from_params(ip=ip_port.split(':')[0], port=ip_port.split(':')[1],
-                                       version=version, use_https=True)
+        url = generate_url_from_params(ip=ip_port.split(':')[0],
+                                       port=ip_port.split(':')[1],
+                                       version=version,
+                                       use_https=True,
+                                       channel=channel)
     elif url_input.isdigit():  # ex) 9000
-        url = generate_url_from_params(port=url_input, version=version)
-    elif ':' in url_input and url_input.split(':')[1].isdigit():  # ex) 127.0.0.1:9000, peer_name:9000
-        url = generate_url_from_params(ip=url_input.split(":")[0], port=url_input.split(":")[1], version=version)
+        url = generate_url_from_params(port=url_input, version=version, channel=channel)
+    elif ':' in url_input and url_input.split(':')[1].isdigit():  # ex) 127.0.0.1:9000, {peer_name}:9000
+        url = generate_url_from_params(ip=url_input.split(":")[0],
+                                       port=url_input.split(":")[1],
+                                       version=version,
+                                       channel=channel)
     elif url_input.count('.') == 3 and url_input.replace(".", "").isdigit():  # ex) 127.0.0.1
-        url = generate_url_from_params(ip=url_input, version=version)
+        url = generate_url_from_params(ip=url_input, version=version, channel=channel)
     else:  # ex) testwallet.icon.foundation => https://testwallet.icon.foundation/api/v3
-        url = generate_url_from_params(dns=url_input, version=version, use_https=True)
+        url = generate_url_from_params(dns=url_input, version=version, use_https=True, channel=channel)
 
     return url
 
 
-def generate_url_from_params(ip=conf.IP_LOCAL, dns=None, port=conf.PORT_PEER_FOR_REST,
-                             version=conf.ApiVersion.v3.name, use_https=False):
+def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_https=False, channel=None):
+    if ip is None:
+        ip = conf.IP_LOCAL
+    if port is None:
+        port = conf.PORT_PEER_FOR_REST
+    if version is None:
+        version = conf.ApiVersion.v3.name
+    if channel is None:
+        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
+
     if dns:
         ip = dns
         port = '443'
 
-    url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version}"
+    if version == conf.ApiVersion.v3 or version == conf.ApiVersion.node:
+        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}/{channel}"
+    else:
+        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
 
     return url
 
@@ -324,6 +344,10 @@ def get_private_ip():
         if check_is_private_ip(ip):
             return ip
         return get_private_ip3()
+
+
+def channel_use_icx(channel):
+    return conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx
 
 
 def dict_to_binary(the_dict):

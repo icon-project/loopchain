@@ -26,21 +26,24 @@ from loopchain import configure as conf
 
 
 class RestStubManager:
-    def __init__(self, target, for_rs_target=True):
+    def __init__(self, target, channel=None, for_rs_target=True):
         util.logger.spam(f"RestStubManager:init target({target})")
+        if channel is None:
+            channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
+        self.__channel_name = channel
         self.__should_update = True
         self.__target = target
 
         self.__version_urls = {}
         for version in conf.ApiVersion:
             if 'https://' in target:
-                url = util.normalize_request_url(target, version.name)
+                url = util.normalize_request_url(target, version, channel)
             elif for_rs_target:
                 url = util.normalize_request_url(
-                    f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version.name)
+                    f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version, channel)
             else:
-                url = util.normalize_request_url(f"http://{target}", version.name)
+                url = util.normalize_request_url(f"http://{target}", version, channel)
             self.__version_urls[version] = url
 
         self.__method_versions = {
@@ -50,7 +53,7 @@ class RestStubManager:
             "AnnounceConfirmedBlock": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
-            "GetLastBlock": conf.ApiVersion.v2
+            "GetLastBlock": conf.ApiVersion.v3
         }
 
         self.__method_names = {
@@ -75,12 +78,12 @@ class RestStubManager:
         try:
             HTTPClient(self.__version_urls[conf.ApiVersion.node]).request(
                 method_name="node_GetBlockByHeight",
-                message={'height': 0}
+                message={'channel': self.__channel_name, 'height': str(0)}
             )
             self.__method_versions[method_name] = conf.ApiVersion.node
             self.__method_names[method_name] = "node_GetBlockByHeight"
         except ReceivedErrorResponse as e:
-            self.__method_versions[method_name] = conf.ApiVersion.v2
+            self.__method_versions[method_name] = conf.ApiVersion.v3
             self.__method_names[method_name] = "icx_getBlockByHeight"
         except Exception as e:
             raise e
@@ -99,15 +102,14 @@ class RestStubManager:
 
             if version == conf.ApiVersion.v1:
                 url += method_name
-                response = requests.get(url)
+                response = requests.get(url, params={'channel': self.__channel_name})
             else:
+                if method_name == "icx_getBlockByHeight" and 'channel' in message:
+                    del message['channel']
+
                 client = HTTPClient(url)
                 client.session.verify = conf.REST_SSL_VERIFY
-                if version == conf.ApiVersion.v2:
-                    response = client.request(method_name, message) if message else client.request(method_name)
-                else:
-                    response = client.request(method_name=method_name, message=message)
-
+                response = client.request(method_name, message) if message else client.request(method_name)
             util.logger.spam(f"RestStubManager:call complete request_url({url}), "
                              f"method_name({method_name})")
             return response

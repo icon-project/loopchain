@@ -88,16 +88,6 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def set_resource(self):
         self.__app.add_route(json_rpc.NodeDispatcher.dispatch,
                              '/api/node/', methods=['POST'])
-
-        if conf.USE_EXTERNAL_SCORE:
-            self.__app.add_route(json_rpc.Version2IconDispatcher.dispatch,
-                                 '/api/v2', methods=['POST'])
-            self.__app.add_route(json_rpc.Version3Dispatcher.dispatch,
-                                 '/api/v3', methods=['POST'])
-        else:
-            self.__app.add_route(json_rpc.Version2Dispatcher.dispatch,
-                                 '/api/v2', methods=['POST'])
-
         if conf.DISABLE_V1_API:
             self.__app.add_route(Disable.as_view(),
                                  '/api/v1', methods=['POST', 'GET'])
