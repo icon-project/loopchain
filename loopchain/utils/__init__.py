@@ -256,7 +256,7 @@ def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_htt
     if port is None:
         port = conf.PORT_PEER_FOR_REST
     if version is None:
-        version = conf.ApiVersion.v3.name
+        version = conf.ApiVersion.v3
     if channel is None:
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
