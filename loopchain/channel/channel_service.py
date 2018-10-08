@@ -221,8 +221,8 @@ class ChannelService:
 
     def __init_peer_auth(self):
         try:
-            channel_use_icx = self.get_channel_option()["send_tx_type"] == conf.SendTxType.icx
-            channel_authorization = IcxAuthorization if channel_use_icx else PeerAuthorization
+            channel_authorization = IcxAuthorization if util.channel_use_icx(ChannelProperty().name) \
+                else PeerAuthorization
 
             self.__peer_auth = channel_authorization(ChannelProperty().name)
 
@@ -290,7 +290,7 @@ class ChannelService:
                 conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
                 ssl_auth_type=conf.GRPC_SSL_TYPE)
         else:
-            self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target)
+            self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target, ChannelProperty().name)
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
@@ -320,7 +320,7 @@ class ChannelService:
             )
             self.__score_container = CommonSubprocess(process_args)
 
-        if conf.USE_EXTERNAL_SCORE:
+        if util.channel_use_icx(ChannelProperty().name):
             await StubCollection().create_icon_score_stub(ChannelProperty().name)
             await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
             await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
@@ -763,7 +763,7 @@ class ChannelService:
             # await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
     def genesis_invoke(self, block: Block) -> dict or None:
-        if conf.USE_EXTERNAL_SCORE:
+        if util.channel_use_icx(ChannelProperty().name):
             method = "icx_sendTransaction"
             transactions = []
             for tx in block.confirmed_transaction_list:
@@ -800,7 +800,7 @@ class ChannelService:
         return None
 
     def score_invoke(self, _block: Block) -> dict or None:
-        if conf.USE_EXTERNAL_SCORE:
+        if util.channel_use_icx(ChannelProperty().name):
             method = "icx_sendTransaction"
             transactions = []
             for tx in _block.confirmed_transaction_list:
@@ -841,14 +841,14 @@ class ChannelService:
         change_hash_info = json.dumps({"block_height": block_height, "old_block_hash": old_block_hash,
                                        "new_block_hash": new_block_hash})
 
-        if not conf.USE_EXTERNAL_SCORE:
+        if not util.channel_use_icx(ChannelProperty().name):
             stub = StubCollection().score_stubs[ChannelProperty().name]
             stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.height} {block.block_hash}")
 
-        if conf.USE_EXTERNAL_SCORE:
+        if util.channel_use_icx(ChannelProperty().name):
             request = {
                 "blockHeight": block.height,
                 "blockHash": block.block_hash,
@@ -870,7 +870,7 @@ class ChannelService:
                 return False
 
     def score_remove_precommit_state(self, block: Block):
-        if conf.USE_EXTERNAL_SCORE:
+        if not util.channel_use_icx(ChannelProperty().name):
             request = {
                 "blockHeight": block.height,
                 "blockHash": block.block_hash,

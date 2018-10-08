@@ -141,7 +141,7 @@ class PeerService:
         return self.__radio_station_target
 
     @property
-    def stub_to_radiostation(self) -> StubManager:
+    def stub_to_radiostation(self):
         stub_type = loopchain_pb2_grpc.PeerServiceStub
         if self.is_support_node_function(conf.NodeFunction.Vote):
             stub_type = loopchain_pb2_grpc.RadioStationStub
@@ -233,13 +233,9 @@ class PeerService:
             logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
             channels = json.loads(response.channel_infos)
         else:
-            response = self.stub_to_radiostation.call_in_times(
-                method_name="GetChannelInfos",
-                message={}
-            )
+            response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()
-                        if conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx}
-            # util.logger.spam(f"__get_channel_infos:channels::{channels}")
+                        if util.channel_use_icx(channel)}
 
         return channels
 
@@ -268,13 +264,14 @@ class PeerService:
                 self.__rest_proxy_server = RestProxyServer(int(port))
             else:
                 # Run web app as it is.
-                logging.debug(f'Launch Sanic RESTful server. Port = {port}')
+                logging.debug(f'Launch Sanic RESTful server. '
+                              f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
                 self.__rest_service = RestService(int(port))
 
     def __make_peer_id(self):
         """네트워크에서 Peer 를 식별하기 위한 UUID를 level db 에 생성한다.
         """
-        if conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]['send_tx_type'] == conf.SendTxType.icx:
+        if util.channel_use_icx(conf.LOOPCHAIN_DEFAULT_CHANNEL):
             self.__peer_id = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
         else:
             try:
@@ -446,7 +443,7 @@ class PeerService:
         for channel_name, channel_info in self.__channel_infos.items():
             await StubCollection().create_channel_stub(channel_name)
 
-            if conf.USE_EXTERNAL_SCORE:
+            if util.channel_use_icx(channel_name):
                 await StubCollection().create_icon_score_stub(channel_name)
             else:
                 await StubCollection().create_score_stub(channel_name, channel_info['score_package'])

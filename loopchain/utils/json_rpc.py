@@ -79,7 +79,7 @@ class CustomAiohttpClient(AsyncClient):
         return None
 
 
-async def redirect_request_to_rs(message, rs_target, version=conf.ApiVersion.v3.name):
+async def redirect_request_to_rs(message, rs_target, version=conf.ApiVersion.v3):
     method_name = 'icx_sendTransaction'
     rs_url = util.normalize_request_url(f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{rs_target}", version)
     async with aiohttp.ClientSession() as session:

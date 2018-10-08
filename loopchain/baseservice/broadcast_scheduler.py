@@ -291,7 +291,7 @@ class BroadcastScheduler(CommonThread):
 
     def __handler_audience_subscribe(self, audience_subscribe_target):
         logging.debug(f"BroadcastThread received audience_subscribe command target: {audience_subscribe_target}")
-        rest_stub_manager = RestStubManager(audience_subscribe_target, for_rs_target=False)
+        rest_stub_manager = RestStubManager(audience_subscribe_target, self.__channel, for_rs_target=False)
         self.__audience_subscriber[audience_subscribe_target] = rest_stub_manager
 
     def __handler_audience_unsubscribe(self, audience_unsubscribe_target):

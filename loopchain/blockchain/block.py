@@ -437,7 +437,7 @@ class Block:
         # util.logger.spam(f'Block::verify_through_score_invoke >>>>> invoke_results :: {invoke_results}')
 
         need_rebuild = False
-        if not conf.USE_EXTERNAL_SCORE:
+        if not util.channel_use_icx(self.__channel_name):
             fail_list = [tx_hash for tx_hash, invoke_result in invoke_results.items()
                          if invoke_result["code"] != message_code.Response.success]
 

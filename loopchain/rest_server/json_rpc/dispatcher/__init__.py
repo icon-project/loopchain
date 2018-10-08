@@ -13,6 +13,3 @@
 # limitations under the License.
 
 from .node import *
-from .version2 import *
-from .version2_icon import *
-from .version3 import *

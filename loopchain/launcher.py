@@ -96,17 +96,39 @@ def start_as_channel(args):
 
 
 def start_as_rest_server(args):
-    peer_ip = util.get_private_ip()
     peer_port = args.port
-    ServerComponents().set_resource()
-    PeerServiceStub().set_stub_port(port=peer_port, IP_address=peer_ip)
-
-    amqp_target = args.amqp_target or conf.AMQP_TARGET
+    channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(peer_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
 
-    logging.info(f"Sanic rest server is running!: {api_port}")
-    ServerComponents().serve(amqp_target, amqp_key, api_port)
+    from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
+    from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
+    from iconcommons.icon_config import IconConfig
+    from iconcommons.logger import Logger
+
+    additional_conf = {
+        "log": {
+            "logger": "iconrpcserver",
+            "colorLog": True,
+            "level": "info",
+            "filePath": "./log/iconrpcserver.log",
+            "outputType": "console|file"
+        },
+        "channel": channel,
+        "port": api_port,
+        "amqpKey": amqp_key,
+        "gunicornWorkerCount": 1,
+        "tbearsMode": False
+    }
+
+    rpcserver_conf = IconConfig("", default_rpcserver_config)
+    rpcserver_conf.load()
+    rpcserver_conf.update_conf(additional_conf)
+    Logger.load_config(rpcserver_conf)
+
+    if not find_procs_by_params(api_port):
+        start_process(conf=rpcserver_conf)
+        Logger.info("start_command done!, IconRpcServerCli")
 
 
 def start_as_rest_server_rs(args):
@@ -126,9 +148,8 @@ def start_as_score(args):
     score_package = args.score_package or conf.DEFAULT_SCORE_PACKAGE
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
-    channel_use_icx = conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx
 
-    if channel_use_icx and conf.USE_EXTERNAL_SCORE:
+    if util.channel_use_icx(channel) and conf.USE_EXTERNAL_SCORE:
         if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
             from iconservice.icon_service import IconService
             from iconservice.icon_config import default_icon_config
@@ -136,10 +157,23 @@ def start_as_score(args):
             from iconcommons.logger import Logger
 
             additional_conf = {
-                "scoreRootPath": f".storage/.score{amqp_key}",
-                "stateDbRootPath": f".storage/.statedb{amqp_key}",
+                "log": {
+                    "logger": "iconservice",
+                    "colorLog": True,
+                    "level": "info",
+                    "filePath": f"./log/icon_service_{channel}.log",
+                    "outputType": "console|file"
+                },
+                "scoreRootPath": f".storage/.score{amqp_key}_{channel}",
+                "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
+                "service": {
+                    "fee": True,
+                    "audit": True,
+                    "deployerWhiteList": False,
+                    "scorePackageValidator": False
+                }
             }
 
             icon_conf = IconConfig("", default_icon_config)

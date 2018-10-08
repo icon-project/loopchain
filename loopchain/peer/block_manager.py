@@ -425,6 +425,7 @@ class BlockManager(CommonThread, Subscriber):
         try:
             get_block_result = rs_rest_stub.call(
                 "GetBlockByHeight", {
+                    'channel': self.__channel_name,
                     'height': str(block_height)
                 }
             )
@@ -583,7 +584,6 @@ class BlockManager(CommonThread, Subscriber):
                         logging.warning(f"Not responding peer({peer_stub}) is removed from the peer stubs target.")
 
                         if len(peer_stubs) < 1:
-                            util.logger.spam(f"set max_height by fail response:{max_height} -> {max_block_height}")
                             raise ConnectionError
 
             if my_height >= max_height:
@@ -694,8 +694,7 @@ class BlockManager(CommonThread, Subscriber):
                             channel=self.__channel_name,
                         ), conf.GRPC_TIMEOUT_SHORT)
                     else:
-                        response = requests.get(f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://"
-                                                f"{target}/api/v1/status/peer")
+                        response = target_peer_stub.call("Status")
                         util.logger.spam('{/api/v1/status/peer} response: ' + response.text)
                         response.block_height = int(json.loads(response.text)["block_height"])
                         stub.target = target

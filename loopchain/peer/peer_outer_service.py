@@ -254,7 +254,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             "channel": StubCollection().channel_stubs.get(channel_name),
             "score":
                 StubCollection().icon_score_stubs.get(channel_name)
-                if conf.USE_EXTERNAL_SCORE else
+                if util.channel_use_icx(channel_name) else
                 StubCollection().score_stubs.get(channel_name)
         }
 
