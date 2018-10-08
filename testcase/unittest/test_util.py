@@ -198,26 +198,30 @@ def close_open_python_process():
 
 
 def clean_up_temp_db_files(kill_process=True):
-    module_root_path = os.path.dirname(loopchain.__file__) + "/.."
+    from pathlib import Path
+    loopchain_root = Path(os.path.dirname(loopchain.__file__)).parent
+
     if kill_process:
         close_open_python_process()
 
-    os.system(f'rm -rf $(find {module_root_path} -name db_*)')
-    os.system(f'rm -rf $(find {module_root_path} -name *test_db*)')
-    os.system(f'rm -rf $(find {module_root_path} -name *_block)')
-    os.system("rm -rf ./testcase/db_*")
-    os.system("rm -rf ./.storage")
-    os.system("rm -rf ./log")
-    os.system("rm -rf chaindb_*")
-    os.system("rm -rf ./blockchain_db*")
-    os.system("rm -rf ./block_confirm_db*")
-    os.system("rm -rf ./genesis_db*")
-    os.system("rm -rf ./testcase/chaindb_*")
-    os.system("rm -rf sample_score")
-    os.system("rm -rf ./testcase/sample_score")
-    os.system("rm -rf certificate_db")
-    os.system("rm -rf ./resources/test_score_deploy")
-    os.system("rm -rf ./resources/test_score_repository/loopchain")
+    print(f"loopchain root : {loopchain_root}")
+
+    os.system(f'rm -rf $(find {loopchain_root} -name db_*)')
+    os.system(f'rm -rf $(find {loopchain_root} -name *test_db*)')
+    os.system(f'rm -rf $(find {loopchain_root} -name *_block)')
+    os.system(f"rm -rf {loopchain_root}/testcase/db_*")
+    os.system(f"rm -rf {loopchain_root}/.storage")
+    os.system(f"rm -rf {loopchain_root}/log")
+    os.system(f"rm -rf {loopchain_root}/chaindb_*")
+    os.system(f"rm -rf {loopchain_root}/blockchain_db*")
+    os.system(f"rm -rf {loopchain_root}/block_confirm_db*")
+    os.system(f"rm -rf {loopchain_root}/genesis_db*")
+    os.system(f"rm -rf {loopchain_root}/testcase/chaindb_*")
+    os.system(f"rm -rf {loopchain_root}/sample_score")
+    os.system(f"rm -rf {loopchain_root}/testcase/sample_score")
+    os.system(f"rm -rf {loopchain_root}/certificate_db")
+    os.system(f"rm -rf {loopchain_root}/resources/test_score_deploy")
+    os.system(f"rm -rf {loopchain_root}/resources/test_score_repository/loopchain")
     time.sleep(1)
 
 
