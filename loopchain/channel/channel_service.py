@@ -340,7 +340,7 @@ class ChannelService:
         elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.siever:
             consensus_algorithm = ConsensusSiever(self.__block_manager)
         elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            consensus_algorithm = ConsensusLFT(self.__block_manager)
+            consensus_algorithm = None
         else:
             consensus_algorithm = ConsensusDefault(self.__block_manager)
 
