@@ -64,7 +64,7 @@ class Acceptor(Subscriber):
         self.__ready_count: dict = {}
         self.__uncommit_block = None
         self.__status = AcceptorStatus.normal
-        self._event_list = [("complete_consensus", self.__callback_complete_consensus)]
+        self._event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.__callback_complete_consensus)]
 
     @property
     def epoch(self):

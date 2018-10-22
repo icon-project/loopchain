@@ -76,7 +76,7 @@ class BlockManager(CommonThread, Subscriber):
         self.__prev_epoch: Epoch = None
         self.__precommit_block: Block = None
         self.__epoch: Epoch = None
-        self._event_list = [("complete_consensus", self.callback_complete_consensus)]
+        self._event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus)]
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = "loopchain.peer.BlockManager"
         self.__service_status = status_code.Service.online

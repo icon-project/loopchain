@@ -28,8 +28,17 @@ from loopchain.baseservice.aging_cache import AgingCache
 
 
 class Consensus(CommonThread, Publisher):
+    EVENT_COMPLETE_CONSENSUS = "complete_consensus"
+    EVENT_MAKE_BLOCK = "make_block"
+    EVENT_LEADER_COMPLAIN_F_1 = "leader_complain_f_1"
+    EVENT_LEADER_COMPLAIN_F_2 = "leader_complain_2f_1"
+
     def __init__(self, channel_service: 'ChannelService', channel: str=None, **kwargs):
-        Publisher.__init__(self, ["complete_consensus", "leader_complain_f_1", "leader_complain_2f_1", "make_block"])
+        Publisher.__init__(self, [
+            Consensus.EVENT_COMPLETE_CONSENSUS,
+            Consensus.EVENT_LEADER_COMPLAIN_F_1,
+            Consensus.EVENT_LEADER_COMPLAIN_F_2,
+            Consensus.EVENT_MAKE_BLOCK])
         self.__channel_service = channel_service
         self.__peer_manager = channel_service.peer_manager
         self.channel_name = channel
@@ -80,7 +89,7 @@ class Consensus(CommonThread, Publisher):
             util.logger.spam(f"hrkim>>>consensus :: create_epoch : precommit height : {self.__precommit_block.height}")
 
         self._notify(
-            event="complete_consensus",
+            event=Consensus.EVENT_COMPLETE_CONSENSUS,
             precommit_block=self.__precommit_block,
             prev_epoch=self.__last_epoch,
             epoch=self.__epoch,
@@ -130,7 +139,7 @@ class Consensus(CommonThread, Publisher):
         while self.is_run():
             time.sleep(sleep_time)
             util.logger.spam(f"---- MAKE BLOCK EVENT ----")
-            self._notify("make_block", tx_queue=self.__tx_queue)
+            self._notify(Consensus.EVENT_MAKE_BLOCK, tx_queue=self.__tx_queue)
 
         logging.info(f"channel({self.channel_name}) Consensus thread Ended.")
 
