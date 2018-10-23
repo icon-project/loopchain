@@ -606,10 +606,9 @@ class BlockChain:
                                                   f"That's why Genesis block couldn't be generated.")
 
         block.generate_block()
-        # 제네시스 블럭을 추가 합니다.
+        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+            block.next_leader_peer = ObjectManager().channel_service.peer_manager.get_next_leader_peer().peer_id
         self.add_block(block)
-        # 제네시스 블럭의 HASH 값은 af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc
-        # 으로 일정 합니다.
 
     def __put_block_to_db(self, block_key, block):
         # confirm 블럭

@@ -18,18 +18,14 @@ import operator
 
 from loopchain.baseservice import ChannelProperty
 from loopchain.blockchain.block import *
-from loopchain.blockchain.validator import TxValidator, get_tx_validator
 from loopchain.consensus import Subscriber, Consensus
 from loopchain.consensus.epoch import *
 from loopchain.consensus.vote_message import *
-from loopchain.protos import loopchain_pb2_grpc
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
 
 from typing import TYPE_CHECKING
-
-from loopchain.tools.grpc_helper import GRPCHelper
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
@@ -50,7 +46,7 @@ class Acceptor(Subscriber):
                  **kwargs):
         Subscriber.__init__(self, name)
         self.__channel = channel
-        self.__channel_service: 'ChannelManager' = channel_service
+        self.__channel_service: 'ChannelService' = channel_service
         self.__peer_id = peer_id
         self.__consensus = consensus
         self.__prev_epoch: Epoch = kwargs.get("prev_epoch", None)
@@ -147,7 +143,7 @@ class Acceptor(Subscriber):
 
         return Block.validate(block)
 
-    def __add_success_vote(self, vote: VoteMessage):
+    async def __add_success_vote(self, vote: VoteMessage):
         if vote.peer_id not in list(self.__vote_list.keys()):
             self.__vote_list[vote.peer_id] = vote
 
@@ -162,7 +158,10 @@ class Acceptor(Subscriber):
             util.logger.spam(f"acceptor:__add_success_vote::vote count over quorum !! can make block.")
             self.__epoch.status = EpochStatus.success
             self.__epoch.agree_vote_list = self.__vote_list
-            self.__consensus.set_new_leader(self.__consensus.precommit_block)
+            await self.__channel_service.reset_leader(
+                new_leader_id=self.__consensus.precommit_block.next_leader_peer,
+                block_height=self.__consensus.precommit_block.height
+            )
             self.__consensus.change_epoch(prev_epoch=self.__epoch, precommit_block=self.__uncommit_block)
 
     def __add_leader_complain(self, vote: VoteMessage):
@@ -216,7 +215,8 @@ class Acceptor(Subscriber):
         if ready_count >= self.__epoch.quorum:
             self.__epoch.status = EpochStatus.leader_complain
             self.__epoch.ready_vote_list = self.__ready_list
-            self.__consensus.set_new_leader(self.__consensus.precommit_block)
+            self.__channel_service.reset_leader(
+                self.__consensus.precommit_block.next_leader_peer, self.__consensus.precommit_block.height)
             self.__consensus.change_epoch(self.__epoch, self.__epoch.precommit_block)
 
     def __initialize_vote_record(self):
@@ -285,7 +285,7 @@ class Acceptor(Subscriber):
 
         if vote.type == VoteMessageType.success:
             if vote.block_hash == self.__epoch.block_hash and vote.block_height == self.__epoch.block_height:
-                self.__add_success_vote(vote)
+                await self.__add_success_vote(vote)
             # elif vote.block_hash == self.__epoch.precommit_block.block_hash:
             #     logging.debug(f"Acceptor.py:apply_vote_into_block::"
             #                   f"This block already has done consensus ({vote.block_hash}/{vote.block_height})")

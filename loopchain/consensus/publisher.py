@@ -49,3 +49,5 @@ class Publisher:
     def _notify(self, event: str, **kwargs):
         for callback in self.subscribers[event].values():
             callback(**kwargs)
+
+        return True

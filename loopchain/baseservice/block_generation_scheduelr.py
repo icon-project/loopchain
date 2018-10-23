@@ -28,7 +28,6 @@ class BlockGenerationScheduler(CommonThread):
         self.__schedule_queue = queue.Queue()
 
     def add_schedule(self, schedule):
-        # util.logger.spam(f"BlockGenerationScheduler:add_schedule")
         self.__schedule_queue.put(schedule)
 
     def get_schedule(self):

@@ -111,7 +111,8 @@ class Block:
             "height": self.height,
             "peer_id": self.peer_id,
             "signature": base64.b64encode(self.signature).decode(),
-            "commit_state": self.__commit_state
+            "commit_state": self.__commit_state,
+            "next_leader_peer_id": self.__next_leader_peer_id
         }
         return json.dumps(self.__json_data)
 
@@ -126,7 +127,8 @@ class Block:
             "height": self.height,
             "peer_id": self.peer_id,
             "signature": base64.b64encode(self.signature).decode(),
-            "commit_state": self.__commit_state
+            "commit_state": self.__commit_state,
+            "next_leader_peer_id": self.__next_leader_peer_id
         }
         return json.dumps(self.__json_data)
 
@@ -316,6 +318,7 @@ class Block:
             self.__signature = base64.b64decode(dump_obj['signature'].encode('UTF-8'))
             self.__commit_state = dump_obj['commit_state'] if 'commit_state' in dump_obj else self.__commit_state
             self.block_status = BlockStatus.confirmed
+            self.__next_leader_peer_id = dump_obj['next_leader_peer_id']
         else:
             dump_obj = pickle.loads(block_dumps)
             if type(dump_obj) == Block:

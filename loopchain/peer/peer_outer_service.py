@@ -476,8 +476,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, response_message, block = self.await_task(
-            channel_stub.task().get_precommit_block(last_block_height=request.last_block_height))
+        response_code, response_message, block = \
+            channel_stub.sync_task().get_precommit_block(last_block_height=request.last_block_height)
 
         return loopchain_pb2.PrecommitBlockReply(
             response_code=response_code, response_message=response_message, block=block)
