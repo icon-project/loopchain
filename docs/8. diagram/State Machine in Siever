@@ -1,0 +1,52 @@
+@startuml State Machine in Siever
+
+[*] --> InitComponets
+InitComponets: AddTimer: Connect to Radiostation
+
+InitComponets --> Consensus
+
+state Timer
+Timer: * Connect to Radiostation
+Timer: * heartbeat to peers
+Timer: * leader complain
+
+state Consensus {
+    [*] --> BlockHeightSync
+
+    state BlockHeightSync {
+        BlockSync: StopTimer: leader complain
+        BlockSync --> EvaluateNetwork : Succeeded
+
+        EvaluateNetwork: Connect Network (Join a quorum if not yet)
+        EvaluateNetwork: Check Highest Block in Network
+        EvaluateNetwork: Check Leader
+        EvaluateNetwork -up-> BlockSync
+    }
+    BlockHeightSync --> BlockGenerate: Complete Sync\n(if leader == self)
+    BlockHeightSync -> Vote: Complete Sync\n(if leader != self)
+
+    BlockGenerate: StopTimer: leader complain
+    BlockGenerate: AddTimer: heartbeat to peers
+    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\n(made block count == max)
+
+    Vote: StopTimer: heartbeat to peers
+    Vote: AddTimer: leader complain
+    Vote -left-> BlockHeightSync : Recv AnnounceUnConfirmedBlock\n(block.height >= mine + 2)
+    Vote -> BlockGenerate : Recv AnnounceUnConfirmedBlock\n(if next leader == self)
+    Vote -> LeaderComplain : !Recv heartbeat from leader by Timer (leader complain) \nSend LeaderComplain
+
+    state LeaderComplain
+    note right of LeaderComplain
+      keep leader complain Timer
+      until new leader elected
+    end note
+    LeaderComplain -> Vote : Recv AnnounceNewLeader\n(if next leader != self)
+    LeaderComplain --> BlockGenerate : Send AnnounceNewLeader\n(if next leader == self)
+}
+
+Consensus --> GracefulShutdown
+
+GracefulShutdown: StopTimer: ALL
+GracefulShutdown --> [*]
+
+@enduml
