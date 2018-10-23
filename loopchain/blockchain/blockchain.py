@@ -766,7 +766,7 @@ class BlockChain:
         self.put_nid(nid)
         ChannelProperty().nid = nid
 
-        util.logger.spam(f"add_genesisblock({self.__channel_name}/nid(nid))")
+        util.logger.spam(f"add_genesisblock({self.__channel_name}/nid({nid}))")
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__invoke_results[block_hash] = invoke_results

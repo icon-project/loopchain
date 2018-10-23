@@ -614,6 +614,7 @@ class BlockManager(CommonThread, Subscriber):
 
             if precommit_block:
                 if last_block.height + 1 == precommit_block.height:
+                    self.__channel_service.score_write_precommit_state(precommit_block)
                     blockchain.put_precommit_block(precommit_block)
                     self.__precommit_block = precommit_block
                     self.consensus.leader_id = precommit_block.peer_id
@@ -825,17 +826,18 @@ class BlockManager(CommonThread, Subscriber):
             logging.error("It's weird what a precommit block is None. "
                           "That's why a timer can't be added to timer service.")
 
-        if self.__prev_epoch is not None:
+        if self.__prev_epoch:
             if self.__prev_epoch.status == EpochStatus.success:
                 util.logger.spam(f"BlockManager:callback_complete_consensus::epoch status is success !! "
                                  f"self.__precommit_block({self.__precommit_block})")
 
-                if self.__precommit_block is not None:
+                if self.__precommit_block:
                     if not self.add_block(self.__precommit_block):
                         self.__precommit_block = self.__blockchain.get_precommit_block()
 
                 self.__precommit_block = kwargs.get("precommit_block", None)
-                if self.__blockchain.put_precommit_block(self.__precommit_block) is not None:
+                if self.__channel_service.score_write_precommit_state(self.__precommit_block) and \
+                        self.__blockchain.put_precommit_block(self.__precommit_block):
                     util.logger.spam(f"start timer :: success precommit block info - {self.__precommit_block.height}")
 
             elif self.__prev_epoch.status == EpochStatus.leader_complain:
