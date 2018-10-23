@@ -129,6 +129,7 @@ class Consensus(CommonThread, Publisher):
 
         while self.is_run():
             time.sleep(sleep_time)
+            util.logger.spam(f"---- MAKE BLOCK EVENT ----")
             self._notify("make_block", tx_queue=self.__tx_queue)
 
         logging.info(f"channel({self.channel_name}) Consensus thread Ended.")
