@@ -849,12 +849,12 @@ class ChannelService:
             stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
-        logging.debug(f"call score precommit {ChannelProperty().name} {block.height} {block.block_hash}")
+        logging.debug(f"call score commit {ChannelProperty().name} {block.height} {block.block_hash}")
 
         if util.channel_use_icx(ChannelProperty().name):
             request = {
                 "blockHeight": block.height,
-                "blockHash": block.block_hash,
+                "blockHash": block.block_hash
             }
             request = convert_params(request, ParamType.write_precommit_state)
 

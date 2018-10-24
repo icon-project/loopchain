@@ -121,7 +121,6 @@ class Proposer(Subscriber):
             self.__block_manager.set_last_commit_state(self.__block.height, self.__block.commit_state)
 
         if block_is_verified:
-            self.__block.next_leader_peer = self.__channel_service.peer_manager.get_next_leader_peer().peer_id
             self.__block.sign(self.__channel_service.peer_auth)
         else:
             self.__throw_out_block(self.__block)

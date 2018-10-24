@@ -47,6 +47,7 @@ class Acceptor(Subscriber):
         Subscriber.__init__(self, name)
         self.__channel = channel
         self.__channel_service: 'ChannelService' = channel_service
+        self.__peer_manager = channel_service.peer_manager
         self.__peer_id = peer_id
         self.__consensus = consensus
         self.__prev_epoch: Epoch = kwargs.get("prev_epoch", None)
@@ -158,8 +159,9 @@ class Acceptor(Subscriber):
             util.logger.spam(f"acceptor:__add_success_vote::vote count over quorum !! can make block.")
             self.__epoch.status = EpochStatus.success
             self.__epoch.agree_vote_list = self.__vote_list
+            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer=vote.leader_id)
             await self.__channel_service.reset_leader(
-                new_leader_id=self.__consensus.precommit_block.next_leader_peer,
+                new_leader_id=next_leader.peer_id,
                 block_height=self.__consensus.precommit_block.height
             )
             self.__consensus.change_epoch(prev_epoch=self.__epoch, precommit_block=self.__uncommit_block)
@@ -200,7 +202,7 @@ class Acceptor(Subscriber):
                                             channel_name=ChannelProperty().name)
                 self.__vote_precommit_block(complain_vote)
 
-    def __add_leader_ready(self, vote: VoteMessage):
+    async def __add_leader_ready(self, vote: VoteMessage):
         if vote.peer_id not in list(self.__ready_list.keys()):
             self.__ready_list[vote.peer_id] = vote
 
@@ -215,8 +217,8 @@ class Acceptor(Subscriber):
         if ready_count >= self.__epoch.quorum:
             self.__epoch.status = EpochStatus.leader_complain
             self.__epoch.ready_vote_list = self.__ready_list
-            self.__channel_service.reset_leader(
-                self.__consensus.precommit_block.next_leader_peer, self.__consensus.precommit_block.height)
+            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer=vote.leader_id)
+            self.__channel_service.reset_leader(next_leader.peer_id, self.__consensus.precommit_block.height)
             self.__consensus.change_epoch(self.__epoch, self.__epoch.precommit_block)
 
     def __initialize_vote_record(self):
@@ -237,21 +239,20 @@ class Acceptor(Subscriber):
         try:
             block_is_validated = self.__validate_block(block, precommit_block, prev_epoch)
 
-            if block_is_validated is not None:
-                if conf.CHANNEL_OPTION[self.__channel]['store_valid_transaction_only'] and block.confirmed_tx_len > 0:
-                        block_is_validated, need_rebuild, invoke_results = block.verify_through_score_invoke()
-                        self.set_invoke_results(block.block_hash, invoke_results)
+            if block_is_validated:
+                if conf.CHANNEL_OPTION[self.__channel]['store_valid_transaction_only']:
+                    block_is_validated, need_rebuild, invoke_results = block.verify_through_score_invoke()
+                    self.__channel_service.block_manager.set_invoke_results(block.block_hash, invoke_results)
 
                 if block_is_validated:
                     vote_type = VoteMessageType.success
-                    leader_id = None
                 else:
                     vote_type = VoteMessageType.leader_complain
-                    leader_id = self.__consensus.leader_id
                     block = precommit_block
                     util.logger.spam(f"try to stop timer in create_vote")
                     self.__channel_service.timer_service.stop_timer(key=f"{self.__peer_id}:{precommit_block.height}")
 
+                leader_id = self.__consensus.leader_id
                 self.__vote_precommit_block(
                     VoteMessage(vote_type=vote_type,
                                 block_height=block.height,
@@ -300,7 +301,7 @@ class Acceptor(Subscriber):
                 if vote.type == VoteMessageType.leader_complain:
                     self.__add_leader_complain(vote)
                 elif vote.type == VoteMessageType.leader_ready:
-                    self.__add_leader_ready(vote)
+                    await self.__add_leader_ready(vote)
             else:
                 logging.debug(f"This vote doesn't include same info that this peer is expected.")
                 logging.debug(f"vote hash({vote.block_hash}) height({vote.block_height}) leader({vote.leader_id})\n"

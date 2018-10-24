@@ -16,10 +16,10 @@ import asyncio
 import queue
 import shutil
 import traceback
+
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
-
-import requests
+from earlgrey import MessageQueueService
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
 from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler, TimerService
@@ -595,15 +595,15 @@ class BlockManager(CommonThread, Subscriber):
             return False
 
         if not is_sync_complete:
-            # block height sync 가 완료되지 않았으면 다시 시도한다.
             logging.warning(f"it's not completed block height synchronization in once ...\n"
                             f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
             self.__block_height_sync(target_peer_stub)
 
+        loop = MessageQueueService.loop
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft \
                 and channel_service.is_support_node_function(conf.NodeFunction.Vote):
             last_block = blockchain.last_block
-
+            precommit_block = None
             for peer_stub in peer_stubs:
                 if peer_stub is not None:
                     precommit_block, response_code, response_message = \
@@ -614,6 +614,7 @@ class BlockManager(CommonThread, Subscriber):
 
             if precommit_block:
                 if last_block.height + 1 == precommit_block.height:
+                    blockchain.invoke_for_precommit(precommit_block)
                     self.__channel_service.score_write_precommit_state(precommit_block)
                     blockchain.put_precommit_block(precommit_block)
                     self.__precommit_block = precommit_block
@@ -621,6 +622,8 @@ class BlockManager(CommonThread, Subscriber):
                     self.consensus.precommit_block = None
                     util.logger.spam(f"set precommit bock {self.__precommit_block.block_hash}/"
                                      f"{self.__precommit_block.height} after block height synchronization.")
+
+                    self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
                 else:
                     util.logger.warning(f"precommit block is weird, an expected block height is {last_block.height+1}, "
                                         f"but it's {precommit_block.height}")
@@ -628,12 +631,10 @@ class BlockManager(CommonThread, Subscriber):
             else:
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
 
-            self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
-
         logging.debug(f"block_manager:block_height_sync is complete.")
 
         # Subscribe to block_sync_target_stub and radiostation
-        loop = self.__channel_service.timer_service.get_event_loop()
+
         if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_radio_station(), loop)
         asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_target_stub(target_peer_stub), loop)

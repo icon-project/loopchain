@@ -32,13 +32,13 @@ class Consensus(CommonThread, Publisher):
     EVENT_COMPLETE_CONSENSUS = "complete_consensus"
     EVENT_MAKE_BLOCK = "make_block"
     EVENT_LEADER_COMPLAIN_F_1 = "leader_complain_f_1"
-    EVENT_LEADER_COMPLAIN_F_2 = "leader_complain_2f_1"
+    EVENT_LEADER_COMPLAIN_2F_1 = "leader_complain_2f_1"
 
     def __init__(self, channel_service: 'ChannelService', channel: str=None, **kwargs):
         Publisher.__init__(self, [
             Consensus.EVENT_COMPLETE_CONSENSUS,
             Consensus.EVENT_LEADER_COMPLAIN_F_1,
-            Consensus.EVENT_LEADER_COMPLAIN_F_2,
+            Consensus.EVENT_LEADER_COMPLAIN_2F_1,
             Consensus.EVENT_MAKE_BLOCK])
         self.channel_name = channel
         self.__channel_service = channel_service
@@ -170,9 +170,6 @@ class Consensus(CommonThread, Publisher):
             self.__last_epoch = self.__epoch
             self.__epoch = None
         elif self.__precommit_block is None and precommit_block is not None:
-            if precommit_block.height > 0:
-                self.__leader_id = precommit_block.peer_id
-                self.__channel_service.reset_leader(precommit_block.next_leader_peer, precommit_block.height)
             self.__precommit_block = precommit_block
 
         if self.__precommit_block is not None:

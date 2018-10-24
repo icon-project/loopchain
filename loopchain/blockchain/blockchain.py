@@ -606,8 +606,6 @@ class BlockChain:
                                                   f"That's why Genesis block couldn't be generated.")
 
         block.generate_block()
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            block.next_leader_peer = ObjectManager().channel_service.peer_manager.get_next_leader_peer().peer_id
         self.add_block(block)
 
     def __put_block_to_db(self, block_key, block):
@@ -773,3 +771,8 @@ class BlockChain:
     def set_last_commit_state(self, height, commit_state):
         self.last_commit_state_height = height
         self.last_commit_state = copy.deepcopy(commit_state)
+
+    def invoke_for_precommit(self, precommit_block: Block):
+        invoke_results = \
+            self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
+        self.__add_tx_to_block_db(precommit_block, invoke_results)
