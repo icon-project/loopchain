@@ -1,9 +1,9 @@
 @startuml State Machine in Siever
 
-[*] --> InitComponets
-InitComponets: AddTimer: Connect to Radiostation
+[*] --> InitComponents
+InitComponents: AddTimer: Connect to Radiostation
 
-InitComponets --> Consensus
+InitComponents --> Consensus
 
 state Timer
 Timer: * Connect to Radiostation
