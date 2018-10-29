@@ -40,14 +40,14 @@ class StateMachine(object):
                 if not hasattr(cls, 'states') or not cls.states:
                     raise ExceptionNullStatesInMachine
 
-                if not hasattr(cls, 'state') or not cls.state:
+                if not hasattr(cls, 'init_state') or not cls.init_state:
                     raise ExceptionNullInitState
 
                 util.logger.spam(f"Wrapped __init__ called")
                 util.logger.spam(f"cls_args is {cls_args}")
                 # self.name = "superman"
 
-                cls.machine = Machine(model=self, states=cls.states, initial=cls.state,
+                cls.machine = Machine(model=self, states=cls.states, initial=cls.init_state,
                                       ignore_invalid_triggers=True)
 
                 cls.__init__(cls, *cls_args)

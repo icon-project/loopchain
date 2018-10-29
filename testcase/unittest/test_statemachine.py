@@ -26,7 +26,7 @@ from loopchain.statemachine import statemachine
 @statemachine.StateMachine("State Machine")
 class StateMachinedHero(object):
     states = ['asleep', 'hanging out', 'hungry', 'sweaty', 'saving the world']
-    state = 'asleep'
+    init_state = 'asleep'
 
     def __init__(self, name):
         util.logger.spam(f"StateMachinedHero __init__ called")
@@ -64,6 +64,10 @@ class StateMachinedHero(object):
     @statemachine.transition
     def nap(self, source='*', dest='asleep'):
         pass
+
+    def clean_up(self):
+        print(f"\n\nStateMachinedHero::clean_up is replaced by add_transition!")
+        raise Exception
 
     def update_journal(self):
         """ Dear Diary, today I saved Mr. Whiskers. Again. """

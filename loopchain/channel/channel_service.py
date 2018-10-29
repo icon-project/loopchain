@@ -52,6 +52,7 @@ class ChannelService:
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
+        self.__state_machine = None
         self.__consensus: Consensus = None
         self.__proposer: Proposer = None
         self.__acceptor: Acceptor = None
