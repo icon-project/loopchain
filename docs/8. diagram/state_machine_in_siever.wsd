@@ -32,15 +32,27 @@ state Consensus {
     BlockHeightSync --> BlockGenerate: Complete Sync\n(if leader == self)
     BlockHeightSync -> Vote: Complete Sync\n(if leader != self)
 
-    BlockGenerate: StopTimer: leader complain
-    BlockGenerate: AddTimer: heartbeat to peers
-    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\n(made block count == max)
-
-    Vote: StopTimer: heartbeat to peers
-    Vote: AddTimer: leader complain
+    Vote: before {
+    Vote: \tStopTimer: heartbeat to peers
+    Vote: \tAddTimer: leader complain
+    Vote: }
+    Vote: 
+    Vote: trigger {
+    Vote: \tvote: do vote\n\t(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
+    Vote: }
     Vote -left-> BlockHeightSync : Recv AnnounceUnConfirmedBlock\n(block.height >= mine + 2)
     Vote -> BlockGenerate : Recv AnnounceUnConfirmedBlock\n(if next leader == self)
     Vote -> LeaderComplain : !Recv heartbeat from leader by Timer (leader complain) \nSend LeaderComplain
+
+    BlockGenerate: before {
+    BlockGenerate: \tStopTimer: leader complain
+    BlockGenerate: \tAddTimer: heartbeat to peers
+    BlockGenerate: }
+    BlockGenerate: 
+    BlockGenerate: trigger {
+    BlockGenerate: \tadd_tx: make block\n\t(Recv AddTx)
+    BlockGenerate: }
+    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\n(made block count == max)
 
     state LeaderComplain
     note right of LeaderComplain

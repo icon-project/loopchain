@@ -18,6 +18,7 @@
 from earlgrey import MessageQueueService
 
 import loopchain.utils as util
+from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 
 
@@ -32,6 +33,9 @@ class ChannelStateMachine(object):
 
     def __init__(self, channel_service):
         self.__channel_service = channel_service
+
+        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
+        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Vote')
 
     @statemachine.transition
     def complete_init_components(self, source='InitComponents', dest='Consensus', after='_enter_block_height_sync'):
@@ -58,10 +62,16 @@ class ChannelStateMachine(object):
 
     @statemachine.transition
     def subscribe_network(self,
-                          source=['BlockSync', 'EvaluateNetwork'],
+                          source=('BlockSync', 'EvaluateNetwork'),
                           dest='SubscribeNetwork',
                           after='_do_subscribe_network'):
         pass
+
+    def complete_sync(self):
+        pass
+
+    def _is_leader(self):
+        return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
 
     def _enter_block_height_sync(self):
         # util.logger.spam(f"\nenter_block_height_sync")

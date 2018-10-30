@@ -20,6 +20,11 @@ import unittest
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
 from loopchain.channel.channel_statemachine import ChannelStateMachine
+from loopchain.protos import loopchain_pb2
+
+
+class MockBlockManager:
+    peer_type = loopchain_pb2.BLOCK_GENERATOR
 
 
 class MockChannelService:
@@ -28,6 +33,13 @@ class MockChannelService:
 
     def evaluate_network(self):
         pass
+
+    def subscribe_network(self):
+        pass
+
+    @property
+    def block_manager(self):
+        return MockBlockManager()
 
 
 class TestChannelStateMachine(unittest.TestCase):
@@ -48,7 +60,21 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
-        self.assertEqual(channel_state_machine.state, "BlockSync")
+        self.assertEqual(channel_state_machine.state, "EvaluateNetwork")
+
+    def test_change_state_by_condition(self):
+        # GIVEN
+        channel_state_machine = ChannelStateMachine(MockChannelService())
+        channel_state_machine.complete_init_components()
+        channel_state_machine.subscribe_network()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # WHEN
+        channel_state_machine.complete_sync()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # THEN
+        self.assertEqual(channel_state_machine.state, "BlockGenerate")
 
 
 if __name__ == '__main__':
