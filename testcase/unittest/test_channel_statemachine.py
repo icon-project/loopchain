@@ -22,6 +22,14 @@ import testcase.unittest.test_util as test_util
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 
 
+class MockChannelService:
+    def block_height_sync_channel(self):
+        pass
+
+    def evaluate_network(self):
+        pass
+
+
 class TestChannelStateMachine(unittest.TestCase):
 
     def setUp(self):
@@ -32,7 +40,7 @@ class TestChannelStateMachine(unittest.TestCase):
 
     def test_init_channel_state(self):
         # GIVEN
-        channel_state_machine = ChannelStateMachine()
+        channel_state_machine = ChannelStateMachine(MockChannelService())
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # WHEN

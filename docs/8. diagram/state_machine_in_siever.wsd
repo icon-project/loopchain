@@ -3,7 +3,7 @@
 [*] --> InitComponents
 InitComponents: AddTimer: Connect to Radiostation
 
-InitComponents --> Consensus
+InitComponents --> Consensus : trigger::complete_init_components
 
 state Timer
 Timer: * Connect to Radiostation
@@ -11,16 +11,23 @@ Timer: * heartbeat to peers
 Timer: * leader complain
 
 state Consensus {
-    [*] --> BlockHeightSync
+    [*] --> BlockHeightSync : trigger::block_height_sync
 
     state BlockHeightSync {
-        BlockSync: StopTimer: leader complain
-        BlockSync --> EvaluateNetwork : Succeeded
+        [*] --> EvaluateNetwork : trigger::evaluate_network
 
-        EvaluateNetwork: Connect Network (Join a quorum if not yet)
-        EvaluateNetwork: Check Highest Block in Network
         EvaluateNetwork: Check Leader
-        EvaluateNetwork -up-> BlockSync
+        EvaluateNetwork --> BlockSync : (if leader != self)\ntrigger::block_sync
+        EvaluateNetwork --> SubscribeNetwork : (if leader == self)\ntrigger::subscribe_network
+
+        BlockSync: StopTimer: leader complain
+        BlockSync: Check Highest Block in Network
+        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
+
+        SubscribeNetwork: Connect Network (Subscribe to Radiostation, Join a quorum if not yet)
+        SubscribeNetwork -up-> EvaluateNetwork
+        SubscribeNetwork -right-> [*] : Block Synced
+
     }
     BlockHeightSync --> BlockGenerate: Complete Sync\n(if leader == self)
     BlockHeightSync -> Vote: Complete Sync\n(if leader != self)

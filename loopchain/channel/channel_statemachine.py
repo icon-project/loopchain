@@ -15,36 +15,81 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Channel Manager for new functions not duplicated another tests"""
+from earlgrey import MessageQueueService
+
+import loopchain.utils as util
 from loopchain.statemachine import statemachine
 
 
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
     states = ['InitComponents', 'Consensus', 'BlockHeightSync',
-              'BlockSync', 'EvaluateNetwork',
+              'EvaluateNetwork', 'BlockSync', 'SubscribeNetwork',
               'Vote', 'BlockGenerate', 'LeaderComplain',
               'GracefulShutdown']
     init_state = 'InitComponents'
+    state = init_state
 
-    def __init__(self):
+    def __init__(self, channel_service):
+        self.__channel_service = channel_service
+
+    @statemachine.transition
+    def complete_init_components(self, source='InitComponents', dest='Consensus', after='_enter_block_height_sync'):
         pass
 
     @statemachine.transition
-    def complete_init_components(self, source='InitComponents', dest='Consensus', after='do_block_height_sync'):
+    def block_height_sync(self, source='Consensus', dest='BlockHeightSync', after='_enter_evaluate_network'):
         pass
 
     @statemachine.transition
-    def block_height_sync(self, source='Consensus', dest='BlockHeightSync', after='do_block_sync'):
+    def evaluate_network(self,
+                         source='BlockHeightSync',
+                         dest='EvaluateNetwork',
+                         after='_do_evaluate_network'):
         pass
 
     @statemachine.transition
-    def block_sync(self, source='BlockHeightSync', dest='BlockSync'):
+    def block_sync(self,
+                   source='EvaluateNetwork',
+                   dest='BlockSync',
+                   before='_before_block_sync',
+                   after='_do_block_sync'):
         pass
 
-    def do_block_height_sync(self):
-        # util.logger.spam(f"\ndo_block_height_sync")
+    @statemachine.transition
+    def subscribe_network(self,
+                          source=['BlockSync', 'EvaluateNetwork'],
+                          dest='SubscribeNetwork',
+                          after='_do_subscribe_network'):
+        pass
+
+    def _enter_block_height_sync(self):
+        # util.logger.spam(f"\nenter_block_height_sync")
         self.block_height_sync()
 
-    def do_block_sync(self):
-        # util.logger.spam(f"do_block_sync")
+    def _enter_evaluate_network(self):
+        # util.logger.spam(f"\nenter_block_sync")
+        self.evaluate_network()
+
+    def _enter_block_sync(self):
+        # util.logger.spam(f"\nenter_block_sync")
         self.block_sync()
+
+    def _before_block_sync(self):
+        # util.logger.spam(f"\nbefore_block_sync")
+        pass
+
+    def _do_block_sync(self):
+        util.logger.spam(f"\ndo_block_sync")
+        loop = MessageQueueService.loop
+        loop.create_task(self.__channel_service.block_height_sync_channel())
+
+    def _do_evaluate_network(self):
+        util.logger.spam(f"\ndo_evaluate_network")
+        loop = MessageQueueService.loop
+        loop.create_task(self.__channel_service.evaluate_network())
+
+    def _do_subscribe_network(self):
+        util.logger.spam(f"\ndo_subscribe_network")
+        loop = MessageQueueService.loop
+        loop.create_task(self.__channel_service.subscribe_network())

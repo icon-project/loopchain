@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import asyncio
 import json
+import leveldb
 import logging
 import pickle
-import leveldb
 import signal
 import time
 import traceback
@@ -29,18 +29,18 @@ from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerSer
 from loopchain.blockchain import Block
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus import Consensus, Acceptor, Proposer
 from loopchain.peer import BlockManager
 from loopchain.peer.consensus_default import ConsensusDefault
-from loopchain.peer.consensus_lft import ConsensusLFT
 from loopchain.peer.consensus_none import ConsensusNone
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.peer.icx_authorization import IcxAuthorization
 from loopchain.peer.peer_authorization import PeerAuthorization
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
-from loopchain.utils.message_queue import StubCollection
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
+from loopchain.utils.message_queue import StubCollection
 
 
 class ChannelService:
@@ -52,7 +52,6 @@ class ChannelService:
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
-        self.__state_machine = None
         self.__consensus: Consensus = None
         self.__proposer: Proposer = None
         self.__acceptor: Acceptor = None
@@ -78,6 +77,7 @@ class ChannelService:
         command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
         ObjectManager().channel_service = self
+        self.__state_machine = ChannelStateMachine(self)
 
     @property
     def block_manager(self):
@@ -119,6 +119,10 @@ class ChannelService:
     def timer_service(self):
         return self.__timer_service
 
+    @property
+    def state_machine(self):
+        return self.__state_machine
+
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -127,7 +131,9 @@ class ChannelService:
             await self.init(*results)
 
             self.__timer_service.start()
-            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}')
+            self.__state_machine.complete_init_components()
+            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
+                         f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
         loop.create_task(_serve())
@@ -210,15 +216,31 @@ class ChannelService:
             
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.connect_to_radio_station()
+
+    async def evaluate_network(self):
         await self.set_peer_type_in_channel()
+        if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:
+            self.__state_machine.subscribe_network()
+        else:
+            self.__state_machine.block_sync()
+
+    async def subscribe_network(self):
+        # Subscribe to block_sync_target_stub and radiostation
+        loop = self.timer_service.get_event_loop()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            asyncio.run_coroutine_threadsafe(self.subscribe_to_radio_station(), loop)
+        asyncio.run_coroutine_threadsafe(
+            self.subscribe_to_target_stub(self.block_manager.subscribe_target_peer_stub), loop)
 
         self.generate_genesis_block()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.__consensus.change_epoch(precommit_block=self.__block_manager.get_blockchain().last_block)
-            self.__consensus.start()
+            if not self.__consensus.is_run():
+                self.__consensus.change_epoch(precommit_block=self.__block_manager.get_blockchain().last_block)
+                self.__consensus.start()
         elif conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self.block_manager.block_generation_scheduler.start()
+            if not self.block_manager.block_generation_scheduler.is_run():
+                self.block_manager.block_generation_scheduler.start()
 
     def __init_peer_auth(self):
         try:
@@ -613,10 +635,8 @@ class ChannelService:
         if peer_type == loopchain_pb2.BLOCK_GENERATOR:
             self.block_manager.set_peer_type(peer_type)
             self.__ready_to_height_sync(True)
-            await self.subscribe_to_radio_station()
         elif peer_type == loopchain_pb2.PEER:
             self.__ready_to_height_sync(False)
-            await self.__block_height_sync_channel()
 
     def __ready_to_height_sync(self, is_leader: bool = False):
         block_chain = self.block_manager.get_blockchain()
@@ -625,7 +645,7 @@ class ChannelService:
         if block_chain.block_height > -1:
             self.block_manager.rebuild_block()
 
-    async def __block_height_sync_channel(self):
+    async def block_height_sync_channel(self):
         # leader 로 시작하지 않았는데 자신의 정보가 leader Peer 정보이면 block height sync 하여
         # 최종 블럭의 leader 를 찾는다.
         peer_manager = self.peer_manager
