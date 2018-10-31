@@ -15,9 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Channel Manager for new functions not duplicated another tests"""
-import asyncio
-
 from earlgrey import MessageQueueService
+from transitions import State
 
 import loopchain.utils as util
 from loopchain.protos import loopchain_pb2
@@ -26,9 +25,13 @@ from loopchain.statemachine import statemachine
 
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
-    states = ['InitComponents', 'Consensus', 'BlockHeightSync',
+    states = ['InitComponents',
+              State(name='Consensus', on_enter='_consensus_on_enter'),
+              State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork', 'BlockSync', 'SubscribeNetwork',
-              'Vote', 'BlockGenerate', 'LeaderComplain',
+              State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
+              State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
+              'LeaderComplain',
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -40,11 +43,11 @@ class ChannelStateMachine(object):
         self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Vote')
 
     @statemachine.transition
-    def complete_init_components(self, source='InitComponents', dest='Consensus', after='_enter_block_height_sync'):
+    def complete_init_components(self, source='InitComponents', dest='Consensus'):
         pass
 
     @statemachine.transition
-    def block_height_sync(self, source='Consensus', dest='BlockHeightSync', after='_enter_evaluate_network'):
+    def block_height_sync(self, source='Consensus', dest='BlockHeightSync'):
         pass
 
     @statemachine.transition
@@ -58,7 +61,6 @@ class ChannelStateMachine(object):
     def block_sync(self,
                    source=('EvaluateNetwork', 'Vote'),
                    dest='BlockSync',
-                   before='_before_block_sync',
                    after='_do_block_sync'):
         pass
 
@@ -79,21 +81,17 @@ class ChannelStateMachine(object):
     def _is_leader(self):
         return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
 
-    def _enter_block_height_sync(self):
+    def _consensus_on_enter(self):
         # util.logger.spam(f"\nenter_block_height_sync")
         self.block_height_sync()
 
-    def _enter_evaluate_network(self):
+    def _blockheightsync_on_enter(self):
         # util.logger.spam(f"\nenter_block_sync")
         self.evaluate_network()
 
     def _enter_block_sync(self):
         # util.logger.spam(f"\nenter_block_sync")
         self.block_sync()
-
-    def _before_block_sync(self):
-        # util.logger.spam(f"\nbefore_block_sync")
-        pass
 
     def _do_block_sync(self):
         util.logger.spam(f"\ndo_block_sync")
@@ -113,3 +111,15 @@ class ChannelStateMachine(object):
     def _do_vote(self):
         util.logger.spam(f"\ndo_vote")
         self.__channel_service.block_manager.vote_as_peer()
+
+    def _vote_on_enter(self):
+        util.logger.spam(f"\nvote_on_enter")
+
+    def _vote_on_exit(self):
+        util.logger.spam(f"\nvote_on_exit")
+
+    def _blockgenerate_on_enter(self):
+        util.logger.spam(f"\nblockgenerate_on_enter")
+
+    def _blockgenerate_on_exit(self):
+        util.logger.spam(f"\nblockgenerate_on_exit")
