@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Channel Manager for new functions not duplicated another tests"""
+import asyncio
+
 from earlgrey import MessageQueueService
 
 import loopchain.utils as util
@@ -54,7 +56,7 @@ class ChannelStateMachine(object):
 
     @statemachine.transition
     def block_sync(self,
-                   source='EvaluateNetwork',
+                   source=('EvaluateNetwork', 'Vote'),
                    dest='BlockSync',
                    before='_before_block_sync',
                    after='_do_block_sync'):
@@ -65,6 +67,10 @@ class ChannelStateMachine(object):
                           source=('BlockSync', 'EvaluateNetwork'),
                           dest='SubscribeNetwork',
                           after='_do_subscribe_network'):
+        pass
+
+    @statemachine.transition
+    def vote(self, source='Vote', dest='Vote', after='_do_vote'):
         pass
 
     def complete_sync(self):
@@ -103,3 +109,7 @@ class ChannelStateMachine(object):
         util.logger.spam(f"\ndo_subscribe_network")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.subscribe_network())
+
+    def _do_vote(self):
+        util.logger.spam(f"\ndo_vote")
+        self.__channel_service.block_manager.vote_as_peer()

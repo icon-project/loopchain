@@ -239,6 +239,8 @@ class ChannelInnerTask:
             self._channel_service.block_manager.add_unconfirmed_block,
             unconfirmed_block)
 
+        self._channel_service.state_machine.vote()
+
         if unconfirmed_block.made_block_count >= conf.LEADER_BLOCK_CREATION_LIMIT \
                 and unconfirmed_block.block_type is BlockType.vote \
                 and unconfirmed_block.is_divided_block is False:

@@ -36,10 +36,8 @@ state Consensus {
     Vote: \tAddTimer: leader complain
     Vote: }
     Vote: 
-    Vote: trigger {
-    Vote: \tvote: do vote\n\t(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
-    Vote: }
-    Vote -left-> BlockHeightSync : Recv AnnounceUnConfirmedBlock\n(block.height >= mine + 2)
+    Vote: trigger::vote\n(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
+    Vote -left-> BlockHeightSync : dest::BlockSync\n(block.height >= mine + 2)\ntrigger::block_sync
     Vote -> BlockGenerate : Recv AnnounceUnConfirmedBlock\n(if next leader == self)
     Vote -> LeaderComplain : !Recv heartbeat from leader by Timer (leader complain) \nSend LeaderComplain
 
