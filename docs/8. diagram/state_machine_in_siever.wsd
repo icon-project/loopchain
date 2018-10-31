@@ -26,11 +26,10 @@ state Consensus {
 
         SubscribeNetwork: Connect Network (Subscribe to Radiostation, Join a quorum if not yet)
         SubscribeNetwork -up-> EvaluateNetwork
-        SubscribeNetwork -right-> [*] : Block Synced
-
+        SubscribeNetwork -right-> [*]
     }
-    BlockHeightSync --> BlockGenerate: Complete Sync\n(if leader == self)
-    BlockHeightSync -> Vote: Complete Sync\n(if leader != self)
+    BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
+    BlockHeightSync -> Vote: (if leader != self)\ntrigger::complete_sync
 
     Vote: before {
     Vote: \tStopTimer: heartbeat to peers

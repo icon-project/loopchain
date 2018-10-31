@@ -72,6 +72,7 @@ class ChannelInnerTask:
             total_tx = block_manager.get_total_tx()
 
         status_data["status"] = block_manager.service_status
+        status_data["state"] = self._channel_service.state_machine.state
         status_data["peer_type"] = str(block_manager.peer_type)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)

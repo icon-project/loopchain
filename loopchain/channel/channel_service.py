@@ -242,6 +242,8 @@ class ChannelService:
             if not self.block_manager.block_generation_scheduler.is_run():
                 self.block_manager.block_generation_scheduler.start()
 
+        self.__state_machine.complete_sync()
+
     def __init_peer_auth(self):
         try:
             channel_authorization = IcxAuthorization if util.channel_use_icx(ChannelProperty().name) \
