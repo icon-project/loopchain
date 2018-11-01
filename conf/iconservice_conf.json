@@ -18,10 +18,10 @@
   "channel": "icon_dex",
   "amqpKey": "7100",
   "amqpTarget": "127.0.0.1",
-  "builtinScoreOwner": "hxba096790caa1804a8828939839a901a5978020a7",
+  "builtinScoreOwner": "hx6e1dd0d4432620778b54b2bbc21ac3df961adf89",
   "service": {
     "fee": true,
-    "audit": true,
+    "audit": false,
     "deployerWhiteList": false,
     "scorePackageValidator": false
   }

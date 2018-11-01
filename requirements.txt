@@ -25,4 +25,5 @@ setproctitle==1.1.10
 terminaltables==3.1.0
 transitions==0.6.8
 verboselogs==1.7
+websockets==5.0.1
 yappi==0.98

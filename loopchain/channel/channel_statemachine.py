@@ -19,6 +19,7 @@ from earlgrey import MessageQueueService
 from transitions import State
 
 import loopchain.utils as util
+from loopchain import configure as conf
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 
@@ -28,7 +29,7 @@ class ChannelStateMachine(object):
     states = ['InitComponents',
               State(name='Consensus', on_enter='_consensus_on_enter'),
               State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
-              'EvaluateNetwork', 'BlockSync', 'SubscribeNetwork',
+              'EvaluateNetwork', 'BlockSync', 'SubscribeNetwork', 'Watch',
               State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
               State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
               'LeaderComplain',
@@ -40,6 +41,7 @@ class ChannelStateMachine(object):
         self.__channel_service = channel_service
 
         self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
+        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
         self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Vote')
 
     @statemachine.transition(source='InitComponents', dest='Consensus')
@@ -62,7 +64,7 @@ class ChannelStateMachine(object):
     def block_sync(self):
         pass
 
-    @statemachine.transition(source=('BlockSync', 'EvaluateNetwork'),
+    @statemachine.transition(source=('BlockSync', 'EvaluateNetwork', 'Watch'),
                              dest='SubscribeNetwork',
                              after='_do_subscribe_network')
     def subscribe_network(self):
@@ -77,6 +79,9 @@ class ChannelStateMachine(object):
 
     def _is_leader(self):
         return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
+
+    def _has_no_vote_function(self):
+        return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
     def _consensus_on_enter(self):
         # util.logger.spam(f"\nenter_block_height_sync")

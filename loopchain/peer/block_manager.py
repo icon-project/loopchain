@@ -266,8 +266,7 @@ class BlockManager(Subscriber):
     def confirm_block(self, block: Block):
         try:
             confirmed_block = self.__blockchain.confirm_block(block.prev_block_hash)
-            if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-                self.__broadcast_block_to_audience_subscriber(confirmed_block)
+            self.__notify_new_block()
 
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
@@ -316,8 +315,7 @@ class BlockManager(Subscriber):
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
-        if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-            self.__broadcast_block_to_audience_subscriber(confirmed_block)
+        self.__notify_new_block()
 
     def add_block(self, block_: Block, is_commit_state_validation=False) -> bool:
         """ add committed block
@@ -329,8 +327,7 @@ class BlockManager(Subscriber):
         result = self.__blockchain.add_block(block_, is_commit_state_validation)
 
         last_block = self.__blockchain.last_block
-        if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-            self.__broadcast_block_to_audience_subscriber(last_block)
+        self.__notify_new_block()
 
         peer_id = ChannelProperty().peer_id
         util.apm_event(peer_id, {
@@ -632,26 +629,8 @@ class BlockManager(Subscriber):
 
         return True
 
-    def __broadcast_block_to_audience_subscriber(self, confirmed_block: Block):
-        try:
-            # repr can convert dict to string. And this string can convert dict again with ast.literal_eval
-            commit_state = repr(confirmed_block.commit_state)
-            util.logger.spam(f"block_manager:__broadcast_block_to_audience_subscriber "
-                             f"commit_state({commit_state})")
-        except Exception as e:
-            logging.warning(f"block_manager:__broadcast_block_to_audience_subscriber "
-                            f"FAIL json.dumps commit_state({confirmed_block.commit_state})")
-            commit_state = ""
-
-        json_data = confirmed_block.get_json_data()
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceConfirmedBlock", {
-                'block_hash': confirmed_block.block_hash,
-                'channel': self.__channel_name,
-                'block': json_data,
-                'commit_state': commit_state
-            }
-        )
+    def __notify_new_block(self):
+        self.__channel_service.inner_service.notify_new_block()
 
     def __get_peer_stub_list(self, target_peer_stub=None):
         """It updates peer list for block manager refer to peer list on the loopchain network.

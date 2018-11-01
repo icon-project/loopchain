@@ -50,7 +50,6 @@ class RestStubManager:
             "Subscribe": conf.ApiVersion.node,
             "Unsubscribe": conf.ApiVersion.node,
             "GetChannelInfos": conf.ApiVersion.node,
-            "AnnounceConfirmedBlock": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
             "GetLastBlock": conf.ApiVersion.v3
@@ -60,7 +59,6 @@ class RestStubManager:
             "Subscribe": "node_Subscribe",
             "Unsubscribe": "node_Unsubscribe",
             "GetChannelInfos": "node_GetChannelInfos",
-            "AnnounceConfirmedBlock": "node_AnnounceConfirmedBlock",
             "GetBlockByHeight": "node_GetBlockByHeight",
             "Status": "/status/peer/",
             "GetLastBlock": "icx_getLastBlock"

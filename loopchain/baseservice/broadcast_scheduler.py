@@ -25,8 +25,8 @@ import grpc
 from grpc._channel import _Rendezvous
 
 from loopchain import configure as conf
-from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, \
-    RestStubManager, TimerService, Timer
+from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, TimerService, \
+    Timer
 from loopchain.baseservice.tx_item_helper import *
 from loopchain.blockchain import Transaction
 from loopchain.channel.channel_property import ChannelProperty
@@ -55,7 +55,6 @@ class BroadcastScheduler(CommonThread):
         self.__self_target = self_target
 
         self.__audience = {}  # self.__audience[peer_target] = stub_manager
-        self.__audience_subscriber = {}  # self.__audience_subscribe[peer_target] = stub_manager
         self.__thread_variables = dict()
         self.__thread_variables[self.THREAD_VARIABLE_PEER_STATUS] = PeerThreadStatus.normal
 
@@ -69,8 +68,6 @@ class BroadcastScheduler(CommonThread):
             BroadcastCommand.CONNECT_TO_LEADER: self.__handler_connect_to_leader,
             BroadcastCommand.SUBSCRIBE: self.__handler_subscribe,
             BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
-            BroadcastCommand.AUDIENCE_SUBSCRIBE: self.__handler_audience_subscribe,
-            BroadcastCommand.AUDIENCE_UNSUBSCRIBE: self.__handler_audience_unsubscribe,
             BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
@@ -95,10 +92,6 @@ class BroadcastScheduler(CommonThread):
         }
 
         self.__timer_service = TimerService()
-
-    @property
-    def audience_subscriber(self):
-        return self.__audience_subscriber
 
     def stop(self):
         super().stop()
@@ -133,8 +126,6 @@ class BroadcastScheduler(CommonThread):
             priority = (10, time.time())
         elif isinstance(params, tuple) and params[0] == "AddTx":
             priority = (10, time.time())
-        elif command == BroadcastCommand.BROADCAST and params[0] == "AnnounceConfirmedBlock":
-            priority = (100, time.time())
         else:
             priority = (0, time.time())
 
@@ -194,13 +185,6 @@ class BroadcastScheduler(CommonThread):
                                             retry_times,
                                             timeout)
                 stub_item = self.__audience[peer_target]
-
-            elif peer_target in self.__audience_subscriber.keys():
-                def _callback(future: futures.Future):
-                    future.exception() and self.__handler_audience_unsubscribe(peer_target)
-
-                stub_item = self.__audience_subscriber[peer_target]
-                call_back_partial = _callback
         except KeyError as e:
             logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
         else:
@@ -243,8 +227,6 @@ class BroadcastScheduler(CommonThread):
         for target in self.__get_broadcast_targets(method_name):
             if target in self.__audience.keys():
                 stub_item = self.__audience[target]
-            elif target in self.__audience_subscriber.keys():
-                stub_item = self.__audience_subscriber[target]
 
             response = stub_item.call_in_times(
                 method_name=method_name,
@@ -255,9 +237,6 @@ class BroadcastScheduler(CommonThread):
             if response is None:
                 logging.warning(f"broadcast_thread:__broadcast_run_sync fail ({method_name}) "
                                 f"target({target}) ")
-                if method_name == "AnnounceConfirmedBlock":
-                    self.__handler_audience_unsubscribe(audience_unsubscribe_target=target)
-                # __handler_unsubscribe(peer_target)
 
     def __handler_subscribe(self, audience_target):
         logging.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
@@ -288,18 +267,6 @@ class BroadcastScheduler(CommonThread):
             if peer_each.target != self.__self_target:
                 logging.warning(f"broadcast thread peer_targets({peer_each.target})")
                 self.__handler_subscribe(peer_each.target)
-
-    def __handler_audience_subscribe(self, audience_subscribe_target):
-        logging.debug(f"BroadcastThread received audience_subscribe command target: {audience_subscribe_target}")
-        rest_stub_manager = RestStubManager(audience_subscribe_target, self.__channel, for_rs_target=False)
-        self.__audience_subscriber[audience_subscribe_target] = rest_stub_manager
-
-    def __handler_audience_unsubscribe(self, audience_unsubscribe_target):
-        try:
-            logging.debug(f"BroadcastThread received audience_unsubscribe target: {audience_unsubscribe_target}")
-            del self.__audience_subscriber[audience_unsubscribe_target]
-        except KeyError:
-            logging.warning(f"Already deleted peer: {audience_unsubscribe_target}")
 
     def __handler_broadcast(self, broadcast_param):
         # logging.debug("BroadcastThread received broadcast command")
@@ -414,9 +381,6 @@ class BroadcastScheduler(CommonThread):
         self.__thread_variables[self.THREAD_VARIABLE_STUB_TO_SELF_PEER] = stub_to_self_peer
 
     def __get_broadcast_targets(self, method_name):
-        if method_name == "AnnounceConfirmedBlock":
-            logging.debug(f"AnnounceConfirmedBlock to audience_subscriber: {self.audience_subscriber.keys()}")
-            return list(self.__audience_subscriber)
 
         peer_targets = list(self.__audience)
         if ObjectManager().rs_service:

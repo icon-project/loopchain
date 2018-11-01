@@ -86,7 +86,7 @@ def long_to_bytes (val, endianness='big'):
 
 
 def exit_and_msg(msg):
-    exit_msg = "Service Stop by " + msg
+    exit_msg = "Service Stop by: " + msg
     logging.exception(exit_msg)
     os.killpg(0, signal.SIGKILL)
 

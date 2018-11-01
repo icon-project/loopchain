@@ -29,6 +29,13 @@ class MockBlockManager:
         pass
 
 
+class MockBlockManagerCitizen:
+    peer_type = loopchain_pb2.PEER
+
+    def start_block_generate_timer(self):
+        pass
+
+
 class MockChannelService:
     def block_height_sync_channel(self):
         pass
@@ -42,6 +49,24 @@ class MockChannelService:
     @property
     def block_manager(self):
         return MockBlockManager()
+
+
+class MockChannelServiceCitizen:
+    def block_height_sync_channel(self):
+        pass
+
+    def evaluate_network(self):
+        pass
+
+    def subscribe_network(self):
+        pass
+
+    def is_support_node_function(self, node_function):
+        return False
+
+    @property
+    def block_manager(self):
+        return MockBlockManagerCitizen()
 
 
 class TestChannelStateMachine(unittest.TestCase):
@@ -77,6 +102,20 @@ class TestChannelStateMachine(unittest.TestCase):
 
         # THEN
         self.assertEqual(channel_state_machine.state, "BlockGenerate")
+
+    def test_change_state_by_multiple_condition(self):
+        # GIVEN
+        channel_state_machine = ChannelStateMachine(MockChannelServiceCitizen())
+        channel_state_machine.complete_init_components()
+        channel_state_machine.subscribe_network()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # WHEN
+        channel_state_machine.complete_sync()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # THEN
+        self.assertEqual(channel_state_machine.state, "Watch")
 
 
 if __name__ == '__main__':
