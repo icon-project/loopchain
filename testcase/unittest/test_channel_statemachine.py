@@ -26,6 +26,9 @@ from loopchain.protos import loopchain_pb2
 class MockBlockManager:
     peer_type = loopchain_pb2.BLOCK_GENERATOR
 
+    def start_block_generate_timer(self):
+        pass
+
 
 class MockChannelService:
     def block_height_sync_channel(self):
