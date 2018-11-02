@@ -14,7 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Test Channel Manager for new functions not duplicated another tests"""
+"""State Machine for Channel Service"""
 from earlgrey import MessageQueueService
 from transitions import State
 
@@ -94,22 +94,22 @@ class ChannelStateMachine(object):
         self.block_sync()
 
     def _do_block_sync(self):
-        util.logger.spam(f"\ndo_block_sync")
+        # util.logger.spam(f"\ndo_block_sync")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.block_height_sync_channel())
 
     def _do_evaluate_network(self):
-        util.logger.spam(f"\ndo_evaluate_network")
+        # util.logger.spam(f"\ndo_evaluate_network")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.evaluate_network())
 
     def _do_subscribe_network(self):
-        util.logger.spam(f"\ndo_subscribe_network")
+        # util.logger.spam(f"\ndo_subscribe_network")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.subscribe_network())
 
     def _do_vote(self):
-        util.logger.spam(f"\ndo_vote")
+        # util.logger.spam(f"\ndo_vote")
         self.__channel_service.block_manager.vote_as_peer()
 
     def _vote_on_enter(self):
@@ -119,9 +119,9 @@ class ChannelStateMachine(object):
         util.logger.spam(f"\nvote_on_exit")
 
     def _blockgenerate_on_enter(self):
-        util.logger.spam(f"\nblockgenerate_on_enter")
+        # util.logger.spam(f"\nblockgenerate_on_enter")
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
-        util.logger.spam(f"\nblockgenerate_on_exit")
+        # util.logger.spam(f"\nblockgenerate_on_exit")
         self.__channel_service.block_manager.stop_block_generate_timer()
