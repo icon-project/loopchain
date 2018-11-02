@@ -156,7 +156,6 @@ class ChannelService:
 
         if self.__block_manager:
             self.__block_manager.stop()
-            self.__block_manager.wait()
             self.__block_manager = None
             logging.info("Cleanup BlockManager.")
 
@@ -266,10 +265,6 @@ class ChannelService:
             )
 
             self.__block_manager.consensus_algorithm = self.__init_consensus_algorithm()
-
-            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                self.__block_manager.start()
-
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
 

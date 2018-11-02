@@ -9,6 +9,7 @@ state Timer
 Timer: * Connect to Radiostation
 Timer: * heartbeat to peers
 Timer: * leader complain
+Timer: * block generate
 
 state Consensus {
     Consensus: on_enter { block_height_sync }
@@ -46,11 +47,11 @@ state Consensus {
 
     BlockGenerate: on_enter {
     BlockGenerate: \tAddTimer: heartbeat to peers
-    BlockGenerate: \tAddTimer: make block (deafult interval = 2 sec.)
+    BlockGenerate: \tAddTimer: block generate (deafult interval = 2 sec.)
     BlockGenerate: }
     BlockGenerate: on_exit {
     BlockGenerate: \tStopTimer: heartbeat to peers
-    BlockGenerate: \tStopTimer: make block
+    BlockGenerate: \tStopTimer: block generate
     BlockGenerate: }
     BlockGenerate -> Vote : Send AnnounceConfirmedBlock\n(made block count == max)
 

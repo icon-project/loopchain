@@ -120,6 +120,8 @@ class ChannelStateMachine(object):
 
     def _blockgenerate_on_enter(self):
         util.logger.spam(f"\nblockgenerate_on_enter")
+        self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
         util.logger.spam(f"\nblockgenerate_on_exit")
+        self.__channel_service.block_manager.stop_block_generate_timer()

@@ -15,7 +15,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test timer service"""
-
 import unittest
 
 import testcase.unittest.test_util as test_util
