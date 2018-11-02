@@ -317,8 +317,8 @@ class ChannelInnerTask:
         return message_code.Response.success, block.height, block_manager.get_blockchain().block_height, block_dumped
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def block_height_sync(self, target_peer_stub=None):
-        self._channel_service.block_manager.block_height_sync(target_peer_stub)
+    def block_height_sync(self):
+        self._channel_service.state_machine.block_sync()
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
