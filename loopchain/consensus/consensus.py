@@ -35,11 +35,13 @@ class Consensus(CommonThread, Publisher):
     EVENT_LEADER_COMPLAIN_2F_1 = "leader_complain_2f_1"
 
     def __init__(self, channel_service: 'ChannelService', channel: str=None, **kwargs):
+        CommonThread.__init__(self)
         Publisher.__init__(self, [
             Consensus.EVENT_COMPLETE_CONSENSUS,
             Consensus.EVENT_LEADER_COMPLAIN_F_1,
             Consensus.EVENT_LEADER_COMPLAIN_2F_1,
             Consensus.EVENT_MAKE_BLOCK])
+
         self.channel_name = channel
         self.__channel_service = channel_service
         self.__peer_manager = channel_service.peer_manager

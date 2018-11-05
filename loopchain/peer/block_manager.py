@@ -545,7 +545,7 @@ class BlockManager(Subscriber):
                             if result:
                                 if block.height == 0:
                                     self.__rebuild_nid(block)
-                                elif self.get_blockchain().find_nid() is None:
+                                elif self.__blockchain.find_nid() is None:
                                     genesis_block = self.get_blockchain().find_block_by_height(0)
                                     self.__rebuild_nid(genesis_block)
 
@@ -611,9 +611,9 @@ class BlockManager(Subscriber):
 
             if precommit_block:
                 if last_block.height + 1 == precommit_block.height:
-                    blockchain.invoke_for_precommit(precommit_block)
+                    self.__blockchain.invoke_for_precommit(precommit_block)
                     self.__channel_service.score_write_precommit_state(precommit_block)
-                    blockchain.put_precommit_block(precommit_block)
+                    self.__blockchain.put_precommit_block(precommit_block)
                     self.__precommit_block = precommit_block
                     self.consensus.leader_id = precommit_block.peer_id
                     self.consensus.precommit_block = None
