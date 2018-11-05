@@ -101,7 +101,7 @@ class Consensus(CommonThread, Publisher):
     def __create_block_generation_schedule(self):
         util.logger.spam(f"block_manager.py:__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
         Schedule = namedtuple("Schedule", "callback kwargs")
-        schedule = Schedule(self._notify, {"event": Consensus.EVENT_MAKE_BLOCK, "tx_queue": self.__tx_queue})
+        schedule = Schedule(self._notify, {"event_name": Consensus.EVENT_MAKE_BLOCK, "tx_queue": self.__tx_queue})
         self.__block_generation_scheduler.add_schedule(schedule)
 
         time.sleep(conf.INTERVAL_BLOCKGENERATION)
@@ -120,7 +120,7 @@ class Consensus(CommonThread, Publisher):
             util.logger.spam(f"hrkim>>>consensus :: create_epoch : precommit height : {self.__precommit_block.height}")
 
         self._notify(
-            event=Consensus.EVENT_COMPLETE_CONSENSUS,
+            event_name=Consensus.EVENT_COMPLETE_CONSENSUS,
             precommit_block=self.__precommit_block,
             prev_epoch=self.__last_epoch,
             epoch=self.__epoch,

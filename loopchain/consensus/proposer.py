@@ -20,7 +20,7 @@ import pickle
 from loopchain import configure as conf
 from loopchain.blockchain import *
 from loopchain.baseservice import ObjectManager
-from loopchain.consensus import Subscriber, Epoch, Consensus
+from loopchain.consensus import Consensus, Epoch, Subscriber
 from loopchain.baseservice.aging_cache import AgingCache
 
 
@@ -42,9 +42,9 @@ class Proposer(Subscriber):
         self.__prev_epoch: Epoch = kwargs.get("prev_epoch", None)
         self.__precommit_block: Block = kwargs.get("precommit_block", None)
         self.__epoch = kwargs.get("epoch", None)
-        self._event_list = [
-            (Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus),
-            (Consensus.EVENT_MAKE_BLOCK, self.callback_make_block)
+        self.event_list = [
+            (Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus, 1),
+            (Consensus.EVENT_MAKE_BLOCK, self.callback_make_block, 0)
         ]
         self.__block: Block = None
         self.__block_tx_size = 0
@@ -145,7 +145,6 @@ class Proposer(Subscriber):
         logging.debug(f"BroadCast AnnounceNewBlockForVote...peers: "
                       f"{self.__channel_service.peer_manager.get_peer_count()}")
 
-        self.__block_manager.get_blockchain().increase_made_block_count()
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceNewBlockForVote",
             (loopchain_pb2.NewBlockSend(
