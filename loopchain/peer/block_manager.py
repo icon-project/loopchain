@@ -155,7 +155,6 @@ class BlockManager(Subscriber):
         self.__peer_type = peer_type
 
     def __create_block_generation_schedule(self):
-        # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             Schedule = namedtuple("Schedule", "callback kwargs")
             schedule = Schedule(self.__consensus_algorithm.consensus, {})
@@ -593,7 +592,6 @@ class BlockManager(Subscriber):
             return False
 
         if not is_sync_complete:
-            # block height sync 가 완료되지 않았으면 다시 시도한다.
             logging.warning(f"it's not completed block height synchronization in once ...\n"
                             f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
             self.__channel_service.state_machine.block_sync()
@@ -627,8 +625,6 @@ class BlockManager(Subscriber):
 
             else:
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
-
-            self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
 
         logging.debug(f"block_manager:block_height_sync is complete.")
         self.__update_service_status(status_code.Service.online)
