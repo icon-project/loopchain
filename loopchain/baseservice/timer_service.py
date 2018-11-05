@@ -44,7 +44,7 @@ class Timer:
         self.__start_time = time.time()
         self.__is_repeat = kwargs.get("is_repeat", False)
         self.__callback = kwargs.get("callback", None)
-        self.__kwargs = kwargs.get("callback_kwargs", [])
+        self.__kwargs = kwargs.get("callback_kwargs", {})
 
     @property
     def target(self):
@@ -96,6 +96,7 @@ class TimerService(CommonThread):
     TIMER_KEY_CONNECT_PEER = "TIMER_KEY_CONNECT_PEER"
     TIMER_KEY_RS_HEARTBEAT = "TIMER_KEY_RS_HEARTBEAT"
     TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE = "TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE"
+    TIMER_KEY_BLOCK_GENERATE = "TIMER_KEY_BLOCK_GENERATE"
 
     def __init__(self):
         CommonThread.__init__(self)

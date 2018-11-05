@@ -72,6 +72,7 @@ class ChannelInnerTask:
             total_tx = block_manager.get_total_tx()
 
         status_data["status"] = block_manager.service_status
+        status_data["state"] = self._channel_service.state_machine.state
         status_data["peer_type"] = str(block_manager.peer_type)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
@@ -238,6 +239,8 @@ class ChannelInnerTask:
             self._channel_service.block_manager.add_unconfirmed_block,
             unconfirmed_block)
 
+        self._channel_service.state_machine.vote()
+
         if unconfirmed_block.made_block_count >= conf.LEADER_BLOCK_CREATION_LIMIT \
                 and unconfirmed_block.block_type is BlockType.vote \
                 and unconfirmed_block.is_divided_block is False:
@@ -314,8 +317,8 @@ class ChannelInnerTask:
         return message_code.Response.success, block.height, block_manager.get_blockchain().block_height, block_dumped
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def block_height_sync(self, target_peer_stub=None):
-        self._channel_service.block_manager.block_height_sync(target_peer_stub)
+    def block_height_sync(self):
+        self._channel_service.state_machine.block_sync()
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:

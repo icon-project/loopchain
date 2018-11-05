@@ -159,7 +159,7 @@ class Acceptor(Subscriber):
             util.logger.spam(f"acceptor:__add_success_vote::vote count over quorum !! can make block.")
             self.__epoch.status = EpochStatus.success
             self.__epoch.agree_vote_list = self.__vote_list
-            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer=vote.leader_id)
+            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer_id=vote.leader_id)
             await self.__channel_service.reset_leader(
                 new_leader_id=next_leader.peer_id,
                 block_height=self.__consensus.precommit_block.height
@@ -217,7 +217,7 @@ class Acceptor(Subscriber):
         if ready_count >= self.__epoch.quorum:
             self.__epoch.status = EpochStatus.leader_complain
             self.__epoch.ready_vote_list = self.__ready_list
-            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer=vote.leader_id)
+            next_leader = self.__peer_manager.get_next_leader_peer(current_leader_peer_id=vote.leader_id)
             self.__channel_service.reset_leader(next_leader.peer_id, self.__consensus.precommit_block.height)
             self.__consensus.change_epoch(self.__epoch, self.__epoch.precommit_block)
 
