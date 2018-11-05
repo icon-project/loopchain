@@ -42,37 +42,34 @@ class ChannelStateMachine(object):
         self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
         self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Vote')
 
-    @statemachine.transition
-    def complete_init_components(self, source='InitComponents', dest='Consensus'):
+    @statemachine.transition(source='InitComponents', dest='Consensus')
+    def complete_init_components(self):
         pass
 
-    @statemachine.transition
-    def block_height_sync(self, source='Consensus', dest='BlockHeightSync'):
+    @statemachine.transition(source='Consensus', dest='BlockHeightSync')
+    def block_height_sync(self):
         pass
 
-    @statemachine.transition
-    def evaluate_network(self,
-                         source='BlockHeightSync',
-                         dest='EvaluateNetwork',
-                         after='_do_evaluate_network'):
+    @statemachine.transition(source='BlockHeightSync',
+                             dest='EvaluateNetwork',
+                             after='_do_evaluate_network')
+    def evaluate_network(self):
         pass
 
-    @statemachine.transition
-    def block_sync(self,
-                   source=('EvaluateNetwork', 'Vote'),
-                   dest='BlockSync',
-                   after='_do_block_sync'):
+    @statemachine.transition(source=('EvaluateNetwork', 'Vote'),
+                             dest='BlockSync',
+                             after='_do_block_sync')
+    def block_sync(self):
         pass
 
-    @statemachine.transition
-    def subscribe_network(self,
-                          source=('BlockSync', 'EvaluateNetwork'),
-                          dest='SubscribeNetwork',
-                          after='_do_subscribe_network'):
+    @statemachine.transition(source=('BlockSync', 'EvaluateNetwork'),
+                             dest='SubscribeNetwork',
+                             after='_do_subscribe_network')
+    def subscribe_network(self):
         pass
 
-    @statemachine.transition
-    def vote(self, source='Vote', dest='Vote', after='_do_vote'):
+    @statemachine.transition(source='Vote', dest='Vote', after='_do_vote')
+    def vote(self):
         pass
 
     def complete_sync(self):

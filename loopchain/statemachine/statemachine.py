@@ -1,4 +1,4 @@
-# Copyright 2017 theloop Inc.
+# Copyright 2018 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import functools
-import inspect
-
 from transitions import Machine
 
 import loopchain.utils as util
@@ -52,31 +49,23 @@ class StateMachine(object):
 
                 cls.__init__(cls, *cls_args)
 
+                for attr_name in dir(cls):
+                    attr = getattr(cls, attr_name, None)
+                    if not attr:
+                        continue
+
+                    info_dict = getattr(attr, "_info_dict_", None)
+                    if not info_dict:
+                        continue
+
+                    self.machine.add_transition(attr.__name__, **info_dict)
+
         return Wrapped
 
 
-def transition(func=None):
-    # if func is None:
-    #     return functools.partial(transition)
+def transition(**kwargs_):
+    def _transaction(func):
+        func._info_dict_ = kwargs_
+        return func
 
-    @functools.wraps(func)
-    def _wrapper(*args, **kwargs):
-        bound_arguments = inspect.signature(func).bind(*args, **kwargs)
-        bound_arguments.apply_defaults()
-        arguments = dict(bound_arguments.arguments)
-        util.logger.spam(f"_wrapper func({func}) bound_arguments({arguments})")
-
-        trigger_name = func.__name__
-        arguments['self'].machine.add_transition(trigger=trigger_name,
-                                                 source=arguments['source'],
-                                                 dest=arguments['dest'],
-                                                 before=arguments.get('before'),
-                                                 after=arguments.get('after'),
-                                                 conditions=arguments.get('conditions'))
-
-        trigger = getattr(arguments['self'], trigger_name)
-        util.logger.spam(f"_wrapper func.__name__({func.__name__})")
-        trigger()
-        # func(*args, **kwargs)
-
-    return _wrapper
+    return _transaction

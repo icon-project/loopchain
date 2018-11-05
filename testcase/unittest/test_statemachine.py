@@ -38,30 +38,30 @@ class StateMachinedHero(object):
         self.machine.add_transition('clean_up', 'sweaty', 'hanging out')
 
     # use decorator for typical transitions
-    @statemachine.transition
-    def wake_up(self, source='asleep', dest='hanging out'):
+    @statemachine.transition(source='asleep', dest='hanging out')
+    def wake_up(self):
         pass
 
-    @statemachine.transition
-    def work_out(self, source='hanging out', dest='hungry'):
+    @statemachine.transition(source='hanging out', dest='hungry')
+    def work_out(self):
         pass
 
-    @statemachine.transition
-    def eat(self, source='hungry', dest='hanging out'):
+    @statemachine.transition(source='hungry', dest='hanging out')
+    def eat(self):
         pass
 
-    @statemachine.transition
-    def distress_call(self, source='*', dest='saving the world',
-                      before='change_into_super_secret_costume'):
+    @statemachine.transition(source='*', dest='saving the world',
+                             before='change_into_super_secret_costume')
+    def distress_call(self):
         pass
 
-    @statemachine.transition
-    def complete_mission(self, source='saving the world', dest='sweaty',
-                         after='update_journal'):
+    @statemachine.transition(source='saving the world', dest='sweaty',
+                             after='update_journal')
+    def complete_mission(self):
         pass
 
-    @statemachine.transition
-    def nap(self, source='*', dest='asleep'):
+    @statemachine.transition(source='*', dest='asleep')
+    def nap(self):
         pass
 
     def clean_up(self):
