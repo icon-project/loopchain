@@ -360,8 +360,8 @@ class Block:
         if block.block_hash != Block.__generate_hash(block):
             raise BlockInValidError('block Hash is not same generate hash')
 
-        leader = channel_service.peer_manager.get_leader_object()
-        if not leader.cert_verifier.verify_hash(block.block_hash, block.signature):
+        block_generator = channel_service.peer_manager.peer_object_list[conf.ALL_GROUP_ID][block.peer_id]
+        if not block_generator.cert_verifier.verify_hash(block.block_hash, block.signature):
             raise BlockInValidError('block signature invalid')
 
         if block.time_stamp == 0:

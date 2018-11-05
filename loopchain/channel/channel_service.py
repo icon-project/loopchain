@@ -685,10 +685,7 @@ class ChannelService:
 
     async def reset_leader(self, new_leader_id, block_height=0):
         logging.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
-
-        complained_leader = self.peer_manager.get_leader_peer()
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
-
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
             return
@@ -712,8 +709,14 @@ class ChannelService:
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.block_manager.get_blockchain().reset_made_block_count()
-            self.peer_manager.announce_new_leader(
-                complained_leader.peer_id, new_leader_id, is_broadcast=True, self_peer_id=ChannelProperty().peer_id)
+
+            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
+                self.peer_manager.announce_new_leader(
+                    self.peer_manager.get_leader_peer().peer_id,
+                    new_leader_id,
+                    is_broadcast=True,
+                    self_peer_id=ChannelProperty().peer_id
+                )
         else:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
@@ -851,7 +854,7 @@ class ChannelService:
         if util.channel_use_icx(ChannelProperty().name):
             request = {
                 "blockHeight": block.height,
-                "blockHash": block.block_hash,
+                "blockHash": block.block_hash
             }
             request = convert_params(request, ParamType.write_precommit_state)
 

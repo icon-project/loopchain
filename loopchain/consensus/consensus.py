@@ -16,6 +16,7 @@
 import logging
 import threading
 import time
+from collections import namedtuple
 
 from loopchain import configure as conf
 from loopchain import utils as util
@@ -23,22 +24,36 @@ from loopchain import utils as util
 from loopchain.blockchain import Block, TransactionStatusInQueue
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Publisher, Epoch, EpochStatus
-from loopchain.baseservice import ObjectManager, CommonThread, Timer
+from loopchain.baseservice import ObjectManager, CommonThread, Timer, BlockGenerationScheduler
 from loopchain.baseservice.aging_cache import AgingCache
 
 
 class Consensus(CommonThread, Publisher):
+    EVENT_COMPLETE_CONSENSUS = "complete_consensus"
+    EVENT_MAKE_BLOCK = "make_block"
+    EVENT_LEADER_COMPLAIN_F_1 = "leader_complain_f_1"
+    EVENT_LEADER_COMPLAIN_2F_1 = "leader_complain_2f_1"
+
     def __init__(self, channel_service: 'ChannelService', channel: str=None, **kwargs):
-        Publisher.__init__(self, ["complete_consensus", "leader_complain_f_1", "leader_complain_2f_1", "make_block"])
+        Publisher.__init__(self, [
+            Consensus.EVENT_COMPLETE_CONSENSUS,
+            Consensus.EVENT_LEADER_COMPLAIN_F_1,
+            Consensus.EVENT_LEADER_COMPLAIN_2F_1,
+            Consensus.EVENT_MAKE_BLOCK])
+        self.channel_name = channel
         self.__channel_service = channel_service
         self.__peer_manager = channel_service.peer_manager
-        self.channel_name = channel
         self.__last_epoch: Epoch = None
         self.__precommit_block: Block = None
         self.__epoch: Epoch = None
         self.__leader_id = None
         self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                      default_item_status=TransactionStatusInQueue.normal)
+        self.__sleep_time = None
+        self.__run_logic = None
+        self.__block_generation_scheduler = BlockGenerationScheduler(self.channel_name)
+
+        self.__init_data()
 
     @property
     def epoch(self):
@@ -60,11 +75,34 @@ class Consensus(CommonThread, Publisher):
     def precommit_block(self, precommit_block):
         self.__precommit_block = precommit_block
 
-    def get_tx_queue(self) -> AgingCache:
-        return self.__tx_queue
+    @property
+    def block_generation_scheduler(self):
+        return self.__block_generation_scheduler
 
-    def add_tx_obj(self, tx):
-        self.__tx_queue[tx.tx_hash] = tx
+    def __init_data(self):
+        self.__init_sleep_time()
+        self.__set_run_logic()
+
+    def __set_run_logic(self):
+        if conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self.__run_logic = self.__create_block_generation_schedule
+        else:
+            self.__run_logic = self.__notify
+
+    def __init_sleep_time(self):
+        if conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self.__sleep_time = conf.INTERVAL_BLOCKGENERATION
+        else:
+            # self.__sleep_time = conf.SLEEP_SECONDS_IN_SERVICE_LOOP
+            self.__sleep_time = 5
+
+    def __create_block_generation_schedule(self):
+        util.logger.spam(f"block_manager.py:__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
+        Schedule = namedtuple("Schedule", "callback kwargs")
+        schedule = Schedule(self._notify, {"event": Consensus.EVENT_MAKE_BLOCK, "tx_queue": self.__tx_queue})
+        self.__block_generation_scheduler.add_schedule(schedule)
+
+        time.sleep(conf.INTERVAL_BLOCKGENERATION)
 
     def __create_epoch(self):
         quorum, complain_quorum = self.__peer_manager.get_quorum()
@@ -80,36 +118,27 @@ class Consensus(CommonThread, Publisher):
             util.logger.spam(f"hrkim>>>consensus :: create_epoch : precommit height : {self.__precommit_block.height}")
 
         self._notify(
-            event="complete_consensus",
+            event=Consensus.EVENT_COMPLETE_CONSENSUS,
             precommit_block=self.__precommit_block,
             prev_epoch=self.__last_epoch,
             epoch=self.__epoch,
             tx_queue=self.__tx_queue)
 
-    def set_new_leader(self, precommit_block: Block):
-        peer_order_list: dict = self.__peer_manager.peer_order_list[conf.ALL_GROUP_ID]
+    def get_tx_queue(self) -> AgingCache:
+        return self.__tx_queue
 
-        util.logger.spam(f"hrkim==================peer_order_list{peer_order_list}")
-        util.logger.spam(f"hrkim==================current_leader({self.__leader_id})")
-        util.logger.spam(f"hrkim==================precommit_block.height({precommit_block.height})")
+    def add_tx_obj(self, tx):
+        self.__tx_queue[tx.tx_hash] = tx
 
-        new_leader_order = None
-        for order, peer_id in peer_order_list.items():
-            if peer_id == self.__leader_id:
-                util.logger.spam(f"hrkim==================current_leader_order({order})")
-                new_leader_order = order + 1
-                break
+    def start(self):
+        if conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self.__block_generation_scheduler.start()
+        CommonThread.start(self)
 
-        peer_list_size = len(peer_order_list)
-        if peer_list_size < new_leader_order or (self.__precommit_block is None and new_leader_order == peer_list_size):
-            new_leader_order = 1
-
-        new_leader_id = peer_order_list[new_leader_order]
-
-        util.logger.spam(f"hrkim==================new_leader({new_leader_id})/new_leader_order({new_leader_order})")
-
-        self.__channel_service.set_new_leader(new_leader_id, precommit_block.height)
-        self.__leader_id = new_leader_id
+    def stop(self):
+        if conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self.__block_generation_scheduler.stop()
+        CommonThread.stop(self)
 
     def run(self, e: threading.Event):
         """Consensus Thread Loop
@@ -121,16 +150,8 @@ class Consensus(CommonThread, Publisher):
         logging.info(f"channel({self.channel_name}) Consensus thread Start.")
         e.set()
 
-        if conf.ALLOW_MAKE_EMPTY_BLOCK:
-            sleep_time = conf.INTERVAL_BLOCKGENERATION
-        else:
-            # sleep_time = conf.SLEEP_SECONDS_IN_SERVICE_LOOP
-            sleep_time = 2
-
         while self.is_run():
-            time.sleep(sleep_time)
-            util.logger.spam(f"---- MAKE BLOCK EVENT ----")
-            self._notify("make_block", tx_queue=self.__tx_queue)
+            self.__run_logic()
 
         logging.info(f"channel({self.channel_name}) Consensus thread Ended.")
 
@@ -149,9 +170,6 @@ class Consensus(CommonThread, Publisher):
             self.__last_epoch = self.__epoch
             self.__epoch = None
         elif self.__precommit_block is None and precommit_block is not None:
-            if precommit_block.height > 0:
-                self.__leader_id = precommit_block.peer_id
-                self.set_new_leader(precommit_block)
             self.__precommit_block = precommit_block
 
         if self.__precommit_block is not None:
@@ -182,3 +200,4 @@ class Consensus(CommonThread, Publisher):
             callback_kwargs={"epoch": self.__epoch}
         )
         ObjectManager().channel_service.timer_service.add_timer(timer_key, timer)
+
