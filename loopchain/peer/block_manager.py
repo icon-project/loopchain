@@ -155,7 +155,7 @@ class BlockManager(Subscriber):
         self.__peer_type = peer_type
 
     def __create_block_generation_schedule(self):
-        # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
+        util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             Schedule = namedtuple("Schedule", "callback kwargs")
             schedule = Schedule(self.__consensus_algorithm.consensus, {})

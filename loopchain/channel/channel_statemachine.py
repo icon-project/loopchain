@@ -75,6 +75,14 @@ class ChannelStateMachine(object):
     def complete_sync(self):
         pass
 
+    @statemachine.transition(source='BlockGenerate', dest='Vote')
+    def turn_to_peer(self):
+        pass
+
+    @statemachine.transition(source='Vote', dest='BlockGenerate')
+    def turn_to_leader(self):
+        pass
+
     def _is_leader(self):
         return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
 

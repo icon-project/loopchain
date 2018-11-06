@@ -241,15 +241,13 @@ class ChannelInnerTask:
 
         self._channel_service.state_machine.vote()
 
-        if unconfirmed_block.made_block_count >= conf.LEADER_BLOCK_CREATION_LIMIT \
-                and unconfirmed_block.block_type is BlockType.vote \
-                and unconfirmed_block.is_divided_block is False:
+        if unconfirmed_block.block_type is BlockType.vote and unconfirmed_block.is_divided_block is False:
             util.logger.spam(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
                              f"\nnext_leader_peer({unconfirmed_block.next_leader_peer}, "
                              f"channel({ChannelProperty().name}))")
 
-            # (hotfix-81) 자기가 다음 리더 일때만 AnnounceUnconfirmedBlock 메시지에서 reset leader 를 호출한다.
             if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer:
+                self._channel_service.state_machine.turn_to_leader()
                 await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer)
 
     @message_queue_task
