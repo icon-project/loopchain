@@ -172,8 +172,6 @@ USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is differ
 VOTING_RATIO = 0.66
 # Block Height 를 level_db 의 key(bytes)로 변환할때 bytes size
 BLOCK_HEIGHT_BYTES_LEN = 12
-# Leader 의 block 생성 갯수
-LEADER_BLOCK_CREATION_LIMIT = 20000000
 # Block vote timeout
 BLOCK_VOTE_TIMEOUT = 60 * 5  # seconds
 # default storage path
