@@ -23,6 +23,9 @@ from loopchain.baseservice import BroadcastCommand, TimerService
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
+from loopchain.peer.consensus_default import ConsensusDefault
+from loopchain.peer.consensus_none import ConsensusNone
+from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
@@ -468,6 +471,8 @@ class BlockManager(Subscriber):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
 
+        self.__set_consensus_algorithm()
+
         if timer_key not in timer_service.timer_list.keys():
             util.logger.spam(f"add timer block generate")
             timer_service.add_timer(
@@ -821,3 +826,15 @@ class BlockManager(Subscriber):
         else:
             util.logger.spam(f"start timer :: after genesis or rebuild block / "
                              f"precommit block info - {last_block_height}")
+
+    def __set_consensus_algorithm(self):
+        """set a consensus algorithm by configuration.
+        """
+        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.siever:
+            self.__consensus_algorithm = ConsensusSiever(self)
+        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+            self.__consensus_algorithm = None
+        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.none:
+            self.__consensus_algorithm = ConsensusNone(self)
+        else:
+            self.__consensus_algorithm = ConsensusDefault(self)

@@ -53,7 +53,7 @@ state Consensus {
     BlockGenerate: \tStopTimer: heartbeat to peers
     BlockGenerate: \tStopTimer: block generate
     BlockGenerate: }
-    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\ntrigger::turn_to_vote\n(block_type == vote)
+    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
 
     state LeaderComplain
     note right of LeaderComplain

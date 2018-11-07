@@ -32,9 +32,6 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus import Consensus, Acceptor, Proposer
 from loopchain.peer import BlockManager
-from loopchain.peer.consensus_default import ConsensusDefault
-from loopchain.peer.consensus_none import ConsensusNone
-from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.peer.icx_authorization import IcxAuthorization
 from loopchain.peer.peer_authorization import PeerAuthorization
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
@@ -263,8 +260,6 @@ class ChannelService:
                 channel_name=ChannelProperty().name,
                 level_db_identity=ChannelProperty().peer_target
             )
-
-            self.__block_manager.consensus_algorithm = self.__init_consensus_algorithm()
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
 
@@ -351,20 +346,6 @@ class ChannelService:
             await StubCollection().score_stubs[ChannelProperty().name].async_task().hello()
 
             return await self.__load_score()
-
-    def __init_consensus_algorithm(self):
-        """initialize a consensus algorithm by configuration.
-        """
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.none:
-            consensus_algorithm = ConsensusNone(self.__block_manager)
-        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.siever:
-            consensus_algorithm = ConsensusSiever(self.__block_manager)
-        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            consensus_algorithm = None
-        else:
-            consensus_algorithm = ConsensusDefault(self.__block_manager)
-
-        return consensus_algorithm
 
     async def __load_score(self):
         channel_name = ChannelProperty().name
