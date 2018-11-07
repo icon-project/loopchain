@@ -207,8 +207,6 @@ class BlockManager(Subscriber):
 
         # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
         block_dump = util.block_dumps(block_)
-        if conf.ALLOW_MAKE_EMPTY_BLOCK or block_.confirmed_tx_len > 0:
-            self.__blockchain.increase_made_block_count()
 
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",

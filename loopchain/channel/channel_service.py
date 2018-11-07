@@ -707,7 +707,6 @@ class ChannelService:
 
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
-            self.block_manager.get_blockchain().reset_made_block_count()
 
             if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
                 self.peer_manager.announce_new_leader(

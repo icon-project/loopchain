@@ -176,40 +176,6 @@ class PeerService:
     def radio_station_target(self):
         return self.__radio_station_target
 
-    def rotate_next_leader(self, channel_name):
-        """Find Next Leader Id from peer_list and reset leader to that peer"""
-
-        # logging.debug("rotate next leader...")
-        util.logger.spam(f"peer_service:rotate_next_leader")
-        peer_manager = self.__channel_manager.get_peer_manager(channel_name)
-        next_leader = peer_manager.get_next_leader_peer(is_only_alive=True)
-
-        # Check Next Leader is available...
-        if next_leader is not None and next_leader.peer_id != self.peer_id:
-            try:
-                stub_manager = peer_manager.get_peer_stub_manager(next_leader)
-                response = stub_manager.call(
-                    "Request", loopchain_pb2.Message(
-                        code=message_code.Request.status,
-                        channel=channel_name,
-                        message="get_leader_peer"
-                    ), is_stub_reuse=True)
-
-                # Peer 가 leader 로 변경되는데 시간이 필요함으로 접속 여부만 확인한다.
-                # peer_status = json.loads(response.status)
-                # if peer_status["peer_type"] != str(loopchain_pb2.BLOCK_GENERATOR):
-                #     logging.warning("next rotate is not a leader")
-                #     raise Exception
-
-            except Exception as e:
-                logging.warning(f"rotate next leader exceptions({e})")
-                next_leader = peer_manager.leader_complain_to_rs(conf.ALL_GROUP_ID)
-
-        if next_leader is not None:
-            self.reset_leader(next_leader.peer_id, channel_name)
-        else:
-            util.logger.warning(f"peer_service:rotate_next_leader next_leader is None({next_leader})")
-
     def service_stop(self):
         self.__common_service.stop()
 

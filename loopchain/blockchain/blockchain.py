@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
 import copy
 import json
 import leveldb
@@ -74,7 +73,6 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
-        self.__made_block_count = 0
         self.__invoke_results = {}
 
         self.last_commit_state_height = 0
@@ -109,16 +107,6 @@ class BlockChain:
         except:
             pass
         return self.__last_block
-
-    @property
-    def made_block_count(self):
-        return self.__made_block_count
-
-    def increase_made_block_count(self):
-        self.__made_block_count += 1
-
-    def reset_made_block_count(self):
-        self.__made_block_count = 0
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:

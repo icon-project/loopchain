@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import ast
 import copy
 import json
@@ -19,6 +18,7 @@ import pickle
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import configure as conf
@@ -60,7 +60,7 @@ class ChannelInnerTask:
         status_data = dict()
 
         block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = block_manager.get_blockchain().made_block_count
+        status_data["made_block_count"] = 0
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
@@ -229,7 +229,6 @@ class ChannelInnerTask:
                       f"peer_id({unconfirmed_block.peer_id})\n"
                       f"height({unconfirmed_block.height})\n"
                       f"hash({unconfirmed_block.block_hash})\n"
-                      f"made_block_count({unconfirmed_block.made_block_count})\n"
                       f"block_type({unconfirmed_block.block_type})\n"
                       f"is_divided_block({unconfirmed_block.is_divided_block})\n")
 

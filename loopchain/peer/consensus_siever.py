@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
-
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import *
 from loopchain.peer import candidate_blocks
@@ -152,9 +151,6 @@ class ConsensusSiever(ConsensusBase):
                 # 검증할 후보 블럭이 없으면서 이전 블럭이 unconfirmed block 이면 투표가 담긴 빈 블럭을 전송한다.
                 self._block.prev_block_hash = confirmed_block.block_hash
                 self._block.block_type = BlockType.vote
-                self.made_block_count -= 1
-
-                logging.debug(f"made_block_count({self.made_block_count})")
 
                 self._block.next_leader_peer = peer_manager.get_next_leader_peer().peer_id
 
@@ -165,7 +161,6 @@ class ConsensusSiever(ConsensusBase):
                                  f"\ntry ObjectManager().peer_service.rotate_next_leader({self._channel_name})")
 
                 ObjectManager().channel_service.state_machine.turn_to_peer()
-                # ObjectManager().peer_service.rotate_next_leader(self._channel_name)
 
         self._makeup_block()
 

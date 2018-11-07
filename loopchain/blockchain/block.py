@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A module for managing Score"""
-
 import base64
 import copy
 import hashlib
@@ -25,7 +24,7 @@ from ordered_set import OrderedSet
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import ScoreResponse, ObjectManager
+from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import TransactionStatus, Transaction
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
@@ -48,7 +47,7 @@ class Block:
     Transaction 들을 담아서 Peer들과 주고 받는 Block Object.
     """
 
-    def __init__(self, channel_name, made_block_count=0, is_divided_block=False):
+    def __init__(self, channel_name, is_divided_block=False):
         # Block head
         self.version = "0.1a"
         self.prev_block_hash = ""
@@ -66,7 +65,6 @@ class Block:
         self.__block_type = BlockType.general
 
         self.peer_id = ""
-        self.__made_block_count = made_block_count
         self.__is_divided_block = is_divided_block
         self.__next_leader_peer_id = ""
         self.__peer_manager = None
@@ -140,14 +138,7 @@ class Block:
 
     @block_type.setter
     def block_type(self, block_type):
-        if block_type is not BlockType.general:
-            self.__made_block_count -= 1
-
         self.__block_type = block_type
-
-    @property
-    def made_block_count(self):
-        return self.__made_block_count
 
     @property
     def is_divided_block(self):
