@@ -125,6 +125,8 @@ class ConsensusSiever(ConsensusBase):
                     self._reset_block()
                     self.__throw_out_block(failed_block)
 
+            self._makeup_block()
+
             # 다음 검증 후보 블럭이 있는지 확인한다.
             candidate_block = self._candidate_blocks.get_candidate_block()
             peer_manager = ObjectManager().channel_service.peer_manager
@@ -161,7 +163,5 @@ class ConsensusSiever(ConsensusBase):
                                  f"\ntry ObjectManager().peer_service.rotate_next_leader({self._channel_name})")
 
                 ObjectManager().channel_service.state_machine.turn_to_peer()
-
-        self._makeup_block()
 
         return result
