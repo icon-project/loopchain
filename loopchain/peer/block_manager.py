@@ -95,7 +95,7 @@ class BlockManager(Subscriber):
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
 
-    def __update_service_status(self, status):
+    def update_service_status(self, status):
         self.__service_status = status
         StubCollection().peer_stub.sync_task().update_status(
             self.__channel_name,
@@ -489,7 +489,6 @@ class BlockManager(Subscriber):
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
-        self.__update_service_status(status_code.Service.block_height_sync)
         channel_service = ObjectManager().channel_service
         peer_manager = channel_service.peer_manager
 
@@ -588,7 +587,6 @@ class BlockManager(Subscriber):
         if my_height >= max_height:
             logging.debug(f"block_manager:block_height_sync is complete.")
             self.__channel_service.state_machine.subscribe_network()
-            self.__update_service_status(status_code.Service.online)
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
                             f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")

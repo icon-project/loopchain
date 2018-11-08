@@ -707,6 +707,7 @@ class ChannelService:
 
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
+            self.state_machine.turn_to_leader()
 
             if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
                 self.peer_manager.announce_new_leader(
@@ -720,6 +721,8 @@ class ChannelService:
             loggers.get_preset().update_logger()
 
             logging.debug("Set Peer Type Peer!")
+            self.state_machine.turn_to_peer()
+
             # 새 leader 에게 subscribe 하기
             await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)

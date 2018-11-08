@@ -639,8 +639,8 @@ class PeerManager:
                 peer_each.status = PeerStatus.connected
                 peer_status = json.loads(response.meta)
 
-                # logging.debug(f"Check Peer Status ({peer_status['peer_type']})")
-                if peer_status["peer_type"] == str(loopchain_pb2.BLOCK_GENERATOR):
+                # logging.debug(f"Check Peer peer_type({peer_status['peer_type']}), state({peer_status['state']})")
+                if peer_status["state"] == "BlockGenerate":
                     check_leader_peer_count += 1
 
                 if peer_status["block_height"] >= self.__highest_block_height:

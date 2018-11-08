@@ -247,7 +247,6 @@ class ChannelInnerTask:
 
             if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer:
                 await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer)
-                self._channel_service.state_machine.turn_to_leader()
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
