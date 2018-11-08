@@ -8,7 +8,7 @@ import sys
 
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
-from loopchain.blockchain.hashing import get_tx_hash_generator
+from loopchain.blockchain.hashing import build_hash_generator
 
 ICX_FACTOR = 10 ** 18
 ICX_FEE = 0.01
@@ -19,7 +19,9 @@ class IcxWallet:
         self.__private_key = private_key or PrivateKey()
         self.__address = self.create_address(self.__private_key.pubkey)
         self.__last_tx_hash = ""
-        self.__hash_generator = get_tx_hash_generator(conf.LOOPCHAIN_DEFAULT_CHANNEL)
+
+        tx_hash_version = conf.CHANNEL_OPTION[conf.conf.LOOPCHAIN_DEFAULT_CHANNEL]["tx_hash_version"]
+        self.__hash_generator = build_hash_generator(tx_hash_version, "icx_sendTransaction")
 
         self.to_address = None
         self.value = None
@@ -96,7 +98,7 @@ class IcxWallet:
         return f"hx{hashed_pub[-40:]}"
 
     def create_signature(self, tx_hash):
-        signature = self.__private_key.ecdsa_sign_recoverable(msg=binascii.unhexlify(tx_hash),
+        signature = self.__private_key.ecdsa_sign_recoverable(msg=tx_hash,
                                                               raw=True,
                                                               digest=hashlib.sha3_256)
         serialized_sig = self.__private_key.ecdsa_recoverable_serialize(signature)

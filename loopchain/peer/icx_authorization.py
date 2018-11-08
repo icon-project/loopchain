@@ -101,6 +101,10 @@ class IcxAuthorization(IcxVerifier):
         if self.verify_data(b'TEST', sign) is False:
             raise ValueError("Invalid Signature(Peer Certificate load test)")
 
+    @property
+    def peer_private_key(self):
+        return self.__peer_pri
+
     def sign_data(self, data, is_hash=False):
         if is_hash:
             if isinstance(data, str):

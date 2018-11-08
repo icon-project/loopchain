@@ -16,7 +16,6 @@
 from .status_code import *
 from .vote import *
 from .block_manager import *
-from .candidate_blocks import *
 from .peer_inner_service import *
 from .peer_outer_service import *
 from .channel_manager import *

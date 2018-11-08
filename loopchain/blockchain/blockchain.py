@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
+
 import copy
 import json
 import leveldb
@@ -22,13 +23,12 @@ from enum import Enum
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import BlockStatus, Block, Transaction, \
-    TransactionStatusInQueue
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVerifier,
+                                  Transaction, TransactionBuilder, TransactionSerializer,
+                                  Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
-from loopchain.blockchain.validator import get_genesis_tx_validator
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import message_code
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -73,12 +73,11 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
+        self.__made_block_count = 0
         self.__invoke_results = {}
 
-        self.last_commit_state_height = 0
-        self.last_commit_state = {}
-        self.__add_block_lock = threading.Lock()
-        self.__confirmed_block_lock = threading.Lock()
+        self.__add_block_lock = threading.RLock()
+        self.__confirmed_block_lock = threading.RLock()
 
         self.__total_tx = 0
 
@@ -108,6 +107,16 @@ class BlockChain:
             pass
         return self.__last_block
 
+    @property
+    def made_block_count(self):
+        return self.__made_block_count
+
+    def increase_made_block_count(self):
+        self.__made_block_count += 1
+
+    def reset_made_block_count(self):
+        self.__made_block_count = 0
+
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
             # rebuild blocks to Genesis block.
@@ -127,7 +136,7 @@ class BlockChain:
                 self.__total_tx = self._rebuild_transaction_count_from_blocks()
 
             logging.info(f"rebuilt blocks, total_tx: {self.__total_tx}")
-            logging.info(f"block hash({self.__last_block.block_hash}) and height({self.__last_block.height})")
+            logging.info(f"block hash({self.__last_block.header.hash.hex()}) and height({self.__last_block.header.height})")
             return True
         else:
             logging.info("There is no block.")
@@ -153,16 +162,14 @@ class BlockChain:
         return int.from_bytes(tx_count_bytes, byteorder='big')
 
     def __find_block_by_key(self, key):
-
         try:
             block_bytes = self.__confirmed_block_db.Get(key)
-            block = Block(channel_name=self.__channel_name)
-            block.deserialize_block(block_bytes)
+            block_dumped = json.loads(block_bytes)
+            return BlockSerializer.new("0.1a").deserialize(block_dumped)
         except KeyError as e:
-            block = None
             logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
-        return block
+        return None
 
     def find_block_by_hash(self, block_hash):
         """find block by block hash.
@@ -191,119 +198,67 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
-    def __score_invoke_with_state_integrity(self, block: Block, is_commit_state_validation=False):
-        if is_commit_state_validation:
-            self.last_commit_state = copy.deepcopy(block.commit_state)
-            invoke_results = ObjectManager().channel_service.score_invoke(block)
-
-            if self.last_commit_state != block.commit_state:
-                util.logger.spam(f"last_commit_state({self.last_commit_state})")
-                util.logger.spam(f"block.commit_state({block.commit_state})")
-                util.exit_and_msg(f"add_block FAIL commit state integrity!! This Peer will Down.")
-            self.last_commit_state_height = block.height
-        else:
-            invoke_results = ObjectManager().channel_service.score_invoke(block)
-
-        return invoke_results
-
-    def add_block(self, block: Block, is_commit_state_validation=False) -> bool:
-        """add committed block
-
-        :param block: a block after confirmation
-        'STORE_VALID_TRANSACTION_ONLY'가 True로 설정 된 경우, 필수 parameter.
-        :param is_commit_state_validation: if True: add only commit state validate pass
-        :return: to add block is success or not
-        """
-
+    def add_block(self, block: Block) -> bool:
         with self.__add_block_lock:
-            util.logger.spam(f"ENGINE-308 blockchain:add_block is_commit_state_validation({is_commit_state_validation})")
+            if not self.__prevent_next_block_mismatch(block):
+                return True
 
-            if block.height != 0 and block.height != (self.last_block.height + 1) and not is_commit_state_validation:
-                logging.warning(f"blockchain:add_block invalid block height({block.height})")
-                return False
+            return self.__add_block(block)
+
+    def __add_block(self, block: Block):
+        with self.__add_block_lock:
+            need_to_commit = True
+
+            invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
+            if invoke_results is None:
+                if block.header.height == 0:
+                    block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
+                else:
+                    block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                self.__verify_block_connection(block)
-            except Exception as e:
-                logging.error(f"add_block error! caused by : {e}")
-                return False
-
-            if conf.CHANNEL_OPTION[self.__channel_name]["send_tx_type"] == conf.SendTxType.icx and block.height == 0:
-                invoke_results = ObjectManager().channel_service.genesis_invoke(block)
-                ObjectManager().channel_service.score_write_precommit_state(block)
-                self.__add_tx_to_block_db(block, invoke_results)
-            elif not conf.CHANNEL_OPTION[self.__channel_name]['store_valid_transaction_only']:
-                # STORE_VALID_TRANSACTION_ONLY
-                if block.height == 0 or ObjectManager().channel_service is None:
-                    # all results to success
-                    success_result = {'code': int(message_code.Response.success)}
-                    invoke_results = util.create_invoke_result_specific_case(
-                        block.confirmed_transaction_list, success_result)
-                    self.__add_tx_to_block_db(block, invoke_results)
-                else:
-                    try:
-                        invoke_results = self.__score_invoke_with_state_integrity(block, is_commit_state_validation)
-                    except Exception as e:
-                        # When Grpc Connection Raise Exception
-                        # save all result{'code': ScoreResponse.SCORE_CONTAINER_EXCEPTION, 'message': str(e)}
-                        logging.error(f'Error While Invoke Score fail add block : {e}')
-                        score_container_exception_result = {
-                            'code': ScoreResponse.SCORE_CONTAINER_EXCEPTION, 'message': str(e)}
-                        invoke_results = \
-                            util.create_invoke_result_specific_case(
-                                block.confirmed_transaction_list,
-                                score_container_exception_result
-                            )
+                if need_to_commit:
                     self.__add_tx_to_block_db(block, invoke_results)
                     ObjectManager().channel_service.score_write_precommit_state(block)
-            else:
-                need_to_commit = True
-                invoke_results = self.__invoke_results.get(block.block_hash, None)
-                if not invoke_results:
-                    need_to_commit = self.__prevent_next_block_mismatch(block, is_commit_state_validation)
-                    if need_to_commit:
-                        invoke_results = self.__score_invoke_with_state_integrity(block, is_commit_state_validation)
-
-                try:
-                    if need_to_commit:
-                        self.__add_tx_to_block_db(block, invoke_results)
-                        ObjectManager().channel_service.score_write_precommit_state(block)
-                        # invoke_results = self.__invoke_results[block.block_hash]
-                except Exception as e:
-                    logging.warning(f"blockchain:add_block FAIL "
-                                    f"channel_service.score_write_precommit_state")
-                    raise e
-                finally:
-                    self.__invoke_results.pop(block.block_hash, None)
+            except Exception as e:
+                logging.warning(f"blockchain:add_block FAIL "
+                                f"channel_service.score_write_precommit_state")
+                raise e
+            finally:
+                self.__invoke_results.pop(block.header.hash, None)
 
             # a condition for the exception case of genesis block.
             next_total_tx = self.__total_tx
-            if block.height > 0:
-                next_total_tx += block.confirmed_tx_len
+            if block.header.height > 0:
+                next_total_tx += len(block.body.transactions)
 
             bit_length = next_total_tx.bit_length()
             byte_length = (bit_length + 7) // 8
             next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-            block_hash_encoded = block.block_hash.encode(encoding='UTF-8')
+            block_serializer = BlockSerializer.new("0.1a")
+            block_serialized = json.dumps(block_serializer.serialize(block))
+            block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
             batch = leveldb.WriteBatch()
-            batch.Put(block_hash_encoded, block.serialize_block())
+            batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
             batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
             batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
             batch.Put(
                 BlockChain.BLOCK_HEIGHT_KEY +
-                block.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+                block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
                 block_hash_encoded)
             self.__confirmed_block_db.Write(batch)
 
             self.__last_block = block
-            self.__block_height = self.__last_block.height
+            self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
             logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
-                          f"last_block({self.__last_block.block_hash})")
+                          f"last_block({self.__last_block.header.hash.hex()})")
             logging.info(
-                f"ADD BLOCK HEIGHT : {block.height} , HASH : {block.block_hash} , CHANNEL : {self.__channel_name}")
+                f"ADD BLOCK HEIGHT : {block.header.height} , "
+                f"HASH : {block.header.hash.hex()} , "
+                f"CHANNEL : {self.__channel_name}")
 
             util.apm_event(self.__peer_id, {
                 'event_type': 'AddBlock',
@@ -311,73 +266,60 @@ class BlockChain:
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self.__channel_name,
                 'data': {
-                    'block_height': self.__block_height,
-                    'block_type': block.block_type.name}})
+                    'block_height': self.__block_height
+                }})
 
             return True
 
-    def __prevent_next_block_mismatch(self, next_block: Block, is_commit_state_validation: bool) -> bool:
+    def __prevent_next_block_mismatch(self, next_block: Block) -> bool:
         logging.debug(f"prevent_block_mismatch...")
-        if util.channel_use_icx(self.__channel_name):
-            score_stub = StubCollection().icon_score_stubs[self.__channel_name]
-            request = {
-                "method": "ise_getStatus",
-                "params": {"filter": ["lastBlock"]}
-            }
+        score_stub = StubCollection().icon_score_stubs[self.__channel_name]
+        request = {
+            "method": "ise_getStatus",
+            "params": {"filter": ["lastBlock"]}
+        }
 
-            response = score_stub.sync_task().query(request)
-            score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
+        response = score_stub.sync_task().query(request)
+        score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
 
-            if score_last_block_height == next_block.height:
-                logging.debug(f"already invoked block in score...")
-                return False
-            elif score_last_block_height < next_block.height:
-                for invoke_block_height in range(score_last_block_height + 1, next_block.height):
-                    logging.debug(f"mismatch invoke_block_height({invoke_block_height}) "
-                                  f"score_last_block_height({score_last_block_height}) "
-                                  f"next_block_height({next_block.height})")
+        if score_last_block_height == next_block.header.height:
+            logging.debug(f"already invoked block in score...")
+            return False
 
-                    invoke_block = self.find_block_by_height(invoke_block_height)
-                    if invoke_block is None:
-                        raise RuntimeError("Error raised during prevent mismatch block, "
-                                           f"Cannot find block({invoke_block_height}")
+        if score_last_block_height < next_block.header.height:
+            for invoke_block_height in range(score_last_block_height + 1, next_block.header.height):
+                logging.debug(f"mismatch invoke_block_height({invoke_block_height}) "
+                              f"score_last_block_height({score_last_block_height}) "
+                              f"next_block_height({next_block.header.height})")
 
-                    invoke_block_result = self.__score_invoke_with_state_integrity(
-                        invoke_block, is_commit_state_validation
-                    )
+                invoke_block = self.find_block_by_height(invoke_block_height)
+                if invoke_block is None:
+                    raise RuntimeError("Error raised during prevent mismatch block, "
+                                       f"Cannot find block({invoke_block_height}")
 
-                    self.__add_tx_to_block_db(invoke_block, invoke_block_result)
-                    ObjectManager().channel_service.score_write_precommit_state(invoke_block)
+                invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
 
-                return True
-            else:
-                if score_last_block_height == next_block.height + 1:
-                    try:
-                        invoke_result_block_height_bytes = \
-                            self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
-                        invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
+                self.__add_tx_to_block_db(invoke_block, invoke_block_result)
+                ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
-                        if invoke_result_block_height == next_block.height:
-                            logging.debug(f"already saved invoke result...")
-                            return False
-                    except KeyError:
-                        logging.debug(f"There is no invoke result height in db.")
-                else:
-                    util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
-                                      "Peer will be down. : "
-                                      f"loopchain({next_block.height})/score({score_last_block_height})")
+            return True
 
-                return True
+        if score_last_block_height == next_block.header.height + 1:
+            try:
+                invoke_result_block_height_bytes = \
+                    self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
+                invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
-    def __verify_block_connection(self, block):
-        if block.block_status is not BlockStatus.confirmed:
-            raise BlockInValidError("미인증 블럭")
-        elif self.__last_block is not None and self.__last_block.height > 0:
-            if self.__last_block.block_hash != block.prev_block_hash:
-                # 마지막 블럭의 hash값이 추가되는 블럭의 prev_hash값과 다르면 추가 하지 않고 익셉션을 냅니다.
-                raise BlockError(f"HEIGHT({block.height}), "
-                                 f"prev_block_hash must({block.prev_block_hash}) "
-                                 f"be same with the last block({self.__last_block.block_hash})")
+                if invoke_result_block_height == next_block.header.height:
+                    logging.debug(f"already saved invoke result...")
+                    return False
+            except KeyError:
+                logging.debug(f"There is no invoke result height in db.")
+        else:
+            util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
+                              "Peer will be down. : "
+                              f"loopchain({next_block.header.height})/score({score_last_block_height})")
+            return True
 
     def __add_tx_to_block_db(self, block, invoke_results):
         """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
@@ -385,22 +327,24 @@ class BlockChain:
         :param block:
         """
         # loop all tx in block
-        logging.debug("try add all tx in block to block db, block hash: " + block.block_hash)
+        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
         block_manager = ObjectManager().channel_service.block_manager
         tx_queue = block_manager.get_tx_queue()
         # util.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
         # util.logger.spam(
         #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
 
-        for index, tx in enumerate(block.confirmed_transaction_list):
-            tx_hash = tx.tx_hash
+        tx_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["tx_hash_version"]
+        for index, tx in enumerate(block.body.transactions.values()):
+            tx_hash = tx.hash.hex()
             invoke_result = invoke_results[tx_hash]
 
+            tx_serializer = TransactionSerializer.new(tx.version, tx_hash_version)
             tx_info = {
-                'block_hash': block.block_hash,
-                'block_height': block.height,
+                'block_hash': block.header.hash.hex(),
+                'block_height': block.header.height,
                 'tx_index': hex(index),
-                'transaction': tx.icx_origin_data_v3,
+                'transaction': tx_serializer.serialize(tx),
                 'result': invoke_result
             }
 
@@ -417,10 +361,10 @@ class BlockChain:
             tx_queue.pop(tx_hash, None)
             # util.logger.spam(f"pop tx from queue:{tx_hash}")
 
-            if block.height > 0:
+            if block.header.height > 0:
                 self.__save_tx_by_address_strategy(tx)
 
-        self.__save_invoke_result_block_height(block.height)
+        self.__save_invoke_result_block_height(block.header.height)
 
     def __save_invoke_result_block_height(self, height):
         bit_length = height.bit_length()
@@ -436,12 +380,12 @@ class BlockChain:
         :param block:
         """
         # loop all tx in block
-        logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.block_hash)
+        logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
         tx_queue = ObjectManager().channel_service.block_manager.get_tx_queue()
         # util.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
 
-        for tx in precommit_block.confirmed_transaction_list:
-            tx_hash = tx.tx_hash
+        for tx in precommit_block.body.transactions.values():
+            tx_hash = tx.hash.hex()
             if tx_queue.get_item_in_status(TransactionStatusInQueue.normal, TransactionStatusInQueue.normal):
                 try:
                     tx_queue.set_item_status(tx_hash, TransactionStatusInQueue.precommited_to_block)
@@ -450,9 +394,9 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: Transaction):
-        address = tx.icx_origin_data['from']
-        return self.add_tx_to_list_by_address(address, tx.tx_hash)
+    def __save_tx_by_address(self, tx: 'Transaction'):
+        address = tx.from_address.hex()
+        return self.add_tx_to_list_by_address(address, tx.hash.hex())
 
     def __save_tx_by_address_pass(self, tx):
         return True
@@ -521,7 +465,7 @@ class BlockChain:
 
         # block 의 hash 로 block object 를 구한다.
         block = self.find_block_by_hash(block_key)
-        logging.debug("block: " + block.block_hash)
+        logging.debug("block: " + block.header.hash)
         if block is None:
             logging.error("There is No Block, block_hash: " + block.block_hash)
             return None
@@ -558,6 +502,9 @@ class BlockChain:
         return tx_info['result']
 
     def find_tx_info(self, tx_hash_key):
+        if isinstance(tx_hash_key, Hash32):
+            tx_hash_key = tx_hash_key.hex()
+
         try:
             tx_info = self.__confirmed_block_db.Get(
                 tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
@@ -572,49 +519,36 @@ class BlockChain:
 
         return tx_info_json
 
-    def __add_genesisblock(self, tx_info: dict=None):
-        """제네시스 블럭을 추가 합니다.
-
+    def __add_genesis_block(self, tx_info: dict=None):
+        """
         :param tx_info: Transaction data for making genesis block from an initial file
         :return:
         """
         logging.info("Make Genesis Block....")
-        block = Block(channel_name=self.__channel_name)
-        block.block_status = BlockStatus.confirmed
-        if tx_info:
-            keys = tx_info.keys()
-            if "accounts" in keys and "message" in keys:
-                genesis_validator = get_genesis_tx_validator(self.__channel_name)
-                is_valid, tx = genesis_validator.init_genesis_tx(tx_info)
-                if is_valid:
-                    block.put_genesis_transaction(tx)
-                else:
-                    raise TransactionInvalidError(message=
-                                                  f"The Genesis block data is invalid."
-                                                  f"That's why Genesis block couldn't be generated.")
+        genesis_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["genesis_tx_hash_version"]
+        tx_builder = TransactionBuilder.new("genesis", genesis_hash_version)
 
-        block.generate_block()
+        nid = tx_info.get("nid")
+        if nid is not None:
+            nid = int(nid, 16)
+        tx_builder.nid = nid  # Optional. It will be 0x3 except for mainnet and testnet if not defined
+        tx_builder.accounts = tx_info["accounts"]
+        tx_builder.message = tx_info["message"]
+        tx = tx_builder.build()
+
+        block_builder = BlockBuilder.new("0.1a")
+        block_builder.height = 0
+        block_builder.fixed_timestamp = 0
+        block_builder.prev_hash = None
+        block_builder.transactions[tx.hash] = tx
+        block = block_builder.build()  # It does not have commit state. It will be rebuilt.
+
+        block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
+        self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
 
     def __put_block_to_db(self, block_key, block):
-        # confirm 블럭
-        if (self.__last_block.height + 1) != block.height:
-            logging.error("The height of the blockchain is different.")
-            return False, "block_height"
-        elif block.prev_block_hash != self.__last_block.block_hash:
-            logging.error(f"The hash of the last block is different. "
-                          f"block's prev_hash({block.prev_block_hash}) vs "
-                          f"last_block's hash({self.__last_block.block_hash})")
-            return False, "prev_block_hash"
-        elif block.block_hash != block.generate_block(self.__last_block):
-            logging.error(f"The block_hash({block.block_hash}) is different from self-generated block's hash.")
-            return False, "generate_block_hash"
-
-        # Save unconfirmed_block
-        # Save and Get Unconfirmed block using pickle for unserialized info(commit_state)
-        # self.__confirmed_block_db.Put(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block.serialize_block())
         self.__confirmed_block_db.Put(block_key, pickle.dumps(block))
-        return True, "No reason"
 
     def add_unconfirm_block(self, unconfirmed_block):
         """인증되지 않은 Unconfirm블럭을 추가 합니다.
@@ -623,31 +557,33 @@ class BlockChain:
         :return:인증값 : True 인증 , False 미인증
         """
         logging.debug(
-            f"blockchain:add_unconfirmed_block ({self.__channel_name}), hash ({unconfirmed_block.block_hash})")
+            f"blockchain:add_unconfirmed_block ({self.__channel_name}), hash ({unconfirmed_block.header.hash.hex()})")
 
-        return self.__put_block_to_db(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block)
+        self.__put_block_to_db(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block)
 
     def put_precommit_block(self, precommit_block: Block):
         # write precommit block to DB
         logging.debug(
-            f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.block_hash})")
-        if self.__last_block.height < precommit_block.height:
+            f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
+        if self.__last_block.height < precommit_block.header.height:
             self.__precommit_tx(precommit_block)
             util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
-            # for tx in precommit_block.confirmed_transaction_list:
-            #     tx_hash = tx.tx_hash
-            #     util.logger.spam(f"blockchain.py:put_precommit_block:{tx_hash}")
 
-            results = self.__confirmed_block_db.Put(BlockChain.PRECOMMIT_BLOCK_KEY, precommit_block.serialize_block())
+            block_serializer = BlockSerializer.new("0.1a")
+            block_serialized = block_serializer.serialize(precommit_block)
+            block_serialized = json.dumps(block_serialized)
+            block_serialized = block_serialized.encode('utf-8')
+            results = self.__confirmed_block_db.Put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
 
             util.logger.spam(f"result of to write to db ({results})")
-            logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.height} , "
-                         f"HASH : {precommit_block.block_hash}, CHANNEL : {self.__channel_name}")
+            logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.header.height} , "
+                         f"HASH : {precommit_block.header.hash.hex()}, CHANNEL : {self.__channel_name}")
         else:
             results = None
             logging.debug(f"blockchain:put_precommit_block::this precommit block is not validate. "
                           f"the height of precommit block must be bigger than the last block."
-                          f"(last block:{self.__last_block.height}/precommit block:{precommit_block.height})")
+                          f"(last block:{self.__last_block.header.height}/"
+                          f"precommit block:{precommit_block.header.height})")
 
         return results
 
@@ -688,21 +624,15 @@ class BlockChain:
             # unconfirmed_block = Block(channel_name=self.__channel_name)
             # unconfirmed_block.deserialize_block(unconfirmed_block_byte)
 
-            if unconfirmed_block.block_hash != confirmed_block_hash:
+            if unconfirmed_block.header.hash.hex() != confirmed_block_hash:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.block_hash)
+            logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
             logging.debug("confirmed_block_hash: " + confirmed_block_hash)
-            logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.prev_block_hash)
+            logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
 
-            is_commit_state_validation = False
-            if conf.CHANNEL_OPTION[self.__channel_name]["send_tx_type"] == conf.SendTxType.icx:
-                is_commit_state_validation = True
-
-            unconfirmed_block.block_status = BlockStatus.confirmed
-            # Block Validate and save Block
-            self.add_block(unconfirmed_block, is_commit_state_validation)
+            self.add_block(unconfirmed_block)
             self.__confirmed_block_db.Delete(BlockChain.UNCONFIRM_BLOCK_KEY)
 
             return unconfirmed_block
@@ -716,18 +646,17 @@ class BlockChain:
         logging.debug("LAST BLOCK KEY : %s", last_block_key)
 
         if last_block_key:
-            # DB에서 마지막 블럭을 가져와서 last_block 에 바인딩
-            self.__last_block = Block(channel_name=self.__channel_name)
             block_dump = self.__confirmed_block_db.Get(last_block_key)
-            self.__last_block.deserialize_block(block_dump)
-            logging.debug("restore from last block hash(" + str(self.__last_block.block_hash) + ")")
-            logging.debug("restore from last block height(" + str(self.__last_block.height) + ")")
+            self.__last_block = BlockSerializer.new("0.1a").deserialize(json.loads(block_dump))
+
+            logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
+            logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
 
         # 블럭의 높이는 마지막 블럭의 높이와 같음
         if self.__last_block is None:
             self.__block_height = -1
         else:
-            self.__block_height = self.__last_block.height
+            self.__block_height = self.__last_block.header.height
         logging.debug(f"ENGINE-303 init_block_chain: {self.__block_height}")
 
     def generate_genesis_block(self):
@@ -747,20 +676,24 @@ class BlockChain:
             except KeyError as e:
                 exit(f"cannot find key name of {e} in genesis data file.")
 
-        self.__add_genesisblock(tx_info)
+        self.__add_genesis_block(tx_info)
         self.put_nid(nid)
         ChannelProperty().nid = nid
 
-        util.logger.spam(f"add_genesisblock({self.__channel_name}/nid({nid}))")
+        util.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__invoke_results[block_hash] = invoke_results
-
-    def set_last_commit_state(self, height, commit_state):
-        self.last_commit_state_height = height
-        self.last_commit_state = copy.deepcopy(commit_state)
 
     def invoke_for_precommit(self, precommit_block: Block):
         invoke_results = \
             self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
         self.__add_tx_to_block_db(precommit_block, invoke_results)
+
+
+class TransactionStatusInQueue(Enum):
+    normal = 1
+    fail_validation = 2
+    fail_invoke = 3
+    added_to_block = 4
+    precommited_to_block = 5
