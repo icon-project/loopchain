@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 # Copyright 2018 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,6 +17,7 @@ from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 
@@ -30,7 +28,7 @@ class ChannelStateMachine(object):
               State(name='Consensus', on_enter='_consensus_on_enter'),
               State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
-              State(name='BlockSync', on_exit='_blocksync_on_exit'),
+              State(name='BlockSync', on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
               'SubscribeNetwork',
               'Watch',
               State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
@@ -80,11 +78,11 @@ class ChannelStateMachine(object):
     def complete_sync(self):
         pass
 
-    @statemachine.transition(source='BlockGenerate', dest='Vote')
+    @statemachine.transition(source=('BlockGenerate', 'Vote'), dest='Vote')
     def turn_to_peer(self):
         pass
 
-    @statemachine.transition(source='Vote', dest='BlockGenerate')
+    @statemachine.transition(source=('Vote', 'BlockGenerate'), dest='BlockGenerate')
     def turn_to_leader(self):
         pass
 
@@ -111,8 +109,12 @@ class ChannelStateMachine(object):
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.block_height_sync_channel())
 
+    def _blocksync_on_enter(self):
+        self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
+
     def _blocksync_on_exit(self):
         self.__channel_service.block_manager.stop_block_height_sync_timer()
+        self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
     def _do_evaluate_network(self):
         # util.logger.spam(f"\ndo_evaluate_network")
