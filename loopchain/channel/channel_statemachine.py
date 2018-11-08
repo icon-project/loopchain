@@ -28,7 +28,9 @@ class ChannelStateMachine(object):
     states = ['InitComponents',
               State(name='Consensus', on_enter='_consensus_on_enter'),
               State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
-              'EvaluateNetwork', 'BlockSync', 'SubscribeNetwork',
+              'EvaluateNetwork',
+              State(name='BlockSync', on_exit='_blocksync_on_exit'),
+              'SubscribeNetwork',
               State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
               State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
               'LeaderComplain',
@@ -102,6 +104,9 @@ class ChannelStateMachine(object):
         # util.logger.spam(f"\ndo_block_sync")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.block_height_sync_channel())
+
+    def _blocksync_on_exit(self):
+        self.__channel_service.block_manager.stop_block_height_sync_timer()
 
     def _do_evaluate_network(self):
         # util.logger.spam(f"\ndo_evaluate_network")
