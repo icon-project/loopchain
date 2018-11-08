@@ -451,12 +451,12 @@ class BlockManager(Subscriber):
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
                     is_repeat=True,
-                    callback=self.__block_height_sync,
+                    callback=self.block_height_sync,
                     callback_kwargs={'target_peer_stub': target_peer_stub}
                 )
             )
 
-    def __stop_block_height_sync_timer(self):
+    def stop_block_height_sync_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
         if timer_key in timer_service.timer_list.keys():
@@ -489,39 +489,35 @@ class BlockManager(Subscriber):
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
         self.__update_service_status(status_code.Service.block_height_sync)
-        is_sync_complete = False
+        channel_service = ObjectManager().channel_service
+        peer_manager = channel_service.peer_manager
+
+        if target_peer_stub is None:
+            target_peer_stub = peer_manager.get_leader_stub_manager()
+        self.__subscribe_target_peer_stub = target_peer_stub
+
+        # The adjustment of block height and the process for data synchronization of peer
+        # === Love&Hate Algorithm === #
+        logging.info("try block height sync...with love&hate")
+
+        # Make Peer Stub List [peer_stub, ...] and get max_height of network
+        # max_height: current max height
+        # peer_stubs: peer stub list for block height synchronization
+        max_height, peer_stubs = self.__get_peer_stub_list(target_peer_stub)
+        if target_height is not None:
+            max_height = target_height
+
+        my_height = self.__blockchain.block_height
+        retry_number = 0
+        util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
+
+        if len(peer_stubs) == 0:
+            util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
+            return False
+
+        logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
         try:
-            channel_service = ObjectManager().channel_service
-            peer_manager = channel_service.peer_manager
-
-            if target_peer_stub is None:
-                target_peer_stub = peer_manager.get_leader_stub_manager()
-            self.__subscribe_target_peer_stub = target_peer_stub
-
-            # The adjustment of block height and the process for data synchronization of peer
-            # === Love&Hate Algorithm === #
-            logging.info("try block height sync...with love&hate")
-
-            # Make Peer Stub List [peer_stub, ...] and get max_height of network
-            # max_height: current max height
-            # peer_stubs: peer stub list for block height synchronization
-            max_height, peer_stubs = self.__get_peer_stub_list(target_peer_stub)
-            if target_height is not None:
-                max_height = target_height
-
-            my_height = self.__blockchain.block_height
-            retry_number = 0
-            util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
-
-            if len(peer_stubs) == 0:
-                util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
-                return False
-            else:
-                self.__stop_block_height_sync_timer()
-
-            logging.info(f"You need block height sync to: {max_height} yours: {my_height}")
-
             while max_height > my_height:
                 for peer_stub in peer_stubs:
                     response_code = message_code.Response.fail
@@ -582,17 +578,17 @@ class BlockManager(Subscriber):
 
                         if len(peer_stubs) < 1:
                             raise ConnectionError
-
-            if my_height >= max_height:
-                is_sync_complete = True
-                self.__channel_service.state_machine.subscribe_network()
         except Exception as e:
             logging.warning(f"block_manager.py >>> block_height_sync :: {e}")
             traceback.print_exc()
             self.__start_block_height_sync_timer(target_peer_stub)
             return False
 
-        if not is_sync_complete:
+        if my_height >= max_height:
+            logging.debug(f"block_manager:block_height_sync is complete.")
+            self.__channel_service.state_machine.subscribe_network()
+            self.__update_service_status(status_code.Service.online)
+        else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
                             f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
             self.__channel_service.state_machine.block_sync()
@@ -626,9 +622,6 @@ class BlockManager(Subscriber):
 
             else:
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
-
-        logging.debug(f"block_manager:block_height_sync is complete.")
-        self.__update_service_status(status_code.Service.online)
 
         return True
 

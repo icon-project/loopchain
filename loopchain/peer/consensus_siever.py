@@ -50,14 +50,13 @@ class ConsensusSiever(ConsensusBase):
                             f"hash({str(e.block.block_hash)}) channel({self._channel_name})")
 
             self._blockmanager.broadcast_audience_set()
+            self._blockmanager.broadcast_send_unconfirmed_block(e.block)
 
             if util.diff_in_seconds(e.block.time_stamp) > conf.BLOCK_VOTE_TIMEOUT:
                 logging.warning("Time Outed Block not confirmed duration: " +
                                 str(util.diff_in_seconds(e.block.time_stamp)))
                 self._candidate_blocks.remove_broken_block(e.block.block_hash)
                 self.__throw_out_block(e.block)
-            else:
-                time.sleep(conf.INTERVAL_WAIT_PEER_VOTE)
         except candidate_blocks.InvalidatedBlock as e:
             # 실패한 투표에 대한 처리
             logging.error("InvalidatedBlock!! hash: " + str(e.block.block_hash))
@@ -142,7 +141,6 @@ class ConsensusSiever(ConsensusBase):
 
                 # 생성된 블럭을 투표 요청하기 위해서 broadcast 한다.
                 self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
-                time.sleep(conf.SLEEP_SECONDS_IN_SERVICE_LOOP)
 
                 # broadcast 를 요청했으면 다음 투표 block 이 있는지 계속 검사하기 위해 return 한다.
                 return result
