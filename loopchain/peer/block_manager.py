@@ -23,6 +23,7 @@ from loopchain.baseservice import BroadcastCommand, TimerService
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
+from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
@@ -204,8 +205,6 @@ class BlockManager(Subscriber):
 
         # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
         block_dump = util.block_dumps(block_)
-        if conf.ALLOW_MAKE_EMPTY_BLOCK or block_.confirmed_tx_len > 0:
-            self.__blockchain.increase_made_block_count()
 
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
@@ -467,6 +466,8 @@ class BlockManager(Subscriber):
     def start_block_generate_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
+
+        self.__consensus_algorithm = ConsensusSiever(self)
 
         if timer_key not in timer_service.timer_list.keys():
             util.logger.spam(f"add timer block generate")

@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """gRPC service for Peer Outer Service"""
-
 import asyncio
 import datetime
 from functools import partial
 
 from loopchain.baseservice import ObjectManager, Monitor, TimerService
 from loopchain.blockchain import *
+from loopchain.consensus.vote_message import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code
-from loopchain.consensus.vote_message import *
 from loopchain.utils.message_queue import StubCollection
 
 # Changing the import location will cause a pickle error.
@@ -538,7 +537,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                       f"block_type({block.block_type})\n"
                       f"block_hash({block.block_hash})\n"
                       f"peer_id({block.peer_id})\n"
-                      f"made_block_count({block.made_block_count})\n"
                       f"block_type({block.block_type})\n")
 
         channel_stub = StubCollection().channel_stubs[channel_name]

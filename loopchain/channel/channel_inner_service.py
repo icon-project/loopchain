@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import ast
 import copy
 import json
@@ -19,6 +18,7 @@ import pickle
 import re
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import configure as conf
@@ -60,7 +60,7 @@ class ChannelInnerTask:
         status_data = dict()
 
         block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = block_manager.get_blockchain().made_block_count
+        status_data["made_block_count"] = 0
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
@@ -229,7 +229,6 @@ class ChannelInnerTask:
                       f"peer_id({unconfirmed_block.peer_id})\n"
                       f"height({unconfirmed_block.height})\n"
                       f"hash({unconfirmed_block.block_hash})\n"
-                      f"made_block_count({unconfirmed_block.made_block_count})\n"
                       f"block_type({unconfirmed_block.block_type})\n"
                       f"is_divided_block({unconfirmed_block.is_divided_block})\n")
 
@@ -241,16 +240,14 @@ class ChannelInnerTask:
 
         self._channel_service.state_machine.vote()
 
-        if unconfirmed_block.made_block_count >= conf.LEADER_BLOCK_CREATION_LIMIT \
-                and unconfirmed_block.block_type is BlockType.vote \
-                and unconfirmed_block.is_divided_block is False:
+        if unconfirmed_block.block_type is BlockType.vote and unconfirmed_block.is_divided_block is False:
             util.logger.spam(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
                              f"\nnext_leader_peer({unconfirmed_block.next_leader_peer}, "
                              f"channel({ChannelProperty().name}))")
 
-            # (hotfix-81) 자기가 다음 리더 일때만 AnnounceUnconfirmedBlock 메시지에서 reset leader 를 호출한다.
             if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer:
                 await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer)
+                self._channel_service.state_machine.turn_to_leader()
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):

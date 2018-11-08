@@ -55,7 +55,7 @@ class Proposer(Subscriber):
         self.__peer_id = peer_id
 
     def __init_block(self):
-        self.__block = Block(channel_name=self.__channel, made_block_count=1)
+        self.__block = Block(channel_name=self.__channel)
         self.__block_tx_size = 0
 
     def __makeup_block(self, tx_queue: AgingCache):
