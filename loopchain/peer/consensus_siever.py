@@ -121,7 +121,7 @@ class ConsensusSiever(ConsensusBase):
                     self._gen_block()
                 else:
                     failed_block = self._block
-                    self._reset_block()
+                    self._gen_block()
                     self.__throw_out_block(failed_block)
 
             self._makeup_block()

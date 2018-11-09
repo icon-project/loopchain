@@ -60,7 +60,7 @@ class ChannelInnerTask:
         status_data = dict()
 
         block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = 0
+        status_data["made_block_count"] = block_manager.made_block_count
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "

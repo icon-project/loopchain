@@ -106,6 +106,12 @@ class BlockManager(Subscriber):
         return self.__peer_type
 
     @property
+    def made_block_count(self):
+        if self.__consensus_algorithm:
+            return self.__consensus_algorithm.made_block_count
+        return 0
+
+    @property
     def consensus(self):
         return self.__consensus
 
@@ -116,10 +122,6 @@ class BlockManager(Subscriber):
     @property
     def consensus_algorithm(self):
         return self.__consensus_algorithm
-
-    @consensus_algorithm.setter
-    def consensus_algorithm(self, consensus_algorithm):
-        self.__consensus_algorithm = consensus_algorithm
 
     @property
     def precommit_block(self):
@@ -467,9 +469,8 @@ class BlockManager(Subscriber):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
 
-        self.__consensus_algorithm = ConsensusSiever(self)
-
         if timer_key not in timer_service.timer_list.keys():
+            self.__consensus_algorithm = ConsensusSiever(self)
             util.logger.spam(f"add timer block generate")
             timer_service.add_timer(
                 timer_key,
@@ -480,6 +481,9 @@ class BlockManager(Subscriber):
                     callback=self.__create_block_generation_schedule
                 )
             )
+
+        if not self.__consensus_algorithm:
+            self.__consensus_algorithm = ConsensusSiever(self)
 
     def stop_block_generate_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
