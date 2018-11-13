@@ -16,6 +16,7 @@ import copy
 import json
 import pickle
 import re
+from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
@@ -39,9 +40,47 @@ class ChannelInnerTask:
         self._channel_service = channel_service
         self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
+        # Citizen
+        self._citizen_condition_new_block: Condition = None
+        self._citizen_set = set()
+
     @message_queue_task
     async def hello(self):
         return 'channel_hello'
+
+    @message_queue_task
+    async def announce_new_block(self, subscriber_block_height: int):
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        my_block_height = blockchain.block_height
+
+        if subscriber_block_height > my_block_height:
+            message = {'error': "Announced block height is lower than subscriber's."}
+            return json.dumps(message)
+
+        if subscriber_block_height == my_block_height:
+            async with self._citizen_condition_new_block:
+                await self._citizen_condition_new_block.wait()
+
+        new_block_height = subscriber_block_height + 1
+        new_block = blockchain.find_block_by_height(new_block_height)
+
+        if new_block is None:
+            message = {'error': f"Cannot find block by height({new_block_height})"}
+            return json.dumps(message)
+
+        return new_block.get_json_data()
+
+    @message_queue_task
+    async def register_subscriber(self, remote_address):
+        if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
+            return False
+        else:
+            self._citizen_set.add(remote_address)
+            return True
+
+    @message_queue_task
+    async def unregister_subscriber(self, remote_address):
+        self._citizen_set.remove(remote_address)
 
     @message_queue_task
     def get_peer_list(self):
@@ -325,33 +364,6 @@ class ChannelInnerTask:
     def remove_audience(self, peer_target) -> None:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
-    @message_queue_task
-    async def add_audience_subscriber(self, peer_target):
-        if peer_target not in self._channel_service.broadcast_scheduler.audience_subscriber:
-            if len(self._channel_service.broadcast_scheduler.audience_subscriber) < conf.SUBSCRIBE_LIMIT:
-                logging.debug(f"channel_inner_service:add_audience_subscriber target({peer_target})")
-                self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.AUDIENCE_SUBSCRIBE, peer_target)
-                response_code = message_code.Response.success
-            else:
-                logging.warning(f"This peer can no longer take more subscribe requests!")
-                response_code = message_code.Response.fail
-        else:
-            logging.info(f"This target({peer_target}) is already subscribing this peer")
-            util.logger.spam(f"audience_subscriber list : "
-                             f"{self._channel_service.broadcast_scheduler.audience_subscriber.keys()}")
-            response_code = message_code.Response.success
-        return response_code
-
-    @message_queue_task
-    async def remove_audience_subscriber(self, peer_target):
-        if peer_target in self._channel_service.broadcast_scheduler.audience_subscriber:
-            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.AUDIENCE_UNSUBSCRIBE, peer_target)
-            response_code = message_code.Response.success
-        else:
-            logging.warning(f"This target({peer_target}) already unsubscribed this peer")
-            response_code = message_code.Response.success
-        return response_code
-
     @message_queue_task(type_=MessageQueueType.Worker)
     def announce_new_peer(self, peer_object_pickled, peer_target) -> None:
         peer_object = pickle.loads(peer_object_pickled)
@@ -590,8 +602,20 @@ class ChannelInnerTask:
 class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
+    def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
+        super().__init__(amqp_target, route_key, username, password, **task_kwargs)
+        self._task._citizen_condition_new_block = Condition(loop=self.loop)
+
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
+
+    def notify_new_block(self):
+        async def _notify():
+            condition = self._task._citizen_condition_new_block
+            async with condition:
+                condition.notify_all()
+
+        asyncio.run_coroutine_threadsafe(_notify(), self.loop)
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):

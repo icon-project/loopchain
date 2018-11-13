@@ -16,6 +16,7 @@
 # limitations under the License.
 
 import argparse
+import json
 import logging
 import os
 import time
@@ -156,6 +157,9 @@ def start_as_score(args):
             from iconcommons.icon_config import IconConfig
             from iconcommons.logger import Logger
 
+            with open(conf.DEFAULT_SCORE_CONF_PATH) as file:
+                load_conf = json.load(file)
+
             additional_conf = {
                 "log": {
                     "logger": "iconservice",
@@ -168,12 +172,8 @@ def start_as_score(args):
                 "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
-                "service": {
-                    "fee": True,
-                    "audit": True,
-                    "deployerWhiteList": False,
-                    "scorePackageValidator": False
-                }
+                "builtinScoreOwner": load_conf.get("builtinScoreOwner"),
+                "service": load_conf.get("service")
             }
 
             icon_conf = IconConfig("", default_icon_config)

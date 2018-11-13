@@ -47,3 +47,6 @@ def update_other_loggers():
     preset_others.log_level = logging.ERROR  # force setting
     logger_sanic_access = logging.getLogger('sanic.access')
     preset_others.update_logger(logger_sanic_access)
+
+    logger_websockets = logging.getLogger('websockets')
+    preset_others.update_logger(logger_websockets)

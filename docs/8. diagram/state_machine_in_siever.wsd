@@ -30,9 +30,12 @@ state Consensus {
         SubscribeNetwork -right-> [*]
     }
     BlockHeightSync: on_enter { evaluate_network }
-    BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
+    BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_sync
     BlockHeightSync -> Vote: (if leader != self)\ntrigger::complete_sync
-
+    BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
+    
+    Watch: Wait for new block announcement (subscribe_loop)
+    Watch --> BlockHeightSync: Reconnect to Mother Peer\n(after connection error)
     Vote: on_enter {
     Vote: \tAddTimer: leader complain
     Vote: }
@@ -47,7 +50,7 @@ state Consensus {
 
     BlockGenerate: on_enter {
     BlockGenerate: \tAddTimer: heartbeat to peers
-    BlockGenerate: \tAddTimer: block generate (deafult interval = 2 sec.)
+    BlockGenerate: \tAddTimer: block generate (default interval = 2 sec.)
     BlockGenerate: }
     BlockGenerate: on_exit {
     BlockGenerate: \tStopTimer: heartbeat to peers
