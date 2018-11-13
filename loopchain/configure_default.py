@@ -310,11 +310,11 @@ LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
 # RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
 # LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy
 ENABLE_RADIOSTATION_HEARTBEAT = True
-SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 30   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
+SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 15   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
 # How many non-response will allow. After this count RS. will delete that node in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 # How many non-response will allow if node is leader. After this count RS. will select new leader in network.
-NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 0
+NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
 ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
