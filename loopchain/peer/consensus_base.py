@@ -47,12 +47,10 @@ class ConsensusBase(metaclass=ABCMeta):
     def _gen_block(self):
         self._block = Block(channel_name=self._channel_name)
         self._block_tx_size = 0
-        self.made_block_count += 1
 
     def _stop_gen_block(self):
         self._block = None
         self._block_tx_size = 0
-        self.made_block_count -= 1
 
     def _makeup_block(self):
         """Queue 에 수집된 tx 를 block 으로 만든다.

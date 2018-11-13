@@ -77,6 +77,7 @@ class ConsensusSiever(ConsensusBase):
 
             # 검증이 끝나면 BlockChain 에 해당 block 의 block_hash 로 등록 완료
             confirmed_block.block_status = BlockStatus.confirmed
+            self.made_block_count += 1
             result = self._blockmanager.add_block(confirmed_block)
 
             # 새로운 블럭의 broadcast 를 위해 current_vote_block_hash 를 리셋한다.
