@@ -33,10 +33,7 @@ import loopchain_pb2
 
 
 class BlockManager(Subscriber):
-    """P2P Service 를 담당하는 BlockGeneratorService, PeerService 와 분리된
-    Thread 로 BlockChain 을 관리한다.
-    BlockGenerator 의 BlockManager 는 주기적으로 Block 을 생성하여 Peer 로 broadcast 한다.
-    Peer 의 BlockManager 는 전달 받은 Block 을 검증 처리 한다.
+    """Manage the blockchain of a channel. It has objects for consensus and db object.
     """
 
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
@@ -481,9 +478,6 @@ class BlockManager(Subscriber):
                 )
             )
 
-        if not self.__consensus_algorithm:
-            self.__consensus_algorithm = ConsensusSiever(self)
-
     def stop_block_generate_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
@@ -689,7 +683,6 @@ class BlockManager(Subscriber):
 
         if conf.ALLOW_MAKE_EMPTY_BLOCK:
             self.__block_generation_scheduler.stop()
-        CommonThread.stop(self)
 
     def __vote_unconfirmed_block(self, block_hash, is_validated):
         logging.debug(f"block_manager:__vote_unconfirmed_block ({self.channel_name}/{is_validated})")

@@ -637,7 +637,6 @@ class PeerManager:
                 peer_each.status = PeerStatus.connected
                 peer_status = json.loads(response.meta)
 
-                # logging.debug(f"Check Peer peer_type({peer_status['peer_type']}), state({peer_status['state']})")
                 if peer_status["state"] == "BlockGenerate":
                     check_leader_peer_count += 1
 
