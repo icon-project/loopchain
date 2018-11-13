@@ -19,35 +19,44 @@ from loopchain.consensus import Subscriber
 
 
 class Publisher:
+    class Callback:
+        def __init__(self, callback, order):
+            self.callback = callback
+            self.order = order
+
     def __init__(self, events: list):
-        self.subscribers: dict = {
-            event: {} for event in events
+        self.event_list: dict = {
+            event: [] for event in events
         }
 
-    def get_subscribers(self, event):
-        return self.subscribers[event]
+    def __unregister_event(self, event):
+        del(self.event_list[event])
 
-    def register(self, event, subscriber: Subscriber, callback=None):
-        if event not in self.subscribers:
-            return False
-
+    def register_subscriber(self, subscriber: Subscriber):
         if not isinstance(subscriber, Subscriber):
             return False
 
-        if callback is None:
-            callback = getattr(subscriber, "update")
+        for event, callback, order in subscriber.event_list:
+            if event not in self.event_list:
+                return False
 
-        self.subscribers[event][subscriber] = callback
+            if callback is None:
+                callback = getattr(subscriber, "update")
 
-    def multiple_register(self, subscriber: Subscriber):
-        for event, callback in subscriber.event_list:
-            self.register(event, subscriber, callback)
+            callback_list = self.event_list[event]
+            callback_list.append(Publisher.Callback(callback, order))
+            callback_list.sort(key=lambda c: c.order)
 
-    def unregister(self, event, subscriber: Subscriber):
-        del self.subscribers[event][subscriber]
+    def unregister_subscriber(self, event, callback: Callback):
+        callback_list: list = self.event_list[event]
+        callback_list[:] = [cb for cb in callback_list if cb.callback != callback]
 
-    def _notify(self, event: str, **kwargs):
-        for callback in self.subscribers[event].values():
-            callback(**kwargs)
+        if len(callback_list) == 0:
+            self.__unregister_event(event)
+
+    def _notify(self, event_name: str, **kwargs):
+        for callback in self.event_list[event_name]:
+            callback.callback(**kwargs)
 
         return True
+

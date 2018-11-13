@@ -50,9 +50,9 @@ class Acceptor(Subscriber):
         self.__peer_manager = channel_service.peer_manager
         self.__peer_id = peer_id
         self.__consensus = consensus
-        self.__prev_epoch: Epoch = kwargs.get("prev_epoch", None)
-        self.__precommit_block: Block = kwargs.get("precommit_block", None)
-        self.__epoch: Epoch = kwargs.get("epoch", None)
+        self.__prev_epoch: Epoch = kwargs.get("prev_epoch")
+        self.__precommit_block: Block = kwargs.get("precommit_block")
+        self.__epoch: Epoch = kwargs.get("epoch")
         self.__vote_list: dict = {}
         self.__complain_list: dict = {}
         self.__ready_list: dict = {}
@@ -61,7 +61,7 @@ class Acceptor(Subscriber):
         self.__ready_count: dict = {}
         self.__uncommit_block = None
         self.__status = AcceptorStatus.normal
-        self._event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.__callback_complete_consensus)]
+        self.event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.__callback_complete_consensus, 2)]
 
     @property
     def epoch(self):

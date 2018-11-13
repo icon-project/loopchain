@@ -19,11 +19,7 @@ import logging
 class Subscriber:
     def __init__(self, name):
         self.name = name
-        self._event_list: list = []  # [(event(str), callback(method))]
+        self.event_list: list = []  # [(event(str), callback(method))]
 
-    @property
-    def event_list(self):
-        return self._event_list
-
-    def update(self, message):
-        logging.debug(f"{self.name} got a new message from publisher: {message}")
+    def update(self, **kwargs):
+        logging.debug(f"{self.name} got a new message from publisher: {kwargs}")

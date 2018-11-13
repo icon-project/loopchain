@@ -42,7 +42,9 @@ class BlockManager(Subscriber):
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, channel_manager, peer_id, channel_name, level_db_identity):
+    def __init__(self, name: str, channel_manager, peer_id, channel_name, level_db_identity):
+        super().__init__(name)
+
         self.__channel_service = channel_manager
         self.__channel_name = channel_name
         self.__pre_validate_strategy = None
@@ -72,9 +74,9 @@ class BlockManager(Subscriber):
         self.__prev_epoch: Epoch = None
         self.__precommit_block: Block = None
         self.__epoch: Epoch = None
-        self._event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus)]
+        self.event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus, 0)]
         self.set_peer_type(loopchain_pb2.PEER)
-        self.name = "loopchain.peer.BlockManager"
+        self.name = name
         self.__service_status = status_code.Service.online
 
     def __set_send_tx_type(self, send_tx_type):
