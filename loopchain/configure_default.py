@@ -146,8 +146,6 @@ class ConsensusAlgorithm(IntEnum):
 
 # 블록 생성 간격, tx 가 없을 경우 다음 간격까지 건너 뛴다.
 INTERVAL_BLOCKGENERATION = 2
-# Interval for Wait peer's vote
-INTERVAL_WAIT_PEER_VOTE = 0.1  # 0.05
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
 # default level db path
@@ -313,11 +311,11 @@ LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
 # RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
 # LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy
 ENABLE_RADIOSTATION_HEARTBEAT = True
-SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 30   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
+SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 15   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
 # How many non-response will allow. After this count RS. will delete that node in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 # How many non-response will allow if node is leader. After this count RS. will select new leader in network.
-NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 0
+NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
 ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10

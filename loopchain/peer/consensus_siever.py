@@ -50,14 +50,13 @@ class ConsensusSiever(ConsensusBase):
                             f"hash({str(e.block.block_hash)}) channel({self._channel_name})")
 
             self._blockmanager.broadcast_audience_set()
+            self._blockmanager.broadcast_send_unconfirmed_block(e.block)
 
             if util.diff_in_seconds(e.block.time_stamp) > conf.BLOCK_VOTE_TIMEOUT:
                 logging.warning("Time Outed Block not confirmed duration: " +
                                 str(util.diff_in_seconds(e.block.time_stamp)))
                 self._candidate_blocks.remove_broken_block(e.block.block_hash)
                 self.__throw_out_block(e.block)
-            else:
-                time.sleep(conf.INTERVAL_WAIT_PEER_VOTE)
         except candidate_blocks.InvalidatedBlock as e:
             # 실패한 투표에 대한 처리
             logging.error("InvalidatedBlock!! hash: " + str(e.block.block_hash))
@@ -78,6 +77,7 @@ class ConsensusSiever(ConsensusBase):
 
             # 검증이 끝나면 BlockChain 에 해당 block 의 block_hash 로 등록 완료
             confirmed_block.block_status = BlockStatus.confirmed
+            self.made_block_count += 1
             result = self._blockmanager.add_block(confirmed_block)
 
             # 새로운 블럭의 broadcast 를 위해 current_vote_block_hash 를 리셋한다.
@@ -122,8 +122,10 @@ class ConsensusSiever(ConsensusBase):
                     self._gen_block()
                 else:
                     failed_block = self._block
-                    self._reset_block()
+                    self._gen_block()
                     self.__throw_out_block(failed_block)
+
+            self._makeup_block()
 
             # 다음 검증 후보 블럭이 있는지 확인한다.
             candidate_block = self._candidate_blocks.get_candidate_block()
@@ -140,7 +142,6 @@ class ConsensusSiever(ConsensusBase):
 
                 # 생성된 블럭을 투표 요청하기 위해서 broadcast 한다.
                 self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
-                time.sleep(conf.SLEEP_SECONDS_IN_SERVICE_LOOP)
 
                 # broadcast 를 요청했으면 다음 투표 block 이 있는지 계속 검사하기 위해 return 한다.
                 return result
@@ -161,7 +162,5 @@ class ConsensusSiever(ConsensusBase):
                                  f"\ntry ObjectManager().peer_service.rotate_next_leader({self._channel_name})")
 
                 ObjectManager().channel_service.state_machine.turn_to_peer()
-
-        self._makeup_block()
 
         return result

@@ -31,6 +31,7 @@ class ConsensusBase(metaclass=ABCMeta):
         self._txQueue = self._blockmanager.get_tx_queue()
         self._current_vote_block_hash = ""
         self._candidate_blocks = self._blockmanager.get_candidate_blocks()
+        self.made_block_count = 0
         self._gen_block()
 
     @abstractmethod
@@ -44,9 +45,6 @@ class ConsensusBase(metaclass=ABCMeta):
         return self._block
 
     def _gen_block(self):
-        self._reset_block()
-
-    def _reset_block(self):
         self._block = Block(channel_name=self._channel_name)
         self._block_tx_size = 0
 

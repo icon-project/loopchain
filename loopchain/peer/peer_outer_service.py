@@ -201,6 +201,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __get_status_peer_type_data(self, channel: str):
         status_cache = self.__get_status_from_cache(channel)
         status = dict()
+        status['state'] = status_cache['state']
         status['peer_type'] = status_cache['peer_type']
         status['block_height'] = status_cache['block_height']
         return status

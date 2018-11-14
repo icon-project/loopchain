@@ -25,8 +25,16 @@ from loopchain.protos import loopchain_pb2
 class MockBlockManager:
     peer_type = loopchain_pb2.BLOCK_GENERATOR
 
+    def __init__(self):
+        self.timer_called = 0
+        self.peer_type = loopchain_pb2.BLOCK_GENERATOR
+
     def start_block_generate_timer(self):
-        pass
+        if self.timer_called == 0:
+            self.timer_called += 1
+
+    def stop_block_generate_timer(self):
+        self.timer_called -= 1
 
 
 class MockBlockManagerCitizen:
@@ -37,6 +45,9 @@ class MockBlockManagerCitizen:
 
 
 class MockChannelService:
+    def __init__(self):
+        self.block_manager = MockBlockManager()
+
     def block_height_sync_channel(self):
         pass
 
@@ -45,10 +56,6 @@ class MockChannelService:
 
     def subscribe_network(self):
         pass
-
-    @property
-    def block_manager(self):
-        return MockBlockManager()
 
 
 class MockChannelServiceCitizen:
@@ -116,6 +123,24 @@ class TestChannelStateMachine(unittest.TestCase):
 
         # THEN
         self.assertEqual(channel_state_machine.state, "Watch")
+
+    def test_change_state_from_same_state(self):
+        # GIVEN
+        mock_channel_service = MockChannelService()
+        channel_state_machine = ChannelStateMachine(mock_channel_service)
+        channel_state_machine.complete_init_components()
+        channel_state_machine.subscribe_network()
+        channel_state_machine.complete_sync()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # WHEN
+        channel_state_machine.turn_to_leader()
+        util.logger.spam(f"\ntimer called({mock_channel_service.block_manager.timer_called})")
+        channel_state_machine.turn_to_leader()
+        util.logger.spam(f"\nstate is {channel_state_machine.state}")
+
+        # THEN
+        self.assertEqual(mock_channel_service.block_manager.timer_called, 1)
 
 
 if __name__ == '__main__':

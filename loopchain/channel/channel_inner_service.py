@@ -99,7 +99,7 @@ class ChannelInnerTask:
         status_data = dict()
 
         block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = 0
+        status_data["made_block_count"] = block_manager.made_block_count
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
@@ -286,7 +286,6 @@ class ChannelInnerTask:
 
             if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer:
                 await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer)
-                self._channel_service.state_machine.turn_to_leader()
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
@@ -389,14 +388,13 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash, vote_code) -> None:
         block_manager = self._channel_service.block_manager
-        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock ({ChannelProperty().name})")
-        peer_type = loopchain_pb2.PEER
-        if block_manager is not None:
-            peer_type = block_manager.peer_type
+        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
+                         f"({ChannelProperty().name}) block_hash({block_hash})")
 
         if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-            if peer_type == loopchain_pb2.PEER:
-                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock ({channel_name}) Not Leader Peer!")
+            if self._channel_service.state_machine.state == "Vote":
+                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock "
+                #                     f"({ChannelProperty().name}) Not Leader Peer!")
                 return
 
         logging.info("Peer vote to : " + block_hash + " " + str(vote_code) + f"from {peer_id}")

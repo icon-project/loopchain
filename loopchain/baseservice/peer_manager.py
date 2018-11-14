@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A module for managing peer list"""
-
 import json
 import logging
 import pickle
@@ -469,8 +468,7 @@ class PeerManager:
         return self.get_peer_stub_manager(self.get_leader_peer(group_id), group_id)
 
     def get_peer_stub_manager(self, peer, group_id=None) -> StubManager:
-        logging.debug("get_peer_stub_manager")
-        logging.debug(f"peer_info : {peer.peer_id} {peer.group_id}")
+        logging.debug(f"get_peer_stub_manager peer_info : {peer.peer_id} {peer.group_id}")
         if group_id is None:
             group_id = conf.ALL_GROUP_ID
         try:
@@ -639,8 +637,7 @@ class PeerManager:
                 peer_each.status = PeerStatus.connected
                 peer_status = json.loads(response.meta)
 
-                # logging.debug(f"Check Peer Status ({peer_status['peer_type']})")
-                if peer_status["peer_type"] == str(loopchain_pb2.BLOCK_GENERATOR):
+                if peer_status["state"] == "BlockGenerate":
                     check_leader_peer_count += 1
 
                 if peer_status["block_height"] >= self.__highest_block_height:
@@ -813,28 +810,27 @@ class PeerManager:
             return None
 
     def __clear_group(self, group_id):
-        try:
-            if len(self.peer_list[group_id]) == 0:
-                del self.peer_list[group_id]
-            if len(self.__peer_object_list[group_id]) == 0:
-                del self.__peer_object_list[group_id]
-            if len(self.peer_order_list[group_id]) == 0:
-                del self.peer_order_list[group_id]
-        except KeyError as e:
-            logging.debug(f"peer_manager:__clear_group there is no group({group_id}) error({e})")
+        if group_id in self.peer_list:
+            del self.peer_list[group_id]
+        if group_id in self.__peer_object_list:
+            del self.__peer_object_list[group_id]
+        if group_id in self.peer_order_list:
+            del self.peer_order_list[group_id]
+        if group_id in self.peer_leader:
+            del self.peer_leader[group_id]
 
     def __remove_peer_from_group(self, peer_id, group_id):
         removed_peer = None
-
-        try:
-            removed_peer = self.peer_list[group_id].pop(peer_id)
-            self.__peer_object_list[group_id].pop(peer_id)
-            self.peer_order_list[group_id].pop(removed_peer.order)
-        except KeyError as e:
-            logging.debug(f"peer_manager:__remove_peer_from_group there is "
-                          f"no peer({peer_id}) in group({group_id}) error({e})")
+        if group_id in self.peer_list:
+            removed_peer = self.peer_list[group_id].pop(peer_id, None)
+        if group_id in self.__peer_object_list:
+            self.__peer_object_list[group_id].pop(peer_id, None)
+        if group_id in self.peer_order_list and removed_peer:
+            self.peer_order_list[group_id].pop(removed_peer.order, None)
+        self.peer_leader.pop(peer_id, None)
 
         if group_id != conf.ALL_GROUP_ID:
+            self.__remove_peer_from_group(peer_id, conf.ALL_GROUP_ID)
             self.__clear_group(group_id)
 
         return removed_peer
