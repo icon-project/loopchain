@@ -69,7 +69,7 @@ class NodeSubscriber:
 
     async def __start_shutdown_timer(self):
         timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key not in ObjectManager().channel_service.timer_service.timer_list.keys():
+        if timer_key not in ObjectManager().channel_service.timer_service.timer_list:
             error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
             ObjectManager().channel_service.timer_service.add_timer(
                 timer_key,
@@ -83,7 +83,7 @@ class NodeSubscriber:
 
     async def __stop_shutdown_timer(self):
         timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key in ObjectManager().channel_service.timer_service.timer_list.keys():
+        if timer_key in ObjectManager().channel_service.timer_service.timer_list:
             ObjectManager().channel_service.timer_service.stop_timer(timer_key)
 
     async def __add_confirmed_block(self, block_json: str):

@@ -309,7 +309,7 @@ class ChannelInnerTask:
                               f"already synced block height({confirmed_block.height})")
             response_code = message_code.Response.success
             # stop subscribe timer
-            if TimerService.TIMER_KEY_SUBSCRIBE in self._channel_service.timer_service.timer_list.keys():
+            if TimerService.TIMER_KEY_SUBSCRIBE in self._channel_service.timer_service.timer_list:
                 self._channel_service.timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
         except Exception as e:
             logging.error(f"announce confirmed block error : {e}")
