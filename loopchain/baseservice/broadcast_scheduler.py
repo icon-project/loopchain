@@ -329,7 +329,7 @@ class BroadcastScheduler(CommonThread):
             self.stored_tx.put(tx_item)
             duration = conf.SEND_TX_LIST_DURATION
 
-        if TimerService.TIMER_KEY_ADD_TX not in self.__timer_service.timer_list.keys():
+        if TimerService.TIMER_KEY_ADD_TX not in self.__timer_service.timer_list:
             self.__timer_service.add_timer(
                 TimerService.TIMER_KEY_ADD_TX,
                 Timer(

@@ -18,7 +18,7 @@ import json
 import logging
 
 import websockets
-from websockets.exceptions import InvalidStatusCode
+from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, Timer, ObjectManager
@@ -46,12 +46,12 @@ class NodeSubscriber:
                     await websocket.send(request)
                     await self.__subscribe_loop(websocket)
 
-            except InvalidStatusCode as e:
-                logging.warning(f"websocket subscribe InvalidStatusCode exception, caused by: {e}\n"
+            except (InvalidStatusCode, InvalidMessage) as e:
+                logging.warning(f"websocket subscribe {type(e)} exception, caused by: {e}\n"
                                 f"This target({self.__rs_target}) may not support websocket yet.")
                 raise NotImplementedError
             except Exception as e:
-                logging.error(f"websocket subscribe exception, caused by: {e}")
+                logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
                 await self.__start_shutdown_timer()
                 await asyncio.sleep(conf.SUBSCRIBE_RETRY_TIMER)
 
@@ -69,7 +69,7 @@ class NodeSubscriber:
 
     async def __start_shutdown_timer(self):
         timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key not in ObjectManager().channel_service.timer_service.timer_list.keys():
+        if timer_key not in ObjectManager().channel_service.timer_service.timer_list:
             error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
             ObjectManager().channel_service.timer_service.add_timer(
                 timer_key,
@@ -83,7 +83,7 @@ class NodeSubscriber:
 
     async def __stop_shutdown_timer(self):
         timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key in ObjectManager().channel_service.timer_service.timer_list.keys():
+        if timer_key in ObjectManager().channel_service.timer_service.timer_list:
             ObjectManager().channel_service.timer_service.stop_timer(timer_key)
 
     async def __add_confirmed_block(self, block_json: str):

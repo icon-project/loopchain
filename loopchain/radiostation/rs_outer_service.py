@@ -206,7 +206,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
 
         if conf.ENABLE_RADIOSTATION_HEARTBEAT:
             timer_key = f"{TimerService.TIMER_KEY_RS_HEARTBEAT}_{request.channel}"
-            if timer_key not in ObjectManager().rs_service.timer_service.timer_list.keys():
+            if timer_key not in ObjectManager().rs_service.timer_service.timer_list:
                 ObjectManager().rs_service.timer_service.add_timer(
                     timer_key,
                     Timer(

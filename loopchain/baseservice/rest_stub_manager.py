@@ -116,7 +116,7 @@ class RestStubManager:
             logging.warning(f"REST call fail method_name({method_name}), caused by : {e}")
             raise e
 
-    def call_async(self, method_name, message, call_back=None, timeout=None, is_stub_reuse=True):
+    def call_async(self, method_name, message=None, call_back=None, timeout=None, is_stub_reuse=True):
         future = self.__executor.submit(self.call, method_name, message, timeout, is_stub_reuse)
         if call_back:
             future.add_done_callback(call_back)

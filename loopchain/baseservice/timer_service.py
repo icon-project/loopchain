@@ -80,7 +80,10 @@ class Timer:
         """
         if off_type is OffType.time_out:
             logging.debug(f'timer({self.__target}) is turned off by timeout')
-            self.__callback(**self.__kwargs)
+            if asyncio.iscoroutinefunction(self.__callback):
+                asyncio.get_event_loop().create_task(self.__callback(**self.__kwargs))
+            else:
+                self.__callback(**self.__kwargs)
 
     def __repr__(self):
         return f"{self.__callback}, {self.remain_time()}"
@@ -89,6 +92,7 @@ class Timer:
 class TimerService(CommonThread):
     """timer service"""
 
+    TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION = "TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION"
     TIMER_KEY_BLOCK_HEIGHT_SYNC = "TIMER_KEY_BLOCK_HEIGHT_SYNC"
     TIMER_KEY_ADD_TX = "TIMER_KEY_ADD_TX"
     TIMER_KEY_SUBSCRIBE = "TIMER_KEY_SUBSCRIBE"

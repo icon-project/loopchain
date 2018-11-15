@@ -442,7 +442,7 @@ class BlockManager(Subscriber):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
 
-        if timer_key not in timer_service.timer_list.keys():
+        if timer_key not in timer_service.timer_list:
             util.logger.spam(f"add timer for block_request_call to radiostation...")
             timer_service.add_timer(
                 timer_key,
@@ -458,14 +458,14 @@ class BlockManager(Subscriber):
     def stop_block_height_sync_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
-        if timer_key in timer_service.timer_list.keys():
+        if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
     def start_block_generate_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
 
-        if timer_key not in timer_service.timer_list.keys():
+        if timer_key not in timer_service.timer_list:
             self.__consensus_algorithm = ConsensusSiever(self)
             util.logger.spam(f"add timer block generate")
             timer_service.add_timer(
@@ -481,7 +481,7 @@ class BlockManager(Subscriber):
     def stop_block_generate_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
         timer_service: TimerService = self.__channel_service.timer_service
-        if timer_key in timer_service.timer_list.keys():
+        if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
