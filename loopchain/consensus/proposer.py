@@ -20,7 +20,7 @@ import pickle
 from loopchain import configure as conf
 from loopchain.blockchain import *
 from loopchain.baseservice import ObjectManager
-from loopchain.consensus import Subscriber, Epoch
+from loopchain.consensus import Consensus, Epoch, Subscriber
 from loopchain.baseservice.aging_cache import AgingCache
 
 
@@ -42,9 +42,9 @@ class Proposer(Subscriber):
         self.__prev_epoch: Epoch = kwargs.get("prev_epoch", None)
         self.__precommit_block: Block = kwargs.get("precommit_block", None)
         self.__epoch = kwargs.get("epoch", None)
-        self._event_list = [
-            ("complete_consensus", self.callback_complete_consensus),
-            ("make_block", self.callback_make_block)
+        self.event_list = [
+            (Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus, 1),
+            (Consensus.EVENT_MAKE_BLOCK, self.callback_make_block, 0)
         ]
         self.__block: Block = None
         self.__block_tx_size = 0
@@ -55,7 +55,7 @@ class Proposer(Subscriber):
         self.__peer_id = peer_id
 
     def __init_block(self):
-        self.__block = Block(channel_name=self.__channel, made_block_count=1)
+        self.__block = Block(channel_name=self.__channel)
         self.__block_tx_size = 0
 
     def __makeup_block(self, tx_queue: AgingCache):
@@ -145,7 +145,6 @@ class Proposer(Subscriber):
         logging.debug(f"BroadCast AnnounceNewBlockForVote...peers: "
                       f"{self.__channel_service.peer_manager.get_peer_count()}")
 
-        self.__block_manager.get_blockchain().increase_made_block_count()
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceNewBlockForVote",
             (loopchain_pb2.NewBlockSend(
@@ -168,8 +167,8 @@ class Proposer(Subscriber):
         self.__epoch = kwargs.get("epoch", None)
         self.__block = None
         util.logger.spam(f"Proposer:callback_complete_consensus::epoch height"
-                         f"{self.__epoch if self.__epoch is None else self.__epoch.block_height}/precommit_block height"
-                         f"{None if self.__precommit_block is None else self.__precommit_block.height}")
+                         f"{self.__epoch if not self.__epoch else self.__epoch.block_height}/precommit_block height"
+                         f"{None if not self.__precommit_block else self.__precommit_block.height}")
 
     def callback_make_block(self, **kwargs):
         tx_queue = kwargs.get("tx_queue")
@@ -178,11 +177,13 @@ class Proposer(Subscriber):
         tx = tx_queue.get_item_in_status(TransactionStatusInQueue.normal, TransactionStatusInQueue.normal)
 
         if self.__peer_id != current_leader_id:
-            util.logger.spam(f"proposer:callback_make_block::ummmmmm "
-                             f"It's not leader peer.({self.__peer_id}/{current_leader_id})")
+            # util.logger.spam(f"proposer:callback_make_block::ummmmmm "
+            #                  f"It's not leader peer.({self.__peer_id}/{current_leader_id})")
             return
 
-        if self.__block is not None and self.__epoch.block_height == self.__block.height:
+        if self.__block and self.__epoch.block_height == self.__block.height:
+            util.logger.spam(f"It needs to be increased epoch. "
+                             f"epoch_height:{self.__epoch.block_height}/block_height:{self.__block.height}")
             return
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
@@ -197,4 +198,6 @@ class Proposer(Subscriber):
         self.__create_block(tx_queue)
         util.logger.spam(f"Proposer::callback_make_block:: peer_id({self.__peer_id})"
                          f"current_leader_id({current_leader_id})tx({tx}/"
-                         f"{None if tx is None else tx_queue.get_item_status(tx.tx_hash)})")
+                         f"{None if not tx else tx_queue.get_item_status(tx.tx_hash)})")
+
+        return True

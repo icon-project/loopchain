@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
 import copy
 import json
 import leveldb
@@ -74,7 +73,6 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
-        self.__made_block_count = 0
         self.__invoke_results = {}
 
         self.last_commit_state_height = 0
@@ -109,16 +107,6 @@ class BlockChain:
         except:
             pass
         return self.__last_block
-
-    @property
-    def made_block_count(self):
-        return self.__made_block_count
-
-    def increase_made_block_count(self):
-        self.__made_block_count += 1
-
-    def reset_made_block_count(self):
-        self.__made_block_count = 0
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -606,10 +594,7 @@ class BlockChain:
                                                   f"That's why Genesis block couldn't be generated.")
 
         block.generate_block()
-        # 제네시스 블럭을 추가 합니다.
         self.add_block(block)
-        # 제네시스 블럭의 HASH 값은 af5570f5a1810b7af78caf4bc70a660f0df51e42baf91d4de5b2328de0e83dfc
-        # 으로 일정 합니다.
 
     def __put_block_to_db(self, block_key, block):
         # confirm 블럭
@@ -774,3 +759,8 @@ class BlockChain:
     def set_last_commit_state(self, height, commit_state):
         self.last_commit_state_height = height
         self.last_commit_state = copy.deepcopy(commit_state)
+
+    def invoke_for_precommit(self, precommit_block: Block):
+        invoke_results = \
+            self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
+        self.__add_tx_to_block_db(precommit_block, invoke_results)

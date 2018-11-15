@@ -24,11 +24,11 @@ from loopchain.baseservice import CommonThread
 
 class BlockGenerationScheduler(CommonThread):
     def __init__(self, channel):
+        CommonThread.__init__(self)
         self.__channel_name = channel
         self.__schedule_queue = queue.Queue()
 
     def add_schedule(self, schedule):
-        # util.logger.spam(f"BlockGenerationScheduler:add_schedule")
         self.__schedule_queue.put(schedule)
 
     def get_schedule(self):

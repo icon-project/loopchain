@@ -1,0 +1,75 @@
+@startuml State Machine in Siever
+
+[*] --> InitComponents
+InitComponents: AddTimer: Connect to Radiostation
+
+InitComponents --> Consensus : trigger::complete_init_components
+
+state Timer
+Timer: * Connect to Radiostation
+Timer: * heartbeat to peers
+Timer: * leader complain
+Timer: * block generate
+
+state Consensus {
+    Consensus: on_enter { block_height_sync }
+    [*] --> BlockHeightSync : trigger::block_height_sync
+
+    state BlockHeightSync {
+        [*] --> EvaluateNetwork : trigger::evaluate_network
+
+        EvaluateNetwork: Check Leader
+        EvaluateNetwork --> BlockSync : (if leader != self)\ntrigger::block_sync
+        EvaluateNetwork --> SubscribeNetwork : (if leader == self)\ntrigger::subscribe_network
+
+        BlockSync: Check Highest Block in Network
+        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
+
+        SubscribeNetwork: Connect Network (Subscribe to Radiostation, Join a quorum if not yet)
+        SubscribeNetwork -up-> EvaluateNetwork
+        SubscribeNetwork -right-> [*]
+    }
+    BlockHeightSync: on_enter { evaluate_network }
+    BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_sync
+    BlockHeightSync -> Vote: (if leader != self)\ntrigger::complete_sync
+    BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
+    
+    Watch: Wait for new block announcement (subscribe_loop)
+    Watch --> BlockHeightSync: Reconnect to Mother Peer\n(after connection error)
+    Vote: on_enter {
+    Vote: \tAddTimer: leader complain
+    Vote: }
+    Vote: on_exit {
+    Vote: \tStopTimer: leader complain
+    Vote: }
+    Vote: 
+    Vote: trigger::vote\n(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
+    Vote -left-> BlockHeightSync : dest::BlockSync\n(block.height >= mine + 2)\ntrigger::block_sync
+    Vote -> BlockGenerate : Recv AnnounceUnConfirmedBlock\ntrigger::turn_to_leader\n(if next leader == self)
+    Vote -> LeaderComplain : !Recv heartbeat from leader by Timer (leader complain) \nSend LeaderComplain
+
+    BlockGenerate: on_enter {
+    BlockGenerate: \tAddTimer: heartbeat to peers
+    BlockGenerate: \tAddTimer: block generate (default interval = 2 sec.)
+    BlockGenerate: }
+    BlockGenerate: on_exit {
+    BlockGenerate: \tStopTimer: heartbeat to peers
+    BlockGenerate: \tStopTimer: block generate
+    BlockGenerate: }
+    BlockGenerate -> Vote : Send AnnounceConfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
+
+    state LeaderComplain
+    note right of LeaderComplain
+      keep leader complain Timer
+      until new leader elected
+    end note
+    LeaderComplain -> Vote : Recv AnnounceNewLeader\n(if next leader != self)
+    LeaderComplain --> BlockGenerate : Send AnnounceNewLeader\n(if next leader == self)
+}
+
+Consensus --> GracefulShutdown
+
+GracefulShutdown: StopTimer: ALL
+GracefulShutdown --> [*]
+
+@enduml

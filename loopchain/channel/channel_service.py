@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+import asyncio
 import json
+import leveldb
 import logging
 import pickle
-import leveldb
 import signal
 import time
 import traceback
@@ -25,22 +25,20 @@ from earlgrey import MessageQueueService
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService, RestStubManager, Timer
+from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService, RestStubManager, Timer, \
+    NodeSubscriber
 from loopchain.blockchain import Block
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus import Consensus, Acceptor, Proposer
 from loopchain.peer import BlockManager
-from loopchain.peer.consensus_default import ConsensusDefault
-from loopchain.peer.consensus_lft import ConsensusLFT
-from loopchain.peer.consensus_none import ConsensusNone
-from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.peer.icx_authorization import IcxAuthorization
 from loopchain.peer.peer_authorization import PeerAuthorization
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
-from loopchain.utils.message_queue import StubCollection
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
+from loopchain.utils.message_queue import StubCollection
 
 
 class ChannelService:
@@ -56,6 +54,7 @@ class ChannelService:
         self.__proposer: Proposer = None
         self.__acceptor: Acceptor = None
         self.__timer_service = TimerService()
+        self.__node_subscriber: NodeSubscriber = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -77,6 +76,7 @@ class ChannelService:
         command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
         ObjectManager().channel_service = self
+        self.__state_machine = ChannelStateMachine(self)
 
     @property
     def block_manager(self):
@@ -118,6 +118,14 @@ class ChannelService:
     def timer_service(self):
         return self.__timer_service
 
+    @property
+    def state_machine(self):
+        return self.__state_machine
+
+    @property
+    def inner_service(self):
+        return self.__inner_service
+
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -126,7 +134,9 @@ class ChannelService:
             await self.init(*results)
 
             self.__timer_service.start()
-            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}')
+            self.__state_machine.complete_init_components()
+            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
+                         f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
         loop.create_task(_serve())
@@ -149,7 +159,6 @@ class ChannelService:
 
         if self.__block_manager:
             self.__block_manager.stop()
-            self.__block_manager.wait()
             self.__block_manager = None
             logging.info("Cleanup BlockManager.")
 
@@ -209,15 +218,35 @@ class ChannelService:
             
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.connect_to_radio_station()
+        else:
+            self.__init_node_subscriber()
+
+    async def evaluate_network(self):
         await self.set_peer_type_in_channel()
+        if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:
+            self.__state_machine.subscribe_network()
+        else:
+            self.__state_machine.block_sync()
+
+    async def subscribe_network(self):
+        # Subscribe to block_sync_target_stub and radiostation
+        loop = self.timer_service.get_event_loop()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            asyncio.run_coroutine_threadsafe(self.subscribe_to_radio_station(), loop)
+        asyncio.run_coroutine_threadsafe(
+            self.subscribe_to_target_stub(self.block_manager.subscribe_target_peer_stub), loop)
 
         self.generate_genesis_block()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.__consensus.change_epoch(precommit_block=self.__block_manager.get_blockchain().last_block)
-            self.__consensus.start()
+            if not self.__consensus.is_run():
+                self.__consensus.change_epoch(precommit_block=self.__block_manager.get_blockchain().last_block)
+                self.__consensus.start()
         elif conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self.block_manager.block_generation_scheduler.start()
+            if not self.block_manager.block_generation_scheduler.is_run():
+                self.block_manager.block_generation_scheduler.start()
+
+        self.__state_machine.complete_sync()
 
     def __init_peer_auth(self):
         try:
@@ -234,17 +263,12 @@ class ChannelService:
         logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
         try:
             self.__block_manager = BlockManager(
+                name="loopchain.peer.BlockManager",
                 channel_manager=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
                 level_db_identity=ChannelProperty().peer_target
             )
-
-            self.__block_manager.consensus_algorithm = self.__init_consensus_algorithm()
-
-            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                self.__block_manager.start()
-
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
 
@@ -252,15 +276,16 @@ class ChannelService:
         consensus = Consensus(self, ChannelProperty().name)
         self.__consensus = consensus
         self.__block_manager.consensus = consensus
-        consensus.multiple_register(self.__block_manager)
+        consensus.register_subscriber(self.__block_manager)
 
     def __init_proposer(self, peer_id: str):
         proposer = Proposer(
             name="loopchain.consensus.Proposer",
             peer_id=peer_id,
             channel=ChannelProperty().name,
-            channel_service=self)
-        self.__consensus.multiple_register(proposer)
+            channel_service=self
+        )
+        self.__consensus.register_subscriber(proposer)
         self.__proposer = proposer
 
     def __init_acceptor(self, peer_id: str):
@@ -269,8 +294,9 @@ class ChannelService:
             consensus=self.__consensus,
             peer_id=peer_id,
             channel=ChannelProperty().name,
-            channel_service=self)
-        self.__consensus.multiple_register(acceptor)
+            channel_service=self
+        )
+        self.__consensus.register_subscriber(acceptor)
         self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
@@ -307,6 +333,12 @@ class ChannelService:
             else:
                 break
 
+    def __init_node_subscriber(self):
+        self.__node_subscriber = NodeSubscriber(
+            channel=ChannelProperty().name,
+            rs_target=ChannelProperty().radio_station_target
+        )
+
     async def __run_score_container(self):
         if not conf.USE_EXTERNAL_SCORE or conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
@@ -331,20 +363,6 @@ class ChannelService:
             await StubCollection().score_stubs[ChannelProperty().name].async_task().hello()
 
             return await self.__load_score()
-
-    def __init_consensus_algorithm(self):
-        """initialize a consensus algorithm by configuration.
-        """
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.none:
-            consensus_algorithm = ConsensusNone(self.__block_manager)
-        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.siever:
-            consensus_algorithm = ConsensusSiever(self.__block_manager)
-        elif conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            consensus_algorithm = None
-        else:
-            consensus_algorithm = ConsensusDefault(self.__block_manager)
-
-        return consensus_algorithm
 
     async def __load_score(self):
         channel_name = ChannelProperty().name
@@ -414,7 +432,7 @@ class ChannelService:
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
 
         # start next ConnectPeer timer
-        if TimerService.TIMER_KEY_CONNECT_PEER not in self.__timer_service.timer_list.keys():
+        if TimerService.TIMER_KEY_CONNECT_PEER not in self.__timer_service.timer_list:
             self.__timer_service.add_timer(
                 TimerService.TIMER_KEY_CONNECT_PEER,
                 Timer(
@@ -441,19 +459,19 @@ class ChannelService:
                     self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
 
     async def subscribe_to_radio_station(self):
-        await self.__subscribe_call_to_stub_by_method(self.__radio_station_stub, loopchain_pb2.PEER)
+        await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)
 
     async def subscribe_to_target_stub(self, target_stub):
-        await self.__subscribe_call_to_stub_by_method(target_stub, loopchain_pb2.PEER)
+        await self.__subscribe_call_to_stub(target_stub, loopchain_pb2.PEER)
 
     async def subscribe_to_peer(self, peer_id, peer_type):
         peer = self.peer_manager.get_peer(peer_id)
         peer_stub = self.peer_manager.get_peer_stub_manager(peer)
 
-        await self.__subscribe_call_to_stub_by_method(peer_stub, peer_type)
+        await self.__subscribe_call_to_stub(peer_stub, peer_type)
         self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_stub.target)
 
-    async def __subscribe_call_to_stub_by_method(self, peer_stub, peer_type):
+    async def __subscribe_call_to_stub(self, peer_stub, peer_type):
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await peer_stub.call_async(
                 "Subscribe",
@@ -465,25 +483,28 @@ class ChannelService:
                 ),
             )
         else:
-            util.logger.spam(f"channel_service:__subscribe_call_to_stub_by_method "
-                             f"peer_target({ChannelProperty().rest_target})")
-            response = self.__subscribe_call_to_rs_stub(peer_stub)
+            await self.__subscribe_call_from_citizen(peer_stub)
 
-            if response['response_code'] != message_code.Response.success:
-                error = f"subscribe fail to peer_target({ChannelProperty().radio_station_target}) " \
-                        f"reason({response['message']})"
-                await StubCollection().peer_stub.async_task().stop(message=error)
-
-    def __subscribe_call_to_rs_stub(self, rs_rest_stub):
-        response = {'response_code': message_code.Response.fail,
-                    'message': message_code.get_response_msg(message_code.Response.fail)}
-
+    async def __subscribe_call_from_citizen(self, rs_rest_stub):
+        util.logger.spam(f"channel_service:__subscribe_call_by_citizen target({ChannelProperty().rest_target})")
         try:
-            if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
-                peer_target = ChannelProperty().rest_target
-            else:
-                peer_target = f"https://{ChannelProperty().rest_target}"
-            response = rs_rest_stub.call(
+            await self.__subscribe_call_by_websocket()
+        except NotImplementedError:
+            await self.__subscribe_call_by_rest_stub(rs_rest_stub)
+
+    async def __subscribe_call_by_websocket(self):
+        await self.__node_subscriber.subscribe(self.__node_subscriber.target_uri,
+                                               block_height=self.block_manager.get_blockchain().block_height)
+
+    async def __subscribe_call_by_rest_stub(self, rs_rest_stub):
+        if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
+            peer_target = ChannelProperty().rest_target
+        else:
+            peer_target = f"https://{ChannelProperty().rest_target}"
+
+        response = None
+        try:
+            response = await rs_rest_stub.call_async(
                 "Subscribe", {
                     'channel': ChannelProperty().name,
                     'peer_target': peer_target
@@ -494,18 +515,17 @@ class ChannelService:
             logging.warning(f"Due to Subscription fail to RadioStation(mother peer), "
                             f"automatically retrying subscribe call")
 
-        if response['response_code'] == message_code.Response.success:
-            if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list.keys():
+        if response and response['response_code'] == message_code.Response.success:
+            if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list:
                 self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
-                self.radio_station_stub.update_methods_version()
                 logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
 
-            if TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE in self.__timer_service.timer_list.keys():
+            if TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE in self.__timer_service.timer_list:
                 self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
 
             # start next get_status timer
             timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-            if timer_key not in self.__timer_service.timer_list.keys():
+            if timer_key not in self.__timer_service.timer_list:
                 util.logger.spam(f"add timer for check_block_height_call to radiostation...")
                 self.__timer_service.add_timer(
                     timer_key,
@@ -519,54 +539,44 @@ class ChannelService:
                 )
         else:
             timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-            if timer_key not in self.__timer_service.timer_list.keys():
+            if timer_key not in self.__timer_service.timer_list:
                 error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER})"
                 self.__timer_service.add_timer(
                     timer_key,
                     Timer(
                         target=timer_key,
                         duration=conf.SHUTDOWN_TIMER,
-                        callback=self.__shutdown_peer,
+                        callback=self.shutdown_peer,
                         callback_kwargs={"message": error}
                     )
                 )
 
-        return response
-
-    def __check_block_height_call_to_rs_stub(self, **kwargs):
+    async def __check_block_height_call_to_rs_stub(self, **kwargs):
         rs_rest_stub = kwargs.get("rs_rest_stub", None)
-        response = dict()
-        try:
-            response = rs_rest_stub.call("GetLastBlock")
-        except Exception as e:
-            response['response_code'] = message_code.Response.fail
+        last_block = await rs_rest_stub.call_async("GetLastBlock")
+        if last_block['height'] <= self.__block_manager.get_blockchain().block_height:
+            return
 
-        if response['response_code'] == message_code.Response.success:
-            if response['block']['height'] <= self.__block_manager.get_blockchain().block_height:
-                # keep get last block timer, citizen subscription is still valid.
-                return
-
-        # citizen needs additional block or failed to connect to mother peer.
         timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key in self.__timer_service.timer_list.keys():
+        if timer_key in self.__timer_service.timer_list:
             util.logger.spam(f"stop timer for check_block_height_call to radiostation...")
             self.__timer_service.stop_timer(timer_key)
 
         timer_key = TimerService.TIMER_KEY_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list.keys():
+        if timer_key not in self.__timer_service.timer_list:
             self.__timer_service.add_timer(
                 timer_key,
                 Timer(
                     target=timer_key,
                     duration=conf.SUBSCRIBE_RETRY_TIMER,
                     is_repeat=True,
-                    callback=self.__subscribe_call_to_rs_stub,
+                    callback=self.__subscribe_call_from_citizen,
                     callback_kwargs={"rs_rest_stub": rs_rest_stub}
                 )
             )
 
-    def __shutdown_peer(self, **kwargs):
-        util.logger.spam(f"channel_service:__shutdown_peer")
+    def shutdown_peer(self, **kwargs):
+        logging.debug(f"channel_service:shutdown_peer")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):
@@ -612,10 +622,8 @@ class ChannelService:
         if peer_type == loopchain_pb2.BLOCK_GENERATOR:
             self.block_manager.set_peer_type(peer_type)
             self.__ready_to_height_sync(True)
-            await self.subscribe_to_radio_station()
         elif peer_type == loopchain_pb2.PEER:
             self.__ready_to_height_sync(False)
-            await self.__block_height_sync_channel()
 
     def __ready_to_height_sync(self, is_leader: bool = False):
         block_chain = self.block_manager.get_blockchain()
@@ -624,7 +632,7 @@ class ChannelService:
         if block_chain.block_height > -1:
             self.block_manager.rebuild_block()
 
-    async def __block_height_sync_channel(self):
+    async def block_height_sync_channel(self):
         # leader 로 시작하지 않았는데 자신의 정보가 leader Peer 정보이면 block height sync 하여
         # 최종 블럭의 leader 를 찾는다.
         peer_manager = self.peer_manager
@@ -685,10 +693,7 @@ class ChannelService:
 
     async def reset_leader(self, new_leader_id, block_height=0):
         logging.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
-
-        complained_leader = self.peer_manager.get_leader_peer()
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
-
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
             return
@@ -711,14 +716,22 @@ class ChannelService:
 
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
-            self.block_manager.get_blockchain().reset_made_block_count()
-            self.peer_manager.announce_new_leader(
-                complained_leader.peer_id, new_leader_id, is_broadcast=True, self_peer_id=ChannelProperty().peer_id)
+            self.state_machine.turn_to_leader()
+
+            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
+                self.peer_manager.announce_new_leader(
+                    self.peer_manager.get_leader_peer().peer_id,
+                    new_leader_id,
+                    is_broadcast=True,
+                    self_peer_id=ChannelProperty().peer_id
+                )
         else:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
 
             logging.debug("Set Peer Type Peer!")
+            self.state_machine.turn_to_peer()
+
             # 새 leader 에게 subscribe 하기
             await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
@@ -851,7 +864,7 @@ class ChannelService:
         if util.channel_use_icx(ChannelProperty().name):
             request = {
                 "blockHeight": block.height,
-                "blockHash": block.block_hash,
+                "blockHash": block.block_hash
             }
             request = convert_params(request, ParamType.write_precommit_state)
 

@@ -12,20 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A management class for blockchain."""
-import asyncio
 import queue
 import shutil
 import traceback
-from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
 
-import requests
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import BroadcastCommand, BlockGenerationScheduler, TimerService
+from loopchain.baseservice import BroadcastCommand, TimerService
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.candidate_blocks import CandidateBlocks
+from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
@@ -34,18 +32,15 @@ from loopchain.utils.message_queue import StubCollection
 import loopchain_pb2
 
 
-class BlockManager(CommonThread, Subscriber):
-    """P2P Service 를 담당하는 BlockGeneratorService, PeerService 와 분리된
-    Thread 로 BlockChain 을 관리한다.
-    BlockGenerator 의 BlockManager 는 주기적으로 Block 을 생성하여 Peer 로 broadcast 한다.
-    Peer 의 BlockManager 는 전달 받은 Block 을 검증 처리 한다.
+class BlockManager(Subscriber):
+    """Manage the blockchain of a channel. It has objects for consensus and db object.
     """
 
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, channel_manager, peer_id, channel_name, level_db_identity):
-        super().__init__()
+    def __init__(self, name: str, channel_manager, peer_id, channel_name, level_db_identity):
+        super().__init__(name)
 
         self.__channel_service = channel_manager
         self.__channel_name = channel_name
@@ -68,17 +63,17 @@ class BlockManager(CommonThread, Subscriber):
         self.__block_type = BlockType.general
         self.__consensus = None
         self.__consensus_algorithm = None
-        self.__run_logic = None
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
+        self.__subscribe_target_peer_stub = None
         self.__block_generation_scheduler = BlockGenerationScheduler(self.__channel_name)
         self.__prev_epoch: Epoch = None
         self.__precommit_block: Block = None
         self.__epoch: Epoch = None
-        self._event_list = [("complete_consensus", self.callback_complete_consensus)]
+        self.event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus, 0)]
         self.set_peer_type(loopchain_pb2.PEER)
-        self.name = "loopchain.peer.BlockManager"
+        self.name = name
         self.__service_status = status_code.Service.online
 
     def __set_send_tx_type(self, send_tx_type):
@@ -99,7 +94,7 @@ class BlockManager(CommonThread, Subscriber):
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
 
-    def __update_service_status(self, status):
+    def update_service_status(self, status):
         self.__service_status = status
         StubCollection().peer_stub.sync_task().update_status(
             self.__channel_name,
@@ -108,6 +103,12 @@ class BlockManager(CommonThread, Subscriber):
     @property
     def peer_type(self):
         return self.__peer_type
+
+    @property
+    def made_block_count(self):
+        if self.__consensus_algorithm:
+            return self.__consensus_algorithm.made_block_count
+        return 0
 
     @property
     def consensus(self):
@@ -120,10 +121,6 @@ class BlockManager(CommonThread, Subscriber):
     @property
     def consensus_algorithm(self):
         return self.__consensus_algorithm
-
-    @consensus_algorithm.setter
-    def consensus_algorithm(self, consensus_algorithm):
-        self.__consensus_algorithm = consensus_algorithm
 
     @property
     def precommit_block(self):
@@ -145,6 +142,10 @@ class BlockManager(CommonThread, Subscriber):
     def block_generation_scheduler(self):
         return self.__block_generation_scheduler
 
+    @property
+    def subscribe_target_peer_stub(self):
+        return self.__subscribe_target_peer_stub
+
     def get_level_db(self):
         return self.__level_db
 
@@ -155,43 +156,20 @@ class BlockManager(CommonThread, Subscriber):
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            if self.__peer_type != loopchain_pb2.BLOCK_GENERATOR and self.__peer_type != loopchain_pb2.PEER:
-                self.__set_run_logic_by_peer_type()
-        else:
-            self.__set_run_logic_by_peer_type()
-
     def __create_block_generation_schedule(self):
-        # util.logger.spam(f"block_manager.py:__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
-        Schedule = namedtuple("Schedule", "callback kwargs")
-        schedule = Schedule(self.__consensus_algorithm.consensus, {})
-        self.__block_generation_scheduler.add_schedule(schedule)
-
-        time.sleep(conf.INTERVAL_BLOCKGENERATION)
-
-    def __set_run_logic_by_peer_type(self):
-        if ChannelProperty().node_type == conf.NodeType.CommunityNode:
-            if self.__peer_type == loopchain_pb2.BLOCK_GENERATOR:
-                if conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    self.__run_logic = self.__create_block_generation_schedule
-                else:
-                    self.__run_logic = self.__consensus_algorithm.consensus
-            elif self.__peer_type == loopchain_pb2.PEER:
-                self.__run_logic = self.__do_vote
-        elif ChannelProperty().node_type == conf.NodeType.CitizenNode:
-            self.__run_logic = self.__do_nothing
+        # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
+        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+            Schedule = namedtuple("Schedule", "callback kwargs")
+            schedule = Schedule(self.__consensus_algorithm.consensus, {})
+            self.__block_generation_scheduler.add_schedule(schedule)
+        else:
+            self.__consensus_algorithm.consensus()
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
 
     def set_last_commit_state(self, block_height, commit_state):
         self.__blockchain.set_last_commit_state(block_height, commit_state)
-
-    def get_run_logic(self):
-        try:
-            return self.__run_logic.__name__
-        except Exception as e:
-            return "unknown"
 
     def get_total_tx(self):
         """
@@ -228,8 +206,6 @@ class BlockManager(CommonThread, Subscriber):
 
         # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
         block_dump = util.block_dumps(block_)
-        if conf.ALLOW_MAKE_EMPTY_BLOCK or block_.confirmed_tx_len > 0:
-            self.__blockchain.increase_made_block_count()
 
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
@@ -290,8 +266,7 @@ class BlockManager(CommonThread, Subscriber):
     def confirm_block(self, block: Block):
         try:
             confirmed_block = self.__blockchain.confirm_block(block.prev_block_hash)
-            if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-                self.__broadcast_block_to_audience_subscriber(confirmed_block)
+            self.__notify_new_block()
 
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
@@ -340,8 +315,7 @@ class BlockManager(CommonThread, Subscriber):
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
-        if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-            self.__broadcast_block_to_audience_subscriber(confirmed_block)
+        self.__notify_new_block()
 
     def add_block(self, block_: Block, is_commit_state_validation=False) -> bool:
         """ add committed block
@@ -353,8 +327,7 @@ class BlockManager(CommonThread, Subscriber):
         result = self.__blockchain.add_block(block_, is_commit_state_validation)
 
         last_block = self.__blockchain.last_block
-        if ObjectManager().channel_service.broadcast_scheduler.audience_subscriber:
-            self.__broadcast_block_to_audience_subscriber(last_block)
+        self.__notify_new_block()
 
         peer_id = ChannelProperty().peer_id
         util.apm_event(peer_id, {
@@ -469,7 +442,7 @@ class BlockManager(CommonThread, Subscriber):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
 
-        if timer_key not in timer_service.timer_list.keys():
+        if timer_key not in timer_service.timer_list:
             util.logger.spam(f"add timer for block_request_call to radiostation...")
             timer_service.add_timer(
                 timer_key,
@@ -477,54 +450,71 @@ class BlockManager(CommonThread, Subscriber):
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
                     is_repeat=True,
-                    callback=self.__block_height_sync,
+                    callback=self.block_height_sync,
                     callback_kwargs={'target_peer_stub': target_peer_stub}
                 )
             )
 
-    def __stop_block_height_sync_timer(self):
+    def stop_block_height_sync_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
-        if timer_key in timer_service.timer_list.keys():
+        if timer_key in timer_service.timer_list:
+            timer_service.stop_timer(timer_key)
+
+    def start_block_generate_timer(self):
+        timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
+        timer_service: TimerService = self.__channel_service.timer_service
+
+        if timer_key not in timer_service.timer_list:
+            self.__consensus_algorithm = ConsensusSiever(self)
+            util.logger.spam(f"add timer block generate")
+            timer_service.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=conf.INTERVAL_BLOCKGENERATION,
+                    is_repeat=True,
+                    callback=self.__create_block_generation_schedule
+                )
+            )
+
+    def stop_block_generate_timer(self):
+        timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
+        timer_service: TimerService = self.__channel_service.timer_service
+        if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
-        self.__update_service_status(status_code.Service.block_height_sync)
-        is_sync_complete = False
+        channel_service = ObjectManager().channel_service
+        peer_manager = channel_service.peer_manager
+
+        if target_peer_stub is None:
+            target_peer_stub = peer_manager.get_leader_stub_manager()
+        self.__subscribe_target_peer_stub = target_peer_stub
+
+        # The adjustment of block height and the process for data synchronization of peer
+        # === Love&Hate Algorithm === #
+        logging.info("try block height sync...with love&hate")
+
+        # Make Peer Stub List [peer_stub, ...] and get max_height of network
+        # max_height: current max height
+        # peer_stubs: peer stub list for block height synchronization
+        max_height, peer_stubs = self.__get_peer_stub_list(target_peer_stub)
+        if target_height is not None:
+            max_height = target_height
+
+        my_height = self.__blockchain.block_height
+        retry_number = 0
+        util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
+
+        if len(peer_stubs) == 0:
+            util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
+            return False
+
+        logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
         try:
-            channel_service = ObjectManager().channel_service
-            block_manager = channel_service.block_manager
-            peer_manager = channel_service.peer_manager
-            blockchain = block_manager.get_blockchain()
-
-            if target_peer_stub is None:
-                target_peer_stub = peer_manager.get_leader_stub_manager()
-
-            # The adjustment of block height and the process for data synchronization of peer
-            # === Love&Hate Algorithm === #
-            logging.info("try block height sync...with love&hate")
-
-            # Make Peer Stub List [peer_stub, ...] and get max_height of network
-            # max_height: current max height
-            # peer_stubs: peer stub list for block height synchronization
-            max_height, peer_stubs = self.__get_peer_stub_list(target_peer_stub)
-            if target_height is not None:
-                max_height = target_height
-
-            my_height = blockchain.block_height
-            retry_number = 0
-            util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
-
-            if len(peer_stubs) == 0:
-                util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
-                return False
-            else:
-                self.__stop_block_height_sync_timer()
-
-            logging.info(f"You need block height sync to: {max_height} yours: {my_height}")
-
             while max_height > my_height:
                 for peer_stub in peer_stubs:
                     response_code = message_code.Response.fail
@@ -541,14 +531,14 @@ class BlockManager(CommonThread, Subscriber):
                             commit_state = getattr(block, "_Block__commit_state", None)
                             logging.debug(f"block_manager.py >> block_height_sync :: "
                                           f"height({block.height}) commit_state({commit_state})")
-                            result = block_manager.add_block(
+                            result = self.add_block(
                                 block_=block,
                                 is_commit_state_validation=True if commit_state else False)
 
                             if result:
                                 if block.height == 0:
                                     self.__rebuild_nid(block)
-                                elif self.get_blockchain().find_nid() is None:
+                                elif self.__blockchain.find_nid() is None:
                                     genesis_block = self.get_blockchain().find_block_by_height(0)
                                     self.__rebuild_nid(genesis_block)
 
@@ -559,7 +549,7 @@ class BlockManager(CommonThread, Subscriber):
                         except exception.BlockError:
                             result = False
                             logging.error("Block Error Clear all block and restart peer.")
-                            block_manager.clear_all_blocks()
+                            self.clear_all_blocks()
                             util.exit_and_msg("Block Error Clear all block and restart peer.")
                             break
                         finally:
@@ -585,25 +575,24 @@ class BlockManager(CommonThread, Subscriber):
 
                         if len(peer_stubs) < 1:
                             raise ConnectionError
-
-            if my_height >= max_height:
-                is_sync_complete = True
         except Exception as e:
             logging.warning(f"block_manager.py >>> block_height_sync :: {e}")
             traceback.print_exc()
             self.__start_block_height_sync_timer(target_peer_stub)
             return False
 
-        if not is_sync_complete:
-            # block height sync 가 완료되지 않았으면 다시 시도한다.
+        if my_height >= max_height:
+            logging.debug(f"block_manager:block_height_sync is complete.")
+            self.__channel_service.state_machine.subscribe_network()
+        else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
                             f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
-            self.__block_height_sync(target_peer_stub)
+            self.__channel_service.state_machine.block_sync()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft \
                 and channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            last_block = blockchain.last_block
-
+            last_block = self.__blockchain.last_block
+            precommit_block = None
             for peer_stub in peer_stubs:
                 if peer_stub is not None:
                     precommit_block, response_code, response_message = \
@@ -614,13 +603,15 @@ class BlockManager(CommonThread, Subscriber):
 
             if precommit_block:
                 if last_block.height + 1 == precommit_block.height:
+                    self.__blockchain.invoke_for_precommit(precommit_block)
                     self.__channel_service.score_write_precommit_state(precommit_block)
-                    blockchain.put_precommit_block(precommit_block)
+                    self.__blockchain.put_precommit_block(precommit_block)
                     self.__precommit_block = precommit_block
                     self.consensus.leader_id = precommit_block.peer_id
                     self.consensus.precommit_block = None
                     util.logger.spam(f"set precommit bock {self.__precommit_block.block_hash}/"
                                      f"{self.__precommit_block.height} after block height synchronization.")
+                    self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
                 else:
                     util.logger.warning(f"precommit block is weird, an expected block height is {last_block.height+1}, "
                                         f"but it's {precommit_block.height}")
@@ -628,39 +619,10 @@ class BlockManager(CommonThread, Subscriber):
             else:
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
 
-            self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
-
-        logging.debug(f"block_manager:block_height_sync is complete.")
-
-        # Subscribe to block_sync_target_stub and radiostation
-        loop = self.__channel_service.timer_service.get_event_loop()
-        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_radio_station(), loop)
-        asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_to_target_stub(target_peer_stub), loop)
-
-        self.__update_service_status(status_code.Service.online)
         return True
 
-    def __broadcast_block_to_audience_subscriber(self, confirmed_block: Block):
-        try:
-            # repr can convert dict to string. And this string can convert dict again with ast.literal_eval
-            commit_state = repr(confirmed_block.commit_state)
-            util.logger.spam(f"block_manager:__broadcast_block_to_audience_subscriber "
-                             f"commit_state({commit_state})")
-        except Exception as e:
-            logging.warning(f"block_manager:__broadcast_block_to_audience_subscriber "
-                            f"FAIL json.dumps commit_state({confirmed_block.commit_state})")
-            commit_state = ""
-
-        json_data = confirmed_block.get_json_data()
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceConfirmedBlock", {
-                'block_hash': confirmed_block.block_hash,
-                'channel': self.__channel_name,
-                'block': json_data,
-                'commit_state': commit_state
-            }
-        )
+    def __notify_new_block(self):
+        self.__channel_service.inner_service.notify_new_block()
 
     def __get_peer_stub_list(self, target_peer_stub=None):
         """It updates peer list for block manager refer to peer list on the loopchain network.
@@ -715,27 +677,12 @@ class BlockManager(CommonThread, Subscriber):
         self.__level_db = None
         self.__blockchain.close_blockchain_db()
 
-    def run(self, e: threading.Event):
-        """Block Manager Thread Loop
-        PEER 의 type 에 따라 Block Generator 또는 Peer 로 동작한다.
-        Block Generator 인 경우 conf 에 따라 사용할 Consensus 알고리즘이 변경된다.
-        """
-
-        logging.info(f"channel({self.__channel_name}) Block Manager thread Start.")
-        e.set()
-
-        while self.is_run():
-            self.__run_logic()
-
+    def stop(self):
         # for reuse level db when restart channel.
         self.__close_level_db()
 
-        logging.info(f"channel({self.__channel_name}) Block Manager thread Ended.")
-
-    def stop(self):
         if conf.ALLOW_MAKE_EMPTY_BLOCK:
             self.__block_generation_scheduler.stop()
-        CommonThread.stop(self)
 
     def __vote_unconfirmed_block(self, block_hash, is_validated):
         logging.debug(f"block_manager:__vote_unconfirmed_block ({self.channel_name}/{is_validated})")
@@ -755,12 +702,8 @@ class BlockManager(CommonThread, Subscriber):
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    @staticmethod
-    def __do_nothing():
-        time.sleep(conf.SLEEP_SECONDS_IN_SERVICE_NONE)
-
-    def __do_vote(self):
-        """Announce 받은 unconfirmed block 에 투표를 한다.
+    def vote_as_peer(self):
+        """Vote to AnnounceUnconfirmedBlock
         """
         if not self.__unconfirmedBlockQueue.empty():
             unconfirmed_block = self.__unconfirmedBlockQueue.get()
@@ -771,10 +714,9 @@ class BlockManager(CommonThread, Subscriber):
             return
 
         my_height = self.__blockchain.block_height
-        while my_height < (unconfirmed_block.height - 1):
-            _, future = self.block_height_sync()
-            if future.result():
-                my_height = self.__blockchain.block_height
+        if my_height < (unconfirmed_block.height - 1):
+            self.__channel_service.state_machine.block_sync()
+            return
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.height:
@@ -785,12 +727,11 @@ class BlockManager(CommonThread, Subscriber):
         if unconfirmed_block.confirmed_tx_len == 0 \
                 and unconfirmed_block.block_type is not BlockType.peer_list \
                 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
-            # siever 에서 사용하는 vote block 은 tx 가 없다. (검증 및 투표 불필요)
-            # siever 에서 vote 블럭 발송 빈도를 보기 위해 warning 으로 로그 남김, 그 외의 경우 아래 로그는 주석처리 할 것
+            # "VOTE Block" has no tx. (no need validate and vote to block)
             # logging.warning("This is vote block by siever")
             pass
         else:
-            # block 검증
+            # block validate
             block_is_validated = False
             try:
                 block_is_validated = Block.validate(unconfirmed_block)

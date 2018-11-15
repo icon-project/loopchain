@@ -50,7 +50,6 @@ class RestStubManager:
             "Subscribe": conf.ApiVersion.node,
             "Unsubscribe": conf.ApiVersion.node,
             "GetChannelInfos": conf.ApiVersion.node,
-            "AnnounceConfirmedBlock": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
             "GetLastBlock": conf.ApiVersion.v3
@@ -60,7 +59,6 @@ class RestStubManager:
             "Subscribe": "node_Subscribe",
             "Unsubscribe": "node_Unsubscribe",
             "GetChannelInfos": "node_GetChannelInfos",
-            "AnnounceConfirmedBlock": "node_AnnounceConfirmedBlock",
             "GetBlockByHeight": "node_GetBlockByHeight",
             "Status": "/status/peer/",
             "GetLastBlock": "icx_getLastBlock"
@@ -118,7 +116,7 @@ class RestStubManager:
             logging.warning(f"REST call fail method_name({method_name}), caused by : {e}")
             raise e
 
-    def call_async(self, method_name, message, call_back=None, timeout=None, is_stub_reuse=True):
+    def call_async(self, method_name, message=None, call_back=None, timeout=None, is_stub_reuse=True):
         future = self.__executor.submit(self.call, method_name, message, timeout, is_stub_reuse)
         if call_back:
             future.add_done_callback(call_back)

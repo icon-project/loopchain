@@ -61,7 +61,6 @@ class Response:
     fail_wrong_block_hash = -4
     fail_no_leader_peer = -5
     fail_validate_params = -6
-    fail_made_block_count_limited = -7
     fail_wrong_subscribe_info = -8
     fail_connect_to_leader = -9
     fail_add_tx_to_leader = -10

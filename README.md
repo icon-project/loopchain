@@ -1,12 +1,5 @@
 # Loopchain
 
-This is the initial commit for the loopchain.
-
-It will be released in GitHub from now.
-The development of loopchain will also be on Github soon.
-
-Details will be updated shortly.
-
 ## Install Requirements
 
 #### Make Virtual Env for Python 3.6.5 (recommended version, 3.7 is not supported, possible versions are 3.6.x)

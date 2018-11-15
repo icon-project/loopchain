@@ -11,14 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import ast
 import copy
 import json
 import pickle
 import re
+from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import configure as conf
@@ -39,9 +40,47 @@ class ChannelInnerTask:
         self._channel_service = channel_service
         self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
+        # Citizen
+        self._citizen_condition_new_block: Condition = None
+        self._citizen_set = set()
+
     @message_queue_task
     async def hello(self):
         return 'channel_hello'
+
+    @message_queue_task
+    async def announce_new_block(self, subscriber_block_height: int):
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        my_block_height = blockchain.block_height
+
+        if subscriber_block_height > my_block_height:
+            message = {'error': "Announced block height is lower than subscriber's."}
+            return json.dumps(message)
+
+        if subscriber_block_height == my_block_height:
+            async with self._citizen_condition_new_block:
+                await self._citizen_condition_new_block.wait()
+
+        new_block_height = subscriber_block_height + 1
+        new_block = blockchain.find_block_by_height(new_block_height)
+
+        if new_block is None:
+            message = {'error': f"Cannot find block by height({new_block_height})"}
+            return json.dumps(message)
+
+        return new_block.get_json_data()
+
+    @message_queue_task
+    async def register_subscriber(self, remote_address):
+        if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
+            return False
+        else:
+            self._citizen_set.add(remote_address)
+            return True
+
+    @message_queue_task
+    async def unregister_subscriber(self, remote_address):
+        self._citizen_set.remove(remote_address)
 
     @message_queue_task
     def get_peer_list(self):
@@ -60,7 +99,7 @@ class ChannelInnerTask:
         status_data = dict()
 
         block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = block_manager.get_blockchain().made_block_count
+        status_data["made_block_count"] = block_manager.made_block_count
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
@@ -72,6 +111,7 @@ class ChannelInnerTask:
             total_tx = block_manager.get_total_tx()
 
         status_data["status"] = block_manager.service_status
+        status_data["state"] = self._channel_service.state_machine.state
         status_data["peer_type"] = str(block_manager.peer_type)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
@@ -228,7 +268,6 @@ class ChannelInnerTask:
                       f"peer_id({unconfirmed_block.peer_id})\n"
                       f"height({unconfirmed_block.height})\n"
                       f"hash({unconfirmed_block.block_hash})\n"
-                      f"made_block_count({unconfirmed_block.made_block_count})\n"
                       f"block_type({unconfirmed_block.block_type})\n"
                       f"is_divided_block({unconfirmed_block.is_divided_block})\n")
 
@@ -238,14 +277,13 @@ class ChannelInnerTask:
             self._channel_service.block_manager.add_unconfirmed_block,
             unconfirmed_block)
 
-        if unconfirmed_block.made_block_count >= conf.LEADER_BLOCK_CREATION_LIMIT \
-                and unconfirmed_block.block_type is BlockType.vote \
-                and unconfirmed_block.is_divided_block is False:
+        self._channel_service.state_machine.vote()
+
+        if unconfirmed_block.block_type is BlockType.vote and unconfirmed_block.is_divided_block is False:
             util.logger.spam(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
                              f"\nnext_leader_peer({unconfirmed_block.next_leader_peer}, "
                              f"channel({ChannelProperty().name}))")
 
-            # (hotfix-81) 자기가 다음 리더 일때만 AnnounceUnconfirmedBlock 메시지에서 reset leader 를 호출한다.
             if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer:
                 await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer)
 
@@ -271,7 +309,7 @@ class ChannelInnerTask:
                               f"already synced block height({confirmed_block.height})")
             response_code = message_code.Response.success
             # stop subscribe timer
-            if TimerService.TIMER_KEY_SUBSCRIBE in self._channel_service.timer_service.timer_list.keys():
+            if TimerService.TIMER_KEY_SUBSCRIBE in self._channel_service.timer_service.timer_list:
                 self._channel_service.timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
         except Exception as e:
             logging.error(f"announce confirmed block error : {e}")
@@ -314,8 +352,8 @@ class ChannelInnerTask:
         return message_code.Response.success, block.height, block_manager.get_blockchain().block_height, block_dumped
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def block_height_sync(self, target_peer_stub=None):
-        self._channel_service.block_manager.block_height_sync(target_peer_stub)
+    def block_height_sync(self):
+        self._channel_service.state_machine.block_sync()
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
@@ -324,33 +362,6 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def remove_audience(self, peer_target) -> None:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
-
-    @message_queue_task
-    async def add_audience_subscriber(self, peer_target):
-        if peer_target not in self._channel_service.broadcast_scheduler.audience_subscriber:
-            if len(self._channel_service.broadcast_scheduler.audience_subscriber) < conf.SUBSCRIBE_LIMIT:
-                logging.debug(f"channel_inner_service:add_audience_subscriber target({peer_target})")
-                self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.AUDIENCE_SUBSCRIBE, peer_target)
-                response_code = message_code.Response.success
-            else:
-                logging.warning(f"This peer can no longer take more subscribe requests!")
-                response_code = message_code.Response.fail
-        else:
-            logging.info(f"This target({peer_target}) is already subscribing this peer")
-            util.logger.spam(f"audience_subscriber list : "
-                             f"{self._channel_service.broadcast_scheduler.audience_subscriber.keys()}")
-            response_code = message_code.Response.success
-        return response_code
-
-    @message_queue_task
-    async def remove_audience_subscriber(self, peer_target):
-        if peer_target in self._channel_service.broadcast_scheduler.audience_subscriber:
-            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.AUDIENCE_UNSUBSCRIBE, peer_target)
-            response_code = message_code.Response.success
-        else:
-            logging.warning(f"This target({peer_target}) already unsubscribed this peer")
-            response_code = message_code.Response.success
-        return response_code
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def announce_new_peer(self, peer_object_pickled, peer_target) -> None:
@@ -377,14 +388,13 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash, vote_code) -> None:
         block_manager = self._channel_service.block_manager
-        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock ({ChannelProperty().name})")
-        peer_type = loopchain_pb2.PEER
-        if block_manager is not None:
-            peer_type = block_manager.peer_type
+        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
+                         f"({ChannelProperty().name}) block_hash({block_hash})")
 
         if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-            if peer_type == loopchain_pb2.PEER:
-                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock ({channel_name}) Not Leader Peer!")
+            if self._channel_service.state_machine.state == "Vote":
+                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock "
+                #                     f"({ChannelProperty().name}) Not Leader Peer!")
                 return
 
         logging.info("Peer vote to : " + block_hash + " " + str(vote_code) + f"from {peer_id}")
@@ -590,8 +600,20 @@ class ChannelInnerTask:
 class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
+    def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
+        super().__init__(amqp_target, route_key, username, password, **task_kwargs)
+        self._task._citizen_condition_new_block = Condition(loop=self.loop)
+
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
+
+    def notify_new_block(self):
+        async def _notify():
+            condition = self._task._citizen_condition_new_block
+            async with condition:
+                condition.notify_all()
+
+        asyncio.run_coroutine_threadsafe(_notify(), self.loop)
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):

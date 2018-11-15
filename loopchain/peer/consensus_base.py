@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A base class of consensus for the loopchain"""
-
 import sys
 
 from loopchain.baseservice import ObjectManager
@@ -24,7 +23,6 @@ class ConsensusBase(metaclass=ABCMeta):
     """
 
     def __init__(self, blockmanager):
-        self._made_block_count = 0
         self._block = None
         self._block_tx_size = 0
         self._blockmanager = blockmanager
@@ -33,6 +31,7 @@ class ConsensusBase(metaclass=ABCMeta):
         self._txQueue = self._blockmanager.get_tx_queue()
         self._current_vote_block_hash = ""
         self._candidate_blocks = self._blockmanager.get_candidate_blocks()
+        self.made_block_count = 0
         self._gen_block()
 
     @abstractmethod
@@ -45,24 +44,11 @@ class ConsensusBase(metaclass=ABCMeta):
     def block(self):
         return self._block
 
-    @property
-    def made_block_count(self):
-        return self._made_block_count
-
-    @made_block_count.setter
-    def made_block_count(self, value):
-        self._made_block_count = value
-
     def _gen_block(self):
-        self._made_block_count += 1
-        self._reset_block()
-
-    def _reset_block(self):
-        self._block = Block(channel_name=self._channel_name, made_block_count=self._made_block_count)
+        self._block = Block(channel_name=self._channel_name)
         self._block_tx_size = 0
 
     def _stop_gen_block(self):
-        self._made_block_count = 0
         self._block = None
         self._block_tx_size = 0
 

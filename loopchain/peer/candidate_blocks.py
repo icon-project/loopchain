@@ -146,7 +146,7 @@ class CandidateBlocks:
                  해당 block 이 검증되지 않았을때에는 Exception(해당블럭이 없다, 해당블럭이 아직 검증되지 않았다.) 을 발생한다.
         """
         if block_hash is None:
-            candidate_block = self.get_candidate_block()
+            candidate_block: Block = self.get_candidate_block()
             if candidate_block is None:
                 return None
             block_hash = candidate_block.block_hash
@@ -183,7 +183,7 @@ class CandidateBlocks:
                         'block_hash': candidate_block.block_hash}})
                 raise InvalidatedBlock("This block fail to validate", candidate_block)
             else:
-                logging.warning("There is Not Complete Validation.")
+                logging.warning(f"There is Not Complete Validation. hash({candidate_block.block_hash})")
                 util.apm_event(self.__peer_id, {
                     'event_type': 'NotCompleteValidation',
                     'peer_id': self.__peer_id,

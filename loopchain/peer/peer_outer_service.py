@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """gRPC service for Peer Outer Service"""
-
 import asyncio
 import datetime
 from functools import partial
 
 from loopchain.baseservice import ObjectManager, Monitor, TimerService
 from loopchain.blockchain import *
+from loopchain.consensus.vote_message import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code
-from loopchain.consensus.vote_message import *
 from loopchain.utils.message_queue import StubCollection
 
 # Changing the import location will cause a pickle error.
@@ -202,6 +201,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __get_status_peer_type_data(self, channel: str):
         status_cache = self.__get_status_from_cache(channel)
         status = dict()
+        status['state'] = status_cache['state']
         status['peer_type'] = status_cache['peer_type']
         status['block_height'] = status_cache['block_height']
         return status
@@ -476,8 +476,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, response_message, block = self.await_task(
-            channel_stub.task().get_precommit_block(last_block_height=request.last_block_height))
+        response_code, response_message, block = \
+            channel_stub.sync_task().get_precommit_block(last_block_height=request.last_block_height)
 
         return loopchain_pb2.PrecommitBlockReply(
             response_code=response_code, response_message=response_message, block=block)
@@ -538,7 +538,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                       f"block_type({block.block_type})\n"
                       f"block_hash({block.block_hash})\n"
                       f"peer_id({block.peer_id})\n"
-                      f"made_block_count({block.made_block_count})\n"
                       f"block_type({block.block_type})\n")
 
         channel_stub = StubCollection().channel_stubs[channel_name]

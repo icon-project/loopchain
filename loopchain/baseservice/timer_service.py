@@ -44,7 +44,7 @@ class Timer:
         self.__start_time = time.time()
         self.__is_repeat = kwargs.get("is_repeat", False)
         self.__callback = kwargs.get("callback", None)
-        self.__kwargs = kwargs.get("callback_kwargs", [])
+        self.__kwargs = kwargs.get("callback_kwargs", {})
 
     @property
     def target(self):
@@ -80,7 +80,10 @@ class Timer:
         """
         if off_type is OffType.time_out:
             logging.debug(f'timer({self.__target}) is turned off by timeout')
-            self.__callback(**self.__kwargs)
+            if asyncio.iscoroutinefunction(self.__callback):
+                asyncio.get_event_loop().create_task(self.__callback(**self.__kwargs))
+            else:
+                self.__callback(**self.__kwargs)
 
     def __repr__(self):
         return f"{self.__callback}, {self.remain_time()}"
@@ -96,6 +99,7 @@ class TimerService(CommonThread):
     TIMER_KEY_CONNECT_PEER = "TIMER_KEY_CONNECT_PEER"
     TIMER_KEY_RS_HEARTBEAT = "TIMER_KEY_RS_HEARTBEAT"
     TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE = "TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE"
+    TIMER_KEY_BLOCK_GENERATE = "TIMER_KEY_BLOCK_GENERATE"
 
     def __init__(self):
         CommonThread.__init__(self)

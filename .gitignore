@@ -208,6 +208,7 @@ loopchain/configure_user_ori.py
 testcase/unittest/blockchain_db*
 channel_manage_data_test2.json
 channel_manage_data_ori.json
+channel_manage_data.json
 citizen_0_conf.json
 run_a_test.sh
 todo.md
