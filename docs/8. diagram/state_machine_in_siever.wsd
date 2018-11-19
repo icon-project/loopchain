@@ -10,6 +10,8 @@ Timer: * Connect to Radiostation
 Timer: * heartbeat to peers
 Timer: * leader complain
 Timer: * block generate
+Timer: * Subscribe
+Timer: * Shutdown
 
 state Consensus {
     Consensus: on_enter { block_height_sync }
