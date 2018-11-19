@@ -78,6 +78,7 @@ class ConsensusSiever(ConsensusBase):
         self._did_vote = True
         self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
         self._blockmanager.add_block(candidate_block)
+        self._made_block_count += 1
 
         pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
                                                       TransactionStatusInQueue.normal)

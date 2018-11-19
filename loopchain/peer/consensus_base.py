@@ -12,9 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A base class of consensus for the loopchain"""
-import sys
-
-from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import *
 
 
@@ -25,8 +22,13 @@ class ConsensusBase(metaclass=ABCMeta):
     def __init__(self, blockmanager):
         self._blockmanager = blockmanager
         self._channel_name = blockmanager.channel_name
+        self._made_block_count = 0
         self._blockchain = self._blockmanager.get_blockchain()
         self._txQueue = self._blockmanager.get_tx_queue()
+
+    @property
+    def made_block_count(self):
+        return self._made_block_count
 
     def stop(self):
         pass

@@ -301,8 +301,8 @@ class ChannelInnerTask:
                              f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
                              f"channel({ChannelProperty().name}))")
 
-            if ChannelProperty().peer_id == unconfirmed_block.next_leader_peer.hex_hex():
-                await self._channel_service.reset_leader(unconfirmed_block.next_leader_peer.hex_hex())
+            if ChannelProperty().peer_id == unconfirmed_block.header.next_leader.hex_hx():
+                await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):

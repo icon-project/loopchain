@@ -41,7 +41,7 @@ class BlockManager(Subscriber):
     def __init__(self, name: str, channel_manager, peer_id, channel_name, level_db_identity):
         super().__init__(name)
 
-        self.__channel_service = channel_manager
+        self.__channel_service: ChannelService = channel_manager
         self.__channel_name = channel_name
         self.__pre_validate_strategy = None
         self.__set_send_tx_type(conf.CHANNEL_OPTION[channel_name]["send_tx_type"])
@@ -241,7 +241,7 @@ class BlockManager(Subscriber):
 
     def confirm_block(self, block: Block):
         try:
-            self.__blockchain.confirm_block(block.prev_block_hash.hex())
+            self.__blockchain.confirm_block(block.header.prev_hash.hex())
             self.__notify_new_block()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
@@ -649,7 +649,7 @@ class BlockManager(Subscriber):
         if self.__unconfirmedBlockQueue.empty():
             return
 
-        unconfirmed_block = self.__unconfirmedBlockQueue.get()
+        unconfirmed_block: Block = self.__unconfirmedBlockQueue.get()
         logging.debug(f"we got unconfirmed block ....{unconfirmed_block.header.hash.hex()}")
 
         my_height = self.__blockchain.block_height
@@ -665,6 +665,11 @@ class BlockManager(Subscriber):
 
         is_vote_type_block = len(unconfirmed_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK
         if is_vote_type_block:
+            return
+
+        leader_peer_id = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
+        if unconfirmed_block.header.peer_id.hex_hx() != leader_peer_id:
+            self.__vote_unconfirmed_block(unconfirmed_block.header.hash.hex(), False)
             return
 
         block_verifier = BlockVerifier.new("0.1a")
