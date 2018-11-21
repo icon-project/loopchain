@@ -12,7 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A base class of consensus for the loopchain"""
-from loopchain.blockchain import *
+import logging
+from abc import ABCMeta, abstractmethod
+from loopchain import configure as conf
+from loopchain.blockchain import BlockBuilder
+from loopchain.blockchain import TransactionVersions, Transaction, TransactionStatusInQueue, TransactionVerifier
 
 
 class ConsensusBase(metaclass=ABCMeta):

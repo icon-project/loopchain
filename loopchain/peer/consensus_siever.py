@@ -13,11 +13,13 @@
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
 
+import logging
 from queue import Queue, Empty
+from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import *
+from loopchain.blockchain import Address, BlockBuilder, BlockVerifier, TransactionStatusInQueue
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import Vote
-
 from loopchain.peer.consensus_base import ConsensusBase
 
 
