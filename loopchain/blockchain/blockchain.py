@@ -102,7 +102,9 @@ class BlockChain:
     @property
     def last_block(self) -> Block:
         try:
-            logging.debug(f"ENGINE-303 blockchain last_block: {self.__last_block.height}, {self.__last_block.block_hash}")
+            logging.debug(f"ENGINE-303 blockchain last_block: "
+                          f"{self.__last_block.header.height}, "
+                          f"{self.__last_block.header.hash.hex()}")
         except:
             pass
         return self.__last_block
@@ -144,17 +146,17 @@ class BlockChain:
 
     def _rebuild_transaction_count_from_blocks(self):
         total_tx = 0
-        block_hash = self.__last_block.block_hash
+        block_hash = self.__last_block.header.hash.hex()
+        block_serializer = BlockSerializer.new("0.1a")
         while block_hash != "":
             block_dump = self.__confirmed_block_db.Get(block_hash.encode(encoding='UTF-8'))
-            block = Block(channel_name=self.__channel_name)
-            block.deserialize_block(block_dump)
+            block = block_serializer.deserialize(json.loads(block_dump))
 
             # Count only normal block`s tx count, not genesis block`s
-            if block.height > 0:
-                total_tx += block.confirmed_tx_len
+            if block.header.height > 0:
+                total_tx += len(block.body.transactions)
 
-            block_hash = block.prev_block_hash
+            block_hash = block.header.prev_hash.hex()
         return total_tx
 
     def _rebuild_transaction_count_from_cached(self):
@@ -565,7 +567,7 @@ class BlockChain:
         # write precommit block to DB
         logging.debug(
             f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
-        if self.__last_block.height < precommit_block.header.height:
+        if self.__last_block.header.height < precommit_block.header.header.height:
             self.__precommit_tx(precommit_block)
             util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 

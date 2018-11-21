@@ -70,7 +70,8 @@ class ChannelInnerTask:
             message = {'error': f"Cannot find block by height({new_block_height})"}
             return json.dumps(message)
 
-        return new_block.get_json_data()
+        bs = BlockSerializer.new(new_block.header.version)
+        return json.dumps(bs.serialize(new_block))
 
     @message_queue_task
     async def register_subscriber(self, remote_address):

@@ -14,7 +14,6 @@
 """package for block chain objects"""
 
 from .exception import *
-from .exceptions import *
 from .types import *
 from .score_base import *
 from .hashing import *

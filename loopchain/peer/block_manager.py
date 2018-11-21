@@ -255,8 +255,7 @@ class BlockManager(Subscriber):
         self.__unconfirmedBlockQueue.put(unconfirmed_block)
 
     def add_confirmed_block(self, confirmed_block: Block):
-        is_commit_state_validation = False if not confirmed_block.commit_state else True
-        result = self.__blockchain.add_block(confirmed_block, is_commit_state_validation)
+        result = self.__blockchain.add_block(confirmed_block)
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
@@ -350,9 +349,8 @@ class BlockManager(Subscriber):
             if max_height_result.status_code != 200:
                 raise ConnectionError
 
-            block_data_str = json.dumps(get_block_result['block'])
-            block = Block(self.__channel_name)
-            block.deserialize_block(block_data_str.encode('utf-8'))
+            block_serializer = BlockSerializer.new("0.1a")
+            block = block_serializer.deserialize(get_block_result['block'])
 
             return block, json.loads(max_height_result.text)['block_height'], message_code.Response.success
 
@@ -465,6 +463,7 @@ class BlockManager(Subscriber):
                         block, max_block_height, response_code = self.__block_request(peer_stub, my_height + 1)
                     except Exception as e:
                         logging.warning("There is a bad peer, I hate you: " + str(e))
+                        traceback.print_exc()
 
                     if response_code == message_code.Response.success:
                         logging.debug(f"try add block height: {block.header.height}")

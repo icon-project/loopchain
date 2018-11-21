@@ -22,7 +22,7 @@ from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, Timer, ObjectManager
-from loopchain.blockchain import Block
+from loopchain.blockchain import Block, BlockSerializer
 
 
 class NodeSubscriber:
@@ -88,12 +88,11 @@ class NodeSubscriber:
 
     async def __add_confirmed_block(self, block_json: str):
         block_dict = json.loads(block_json)
-        confirmed_block = Block(channel_name=self.__channel)
-        confirmed_block.deserialize_block(block_json.encode('utf-8'))
-        confirmed_block.commit_state = block_dict.get('commit_state')
+        block_serializer = BlockSerializer.new(block_dict["version"])
+        confirmed_block = block_serializer.deserialize(block_dict)
 
-        logging.debug(f"add_confirmed_block height({confirmed_block.height}), "
-                      f"hash({confirmed_block.block_hash})")
+        logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
+                      f"hash({confirmed_block.header.hash.hex()})")
         ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
 
     def __shutdown_peer(self, **kwargs):
