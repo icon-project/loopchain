@@ -20,7 +20,7 @@ class IcxWallet:
         self.__address = self.create_address(self.__private_key.pubkey)
         self.__last_tx_hash = ""
 
-        tx_hash_version = conf.CHANNEL_OPTION[conf.conf.LOOPCHAIN_DEFAULT_CHANNEL]["tx_hash_version"]
+        tx_hash_version = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["tx_hash_version"]
         self.__hash_generator = build_hash_generator(tx_hash_version, "icx_sendTransaction")
 
         self.to_address = None
