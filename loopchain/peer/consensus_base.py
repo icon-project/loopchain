@@ -68,7 +68,7 @@ class ConsensusBase(metaclass=ABCMeta):
                 tv.verify(tx, self._blockchain)
             except Exception as e:
                 logging.warning(f"tx hash invalid. tx: {tx}")
-
-            block_builder.transactions[tx.hash] = tx
+            else:
+                block_builder.transactions[tx.hash] = tx
 
         return block_builder
