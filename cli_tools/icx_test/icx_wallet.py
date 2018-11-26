@@ -8,6 +8,7 @@ import sys
 
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
+from loopchain.blockchain import Hash32
 from loopchain.blockchain.hashing import build_hash_generator
 
 ICX_FACTOR = 10 ** 18
@@ -50,8 +51,8 @@ class IcxWallet:
         params["fee"] = hex(int(self.fee * ICX_FACTOR))
         params["timestamp"] = str(utils.get_now_time_stamp())
 
-        tx_hash = self.__hash_generator.generate_hash(params)
-        params["tx_hash"] = tx_hash
+        tx_hash = Hash32(self.__hash_generator.generate_hash(params))
+        params["tx_hash"] = tx_hash.hex()
         params["signature"] = self.create_signature(tx_hash)
 
         icx_origin = dict()
