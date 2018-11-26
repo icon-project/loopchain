@@ -9,13 +9,16 @@ class TransactionSerializer(BaseTransactionSerializer):
     def extract(self, tx: 'Transaction'):
         params = {
             "version": Transaction.version,
-            "from": tx.from_address.hex_hx(),
-            "to": tx.to_address.hex_hx(),
-            "value": hex(tx.value),
+            "from": tx.from_address.hex_xx(),
+            "to": tx.to_address.hex_xx(),
             "stepLimit": hex(tx.step_limit),
             "timestamp": hex(tx.timestamp),
             "nid": hex(tx.nid)
         }
+
+        if tx.value is not None:
+            params["value"] = hex(tx.value)
+
         if tx.nonce is not None:
             params['nonce'] = hex(tx.nonce)
 
@@ -47,13 +50,17 @@ class TransactionSerializer(BaseTransactionSerializer):
         if data is not None and isinstance(data, str):
             data = bytes.fromhex(data).decode('utf-8')
 
+        value = tx_data.get('value')
+        if value is not None:
+            value = int(value, 16)
+
         return Transaction(
             hash=Hash32(tx_hash),
             signature=Signature.from_base64str(tx_data['signature']),
             timestamp=int(tx_data['timestamp'], 16),
             from_address=Address.fromhex(tx_data['from']),
             to_address=Address.fromhex(tx_data['to']),
-            value=int(tx_data['value'], 16),
+            value=value,
             step_limit=int(tx_data['stepLimit'], 16),
             nonce=nonce,
             nid=int(tx_data['nid'], 16),

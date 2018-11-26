@@ -8,8 +8,8 @@ class TransactionSerializer(BaseTransactionSerializer):
 
     def extract(self, tx: 'Transaction'):
         params = {
-            "from": tx.from_address.hex_hx(),
-            "to": tx.to_address.hex_hx(),
+            "from": tx.from_address.hex_xx(),
+            "to": tx.to_address.hex_xx(),
             "value": hex(tx.value),
             "fee": hex(tx.fee),
             "timestamp": str(tx.timestamp)

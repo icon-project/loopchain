@@ -2,7 +2,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Mapping
-from .. import Hash32, Address, Signature
+from .. import Hash32, ExternalAddress, Signature
 from ..transactions import Transaction
 
 
@@ -12,7 +12,7 @@ class BlockHeader:
     prev_hash: Hash32
     height: int
     timestamp: int
-    peer_id: Address
+    peer_id: ExternalAddress
     signature: Signature
 
     version = ''

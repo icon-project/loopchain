@@ -56,8 +56,8 @@ class TransactionBuilder(BaseTransactionBuilder):
             self._timestamp = self.fixed_timestamp
 
         params = {
-            "from": self.from_address.hex_hx(),
-            "to": self.to_address.hex_hx(),
+            "from": self.from_address.hex_xx(),
+            "to": self.to_address.hex_xx(),
             "value": hex(self.value),
             "fee": hex(self.fee),
             "timestamp": str(self._timestamp)

@@ -1,6 +1,7 @@
 import base64
 from math import ceil
 from typing import Union
+from abc import ABCMeta
 
 
 class FixedBytes(bytes):
@@ -38,12 +39,36 @@ class Hash32(FixedBytes):
         return self.prefix + self.hex()
 
 
-class Address(FixedBytes):
+class Address(FixedBytes, metaclass=ABCMeta):
     size = 20
+
+    def hex_xx(self):
+        return self.prefix + self.hex()
+
+    @classmethod
+    def fromhex(cls, value: Union[str, int]):
+        if isinstance(value, int):
+            return super(cls).fromhex(value)
+
+        prefix = value[:2]
+        if prefix == ContractAddress.prefix:
+            return ContractAddress(bytes.fromhex(value[2:]))
+
+        return ExternalAddress(bytes.fromhex(value[2:]))
+
+
+class ExternalAddress(Address):
     prefix = "hx"
 
     def hex_hx(self):
-        return "hx" + self.hex()
+        return self.prefix + self.hex()
+
+
+class ContractAddress(Address):
+    prefix = "cx"
+
+    def hex_cx(self):
+        return self.prefix + self.hex()
 
 
 class Signature(FixedBytes):

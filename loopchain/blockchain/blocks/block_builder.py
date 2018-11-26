@@ -5,7 +5,7 @@ from secp256k1 import PrivateKey
 from typing import Dict, Callable
 
 from . import Block
-from .. import Hash32, Address, Signature
+from .. import Hash32, ExternalAddress, Signature
 from ..transactions import Transaction
 
 
@@ -22,7 +22,7 @@ class BlockBuilder(ABC):
         self.block: Block = None
         self.hash: Hash32 = None
         self.signature: Signature = None
-        self.peer_id: 'Address' = None
+        self.peer_id: 'ExternalAddress' = None
 
     def __len__(self):
         return sum(len(tx) for tx in self.transactions.values())
@@ -59,7 +59,7 @@ class BlockBuilder(ABC):
     def _build_peer_id(self):
         serialized_pub = self.peer_private_key.pubkey.serialize(compressed=False)
         hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return Address(hashed_pub[-20:])
+        return ExternalAddress(hashed_pub[-20:])
 
     def sign(self):
         if self.signature is not None:

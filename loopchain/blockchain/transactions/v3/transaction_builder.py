@@ -60,8 +60,8 @@ class TransactionBuilder(BaseTransactionBuilder):
 
         params = {
             "version": "0x3",
-            "from": self.from_address.hex_hx(),
-            "to": self.to_address.hex_hx(),
+            "from": self.from_address.hex_xx(),
+            "to": self.to_address.hex_xx(),
             "value": hex(int(self.value)),
             "stepLimit": hex(self.step_limit),
             "timestamp": hex(int(self._timestamp)),
