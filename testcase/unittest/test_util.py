@@ -30,9 +30,9 @@ import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
-from loopchain.blockchain import Transaction
+from loopchain.blockchain import Transaction, TransactionBuilder, Address
 from loopchain.components import SingletonMetaClass
-from loopchain.peer import PeerService, PeerAuthorization
+from loopchain.peer import PeerService, IcxAuthorization
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
@@ -230,35 +230,23 @@ def clean_up_mq():
     os.system("rabbitmqctl start_app")
 
 
-def create_basic_tx(peer_id: str, peer_auth: PeerAuthorization) -> Transaction:
-    """ create basic tx data is "{args:[]}"
-
-    :param peer_id: peer_id
+def create_basic_tx(peer_auth: IcxAuthorization) -> Transaction:
+    """
     :param peer_auth:
     :return: transaction
     """
-    return create_tx(peer_id, "{args:[]}", peer_auth)
+    tx_builder = TransactionBuilder.new("0x3", 1)
+    tx_builder.private_key = peer_auth.peer_private_key
+    tx_builder.to_address = Address("hx3f376559204079671b6a8df481c976e7d51b3c7c")
+    tx_builder.value = 1
+    tx_builder.step_limit = 100000000
+    tx_builder.nid = 3
+    return tx_builder.build()
 
 
-def create_tx(peer_id: str, data: str, peer_auth: PeerAuthorization) -> Transaction:
-    """ create basic tx data is "{args:[]}"
-
-    :param peer_id: peer_id
-    :param data: tx_data
-    :param peer_auth:
-    :return: transaction
-    """
-    tx = Transaction()
-    tx.put_meta('peer_id', peer_id)
-    tx.put_meta(Transaction.CHANNEL_KEY, conf.LOOPCHAIN_DEFAULT_CHANNEL)
-    tx.put_data(data)
-    tx.sign_hash(peer_auth)
-    return tx
-
-
-def create_default_peer_auth() -> PeerAuthorization:
+def create_default_peer_auth() -> IcxAuthorization:
     channel = list(conf.CHANNEL_OPTION)[0]
-    peer_auth = PeerAuthorization(channel)
+    peer_auth = IcxAuthorization(channel)
     return peer_auth
 
 
