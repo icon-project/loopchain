@@ -47,7 +47,7 @@ class TxItemJson:
         tx_serializer = cls.tx_serializers[tx.version]
 
         tx_item = TxItemJson(
-            json.dumps(tx_serializer.serialize(tx)),
+            json.dumps(tx_serializer.to_raw_data(tx)),
             channel
         )
         return tx_item

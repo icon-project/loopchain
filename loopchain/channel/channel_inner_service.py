@@ -174,7 +174,7 @@ class ChannelInnerTask:
             tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
 
             ts = TransactionSerializer.new(tx_version, tx_hash_version)
-            tx = ts.deserialize(kwargs)
+            tx = ts.from_(kwargs)
 
             tv = TransactionVerifier.new(tx_version, tx_hash_version)
             tv.verify(tx)
@@ -207,7 +207,7 @@ class ChannelInnerTask:
         tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
 
         ts = TransactionSerializer.new(tx_version, tx_hash_version)
-        tx = ts.deserialize(tx_json)
+        tx = ts.from_(tx_json)
 
         tv = TransactionVerifier.new(tx_version, tx_hash_version)
         tv.verify(tx)
@@ -234,7 +234,7 @@ class ChannelInnerTask:
             tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
 
             ts = TransactionSerializer.new(tx_version, tx_hash_version)
-            tx = ts.deserialize(tx_json)
+            tx = ts.from_(tx_json)
 
             tv = TransactionVerifier.new(tx_version, tx_hash_version)
             tv.verify(tx)
@@ -476,22 +476,32 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        block_data_dict = json.loads(block.serialize_block().decode())
+        bs = BlockSerializer.new(block.header.version)
+        block_data_dict = bs.serialize(block)
 
-        if block.height == 0:
-            return message_code.Response.success, block.block_hash, json.dumps(block_data_dict), []
+        if block.header.height == 0:
+            return message_code.Response.success, block.header.hash.hex(), json.dumps(block_data_dict), []
 
         confirmed_tx_list = block_data_dict["confirmed_transaction_list"]
         confirmed_tx_list_without_fail = []
 
+        tv = TransactionVersions()
+        tss = {
+            "genesis": TransactionSerializer.new("genesis", tv.get_hash_generator_version("genesis")),
+            "0x2": TransactionSerializer.new("0x2", tv.get_hash_generator_version("0x2")),
+            "0x3": TransactionSerializer.new("0x3", tv.get_hash_generator_version("0x3"))
+        }
+
         for tx in confirmed_tx_list:
-            tx_hash = util.get_tx_hash(tx)
+            version = tv.get_version(tx)
+            tx_hash = tss[version].get_hash(tx)
+
             invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
 
             if 'failure' in invoke_result:
                 continue
 
-            if util.get_tx_version(tx) == conf.ApiVersion.v3:
+            if tv.get_version(tx) == "0x3":
                 step_used, step_price = int(invoke_result["stepUsed"], 16), int(invoke_result["stepPrice"], 16)
                 tx["fee"] = hex(step_used * step_price)
 
@@ -504,7 +514,7 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), []
 
-        return message_code.Response.success, block.block_hash, block_data_json, []
+        return message_code.Response.success, block.header.hash.hex(), block_data_json, []
 
     @message_queue_task
     async def get_block(self, block_height, block_hash, block_data_filter, tx_data_filter):
@@ -514,39 +524,9 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        if self._channel_service.get_channel_option()["send_tx_type"] == conf.SendTxType.icx:
-            bs = BlockSerializer.new("0.1a")
-            block_dict = bs.serialize(block)
-            return message_code.Response.success, block.header.hash, json.dumps(block_dict), []
-        else:
-            block_data = dict()
-            for key in block_filter:
-                try:
-                    block_data[key] = str(getattr(block, key))
-                except AttributeError:
-                    try:
-                        getter = getattr(block, "get_" + key)
-                        block_data[key] = getter()
-                    except AttributeError:
-                        block_data[key] = ""
-
-            tx_data_json_list = []
-            for tx in block.confirmed_transaction_list:
-                tx_data_json = json.loads("{}")
-                for key in tx_filter:
-                    try:
-                        tx_data_json[key] = str(getattr(tx, key))
-                    except AttributeError:
-                        try:
-                            getter = getattr(tx, "get_" + key)
-                            tx_data_json[key] = getter()
-                        except AttributeError:
-                            tx_data_json[key] = ""
-                tx_data_json_list.append(json.dumps(tx_data_json))
-
-            block_data_json = json.dumps(block_data)
-
-        return message_code.Response.success, block.block_hash, block_data_json, tx_data_json_list
+        bs = BlockSerializer.new(block.header.version)
+        block_dict = bs.serialize(block)
+        return message_code.Response.success, block.header.hash, json.dumps(block_dict), []
 
     async def __get_block(self, block_data_filter, block_hash, block_height, tx_data_filter):
         block_manager = self._channel_service.block_manager

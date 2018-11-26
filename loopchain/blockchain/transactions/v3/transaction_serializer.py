@@ -6,7 +6,7 @@ from ... import Hash32, Signature, Address
 class TransactionSerializer(BaseTransactionSerializer):
     _hash_salt = HASH_SALT
 
-    def extract(self, tx: 'Transaction'):
+    def to_origin_data(self, tx: 'Transaction'):
         params = {
             "version": Transaction.version,
             "from": tx.from_address.hex_xx(),
@@ -30,12 +30,17 @@ class TransactionSerializer(BaseTransactionSerializer):
             params["dataType"] = tx.data_type
         return params
 
-    def serialize(self, tx: 'Transaction'):
-        params = self.extract(tx)
+    def to_raw_data(self, tx: 'Transaction'):
+        params = self.to_origin_data(tx)
         params['signature'] = tx.signature.to_base64str()
         return params
 
-    def deserialize(self, tx_data: dict) -> 'Transaction':
+    def to_full_data(self, tx: 'Transaction'):
+        params = self.to_raw_data(tx)
+        params['txHash'] = tx.hash.hex()
+        return params
+
+    def from_(self, tx_data: dict) -> 'Transaction':
         tx_data_copied = dict(tx_data)
         tx_data_copied.pop('signature', None)
         tx_data_copied.pop('txHash', None)
@@ -68,3 +73,5 @@ class TransactionSerializer(BaseTransactionSerializer):
             data=data
         )
 
+    def get_hash(self, tx_dumped: dict) -> str:
+        return tx_dumped['txHash']

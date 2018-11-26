@@ -21,7 +21,7 @@ class Transaction:
             hash_version = tv.get_hash_generator_version(self.version)
 
             ts = TransactionSerializer.new(self.version, hash_version)
-            tx_serialized = ts.serialize(self)
+            tx_serialized = ts.to_raw_data(self)
             tx_serialized = json.dumps(tx_serialized)
             tx_serialized = tx_serialized.encode('utf-8')
 

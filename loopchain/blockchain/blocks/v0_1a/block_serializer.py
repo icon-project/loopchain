@@ -17,7 +17,7 @@ class BlockSerializer(BaseBlockSerializer):
         for tx in body.transactions.values():
             tx_hash_generator_version = tv.get_hash_generator_version(tx.version)
             ts = TransactionSerializer.new(tx.version, tx_hash_generator_version)
-            tx_serialized = ts.serialize(tx)
+            tx_serialized = ts.to_full_data(tx)
             transactions.append(tx_serialized)
 
         return {
@@ -70,7 +70,7 @@ class BlockSerializer(BaseBlockSerializer):
             tx_version = tv.get_version(tx_data)
             tx_hash_generator_version = tv.get_hash_generator_version(tx_version)
             ts = TransactionSerializer.new(tx_version, tx_hash_generator_version)
-            tx = ts.deserialize(tx_data)
+            tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
         body = BlockBody(transactions, votes)

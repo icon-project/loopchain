@@ -13,15 +13,23 @@ class TransactionSerializer(ABC):
         self._hash_generator = build_hash_generator(hash_generator_version, self._hash_salt)
 
     @abstractmethod
-    def extract(self, tx: 'Transaction'):
+    def to_origin_data(self, tx: 'Transaction'):
         raise NotImplementedError
 
     @abstractmethod
-    def serialize(self, tx: 'Transaction'):
+    def to_raw_data(self, tx: 'Transaction'):
         raise NotImplementedError
 
     @abstractmethod
-    def deserialize(self, tx_dumped) -> 'Transaction':
+    def to_full_data(self, tx: 'Transaction'):
+        raise NotImplementedError
+
+    @abstractmethod
+    def from_(self, tx_dumped: dict) -> 'Transaction':
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_hash(self, tx_dumped: dict) -> str:
         raise NotImplementedError
 
     @classmethod

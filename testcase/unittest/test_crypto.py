@@ -426,9 +426,9 @@ class TestCrypto(unittest.TestCase):
         tv = TransactionVersions()
         version = tv.get_version(question)
         ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
-        tx = ts.deserialize(question)
+        tx = ts.from_(question)
 
-        result = self.hash_generator.generate_salted_origin(ts.extract(tx))
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
 
     def test_hash_origin_case_v3(self):
@@ -484,8 +484,8 @@ class TestCrypto(unittest.TestCase):
         tv = TransactionVersions()
         version = tv.get_version(question)
         ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
-        tx = ts.deserialize(question)
-        result = self.hash_generator.generate_salted_origin(ts.extract(tx))
+        tx = ts.from_(question)
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
 
     def test_hash_case_v3_escape(self):
@@ -542,8 +542,8 @@ class TestCrypto(unittest.TestCase):
         tv = TransactionVersions()
         version = tv.get_version(question)
         ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
-        tx = ts.deserialize(question)
-        result = self.hash_generator.generate_salted_origin(ts.extract(tx))
+        tx = ts.from_(question)
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
         self.assertEqual(result, answer)
 
@@ -601,9 +601,9 @@ class TestCrypto(unittest.TestCase):
         version = tv.get_version(question)
 
         ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
-        tx = ts.deserialize(question)
+        tx = ts.from_(question)
 
-        result = self.hash_generator.generate_salted_origin(ts.extract(tx))
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
         self.assertEqual(result, answer)
 
@@ -668,14 +668,14 @@ class TestCrypto(unittest.TestCase):
         tv = TransactionVersions()
         version = tv.get_version(question)
         ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
-        tx = ts.deserialize(question)
+        tx = ts.from_(question)
 
-        result_new_hash = self.hash_generator.generate_hash(ts.extract(tx))
+        result_new_hash = self.hash_generator.generate_hash(ts.to_origin_data(tx))
         result_old_hash = generate_icx_hash(question, "tx_hash")
         self.assertEqual(result_new_hash, result_old_hash)
 
         v0_hash_generator = build_hash_generator(0, "icx_sendTransaction")
-        result_old_hash = v0_hash_generator.generate_hash(ts.extract(tx))
+        result_old_hash = v0_hash_generator.generate_hash(ts.to_origin_data(tx))
 
         self.assertEquals(result_new_hash, result_old_hash)
 

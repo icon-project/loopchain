@@ -25,7 +25,7 @@ class TransactionVerifier(ABC):
             raise RuntimeError
 
     def verify_hash(self, tx: 'Transaction'):
-        params = self._tx_serializer.extract(tx)
+        params = self._tx_serializer.to_origin_data(tx)
         tx_hash_expected = self._hash_generator.generate_hash(params)
         if tx_hash_expected != tx.hash:
             raise RuntimeError

@@ -784,7 +784,7 @@ class ChannelService:
                 "params": {
                     "txHash": tx.hash.hex()
                 },
-                "genesisData": tx_serializer.serialize(tx)
+                "genesisData": tx_serializer.to_full_data(tx)
             }
             transactions.append(transaction)
 
@@ -815,13 +815,9 @@ class ChannelService:
             hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["tx_hash_version"]
             tx_serializer = TransactionSerializer.new(tx.version, hash_version)
 
-            data = tx_serializer.serialize(tx)
-            if tx.version == "0x3":
-                data["txHash"] = tx.hash.hex()
-
             transaction = {
                 "method": method,
-                "params": data
+                "params": tx_serializer.to_full_data(tx)
             }
             transactions.append(transaction)
 

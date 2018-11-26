@@ -48,13 +48,16 @@ class Address(FixedBytes, metaclass=ABCMeta):
     @classmethod
     def fromhex(cls, value: Union[str, int]):
         if isinstance(value, int):
-            return super(cls).fromhex(value)
+            return super().fromhex(value)
 
         prefix = value[:2]
         if prefix == ContractAddress.prefix:
             return ContractAddress(bytes.fromhex(value[2:]))
 
-        return ExternalAddress(bytes.fromhex(value[2:]))
+        if prefix == ExternalAddress.prefix:
+            return ExternalAddress(bytes.fromhex(value[2:]))
+
+        return ExternalAddress(bytes.fromhex(value))
 
 
 class ExternalAddress(Address):
