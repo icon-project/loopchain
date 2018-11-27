@@ -32,10 +32,9 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
 from cryptography.x509.oid import NameOID
 
-from loopchain import configure as conf
 from loopchain.utils import loggers
-from loopchain.blockchain.hashing import (get_tx_hash_generator, build_hash_generator,
-                                          HashPreprocessor, HashPreprocessorSendTransaction)
+from loopchain.blockchain import Hash32, TransactionSerializer, TransactionVersions
+from loopchain.blockchain.hashing import build_hash_generator
 
 import testcase.unittest.test_util as test_util
 
@@ -48,7 +47,7 @@ class TestCrypto(unittest.TestCase):
     def setUp(self):
         test_util.print_testname(self._testMethodName)
 
-        self.hash_generator = get_tx_hash_generator(conf.LOOPCHAIN_DEFAULT_CHANNEL)
+        self.hash_generator = build_hash_generator(1, "icx_sendTransaction")
 
     def tearDown(self):
         pass
@@ -404,12 +403,13 @@ class TestCrypto(unittest.TestCase):
             "method": "icx_sendTransaction",
             "id": 1234,
             "params": {
-                "version": "0x3",
                 "from": "hxbe258ceb872e08851f1f59694dac2558708ece11",
                 "to": "hx5bfdb090f43a808005ffc27c25b213145e80b7cd",
                 "value": "0xde0b6b3a7640000",
-                "timestamp": "0x563a6cf330136",
+                "fee": "0x1000000",
+                "timestamp": "1000000000000",
                 "nonce": "0x1",
+                "tx_hash": "a247a97a23398daccb66e2d61d63788b3c2edb91e1fdbb4f34d86d485eb72915",
                 "signature": "VAia7YZ2Ji6igKWzjR2YsGa2m53nKPrfK7uXYW78QLE+ATehAVZPC40szvAiA6NEU5gCYB4c4qaQzqDh2ugcHgA="
             }
         }'''
@@ -419,11 +419,16 @@ class TestCrypto(unittest.TestCase):
         logging.info(f"request loaded : {request}")
 
         question = request["params"]
-        answer = "icx_sendTransaction.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nonce.0x1." \
-                 "timestamp.0x563a6cf330136.to.hx5bfdb090f43a808005ffc27c25b213145e80b7cd." \
-                 "value.0xde0b6b3a7640000.version.0x3"
+        answer = "icx_sendTransaction.fee.0x1000000.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nonce.0x1." \
+                 "timestamp.1000000000000.to.hx5bfdb090f43a808005ffc27c25b213145e80b7cd." \
+                 "value.0xde0b6b3a7640000"
 
-        result = self.hash_generator.generate_salted_origin(question)
+        tv = TransactionVersions()
+        version = tv.get_version(question)
+        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        tx = ts.from_(question)
+
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
 
     def test_hash_origin_case_v3(self):
@@ -438,6 +443,7 @@ class TestCrypto(unittest.TestCase):
                 "stepLimit": "0x12345",
                 "timestamp": "0x563a6cf330136",
                 "nonce": "0x1",
+                "nid": "0x2",
                 "signature": "VAia7YZ2Ji6igKWzjR2YsGa2m53nKPrfK7uXYW78QLE+ATehAVZPC40szvAiA6NEU5gCYB4c4qaQzqDh2ugcHgA=",
                 "dataType": "call",
                 "data": {
@@ -472,10 +478,14 @@ class TestCrypto(unittest.TestCase):
         answer = "icx_sendTransaction.data.{method.transfer.params." \
                  "{array0.[1.221].array1.[{hash.0x12.value.0x34}.{hash.0x56.value.0x78}]." \
                  "to.hxab2d8215eab14bc6bdd8bfb2c8151257032ecd8b.value.0x1}}." \
-                 "dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nonce.0x1.stepLimit.0x12345." \
+                 "dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x2.nonce.0x1.stepLimit.0x12345." \
                  "timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        result = self.hash_generator.generate_salted_origin(question)
+        tv = TransactionVersions()
+        version = tv.get_version(question)
+        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        tx = ts.from_(question)
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
 
     def test_hash_case_v3_escape(self):
@@ -490,6 +500,7 @@ class TestCrypto(unittest.TestCase):
                 "stepLimit": "0x12345",
                 "timestamp": "0x563a6cf330136",
                 "nonce": "0x1",
+                "nid": "0x2",
                 "signature": "VAia7YZ2Ji6igKWzjR2YsGa2m53nKPrfK7uXYW78QLE+ATehAVZPC40szvAiA6NEU5gCYB4c4qaQzqDh2ugcHgA=",
                 "dataType": "call",
                 "data": {
@@ -525,10 +536,14 @@ class TestCrypto(unittest.TestCase):
         answer = r"icx_sendTransaction.data.{method.transfer.params." \
                  r"{array0.[1.2\.21].array1.[{hash.0x12.value.0x34}.{hash.0x56.value.0x78}]." \
                  r"to.hx\.ab2d8215eab\\14bc6bdd8bfb2c\[8151257\]032ec\{d8\}b.value.0x1}}." \
-                 r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nonce.0x1.stepLimit.0x12345." \
+                 r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x2.nonce.0x1.stepLimit.0x12345." \
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        result = self.hash_generator.generate_salted_origin(question)
+        tv = TransactionVersions()
+        version = tv.get_version(question)
+        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        tx = ts.from_(question)
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
         self.assertEqual(result, answer)
 
@@ -543,6 +558,7 @@ class TestCrypto(unittest.TestCase):
                 "to": "cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32",
                 "stepLimit": "0x12345",
                 "timestamp": "0x563a6cf330136",
+                "nid": "0x1",
                 "nonce": "0x1",
                 "signature": "VAia7YZ2Ji6igKWzjR2YsGa2m53nKPrfK7uXYW78QLE+ATehAVZPC40szvAiA6NEU5gCYB4c4qaQzqDh2ugcHgA=",
                 "dataType": "call",
@@ -578,10 +594,16 @@ class TestCrypto(unittest.TestCase):
         answer = r"icx_sendTransaction.data.{method.transfer.params." \
                  r"{array0.[\0.\0].array1.[{hash.\0.value.\0}.{hash.\0.value.0x78}]." \
                  r"to.hxab2d8215eab14bc6bdd8bfb2c8151257032ecd8b.value.0x1}}." \
-                 r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nonce.0x1.stepLimit.0x12345." \
+                 r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x1.nonce.0x1.stepLimit.0x12345." \
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        result = self.hash_generator.generate_salted_origin(question)
+        tv = TransactionVersions()
+        version = tv.get_version(question)
+
+        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        tx = ts.from_(question)
+
+        result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
         self.assertEqual(result, answer)
 
@@ -618,7 +640,7 @@ class TestCrypto(unittest.TestCase):
             origin = create_origin_for_hash(copy_tx)
             origin = f"icx_sendTransaction.{origin}"
             # gen hash
-            return hashlib.sha3_256(origin.encode()).hexdigest()
+            return hashlib.sha3_256(origin.encode()).digest()
 
         request = r'''{
             "jsonrpc": "2.0",
@@ -631,6 +653,8 @@ class TestCrypto(unittest.TestCase):
                 "value": "0xde0b6b3a7640000",
                 "timestamp": "0x563a6cf330136",
                 "nonce": "0x1",
+                "stepLimit": "0x100000",
+                "nid": "0x2",
                 "signature": "VAia7YZ2Ji6igKWzjR2YsGa2m53nKPrfK7uXYW78QLE+ATehAVZPC40szvAiA6NEU5gCYB4c4qaQzqDh2ugcHgA="
             }
         }'''
@@ -641,12 +665,17 @@ class TestCrypto(unittest.TestCase):
 
         question = request["params"]
 
-        result_new_hash = self.hash_generator.generate_hash(question)
+        tv = TransactionVersions()
+        version = tv.get_version(question)
+        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        tx = ts.from_(question)
+
+        result_new_hash = self.hash_generator.generate_hash(ts.to_origin_data(tx))
         result_old_hash = generate_icx_hash(question, "tx_hash")
         self.assertEqual(result_new_hash, result_old_hash)
 
-        v0_hash_generator = build_hash_generator(0, HashPreprocessorSendTransaction(), "icx_sendTransaction")
-        result_old_hash = v0_hash_generator.generate_hash(question)
+        v0_hash_generator = build_hash_generator(0, "icx_sendTransaction")
+        result_old_hash = v0_hash_generator.generate_hash(ts.to_origin_data(tx))
 
         self.assertEquals(result_new_hash, result_old_hash)
 
@@ -759,9 +788,10 @@ class TestCrypto(unittest.TestCase):
             }
         }
 
-        genesis_hash_generator = build_hash_generator(0, HashPreprocessor(), "genesis_tx")
+        genesis_hash_generator = build_hash_generator(0, "genesis_tx")
         genesis_tx_hash = genesis_hash_generator.generate_hash(genesis_init_data["transaction_data"])
-        self.assertEqual(genesis_tx_hash, "6dbc389370253739f28b8c236f4e7acdcfcdb9cfe8386c32d809114d5b00ac65")
+        self.assertEqual(genesis_tx_hash,
+                         Hash32.fromhex("6dbc389370253739f28b8c236f4e7acdcfcdb9cfe8386c32d809114d5b00ac65"))
 
 
 if __name__ == '__main__':

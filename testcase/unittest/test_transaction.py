@@ -27,8 +27,6 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import Transaction, TransactionStatus
-from loopchain.blockchain.validator import TxValidator, get_tx_hash_generator
 from loopchain.peer import PeerAuthorization
 from loopchain import configure as conf
 from loopchain.utils import loggers
@@ -37,14 +35,7 @@ loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
-class TransactionDataOnly:
-    def __init__(self):
-        self.__transaction_type = TransactionStatus.unconfirmed
-        self.data = []
-        self.__time_stamp = []
-        self.__transaction_hash = ""
-
-
+@unittest.skip("BVS")
 class TestTransaction(unittest.TestCase):
 
     def setUp(self):

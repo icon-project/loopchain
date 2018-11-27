@@ -496,25 +496,6 @@ def is_hex(s):
 def trim_hex(s):
     return s.split("0x")[1] if s.startswith("0x") else s
 
-
-def get_tx_version(icx_origin_data):
-    if 'version' in icx_origin_data and icx_origin_data['version'] == hex(conf.ApiVersion.v3):
-        return conf.ApiVersion.v3
-    return conf.ApiVersion.v2
-
-
-def get_tx_hash_key(icx_origin_data):
-    if get_tx_version(icx_origin_data) == conf.ApiVersion.v3:
-        tx_hash_key = "txHash"
-    else:
-        tx_hash_key = "tx_hash"
-    return tx_hash_key
-
-
-def get_tx_hash(icx_origin_data):
-    tx_hash_key = get_tx_hash_key(icx_origin_data)
-    return icx_origin_data[tx_hash_key]
-
 # ------------------- data utils ----------------------------
 
 

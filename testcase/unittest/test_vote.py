@@ -101,6 +101,7 @@ class TestVote(unittest.TestCase):
         # THEN
         self.assertTrue(vote.check_vote_init(peer_manager))
 
+    @unittest.skip("BVS")
     def test_add_vote(self):
         # GIVEN
         peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
@@ -141,6 +142,7 @@ class TestVote(unittest.TestCase):
         ret = vote.get_result_detail("block_hash", 0.51)
         self.assertEqual(ret[5], 5)
 
+    @unittest.skip("BVS")
     def test_fail_vote(self):
         # GIVEN
         peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)

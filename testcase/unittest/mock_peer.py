@@ -2,7 +2,6 @@ from loopchain.baseservice import ScoreResponse, PeerInfo, PeerStatus, PeerObjec
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Block
 from loopchain import configure as conf
-from loopchain.blockchain.validator import GenesisBlockValidator
 from testcase.unittest import test_util
 
 

@@ -27,7 +27,6 @@ import testcase.unittest.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain.validator import tx_validator, IconValidateStrategy, get_tx_hash_generator
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
@@ -38,6 +37,7 @@ loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
+@unittest.skip("BVS")
 class TestBlock(unittest.TestCase):
     __peer_id = 'aaa'
 

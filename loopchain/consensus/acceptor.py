@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A Acceptor module for block """
-
+import hashlib
 import logging
 import operator
 
+from loopchain import configure as conf
 from loopchain.baseservice import ChannelProperty
-from loopchain.blockchain.block import *
 from loopchain.consensus import Subscriber, Consensus
 from loopchain.consensus.epoch import *
 from loopchain.consensus.vote_message import *

@@ -17,7 +17,7 @@ import json
 
 from enum import IntEnum
 
-from loopchain.blockchain.hashing import get_vote_hash_generator
+from loopchain.blockchain.hashing import build_hash_generator
 
 
 class VoteMessageType(IntEnum):
@@ -53,6 +53,7 @@ class VoteMessage:
         self.__peer_id = peer_id
         self.__channel_name = channel_name
         self.__hash = None
+        self.__hash_generator = build_hash_generator(1, None)
 
     @property
     def type(self):
@@ -90,7 +91,6 @@ class VoteMessage:
         if not need_sign:
             del json_data["signature"]
 
-        hash_generator = get_vote_hash_generator(self.channel_name)
         return hash_generator.generate_hash(json_data)
 
     def print_vote_message(self):

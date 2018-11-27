@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
+
+import logging
+from queue import Queue, Empty
+from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import *
-from loopchain.peer import candidate_blocks
+from loopchain.blockchain import Address, BlockBuilder, BlockVerifier, TransactionStatusInQueue
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.peer import Vote
 from loopchain.peer.consensus_base import ConsensusBase
 
 
@@ -23,144 +28,97 @@ class ConsensusSiever(ConsensusBase):
     기본 합의 알고리즘으로 Block Generator 에 접속한 모든 PEER 에게 Block 에 대한 투표를 요청한다.
     51% 이상의 투표를 획득하면 해당 블록을 Block Chain 에 추가한다.
     """
+    def __init__(self, block_manager):
+        super().__init__(block_manager)
 
-    def __throw_out_block(self, failed_block):
-        logging.debug(f"Throw out Block!!! {failed_block.height}, {failed_block.block_hash} ")
-        # 이전 블럭에 대한 confirm 작업을 생략하도록 설정한다.
-        self._block.prev_block_confirm = False
+        self._vote_queue = Queue()
+        self._did_vote = False
 
-        # 실패한 블럭은 버리고 prev_block_hash 와 block height 를 보정한다.
-        self._block.prev_block_hash = failed_block.prev_block_hash
-        self._block.height = failed_block.height
-        self._block.time_stamp = 0
-        self._block_tx_size = 0
+    def stop(self):
+        logging.info("Stop Siever")
 
-        self._current_vote_block_hash = ""
-        
+        self._vote_queue.put(None)  # sentinel
+        self._did_vote = False
+
+    def vote(self, vote_block_hash, vote_code, peer_id, group_id):
+        self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
+
     def consensus(self):
-        # broadcasting 한 블럭이 검증이 끝났는지 확인한다.
-        confirmed_block = None
-        try:
-            confirmed_block = self._candidate_blocks.get_confirmed_block()
-        except candidate_blocks.NoExistBlock as e:
-            logging.error(e)
-        except candidate_blocks.NotCompleteValidation as e:
-            # try re count voters
-            logging.warning(f"This block need more validation vote from Peers block "
-                            f"hash({str(e.block.block_hash)}) channel({self._channel_name})")
+        block_builder = self._makeup_block()
 
-            self._blockmanager.broadcast_audience_set()
-            self._blockmanager.broadcast_send_unconfirmed_block(e.block)
+        if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+            return
 
-            if util.diff_in_seconds(e.block.time_stamp) > conf.BLOCK_VOTE_TIMEOUT:
-                logging.warning("Time Outed Block not confirmed duration: " +
-                                str(util.diff_in_seconds(e.block.time_stamp)))
-                self._candidate_blocks.remove_broken_block(e.block.block_hash)
-                self.__throw_out_block(e.block)
-        except candidate_blocks.InvalidatedBlock as e:
-            # 실패한 투표에 대한 처리
-            logging.error("InvalidatedBlock!! hash: " + str(e.block.block_hash))
-            logging.debug("InvalidatedBlock!! prev_hash: " + str(e.block.prev_block_hash))
+        peer_manager = ObjectManager().channel_service.peer_manager
 
-            # 현재 블록은 데이터가 있나?
-            logging.debug("This block status: " + str(self._block.confirmed_tx_len))
+        last_block = self._blockchain.last_block
+        block_builder.height = last_block.header.height + 1
+        block_builder.prev_hash = last_block.header.hash
+        block_builder.next_leader = Address.fromhex(peer_manager.get_next_leader_peer().peer_id)
+        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
+        block_builder.votes = self._did_vote
 
-            self.__throw_out_block(e.block)
+        candidate_block = block_builder.build()
+        candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
 
-        # 검증이 끝난 블럭이 있으면
-        result = None
-        if confirmed_block is not None:
-            logging.info(f"Block Validation is Complete "
-                         f"hash({confirmed_block.block_hash}) channel({self._channel_name})")
-            # 현재 블럭에 이전 투표에 대한 기록을 갱신한다.
-            self._block.prev_block_confirm = True
+        block_verifier = BlockVerifier.new("0.1a")
+        block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
-            # 검증이 끝나면 BlockChain 에 해당 block 의 block_hash 로 등록 완료
-            confirmed_block.block_status = BlockStatus.confirmed
-            self.made_block_count += 1
-            result = self._blockmanager.add_block(confirmed_block)
+        logging.info(f"candidate block height: {candidate_block.header.height}")
+        logging.info(f"candidate block hash: {candidate_block.header.hash.hex()}")
+        logging.info(f"candidate block next leader: {candidate_block.header.next_leader.hex()}")
+        logging.info(f"candidate block votes: {candidate_block.body.votes}")
 
-            # 새로운 블럭의 broadcast 를 위해 current_vote_block_hash 를 리셋한다.
-            self._current_vote_block_hash = ""
+        vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
+        vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)
 
-        block_is_verified = True
-        if self._current_vote_block_hash == "":
-            if self._block and (conf.ALLOW_MAKE_EMPTY_BLOCK or self._block.confirmed_tx_len > 0):
-                if conf.ALLOW_MAKE_EMPTY_BLOCK and \
-                        self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
-                                                         TransactionStatusInQueue.normal):
-                    self._makeup_block()
-                if conf.CHANNEL_OPTION[self._channel_name]['store_valid_transaction_only']:
-                    # candidate_block을 broadcasting하기 전에 invoke result verifying 실행
-                    self._block.generate_block(self._candidate_blocks.get_last_block(self._blockchain))
+        self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
+        success = self._wait_for_voting(candidate_block, vote)
+        if not success:
+            return
 
-                    block_is_verified, need_rebuild, invoke_results = \
-                        self._block.verify_through_score_invoke(is_leader=True)
+        self._did_vote = True
+        self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
+        self._blockmanager.add_block(candidate_block)
+        self._made_block_count += 1
 
-                    old_block_hash = self._block.block_hash
-                    if need_rebuild:
-                        verified_commit_state = copy.deepcopy(self._block.commit_state)
-                        self._block.generate_block(self._candidate_blocks.get_last_block(self._blockchain))
-                        assert verified_commit_state == self._block.commit_state
+        pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
+                                                      TransactionStatusInQueue.normal)
+        if not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+            block_builder = BlockBuilder.new("0.1a")
+            block_builder.prev_hash = candidate_block.header.hash
+            block_builder.height = candidate_block.header.height + 1
+            block_builder.next_leader = candidate_block.header.next_leader
+            block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
+            block_builder.votes = True
+            empty_block = block_builder.build()
 
-                        ObjectManager().channel_service.score_change_block_hash(block_height=self._block.height,
-                                                                                old_block_hash=old_block_hash,
-                                                                                new_block_hash=self._block.block_hash)
-                    self._blockmanager.set_invoke_results(self._block.block_hash, invoke_results)
-                    self._blockmanager.get_blockchain().set_last_commit_state(
-                        self._block.height, self._block.commit_state)
-                else:
-                    # 검증 받을 블록의 hash 를 생성하고 후보로 등록한다.
-                    # logging.warning("add unconfirmed block to candidate blocks")
-                    self._block.generate_block(self._candidate_blocks.get_last_block(self._blockchain))
+            self._blockmanager.broadcast_send_unconfirmed_block(empty_block)
+            self._did_vote = False
 
-                if block_is_verified:
-                    self._block.sign(ObjectManager().channel_service.peer_auth)
-                    self._candidate_blocks.add_unconfirmed_block(self._block)
+            ObjectManager().channel_service.state_machine.turn_to_peer()
 
-                    # 새로운 Block 을 생성하여 다음 tx 을 수집한다.
-                    self._gen_block()
-                else:
-                    failed_block = self._block
-                    self._gen_block()
-                    self.__throw_out_block(failed_block)
+    def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
+        while True:
+            result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
+            if result:
+                return True
 
-            self._makeup_block()
+            timeout_timestamp = candidate_block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
+            timeout = -util.diff_in_seconds(timeout_timestamp)
+            try:
+                if timeout < 0:
+                    raise Empty
 
-            # 다음 검증 후보 블럭이 있는지 확인한다.
-            candidate_block = self._candidate_blocks.get_candidate_block()
-            peer_manager = ObjectManager().channel_service.peer_manager
+                vote_result = self._vote_queue.get(timeout=timeout)
+                if vote_result is None:  # sentinel
+                    return False
 
-            if candidate_block is not None:
-                # 있으면 해당 블럭을 broadcast 하여 Peer 에게 검증을 요청한다.
-                self._current_vote_block_hash = candidate_block.block_hash
-                logging.info(f"candidate block height: {candidate_block.height}")
-                logging.info("candidate block hash: " + self._current_vote_block_hash)
+                vote_block_hash, vote_code, peer_id, group_id = vote_result
+                if vote.target_hash == vote_block_hash:
+                    vote.add_vote(group_id, peer_id, vote_code)
 
-                util.logger.spam(f"consensus_siever:consensus try peer_manager.get_next_leader_peer().peer_id")
-                candidate_block.next_leader_peer = peer_manager.get_next_leader_peer().peer_id
-
-                # 생성된 블럭을 투표 요청하기 위해서 broadcast 한다.
-                self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
-
-                # broadcast 를 요청했으면 다음 투표 block 이 있는지 계속 검사하기 위해 return 한다.
-                return result
-            elif self._block is not None and \
-                    not conf.ALLOW_MAKE_EMPTY_BLOCK and \
-                    (self._block.prev_block_confirm is True) and \
-                    (self._block.confirmed_tx_len == 0):
-                # 검증할 후보 블럭이 없으면서 이전 블럭이 unconfirmed block 이면 투표가 담긴 빈 블럭을 전송한다.
-                self._block.prev_block_hash = confirmed_block.block_hash
-                self._block.block_type = BlockType.vote
-
-                self._block.next_leader_peer = peer_manager.get_next_leader_peer().peer_id
-
-                self._blockmanager.broadcast_send_unconfirmed_block(self._block)
-
-                self._stop_gen_block()
-                util.logger.spam(f"consensus_siever:consensus channel({self._channel_name}) "
-                                 f"\ntry ObjectManager().peer_service.rotate_next_leader({self._channel_name})")
-
-                ObjectManager().channel_service.state_machine.turn_to_peer()
-
-        return result
+            except Empty:
+                logging.warning("Timed Out Block not confirmed duration: " +
+                                str(util.diff_in_seconds(candidate_block.header.timestamp)))
+                return False
