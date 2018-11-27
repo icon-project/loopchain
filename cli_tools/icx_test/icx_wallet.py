@@ -60,7 +60,7 @@ class IcxWallet:
         icx_origin["method"] = "icx_sendTransaction"
         icx_origin["id"] = random.randrange(0, 100000)
         icx_origin["params"] = params
-        self.__last_tx_hash = tx_hash
+        self.__last_tx_hash = tx_hash.hex_0x()
         if self.is_logging:
             logging.debug(f"icx_sendTransaction params for v2: {params}")
 
@@ -85,6 +85,7 @@ class IcxWallet:
         if self.is_logging:
             logging.debug(f"icx_sendTransaction params for v3: {params}")
 
+        self.__last_tx_hash = Hash32(hash_for_sign).hex_0x()
         icx_origin = dict()
         icx_origin["jsonrpc"] = "2.0"
         icx_origin["method"] = "icx_sendTransaction"
