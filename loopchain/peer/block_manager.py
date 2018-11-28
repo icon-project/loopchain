@@ -413,7 +413,7 @@ class BlockManager(Subscriber):
                 Timer(
                     target=timer_key,
                     duration=conf.INTERVAL_BLOCKGENERATION,
-                    is_repeat=True,
+                    is_repeat=False,
                     callback=self.__create_block_generation_schedule
                 )
             )
