@@ -70,7 +70,6 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
-        self.__made_block_count = 0
         self.__invoke_results = {}
 
         self.__add_block_lock = threading.RLock()
@@ -117,22 +116,12 @@ class BlockChain:
         return self.__last_block
 
     @property
-    def made_block_count(self):
-        return self.__made_block_count
-
-    @property
     def block_versioner(self):
         return self.__block_versioner
 
     @property
     def tx_versioner(self):
         return self.__tx_versioner
-
-    def increase_made_block_count(self):
-        self.__made_block_count += 1
-
-    def reset_made_block_count(self):
-        self.__made_block_count = 0
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
