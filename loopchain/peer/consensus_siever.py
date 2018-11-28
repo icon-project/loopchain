@@ -13,8 +13,8 @@
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
 
+import asyncio
 import logging
-from queue import Queue, Empty
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import Address, BlockBuilder, BlockVerifier, TransactionStatusInQueue
@@ -31,19 +31,25 @@ class ConsensusSiever(ConsensusBase):
     def __init__(self, block_manager):
         super().__init__(block_manager)
 
-        self._vote_queue = Queue()
+        self._loop: asyncio.BaseEventLoop = None
+        self._vote_queue: asyncio.Queue = None
         self._did_vote = False
 
     def stop(self):
         logging.info("Stop Siever")
 
-        self._vote_queue.put(None)  # sentinel
+        if self._loop:
+            coroutine = self._vote_queue.put(None)  # sentinel
+            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+
         self._did_vote = False
 
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
-        self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
+        if self._loop:
+            coroutine = self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
+            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
 
-    def consensus(self):
+    async def consensus(self):
         block_builder = self._makeup_block()
 
         if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
@@ -98,7 +104,7 @@ class ConsensusSiever(ConsensusBase):
 
             ObjectManager().channel_service.state_machine.turn_to_peer()
 
-    def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
+    async def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
         while True:
             result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
             if result:
@@ -108,9 +114,9 @@ class ConsensusSiever(ConsensusBase):
             timeout = -util.diff_in_seconds(timeout_timestamp)
             try:
                 if timeout < 0:
-                    raise Empty
+                    raise asyncio.TimeoutError
 
-                vote_result = self._vote_queue.get(timeout=timeout)
+                vote_result = asyncio.wait_for(self._vote_queue.get(), timeout=timeout)
                 if vote_result is None:  # sentinel
                     return False
 
@@ -118,7 +124,7 @@ class ConsensusSiever(ConsensusBase):
                 if vote.target_hash == vote_block_hash:
                     vote.add_vote(group_id, peer_id, vote_code)
 
-            except Empty:
+            except asyncio.TimeoutError:
                 logging.warning("Timed Out Block not confirmed duration: " +
                                 str(util.diff_in_seconds(candidate_block.header.timestamp)))
                 return False
