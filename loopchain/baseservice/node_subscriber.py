@@ -16,6 +16,7 @@
 import asyncio
 import json
 import logging
+import traceback
 
 import websockets
 from websockets.exceptions import InvalidStatusCode, InvalidMessage
@@ -38,7 +39,8 @@ class NodeSubscriber:
     async def subscribe(self, uri, block_height):
         while True:
             try:
-                async with websockets.connect(uri) as websocket:
+                # set websocket payload maxsize to 4MB.
+                async with websockets.connect(uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK) as websocket:
                     await self.__stop_shutdown_timer()
                     request = json.dumps({
                         'height': block_height
@@ -51,6 +53,7 @@ class NodeSubscriber:
                                 f"This target({self.__rs_target}) may not support websocket yet.")
                 raise NotImplementedError
             except Exception as e:
+                traceback.print_exc()
                 logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
                 await self.__start_shutdown_timer()
                 await asyncio.sleep(conf.SUBSCRIBE_RETRY_TIMER)

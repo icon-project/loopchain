@@ -53,25 +53,27 @@ class ChannelInnerTask:
     @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int):
         blockchain = self._channel_service.block_manager.get_blockchain()
-        my_block_height = blockchain.block_height
 
-        if subscriber_block_height > my_block_height:
-            message = {'error': "Announced block height is lower than subscriber's."}
-            return json.dumps(message)
+        while True:
+            my_block_height = blockchain.block_height
+            if subscriber_block_height > my_block_height:
+                message = {'error': "Announced block height is lower than subscriber's."}
+                return json.dumps(message)
 
-        if subscriber_block_height == my_block_height:
-            async with self._citizen_condition_new_block:
-                await self._citizen_condition_new_block.wait()
+            if subscriber_block_height == my_block_height:
+                async with self._citizen_condition_new_block:
+                    await self._citizen_condition_new_block.wait()
 
-        new_block_height = subscriber_block_height + 1
-        new_block = blockchain.find_block_by_height(new_block_height)
+            new_block_height = subscriber_block_height + 1
+            new_block = blockchain.find_block_by_height(new_block_height)
 
-        if new_block is None:
-            message = {'error': f"Cannot find block by height({new_block_height})"}
-            return json.dumps(message)
+            if new_block is None:
+                logging.warning(f"Cannot find block height({new_block_height})")
+                await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
+                continue
 
-        bs = BlockSerializer.new(new_block.header.version)
-        return json.dumps(bs.serialize(new_block))
+            bs = BlockSerializer.new(new_block.header.version)
+            return json.dumps(bs.serialize(new_block))
 
     @message_queue_task
     async def register_subscriber(self, remote_address):
@@ -610,6 +612,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         util.exit_and_msg("MQ Connection lost.")
 
     def notify_new_block(self):
+
         async def _notify():
             condition = self._task._citizen_condition_new_block
             async with condition:

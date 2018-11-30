@@ -271,6 +271,9 @@ class BlockChain:
                     'block_height': self.__block_height
                 }})
 
+            # notify new block
+            ObjectManager().channel_service.inner_service.notify_new_block()
+
             return True
 
     def __prevent_next_block_mismatch(self, next_block: Block) -> bool:

@@ -242,7 +242,6 @@ class BlockManager(Subscriber):
     def confirm_block(self, block: Block):
         try:
             self.__blockchain.confirm_block(block.header.prev_hash.hex())
-            self.__notify_new_block()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.block_height_sync()
@@ -259,13 +258,10 @@ class BlockManager(Subscriber):
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
-        self.__notify_new_block()
-
     def add_block(self, block_: Block) -> bool:
         result = self.__blockchain.add_block(block_)
 
         last_block = self.__blockchain.last_block
-        self.__notify_new_block()
 
         peer_id = ChannelProperty().peer_id
         util.apm_event(peer_id, {
@@ -560,9 +556,6 @@ class BlockManager(Subscriber):
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
 
         return True
-
-    def __notify_new_block(self):
-        self.__channel_service.inner_service.notify_new_block()
 
     def __get_peer_stub_list(self, target_peer_stub=None):
         """It updates peer list for block manager refer to peer list on the loopchain network.
