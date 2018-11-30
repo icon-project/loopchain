@@ -620,11 +620,18 @@ class BlockChain:
                 # Save and Get Unconfirmed block using pickle for unserialized info(commit_state)
                 # unconfirmed_block_byte = self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY)
                 unconfirmed_block = pickle.loads(self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY))
+                logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
+                logging.debug("confirmed_block_hash: " + confirmed_block_hash)
+                logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
 
             except KeyError:
-                except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash})"
-                logging.warning(except_msg)
-                raise BlockchainError(except_msg)
+                if self.last_block.header.hash == confirmed_block_hash:
+                    logging.warning(f"Already added block hash({confirmed_block_hash})")
+                    return
+                else:
+                    except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash})"
+                    logging.warning(except_msg)
+                    raise BlockchainError(except_msg)
 
             # unconfirmed_block = Block(channel_name=self.__channel_name)
             # unconfirmed_block.deserialize_block(unconfirmed_block_byte)
@@ -632,10 +639,6 @@ class BlockChain:
             if unconfirmed_block.header.hash.hex() != confirmed_block_hash:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
-
-            logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
-            logging.debug("confirmed_block_hash: " + confirmed_block_hash)
-            logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
 
             self.add_block(unconfirmed_block)
             self.__confirmed_block_db.Delete(BlockChain.UNCONFIRM_BLOCK_KEY)
