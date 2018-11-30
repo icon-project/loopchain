@@ -49,6 +49,10 @@
         - When complain finished [c], [c], [c], [c], [c], [c], [c] (v: Vote, c: Complain)
         - If there is 1/2 + 1 same pick for next leader, leader complain round finished, start next Inning in same height.
         - If there is not, start next round with 'normal strategy'
+
+        - Round up condition
+          - All normal peers repeat the round Complain Message if the round is not completed.
+          - If round voting is completed or leader selection is not possible, round is going up.
         
     - Inning = 1
       - Round = 0
