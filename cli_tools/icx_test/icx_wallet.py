@@ -8,7 +8,8 @@ import sys
 
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
-from loopchain.blockchain.hashing import get_tx_hash_generator
+from loopchain.blockchain import Hash32
+from loopchain.blockchain.hashing import build_hash_generator
 
 ICX_FACTOR = 10 ** 18
 ICX_FEE = 0.01
@@ -19,7 +20,9 @@ class IcxWallet:
         self.__private_key = private_key or PrivateKey()
         self.__address = self.create_address(self.__private_key.pubkey)
         self.__last_tx_hash = ""
-        self.__hash_generator = get_tx_hash_generator(conf.LOOPCHAIN_DEFAULT_CHANNEL)
+
+        tx_hash_version = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["tx_hash_version"]
+        self.__hash_generator = build_hash_generator(tx_hash_version, "icx_sendTransaction")
 
         self.to_address = None
         self.value = None
@@ -48,8 +51,8 @@ class IcxWallet:
         params["fee"] = hex(int(self.fee * ICX_FACTOR))
         params["timestamp"] = str(utils.get_now_time_stamp())
 
-        tx_hash = self.__hash_generator.generate_hash(params)
-        params["tx_hash"] = tx_hash
+        tx_hash = Hash32(self.__hash_generator.generate_hash(params))
+        params["tx_hash"] = tx_hash.hex()
         params["signature"] = self.create_signature(tx_hash)
 
         icx_origin = dict()
@@ -57,7 +60,7 @@ class IcxWallet:
         icx_origin["method"] = "icx_sendTransaction"
         icx_origin["id"] = random.randrange(0, 100000)
         icx_origin["params"] = params
-        self.__last_tx_hash = tx_hash
+        self.__last_tx_hash = tx_hash.hex_0x()
         if self.is_logging:
             logging.debug(f"icx_sendTransaction params for v2: {params}")
 
@@ -82,6 +85,7 @@ class IcxWallet:
         if self.is_logging:
             logging.debug(f"icx_sendTransaction params for v3: {params}")
 
+        self.__last_tx_hash = Hash32(hash_for_sign).hex_0x()
         icx_origin = dict()
         icx_origin["jsonrpc"] = "2.0"
         icx_origin["method"] = "icx_sendTransaction"
@@ -96,7 +100,7 @@ class IcxWallet:
         return f"hx{hashed_pub[-40:]}"
 
     def create_signature(self, tx_hash):
-        signature = self.__private_key.ecdsa_sign_recoverable(msg=binascii.unhexlify(tx_hash),
+        signature = self.__private_key.ecdsa_sign_recoverable(msg=tx_hash,
                                                               raw=True,
                                                               digest=hashlib.sha3_256)
         serialized_sig = self.__private_key.ecdsa_recoverable_serialize(signature)

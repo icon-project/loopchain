@@ -15,26 +15,20 @@
 import hashlib
 
 from .hash_origin_generator import HashOriginGenerator
-from .hash_preprossesor import HashPreprocessor
 
 
 class HashGenerator:
-    def __init__(self, origin_generator: HashOriginGenerator, preprocessor: HashPreprocessor, salt=None):
+    def __init__(self, origin_generator: HashOriginGenerator, salt=None):
         self.origin_generator = origin_generator
-        self.preprocessor = preprocessor
         self.salt = salt
-
-    def generate_origin(self, origin_data: dict):
-        origin_data = self.preprocessor.preprocess(origin_data)
-        return self.origin_generator.generate(origin_data)
 
     def generate_salted_origin(self, origin_data: dict):
         def _gen():
             if self.salt is not None:
                 yield self.salt
-            yield self.generate_origin(origin_data)
+            yield self.origin_generator.generate(origin_data)
         return '.'.join(_gen())
 
     def generate_hash(self, origin_data: dict):
         origin = self.generate_salted_origin(origin_data)
-        return hashlib.sha3_256(origin.encode()).hexdigest()
+        return hashlib.sha3_256(origin.encode()).digest()

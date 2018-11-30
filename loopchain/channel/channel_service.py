@@ -25,9 +25,9 @@ from earlgrey import MessageQueueService
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService, RestStubManager, Timer, \
-    NodeSubscriber
-from loopchain.blockchain import Block
+from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.baseservice import RestStubManager, Timer, NodeSubscriber
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -46,7 +46,7 @@ class ChannelService:
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
-        self.__peer_auth: PeerAuthorization = None
+        self.__peer_auth: IcxAuthorization = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
@@ -736,8 +736,6 @@ class ChannelService:
             await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
-        # update candidate blocks
-        self.block_manager.get_candidate_blocks().set_last_block(self.block_manager.get_blockchain().last_block)
         self.block_manager.set_peer_type(peer_type)
 
     def set_new_leader(self, new_leader_id, block_height=0):
@@ -775,112 +773,95 @@ class ChannelService:
             # await self.subscribe_to_radio_station()
             # await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
-    def genesis_invoke(self, block: Block) -> dict or None:
-        if util.channel_use_icx(ChannelProperty().name):
-            method = "icx_sendTransaction"
-            transactions = []
-            for tx in block.confirmed_transaction_list:
-                transaction = {
-                    "method": method,
-                    "params": {
-                        "txHash": tx.tx_hash
-                    },
-                    "genesisData": tx.genesis_origin_data
-                }
-                transactions.append(transaction)
-
-            request = {
-                'block': {
-                    'blockHeight': block.height,
-                    'blockHash': block.block_hash,
-                    'timestamp': block.time_stamp
+    def genesis_invoke(self, block: Block) -> ('Block', dict):
+        method = "icx_sendTransaction"
+        transactions = []
+        for tx in block.body.transactions.values():
+            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["genesis_tx_hash_version"]
+            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
+            transaction = {
+                "method": method,
+                "params": {
+                    "txHash": tx.hash.hex()
                 },
-                'transactions': transactions
+                "genesisData": tx_serializer.to_full_data(tx)
             }
-            request = convert_params(request, ParamType.invoke)
-            stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-            response = stub.sync_task().invoke(request)
-            response_to_json_query(response)
-            block.commit_state[ChannelProperty().name] = response['stateRootHash']
-            return response["txResults"]
-        else:
-            block_object = pickle.dumps(block)
-            stub = StubCollection().score_stubs[ChannelProperty().name]
-            response = stub.sync_task().genesis_invoke(block_object)
-            if response.code == message_code.Response.success:
-                return json.loads(response.meta)
+            transactions.append(transaction)
 
-        return None
+        request = {
+            'block': {
+                'blockHeight': block.header.height,
+                'blockHash': block.header.hash.hex(),
+                'timestamp': block.header.timestamp
+            },
+            'transactions': transactions
+        }
+        request = convert_params(request, ParamType.invoke)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = stub.sync_task().invoke(request)
+        response_to_json_query(response)
+
+        block_builder = BlockBuilder.from_new(block)
+        block_builder.commit_state = {
+            ChannelProperty().name: response['stateRootHash']
+        }
+        new_block = block_builder.build()
+        return new_block, response["txResults"]
 
     def score_invoke(self, _block: Block) -> dict or None:
-        if util.channel_use_icx(ChannelProperty().name):
-            method = "icx_sendTransaction"
-            transactions = []
-            for tx in _block.confirmed_transaction_list:
-                data = tx.icx_origin_data
-                transaction = {
-                    "method": method,
-                    "params": data
-                }
-                transactions.append(transaction)
+        method = "icx_sendTransaction"
+        transactions = []
+        for tx in _block.body.transactions.values():
+            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["tx_hash_version"]
+            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
 
-            request = {
-                'block': {
-                    'blockHeight': _block.height,
-                    'blockHash': _block.block_hash,
-                    'prevBlockHash': _block.prev_block_hash,
-                    'timestamp': _block.time_stamp
-                },
-                'transactions': transactions
+            transaction = {
+                "method": method,
+                "params": tx_serializer.to_full_data(tx)
             }
-            request = convert_params(request, ParamType.invoke)
-            stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-            response = stub.sync_task().invoke(request)
-            response_to_json_query(response)
-            _block.commit_state[ChannelProperty().name] = response['stateRootHash']
-            return response["txResults"]
-        else:
-            stub = StubCollection().score_stubs[ChannelProperty().name]
-            response = stub.sync_task().score_invoke(_block)
+            transactions.append(transaction)
 
-            if response.code == message_code.Response.success:
-                commit_state = pickle.loads(response.object)
-                _block.commit_state = commit_state
-                return json.loads(response.meta)
+        request = {
+            'block': {
+                'blockHeight': _block.header.height,
+                'blockHash': _block.header.hash.hex(),
+                'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
+                'timestamp': _block.header.timestamp
+            },
+            'transactions': transactions
+        }
+        request = convert_params(request, ParamType.invoke)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = stub.sync_task().invoke(request)
+        response_to_json_query(response)
 
-        return None
+        block_builder = BlockBuilder.from_new(_block)
+        block_builder.commit_state = {
+            ChannelProperty().name: response['stateRootHash']
+        }
+        new_block = block_builder.build()
+
+        return new_block, response["txResults"]
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
         change_hash_info = json.dumps({"block_height": block_height, "old_block_hash": old_block_hash,
                                        "new_block_hash": new_block_hash})
 
-        if not util.channel_use_icx(ChannelProperty().name):
-            stub = StubCollection().score_stubs[ChannelProperty().name]
-            stub.sync_task().change_block_hash(change_hash_info)
+        stub = StubCollection().score_stubs[ChannelProperty().name]
+        stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
-        logging.debug(f"call score commit {ChannelProperty().name} {block.height} {block.block_hash}")
+        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash}")
 
-        if util.channel_use_icx(ChannelProperty().name):
-            request = {
-                "blockHeight": block.height,
-                "blockHash": block.block_hash
-            }
-            request = convert_params(request, ParamType.write_precommit_state)
+        request = {
+            "blockHeight": block.header.height,
+            "blockHash": block.header.hash.hex(),
+        }
+        request = convert_params(request, ParamType.write_precommit_state)
 
-            stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-            stub.sync_task().write_precommit_state(request)
-            return True
-        else:
-            block_commit_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-            stub = StubCollection().score_stubs[ChannelProperty().name]
-            response = stub.sync_task().write_precommit_state(block_commit_info)
-
-            if response.code == message_code.Response.success:
-                return True
-            else:
-                logging.error(f"score db commit fail cause {response.message}")
-                return False
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub.sync_task().write_precommit_state(request)
+        return True
 
     def score_remove_precommit_state(self, block: Block):
         if not util.channel_use_icx(ChannelProperty().name):

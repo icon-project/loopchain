@@ -13,6 +13,8 @@
 # limitations under the License.
 """A module for managing Score"""
 
+# This file is obsolete.
+
 import os
 import os.path as osp
 import shutil

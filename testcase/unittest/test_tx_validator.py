@@ -34,7 +34,6 @@ from secp256k1 import PrivateKey, PublicKey
 
 from cli_tools.icx_test.icx_wallet import IcxWallet
 import loopchain.utils as util
-from loopchain.blockchain.validator import TxValidator, IconValidateStrategy, get_tx_hash_generator
 from loopchain import configure as conf
 from loopchain import utils, loggers
 from loopchain.blockchain.exception import *
@@ -43,6 +42,7 @@ loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
+@unittest.skip("BVS")
 class TestTxValidator(unittest.TestCase):
     def setUp(self):
         # create private key and sender_address receive_address

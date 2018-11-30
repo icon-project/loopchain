@@ -16,13 +16,14 @@
 import asyncio
 import json
 import logging
+import traceback
 
 import websockets
 from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, Timer, ObjectManager
-from loopchain.blockchain import Block
+from loopchain.blockchain import Block, BlockSerializer
 
 
 class NodeSubscriber:
@@ -38,7 +39,8 @@ class NodeSubscriber:
     async def subscribe(self, uri, block_height):
         while True:
             try:
-                async with websockets.connect(uri) as websocket:
+                # set websocket payload maxsize to 4MB.
+                async with websockets.connect(uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK) as websocket:
                     await self.__stop_shutdown_timer()
                     request = json.dumps({
                         'height': block_height
@@ -51,6 +53,7 @@ class NodeSubscriber:
                                 f"This target({self.__rs_target}) may not support websocket yet.")
                 raise NotImplementedError
             except Exception as e:
+                traceback.print_exc()
                 logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
                 await self.__start_shutdown_timer()
                 await asyncio.sleep(conf.SUBSCRIBE_RETRY_TIMER)
@@ -88,12 +91,11 @@ class NodeSubscriber:
 
     async def __add_confirmed_block(self, block_json: str):
         block_dict = json.loads(block_json)
-        confirmed_block = Block(channel_name=self.__channel)
-        confirmed_block.deserialize_block(block_json.encode('utf-8'))
-        confirmed_block.commit_state = block_dict.get('commit_state')
+        block_serializer = BlockSerializer.new(block_dict["version"])
+        confirmed_block = block_serializer.deserialize(block_dict)
 
-        logging.debug(f"add_confirmed_block height({confirmed_block.height}), "
-                      f"hash({confirmed_block.block_hash})")
+        logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
+                      f"hash({confirmed_block.header.hash.hex()})")
         ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
 
     def __shutdown_peer(self, **kwargs):

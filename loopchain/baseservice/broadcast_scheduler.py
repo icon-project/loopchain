@@ -14,6 +14,7 @@
 """gRPC broadcast thread"""
 
 import logging
+import pickle
 import queue
 import threading
 import time
@@ -24,9 +25,9 @@ from functools import partial
 import grpc
 from grpc._channel import _Rendezvous
 
-from loopchain import configure as conf
-from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, TimerService, \
-    Timer
+from loopchain import configure as conf, utils as util
+from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, \
+    RestStubManager, TimerService, Timer
 from loopchain.baseservice.tx_item_helper import *
 from loopchain.blockchain import Transaction
 from loopchain.channel.channel_property import ChannelProperty
@@ -71,7 +72,6 @@ class BroadcastScheduler(CommonThread):
             BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
-            BroadcastCommand.STATUS: self.__handler_status
         }
 
         self.__broadcast_with_self_target_methods = {
@@ -84,12 +84,6 @@ class BroadcastScheduler(CommonThread):
 
         self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
         self.__broadcast_queue = queue.PriorityQueue()
-
-        self.__tx_item_helpers = {
-            conf.SendTxType.pickle: TxItemHelperPickle,
-            conf.SendTxType.json: TxItemHelperJson,
-            conf.SendTxType.icx: TxItemHelperIcx
-        }
 
         self.__timer_service = TimerService()
 
@@ -188,11 +182,12 @@ class BroadcastScheduler(CommonThread):
         except KeyError as e:
             logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
         else:
-            stub_item.call_async(method_name=method_name,
-                                 message=method_param,
-                                 is_stub_reuse=is_stub_reuse,
-                                 call_back=call_back_partial,
-                                 timeout=timeout)
+            if stub_item:
+                stub_item.call_async(method_name=method_name,
+                                     message=method_param,
+                                     is_stub_reuse=is_stub_reuse,
+                                     call_back=call_back_partial,
+                                     timeout=timeout)
 
     def __broadcast_run_async(self, method_name, method_param, retry_times=None, timeout=None):
         """call gRPC interface of audience
@@ -277,14 +272,6 @@ class BroadcastScheduler(CommonThread):
         # logging.debug("BroadcastThread method param: " + str(broadcast_method_param))
         self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
-    def __handler_status(self, status_param):
-        logging.debug(f"Broadcast Status, param({status_param}) audience({len(self.__audience)})")
-
-        status = dict()
-        status['result'] = message_code.get_response_msg(message_code.Response.success)
-        status['Audience'] = str(len(self.__audience))
-        return json.dumps(status)
-
     def __make_tx_list_message(self):
         tx_list = []
         tx_list_size = 0
@@ -345,13 +332,12 @@ class BroadcastScheduler(CommonThread):
     def __handler_create_tx(self, create_tx_param):
         # logging.debug(f"Broadcast create_tx....")
         try:
-            tx_item = self.__tx_item_helpers[create_tx_param.meta[Transaction.SEND_TX_TYPE_KEY]]. \
-                create_tx_item(create_tx_param)
+            tx_item = TxItemJson.create_tx_item(create_tx_param, self.__channel)
             # util.logger.spam(f"broadcast_process:__handler_create_tx "
             #                  f"send_tx_type({create_tx_param.meta[Transaction.SEND_TX_TYPE_KEY]})")
         except Exception as e:
-            logging.warning(f"tx in channel({create_tx_param.meta})")
-            logging.warning(f"__handler_create_tx: meta({create_tx_param.meta[Transaction.SEND_TX_TYPE_KEY]})")
+            logging.warning(f"tx in channel({self.__channel})")
+            logging.warning(f"__handler_create_tx: meta({create_tx_param})")
             logging.warning(f"tx dumps fail ({e})")
             return
 

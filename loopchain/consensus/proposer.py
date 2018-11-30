@@ -118,7 +118,6 @@ class Proposer(Subscriber):
                                                                      new_block_hash=self._block.block_hash)
 
             self.__block_manager.set_invoke_results(self.__block.block_hash, invoke_results)
-            self.__block_manager.set_last_commit_state(self.__block.height, self.__block.commit_state)
 
         if block_is_verified:
             self.__block.sign(self.__channel_service.peer_auth)

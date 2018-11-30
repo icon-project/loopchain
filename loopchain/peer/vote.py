@@ -54,6 +54,10 @@ class Vote:
     def votes(self):
         return self.__votes
 
+    @property
+    def target_hash(self):
+        return self.__target_hash
+
     @staticmethod
     def __make_vote_init(audience):
         vote_init = {}
@@ -76,9 +80,7 @@ class Vote:
     def __parse_vote_sign(vote_sign):
         """서명된 vote로 부터 투표 결과를 추출한다."""
 
-        if vote_sign == conf.TEST_FAIL_VOTE_SIGN:
-            return False
-        return True
+        return vote_sign
 
     def add_vote(self, group_id, peer_id, vote_sign):
         if group_id not in self.__votes.keys():

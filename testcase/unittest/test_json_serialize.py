@@ -21,7 +21,6 @@ import logging
 import unittest
 
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import Transaction, TransactionStatus
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
@@ -44,6 +43,7 @@ def decode_object(obj):
     return obj
 
 
+@unittest.skip("BVS")
 class TestJsonSerialize(unittest.TestCase):
 
     def setUp(self):
