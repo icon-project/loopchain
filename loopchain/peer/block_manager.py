@@ -144,14 +144,14 @@ class BlockManager(Subscriber):
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
-    def __create_block_generation_schedule(self):
+    async def __create_block_generation_schedule(self):
         # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             Schedule = namedtuple("Schedule", "callback kwargs")
             schedule = Schedule(self.__consensus_algorithm.consensus, {})
             self.__block_generation_scheduler.add_schedule(schedule)
         else:
-            self.__consensus_algorithm.consensus()
+            await self.__consensus_algorithm.consensus()
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
@@ -247,8 +247,8 @@ class BlockManager(Subscriber):
             self.block_height_sync()
 
     def add_unconfirmed_block(self, unconfirmed_block):
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.votes}")
-        if unconfirmed_block.body.votes:
+        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
+        if unconfirmed_block.body.confirm_prev_block:
             self.confirm_block(unconfirmed_block)
 
         self.__unconfirmedBlockQueue.put(unconfirmed_block)
@@ -403,6 +403,9 @@ class BlockManager(Subscriber):
         timer_service: TimerService = self.__channel_service.timer_service
 
         if timer_key not in timer_service.timer_list:
+            if self.__consensus_algorithm:
+                self.__consensus_algorithm.stop()
+
             self.__consensus_algorithm = ConsensusSiever(self)
             util.logger.spam(f"add timer block generate")
             timer_service.add_timer(
@@ -410,7 +413,7 @@ class BlockManager(Subscriber):
                 Timer(
                     target=timer_key,
                     duration=conf.INTERVAL_BLOCKGENERATION,
-                    is_repeat=True,
+                    is_repeat=False,
                     callback=self.__create_block_generation_schedule
                 )
             )
@@ -616,6 +619,9 @@ class BlockManager(Subscriber):
 
         if conf.ALLOW_MAKE_EMPTY_BLOCK:
             self.__block_generation_scheduler.stop()
+
+        if self.consensus_algorithm:
+            self.consensus_algorithm.stop()
 
     def __vote_unconfirmed_block(self, block_hash, is_validated):
         logging.debug(f"block_manager:__vote_unconfirmed_block ({self.channel_name}/{is_validated})")

@@ -13,11 +13,12 @@
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
 
+import asyncio
 import logging
-from queue import Queue, Empty
+import time
 from loopchain import configure as conf, utils as util
-from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Address, BlockBuilder, BlockVerifier, TransactionStatusInQueue
+from loopchain.baseservice import ObjectManager, Timer, TimerService
+from loopchain.blockchain import Address, Block, BlockBuilder, BlockVerifier, TransactionStatusInQueue
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import Vote
 from loopchain.peer.consensus_base import ConsensusBase
@@ -31,74 +32,90 @@ class ConsensusSiever(ConsensusBase):
     def __init__(self, block_manager):
         super().__init__(block_manager)
 
-        self._vote_queue = Queue()
-        self._did_vote = False
+        self._loop: asyncio.BaseEventLoop = None
+        self._vote_queue: asyncio.Queue = None
 
     def stop(self):
         logging.info("Stop Siever")
 
-        self._vote_queue.put(None)  # sentinel
-        self._did_vote = False
+        if self._loop:
+            coroutine = self._vote_queue.put(None)  # sentinel
+            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
 
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
-        self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
-
-    def consensus(self):
-        block_builder = self._makeup_block()
-
-        if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+        if self._loop:
+            coroutine = self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
+            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
             return
 
-        peer_manager = ObjectManager().channel_service.peer_manager
+        raise RuntimeError("Cannot vote before starting consensus.")
 
-        last_block = self._blockchain.last_block
-        block_builder.height = last_block.header.height + 1
-        block_builder.prev_hash = last_block.header.hash
-        block_builder.next_leader = Address.fromhex(peer_manager.get_next_leader_peer().peer_id)
-        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
-        block_builder.votes = self._did_vote
+    async def consensus(self):
+        start_time = time.time()
+        empty_block: Block = None
 
-        candidate_block = block_builder.build()
-        candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
+        try:
+            self._loop = asyncio.get_event_loop()
+            self._vote_queue = asyncio.Queue(loop=self._loop)
 
-        block_verifier = BlockVerifier.new("0.1a")
-        block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
+            block_builder = self._makeup_block()
 
-        logging.info(f"candidate block height: {candidate_block.header.height}")
-        logging.info(f"candidate block hash: {candidate_block.header.hash.hex()}")
-        logging.info(f"candidate block next leader: {candidate_block.header.next_leader.hex()}")
-        logging.info(f"candidate block votes: {candidate_block.body.votes}")
+            if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+                return
 
-        vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
-        vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)
+            peer_manager = ObjectManager().channel_service.peer_manager
 
-        self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
-        success = self._wait_for_voting(candidate_block, vote)
-        if not success:
-            return
-
-        self._did_vote = True
-        self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
-        self._blockmanager.add_block(candidate_block)
-        self._made_block_count += 1
-
-        pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
-                                                      TransactionStatusInQueue.normal)
-        if not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
-            block_builder = BlockBuilder.new("0.1a")
-            block_builder.prev_hash = candidate_block.header.hash
-            block_builder.height = candidate_block.header.height + 1
-            block_builder.next_leader = candidate_block.header.next_leader
+            last_block = self._blockchain.last_block
+            block_builder.height = last_block.header.height + 1
+            block_builder.prev_hash = last_block.header.hash
+            block_builder.next_leader = Address.fromhex(peer_manager.get_next_leader_peer().peer_id)
             block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
-            block_builder.votes = True
-            empty_block = block_builder.build()
+            block_builder.confirm_prev_block = (self._made_block_count > 0)
 
-            self._blockmanager.broadcast_send_unconfirmed_block(empty_block)
-            self._did_vote = False
+            candidate_block = block_builder.build()
+            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
 
-            ObjectManager().channel_service.state_machine.turn_to_peer()
+            block_verifier = BlockVerifier.new("0.1a")
+            block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
-    def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
+            logging.info(f"candidate block height: {candidate_block.header.height}")
+            logging.info(f"candidate block hash: {candidate_block.header.hash.hex()}")
+            logging.info(f"candidate block next leader: {candidate_block.header.next_leader.hex()}")
+            logging.info(f"candidate block confirm_prev_block: {candidate_block.body.confirm_prev_block}")
+
+            vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
+            vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)
+
+            self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
+            success = await self._wait_for_voting(candidate_block, vote)
+            if not success:
+                return
+
+            self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
+            self._blockmanager.add_block(candidate_block)
+            self._made_block_count += 1
+
+            pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
+                                                          TransactionStatusInQueue.normal)
+            if not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+                block_builder = BlockBuilder.new("0.1a")
+                block_builder.prev_hash = candidate_block.header.hash
+                block_builder.height = candidate_block.header.height + 1
+                block_builder.next_leader = candidate_block.header.next_leader
+                block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
+                block_builder.confirm_prev_block = True
+                empty_block = block_builder.build()
+
+                self._blockmanager.broadcast_send_unconfirmed_block(empty_block)
+
+                ObjectManager().channel_service.state_machine.turn_to_peer()
+        finally:
+            if not empty_block:
+                elapsed_time = time.time() - start_time
+                delay_time = conf.INTERVAL_BLOCKGENERATION - elapsed_time
+                self._start_consensus_timer(delay_time)
+
+    async def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
         while True:
             result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
             if result:
@@ -108,9 +125,9 @@ class ConsensusSiever(ConsensusBase):
             timeout = -util.diff_in_seconds(timeout_timestamp)
             try:
                 if timeout < 0:
-                    raise Empty
+                    raise asyncio.TimeoutError
 
-                vote_result = self._vote_queue.get(timeout=timeout)
+                vote_result = await asyncio.wait_for(self._vote_queue.get(), timeout=timeout)
                 if vote_result is None:  # sentinel
                     return False
 
@@ -118,7 +135,23 @@ class ConsensusSiever(ConsensusBase):
                 if vote.target_hash == vote_block_hash:
                     vote.add_vote(group_id, peer_id, vote_code)
 
-            except Empty:
+            except asyncio.TimeoutError:
                 logging.warning("Timed Out Block not confirmed duration: " +
                                 str(util.diff_in_seconds(candidate_block.header.timestamp)))
                 return False
+
+    def _start_consensus_timer(self, delay):
+        if delay < 0:
+            delay = 0
+
+        timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
+        timer_service = ObjectManager().channel_service.timer_service
+        timer_service.add_timer(
+            timer_key,
+            Timer(
+                target=timer_key,
+                duration=delay,
+                is_repeat=False,
+                callback=self.consensus
+            )
+        )

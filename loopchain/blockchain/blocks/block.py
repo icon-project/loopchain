@@ -22,7 +22,7 @@ class BlockHeader:
 class BlockBody:
     transactions: Mapping[Hash32, Transaction]
 
-    def __init__(self, transactions: OrderedDict):
+    def __init__(self, transactions: Mapping[Hash32, Transaction]):
         object.__setattr__(self, "transactions", MappingProxyType(OrderedDict(transactions)))
 
 

@@ -14,4 +14,4 @@ class BlockHeader(BaseBlockHeader):
 
 @dataclass(frozen=True)
 class BlockBody(BaseBlockBody):
-    votes: bool
+    confirm_prev_block: bool

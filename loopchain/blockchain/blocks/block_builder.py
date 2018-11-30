@@ -2,7 +2,7 @@ import hashlib
 from abc import ABC
 from collections import OrderedDict
 from secp256k1 import PrivateKey
-from typing import Dict, Callable
+from typing import Dict
 
 from . import Block
 from .. import Hash32, ExternalAddress, Signature

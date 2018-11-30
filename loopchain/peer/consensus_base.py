@@ -38,7 +38,7 @@ class ConsensusBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def consensus(self):
+    async def consensus(self):
         """Block Manager 의 Thread Loop 에서 호출 하는 합의 알고리즘
         """
         pass
