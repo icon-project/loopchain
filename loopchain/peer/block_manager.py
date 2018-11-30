@@ -247,8 +247,8 @@ class BlockManager(Subscriber):
             self.block_height_sync()
 
     def add_unconfirmed_block(self, unconfirmed_block):
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.votes}")
-        if unconfirmed_block.body.votes:
+        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
+        if unconfirmed_block.body.confirm_prev_block:
             self.confirm_block(unconfirmed_block)
 
         self.__unconfirmedBlockQueue.put(unconfirmed_block)

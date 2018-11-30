@@ -13,7 +13,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes to be assigned(optional)
         self.next_leader: Address = None
-        self.votes = True
+        self.confirm_prev_block = True
         self.fixed_timestamp: int = None
 
         # Attributes to be generated
@@ -47,7 +47,7 @@ class BlockBuilder(BaseBlockBuilder):
             next_leader=self.next_leader,
             merkle_tree_root_hash=self.merkle_tree_root_hash,
             commit_state=self.commit_state)
-        body = BlockBody(self.transactions, self.votes)
+        body = BlockBody(self.transactions, self.confirm_prev_block)
         self.block = Block(header, body)
         return self.block
 
@@ -126,4 +126,4 @@ class BlockBuilder(BaseBlockBuilder):
         self._timestamp = header.timestamp
 
         body: BlockBody = block.body
-        self.votes = body.votes
+        self.confirm_prev_block = body.confirm_prev_block

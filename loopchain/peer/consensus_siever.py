@@ -34,7 +34,6 @@ class ConsensusSiever(ConsensusBase):
 
         self._loop: asyncio.BaseEventLoop = None
         self._vote_queue: asyncio.Queue = None
-        self._did_vote = False
 
     def stop(self):
         logging.info("Stop Siever")
@@ -42,8 +41,6 @@ class ConsensusSiever(ConsensusBase):
         if self._loop:
             coroutine = self._vote_queue.put(None)  # sentinel
             asyncio.run_coroutine_threadsafe(coroutine, self._loop)
-
-        self._did_vote = False
 
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
         if self._loop:
@@ -73,7 +70,7 @@ class ConsensusSiever(ConsensusBase):
             block_builder.prev_hash = last_block.header.hash
             block_builder.next_leader = Address.fromhex(peer_manager.get_next_leader_peer().peer_id)
             block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
-            block_builder.votes = self._did_vote
+            block_builder.confirm_prev_block = (self._made_block_count > 0)
 
             candidate_block = block_builder.build()
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
@@ -84,7 +81,7 @@ class ConsensusSiever(ConsensusBase):
             logging.info(f"candidate block height: {candidate_block.header.height}")
             logging.info(f"candidate block hash: {candidate_block.header.hash.hex()}")
             logging.info(f"candidate block next leader: {candidate_block.header.next_leader.hex()}")
-            logging.info(f"candidate block votes: {candidate_block.body.votes}")
+            logging.info(f"candidate block confirm_prev_block: {candidate_block.body.confirm_prev_block}")
 
             vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
             vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)
@@ -94,7 +91,6 @@ class ConsensusSiever(ConsensusBase):
             if not success:
                 return
 
-            self._did_vote = True
             self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
             self._blockmanager.add_block(candidate_block)
             self._made_block_count += 1
@@ -107,11 +103,10 @@ class ConsensusSiever(ConsensusBase):
                 block_builder.height = candidate_block.header.height + 1
                 block_builder.next_leader = candidate_block.header.next_leader
                 block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
-                block_builder.votes = True
+                block_builder.confirm_prev_block = True
                 empty_block = block_builder.build()
 
                 self._blockmanager.broadcast_send_unconfirmed_block(empty_block)
-                self._did_vote = False
 
                 ObjectManager().channel_service.state_machine.turn_to_peer()
         finally:

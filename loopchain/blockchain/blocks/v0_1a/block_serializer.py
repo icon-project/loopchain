@@ -50,7 +50,7 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("next_leader")
         next_leader = Address.fromhex(next_leader) if next_leader else None
 
-        votes = json_data.get("votes")
+        confirm_prev_block = json_data.get("confirm_prev_block")
 
         header = BlockHeader(
             hash=Hash32.fromhex(json_data["block_hash"]),
@@ -73,5 +73,5 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        body = BlockBody(transactions, votes)
+        body = BlockBody(transactions, confirm_prev_block)
         return Block(header, body)
