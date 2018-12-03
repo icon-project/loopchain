@@ -17,6 +17,8 @@ class TransactionSerializer(BaseTransactionSerializer):
             params['timestamp'] = str(tx.timestamp)
         if tx.nonce is not None:
             params['nonce'] = tx.nonce
+
+        params.update(tx.extra)
         return params
 
     def to_raw_data(self, tx: 'Transaction'):
@@ -29,18 +31,29 @@ class TransactionSerializer(BaseTransactionSerializer):
         return self.to_raw_data(tx)
 
     def from_(self, tx_data: dict) -> 'Transaction':
-        nonce = tx_data.get('nonce')
-        timestamp = tx_data.get('timestamp')
+        tx_data = dict(tx_data)
+        tx_data.pop('method', None)
+
+        hash = tx_data.pop('tx_hash', None)
+        signature = tx_data.pop('signature', None)
+        timestamp = tx_data.pop('timestamp', None)
+        from_address = tx_data.pop('from', None)
+        to_address = tx_data.pop('to', None)
+        value = tx_data.pop('value', None)
+        fee = tx_data.pop('fee', None)
+        nonce = tx_data.pop('nonce', None)
+        extra = tx_data
 
         return Transaction(
-            hash=Hash32.fromhex(tx_data['tx_hash']),
-            signature=Signature.from_base64str(tx_data['signature']),
+            hash=Hash32.fromhex(hash),
+            signature=Signature.from_base64str(signature),
             timestamp=int(timestamp) if timestamp is not None else None,
-            from_address=Address.fromhex(tx_data['from']),
-            to_address=Address.fromhex(tx_data['to']),
-            value=tx_data['value'],
-            fee=tx_data['fee'],
-            nonce=nonce
+            from_address=Address.fromhex(from_address),
+            to_address=Address.fromhex(to_address),
+            value=value,
+            fee=fee,
+            nonce=nonce,
+            extra=extra
         )
 
     def get_hash(self, tx_dumped: dict) -> str:
