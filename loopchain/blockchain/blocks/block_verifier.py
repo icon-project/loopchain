@@ -2,6 +2,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
+from .. import Address
 
 if TYPE_CHECKING:
     from . import Block
@@ -17,6 +18,10 @@ class BlockVerifier(ABC):
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None):
         raise RuntimeError
 
+    @abstractmethod
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None):
+        raise RuntimeError
+
     def verify_signature(self, block: 'Block'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
             block.header.signature.signature(),
@@ -30,7 +35,8 @@ class BlockVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != block.header.peer_id:
-            raise RuntimeError
+            raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
+                               f"expected {Address(expect_address).hex_xx()}")
 
     @classmethod
     def new(cls, version: str) -> 'BlockVerifier':

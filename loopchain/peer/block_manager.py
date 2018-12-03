@@ -477,10 +477,9 @@ class BlockManager(Subscriber):
                                 block_verifier.invoke_func = self.__channel_service.genesis_invoke
                             else:
                                 block_verifier.invoke_func = self.__channel_service.score_invoke
-                            invoke_results = block_verifier.verify(block,
-                                                                   self.__blockchain.last_block,
-                                                                   self.__blockchain)
-
+                            invoke_results = block_verifier.verify_loosely(block,
+                                                                           self.__blockchain.last_block,
+                                                                           self.__blockchain)
                             self.__blockchain.set_invoke_results(block.header.hash.hex(), invoke_results)
                             result = self.add_block(block)
 

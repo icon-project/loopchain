@@ -10,6 +10,18 @@ if TYPE_CHECKING:
 
 class BlockVerifier(BaseBlockVerifier):
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None):
+        invoke_result = self.verify_common(block, prev_block, blockchain)
+        self.verify_transactions(block, blockchain)
+
+        return invoke_result
+
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None):
+        invoke_result = self.verify_common(block, prev_block, blockchain)
+        self.verify_transactions_loosely(block, blockchain)
+
+        return invoke_result
+
+    def verify_common(self, block: 'Block', prev_block: 'Block', blockchain=None):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -43,7 +55,6 @@ class BlockVerifier(BaseBlockVerifier):
 
         if block.header.height > 0:
             self.verify_signature(block)
-        self.verify_transactions(block, blockchain)
 
         if prev_block:
             self.verify_by_prev_block(block, prev_block)
@@ -55,6 +66,12 @@ class BlockVerifier(BaseBlockVerifier):
         for tx in block.body.transactions.values():
             tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
             tv.verify(tx, blockchain)
+
+    def verify_transactions_loosely(self, block: 'Block', blockchain=None):
+        tx_versions = TransactionVersions()
+        for tx in block.body.transactions.values():
+            tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
+            tv.verify_loosely(tx, blockchain)
 
     def verify_by_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
