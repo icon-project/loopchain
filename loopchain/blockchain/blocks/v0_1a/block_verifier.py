@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from . import BlockBuilder
 from .. import BlockVerifier as BaseBlockVerifier
-from ... import TransactionVerifier
+from ... import TransactionVerifier, TransactionVersions
 
 if TYPE_CHECKING:
     from . import BlockHeader, BlockBody
@@ -51,8 +51,9 @@ class BlockVerifier(BaseBlockVerifier):
         return invoke_result
 
     def verify_transactions(self, block: 'Block', blockchain=None):
+        tx_versions = TransactionVersions()
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, 0)
+            tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
             tv.verify(tx, blockchain)
 
     def verify_by_prev_block(self, block: 'Block', prev_block: 'Block'):
