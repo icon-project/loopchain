@@ -132,13 +132,9 @@ class PeerObject:
             logging.exception(f"Create Peer create stub_manager fail target : {self.__peer_info.target} \n"
                               f"exception : {e}")
         try:
-            if conf.CHANNEL_OPTION[self.__channel]["send_tx_type"] == conf.SendTxType.icx:
-                self.__cert_verifier = IcxVerifier()
-                self.__cert_verifier.init_and_verify_address(pubkey=self.peer_info.cert,
+            self.__cert_verifier = IcxVerifier()
+            self.__cert_verifier.init_and_verify_address(pubkey=self.peer_info.cert,
                                                              address=self.peer_info.peer_id)
-            else:
-                self.__cert_verifier = PublicVerifier(self.__channel)
-                self.__cert_verifier.load_public_for_tx_verify(self.peer_info.cert)
         except Exception as e:
             logging.exception(f"create cert verifier error : {self.__channel} {self.__peer_info.cert} \n"
                               f"exception {e}")

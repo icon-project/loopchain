@@ -57,6 +57,18 @@ class MockChannelService:
     def subscribe_network(self):
         pass
 
+    def start_subscribe_timer(self):
+        pass
+
+    def start_shutdown_timer(self):
+        pass
+
+    def stop_subscribe_timer(self):
+        pass
+
+    def stop_shutdown_timer(self):
+        pass
+
 
 class MockChannelServiceCitizen:
     def block_height_sync_channel(self):
@@ -66,6 +78,18 @@ class MockChannelServiceCitizen:
         pass
 
     def subscribe_network(self):
+        pass
+
+    def start_subscribe_timer(self):
+        pass
+
+    def start_shutdown_timer(self):
+        pass
+
+    def stop_subscribe_timer(self):
+        pass
+
+    def stop_shutdown_timer(self):
         pass
 
     def is_support_node_function(self, node_function):

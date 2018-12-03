@@ -41,7 +41,7 @@ class PeerService:
     channel 관련 instance 는 channel manager 를 통해서 관리한다.
     """
 
-    def __init__(self, group_id=None, radio_station_ip=None, radio_station_port=None, node_type=None):
+    def __init__(self, group_id=None, radio_station_target=None, node_type=None):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
         :param group_id: Peer Group 을 구분하기 위한 ID, None 이면 Single Peer Group 이 된다. (peer_id is group_id)
@@ -50,8 +50,6 @@ class PeerService:
         :param radio_station_port: RS Port
         :return:
         """
-        radio_station_ip = radio_station_ip or conf.IP_RADIOSTATION
-        radio_station_port = radio_station_port or conf.PORT_RADIOSTATION
         node_type = node_type or conf.NodeType.CommunityNode
 
         self.is_support_node_function = \
@@ -66,7 +64,7 @@ class PeerService:
 
         self.__node_type = node_type
 
-        self.__radio_station_target = radio_station_ip + ":" + str(radio_station_port)
+        self.__radio_station_target = radio_station_target
         logging.info("Set Radio Station target is " + self.__radio_station_target)
 
         self.__radio_station_stub = None
