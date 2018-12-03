@@ -51,7 +51,7 @@ class Address(Bytes, metaclass=ABCMeta):
             return super().fromhex(value)
 
         prefix, contents = value[:2], value[2:]
-        if len(contents) == cls.size * 2:
+        if len(contents) == cls.size * 2 and contents.lower() == contents:
             if prefix == ContractAddress.prefix:
                 return ContractAddress(bytes.fromhex(contents))
 
