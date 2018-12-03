@@ -63,6 +63,6 @@ class TransactionBuilder(BaseTransactionBuilder):
             "timestamp": str(self._timestamp)
         }
         if self.nonce is not None:
-            params["nonce"] = hex(self.nonce)
+            params["nonce"] = str(self.nonce)
 
         return Hash32(self._hash_generator.generate_hash(params))
