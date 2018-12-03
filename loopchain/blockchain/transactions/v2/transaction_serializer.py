@@ -10,8 +10,8 @@ class TransactionSerializer(BaseTransactionSerializer):
         params = {
             "from": tx.from_address.hex_xx(),
             "to": tx.to_address.hex_xx(),
-            "value": hex(tx.value),
-            "fee": hex(tx.fee)
+            "value": tx.value,
+            "fee": tx.fee
         }
         if tx.timestamp is not None:
             params['timestamp'] = str(tx.timestamp)
@@ -38,8 +38,8 @@ class TransactionSerializer(BaseTransactionSerializer):
             timestamp=int(timestamp) if timestamp is not None else None,
             from_address=Address.fromhex(tx_data['from']),
             to_address=Address.fromhex(tx_data['to']),
-            value=int(tx_data['value'], 16),
-            fee=int(tx_data['fee'], 16),
+            value=tx_data['value'],
+            fee=tx_data['fee'],
             nonce=nonce
         )
 

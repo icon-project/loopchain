@@ -7,8 +7,8 @@ from ... import Address
 class Transaction(BaseTransition):
     from_address: Address
     to_address: Address
-    value: int
-    fee: int
+    value: str
+    fee: str
     nonce: str
 
     method = "icx_sendTransaction"
