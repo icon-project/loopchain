@@ -17,6 +17,7 @@ from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.baseservice import TimerService
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -29,7 +30,8 @@ class ChannelStateMachine(object):
               State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
               State(name='BlockSync', on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
-              'SubscribeNetwork',
+              State(name='SubscribeNetwork', on_enter='_subscribe_network_on_enter',
+                    on_exit='_subscribe_network_on_exit'),
               'Watch',
               State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
               State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
@@ -93,19 +95,15 @@ class ChannelStateMachine(object):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
     def _consensus_on_enter(self):
-        # util.logger.spam(f"\nenter_block_height_sync")
         self.block_height_sync()
 
     def _blockheightsync_on_enter(self):
-        # util.logger.spam(f"\nenter_block_sync")
         self.evaluate_network()
 
     def _enter_block_sync(self):
-        # util.logger.spam(f"\nenter_block_sync")
         self.block_sync()
 
     def _do_block_sync(self):
-        # util.logger.spam(f"\ndo_block_sync")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.block_height_sync_channel())
 
@@ -117,17 +115,22 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
     def _do_evaluate_network(self):
-        # util.logger.spam(f"\ndo_evaluate_network")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.evaluate_network())
 
     def _do_subscribe_network(self):
-        # util.logger.spam(f"\ndo_subscribe_network")
         loop = MessageQueueService.loop
         loop.create_task(self.__channel_service.subscribe_network())
 
+    def _subscribe_network_on_enter(self):
+        self.__channel_service.start_subscribe_timer()
+        self.__channel_service.start_shutdown_timer()
+
+    def _subscribe_network_on_exit(self):
+        self.__channel_service.stop_subscribe_timer()
+        self.__channel_service.stop_shutdown_timer()
+
     def _do_vote(self):
-        # util.logger.spam(f"\ndo_vote")
         self.__channel_service.block_manager.vote_as_peer()
 
     def _vote_on_enter(self):
@@ -137,9 +140,7 @@ class ChannelStateMachine(object):
         util.logger.spam(f"\nvote_on_exit")
 
     def _blockgenerate_on_enter(self):
-        # util.logger.spam(f"\nblockgenerate_on_enter")
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
-        # util.logger.spam(f"\nblockgenerate_on_exit")
         self.__channel_service.block_manager.stop_block_generate_timer()
