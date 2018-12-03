@@ -9,7 +9,7 @@ class Transaction(BaseTransition):
     to_address: Address
     value: int
     fee: int
-    nonce: int
+    nonce: str
 
     method = "icx_sendTransaction"
     version = "0x2"

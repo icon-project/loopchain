@@ -21,7 +21,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.to_address: 'Address' = None
         self.value: int = None
         self.fee: int = ICX_FEE
-        self.nonce = None
+        self.nonce: str = None
 
         # Attributes to be assigned(optional)
         self.fixed_timestamp: int = None
@@ -63,6 +63,6 @@ class TransactionBuilder(BaseTransactionBuilder):
             "timestamp": str(self._timestamp)
         }
         if self.nonce is not None:
-            params["nonce"] = str(self.nonce)
+            params["nonce"] = self.nonce
 
         return Hash32(self._hash_generator.generate_hash(params))
