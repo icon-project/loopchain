@@ -472,6 +472,15 @@ class BlockManager(Subscriber):
                             commit_state = block.header.commit_state
                             logging.debug(f"block_manager.py >> block_height_sync :: "
                                           f"height({block.header.height}) commit_state({commit_state})")
+                            block_verifier = BlockVerifier.new("0.1a")
+                            if block.header.height == 0:
+                                block_verifier.invoke_func = self.__channel_service.genesis_invoke
+                            else:
+                                block_verifier.invoke_func = self.__channel_service.score_invoke
+                            invoke_results = block_verifier.verify_loosely(block,
+                                                                           self.__blockchain.last_block,
+                                                                           self.__blockchain)
+                            self.__blockchain.set_invoke_results(block.header.hash.hex(), invoke_results)
                             result = self.add_block(block)
 
                             if result:

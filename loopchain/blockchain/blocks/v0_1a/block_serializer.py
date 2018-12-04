@@ -28,7 +28,7 @@ class BlockSerializer(BaseBlockSerializer):
             "confirmed_transaction_list": transactions,
             "block_hash": header.hash.hex(),
             "height": header.height,
-            "peer_id": header.peer_id.hex() if header.peer_id else '',
+            "peer_id": header.peer_id.hex_hx() if header.peer_id else '',
             "signature": header.signature.to_base64str() if header.signature else '',
             "commit_state": header.commit_state
         }
