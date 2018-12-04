@@ -2,7 +2,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
-from .. import Address
+from .. import ExternalAddress
 
 if TYPE_CHECKING:
     from . import Block
@@ -36,7 +36,7 @@ class BlockVerifier(ABC):
         expect_address = hash_pub[-20:]
         if expect_address != block.header.peer_id:
             raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
-                               f"expected {Address(expect_address).hex_xx()}")
+                               f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     @classmethod
     def new(cls, version: str) -> 'BlockVerifier':
