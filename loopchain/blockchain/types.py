@@ -4,13 +4,13 @@ from typing import Union
 from abc import ABCMeta
 
 
-class FixedBytes(bytes):
+class Bytes(bytes):
     size = None
     prefix = None
 
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
-        if len(self) != cls.size:
+        if cls.size is not None and cls.size != len(self):
             raise RuntimeError
 
         return self
@@ -31,7 +31,7 @@ class FixedBytes(bytes):
         return cls(result)
 
 
-class Hash32(FixedBytes):
+class Hash32(Bytes):
     size = 32
     prefix = "0x"
 
@@ -39,7 +39,7 @@ class Hash32(FixedBytes):
         return self.prefix + self.hex()
 
 
-class Address(FixedBytes, metaclass=ABCMeta):
+class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
     def hex_xx(self):
@@ -50,14 +50,15 @@ class Address(FixedBytes, metaclass=ABCMeta):
         if isinstance(value, int):
             return super().fromhex(value)
 
-        prefix = value[:2]
-        if prefix == ContractAddress.prefix:
-            return ContractAddress(bytes.fromhex(value[2:]))
+        prefix, contents = value[:2], value[2:]
+        if len(contents) == cls.size * 2 and contents.lower() == contents:
+            if prefix == ContractAddress.prefix:
+                return ContractAddress(bytes.fromhex(contents))
 
-        if prefix == ExternalAddress.prefix:
-            return ExternalAddress(bytes.fromhex(value[2:]))
+            if prefix == ExternalAddress.prefix:
+                return ExternalAddress(bytes.fromhex(contents))
 
-        return ExternalAddress(bytes.fromhex(value))
+        return MalformedAddress(value)
 
 
 class ExternalAddress(Address):
@@ -74,7 +75,22 @@ class ContractAddress(Address):
         return self.prefix + self.hex()
 
 
-class Signature(FixedBytes):
+class MalformedAddress(str):
+    @classmethod
+    def fromhex(cls, value: str):
+        return MalformedAddress(value)
+
+    def hex(self):
+        return self
+
+    def hex_xx(self):
+        return self
+
+    def hex_hx(self):
+        return self
+
+
+class Signature(Bytes):
     size = 65
 
     def recover_id(self):

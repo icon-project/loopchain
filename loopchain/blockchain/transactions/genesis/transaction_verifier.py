@@ -15,6 +15,9 @@ class TransactionVerifier(BaseTransactionVerifier):
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
     def verify(self, tx: 'Transaction', blockchain=None):
+        self.verify_loosely(tx, blockchain)
+
+    def verify_loosely(self, tx: 'Transaction', blockchain=None):
         self.verify_hash(tx)
         self.verify_accounts(tx)
         if blockchain:

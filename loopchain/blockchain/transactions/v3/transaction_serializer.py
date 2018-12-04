@@ -24,7 +24,7 @@ class TransactionSerializer(BaseTransactionSerializer):
 
         if tx.data is not None and tx.data_type is not None:
             if isinstance(tx.data, str):
-                params["data"] = tx.data.encode('utf-8').hex()
+                params["data"] = tx.data
             else:
                 params["data"] = tx.data
             params["dataType"] = tx.data_type
@@ -51,10 +51,6 @@ class TransactionSerializer(BaseTransactionSerializer):
         if nonce is not None:
             nonce = int(nonce, 16)
 
-        data = tx_data.get('data')
-        if data is not None and isinstance(data, str):
-            data = bytes.fromhex(data).decode('utf-8')
-
         value = tx_data.get('value')
         if value is not None:
             value = int(value, 16)
@@ -70,7 +66,7 @@ class TransactionSerializer(BaseTransactionSerializer):
             nonce=nonce,
             nid=int(tx_data['nid'], 16),
             data_type=tx_data.get('dataType'),
-            data=data
+            data=tx_data.get('data')
         )
 
     def get_hash(self, tx_dumped: dict) -> str:

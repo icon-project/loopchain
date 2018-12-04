@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from secp256k1 import PublicKey, PrivateKey
 from ..hashing import build_hash_generator
+from .. import Hash32, Address
 if TYPE_CHECKING:
     from . import Transaction
 
@@ -20,6 +21,10 @@ class TransactionVerifier(ABC):
     def verify(self, tx: 'Transaction', blockchain=None):
         raise NotImplementedError
 
+    @abstractmethod
+    def verify_loosely(self, tx: 'Transaction', blockchain=None):
+        raise NotImplementedError
+
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
             raise RuntimeError
@@ -28,7 +33,7 @@ class TransactionVerifier(ABC):
         params = self._tx_serializer.to_origin_data(tx)
         tx_hash_expected = self._hash_generator.generate_hash(params)
         if tx_hash_expected != tx.hash:
-            raise RuntimeError
+            raise RuntimeError(f"tx hash {tx.hash.hex_0x()}, expected {Hash32(tx_hash_expected).hex_0x()}")
 
     def verify_signature(self, tx: 'Transaction'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -43,7 +48,8 @@ class TransactionVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != tx.from_address:
-            raise RuntimeError
+            raise RuntimeError(f"tx from address {tx.from_address.hex_xx()}, "
+                               f"expected {Address(expect_address).hex_xx()}")
 
     @classmethod
     def new(cls, version: str, hash_generator_version: int):

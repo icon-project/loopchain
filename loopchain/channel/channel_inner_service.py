@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import ast
-import copy
 import json
 import pickle
 import re
@@ -26,7 +25,7 @@ from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersions,
-                                  Block, BlockSerializer)
+                                  Block, BlockBuilder, BlockSerializer, blocks)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Epoch, VoteMessage
@@ -310,23 +309,34 @@ class ChannelInnerTask:
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
         try:
-            confirmed_block = Block(channel_name=ChannelProperty().name)
-            confirmed_block.deserialize_block(serialized_block)
+            bs = BlockSerializer.new("0.1a")
+            json_block = json.loads(serialized_block)
+            confirmed_block = bs.deserialize(json_block)
             util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
-                             f"hash({confirmed_block.block_hash}), block_type({confirmed_block.block_type}), "
-                             f"block height({confirmed_block.height}), "
+                             f"hash({confirmed_block.header.hash.hex()}) "
+                             f"block height({confirmed_block.header.height}), "
                              f"commit_state({commit_state})")
+
+            header: blocks.v0_1a.BlockHeader = confirmed_block.header
+            if not header.commit_state:
+                bb = BlockBuilder.from_new(confirmed_block)
+                confirmed_block = bb.build()  # to generate commit_state
+                header = confirmed_block.header
             try:
-                confirmed_block.commit_state = ast.literal_eval(commit_state)
+                commit_state = ast.literal_eval(commit_state)
             except Exception as e:
                 logging.warning(f"channel_inner_service:announce_confirmed_block FAIL get commit_state_dict, "
                                 f"error by : {e}")
 
-            if self._channel_service.block_manager.get_blockchain().block_height < confirmed_block.height:
+            if header.commit_state != commit_state:
+                raise RuntimeError(f"Commit states does not match. "
+                                   f"Generated {header.commit_state}, Received {commit_state}")
+
+            if self._channel_service.block_manager.get_blockchain().block_height < confirmed_block.header.height:
                 self._channel_service.block_manager.add_confirmed_block(confirmed_block)
             else:
                 logging.debug(f"channel_inner_service:announce_confirmed_block "
-                              f"already synced block height({confirmed_block.height})")
+                              f"already synced block height({confirmed_block.header.height})")
             response_code = message_code.Response.success
             # stop subscribe timer
             if TimerService.TIMER_KEY_SUBSCRIBE in self._channel_service.timer_service.timer_list:
