@@ -23,6 +23,7 @@ class TransactionSerializer(BaseTransactionSerializer):
 
     def to_raw_data(self, tx: 'Transaction'):
         params = self.to_origin_data(tx)
+        params['method'] = tx.method
         params['tx_hash'] = tx.hash.hex()
         params['signature'] = tx.signature.to_base64str()
         return params
@@ -32,8 +33,8 @@ class TransactionSerializer(BaseTransactionSerializer):
 
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data = dict(tx_data)
-        tx_data.pop('method', None)
 
+        method = tx_data.pop('method', None)
         hash = tx_data.pop('tx_hash', None)
         signature = tx_data.pop('signature', None)
         timestamp = tx_data.pop('timestamp', None)
@@ -53,7 +54,8 @@ class TransactionSerializer(BaseTransactionSerializer):
             value=value,
             fee=fee,
             nonce=nonce,
-            extra=extra
+            extra=extra,
+            method=method
         )
 
     def get_hash(self, tx_dumped: dict) -> str:
