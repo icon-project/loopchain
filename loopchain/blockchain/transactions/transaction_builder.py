@@ -2,7 +2,7 @@ import hashlib
 
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from .. import Signature, Address
+from .. import Signature, ExternalAddress
 from ..hashing import build_hash_generator
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ class TransactionBuilder(ABC):
         self.private_key: 'PrivateKey' = None
 
         # Attributes to be generated
-        self.from_address: 'Address' = None
+        self.from_address: 'ExternalAddress' = None
         self.hash: 'Hash32' = None
         self.signature: 'Signature' = None
 
@@ -55,7 +55,7 @@ class TransactionBuilder(ABC):
     def _build_from_address(self):
         serialized_pub = self.private_key.pubkey.serialize(compressed=False)
         hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return Address(hashed_pub[-20:])
+        return ExternalAddress(hashed_pub[-20:])
 
     def sign(self):
         if self.hash is None:
