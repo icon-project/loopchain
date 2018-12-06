@@ -28,12 +28,19 @@ class TransactionVerifier(BaseTransactionVerifier):
 
     def verify_accounts(self, tx: 'Transaction'):
         for account in tx.accounts:
-            keys = account.keys()
-            if "address" not in keys or "balance" not in keys or "name" not in keys:
-                raise RuntimeError
+            if "address" not in account:
+                raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                                   f'"address" does not exist in an account of genesis tx.')
+            if "balance" not in account:
+                raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                                   f'"balance" does not exist in an account of genesis tx.')
+            if "name" not in account:
+                raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                                   f'"name" does not exist in an account of genesis tx.')
 
             if account["balance"] is None:
-                raise RuntimeError
+                raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                                   '"balance" value is None in an account of genesis tx.')
 
             # An exception will be raised if 'address' is invalid.
             Address.fromhex(account['address'])

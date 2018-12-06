@@ -26,10 +26,10 @@ class BlockVerifier(BaseBlockVerifier):
         body: BlockBody = block.body
 
         if header.timestamp is None:
-            raise RuntimeError
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have timestamp.")
 
         if header.height > 0 and header.prev_hash is None:
-            raise RuntimeError
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
 
         builder = BlockBuilder()
         builder.height = header.height
@@ -43,15 +43,21 @@ class BlockVerifier(BaseBlockVerifier):
         if self.invoke_func:
             new_block, invoke_result = self.invoke_func(block)
             if header.commit_state != new_block.header.commit_state:
-                raise RuntimeError
+                raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                   f"CommitState({header.commit_state}), "
+                                   f"Expected({new_block.header.commit_state}).")
 
         builder.build_merkle_tree_root_hash()
         if header.merkle_tree_root_hash != builder.merkle_tree_root_hash:
-            raise RuntimeError
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                               f"MerkleTreeRootHash({header.merkle_tree_root_hash.hex()}), "
+                               f"Expected({builder.merkle_tree_root_hash.hex()}).")
 
         builder.build_hash()
         if header.hash != builder.hash:
-            raise RuntimeError
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}"
+                               f"Hash({header.hash.hex()}, "
+                               f"Expected({builder.hash.hex()}).")
 
         if block.header.height > 0:
             self.verify_signature(block)
@@ -75,7 +81,11 @@ class BlockVerifier(BaseBlockVerifier):
 
     def verify_by_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
-            raise RuntimeError
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+                               f"PrevHash({block.header.prev_hash.hex()}), "
+                               f"Expected({prev_block.header.hash.hex()}).")
 
         if block.header.height != prev_block.header.height + 1:
-            raise RuntimeError
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+                               f"Height({block.header.height}), "
+                               f"Expected({prev_block.header.height + 1}).")
