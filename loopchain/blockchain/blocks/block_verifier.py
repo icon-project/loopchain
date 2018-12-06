@@ -15,11 +15,11 @@ class BlockVerifier(ABC):
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     @abstractmethod
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None):
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         raise RuntimeError
 
     @abstractmethod
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None):
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         raise RuntimeError
 
     def verify_signature(self, block: 'Block'):

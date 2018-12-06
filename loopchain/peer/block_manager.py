@@ -674,17 +674,17 @@ class BlockManager(Subscriber):
         if is_vote_type_block:
             return
 
-        leader_peer_id = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
-        if unconfirmed_block.header.peer_id.hex_hx() != leader_peer_id:
-            self.__vote_unconfirmed_block(unconfirmed_block.header.hash.hex(), False)
-            return
+        leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
 
         block_verifier = BlockVerifier.new("0.1a")
         block_verifier.invoke_func = self.__channel_service.score_invoke
 
         exception = None
         try:
-            invoke_results = block_verifier.verify(unconfirmed_block, self.__blockchain.last_block, self.__blockchain)
+            invoke_results = block_verifier.verify(unconfirmed_block,
+                                                   self.__blockchain.last_block,
+                                                   self.__blockchain,
+                                                   ExternalAddress.fromhex(leader_peer_id))
         except Exception as e:
             exception = e
             logging.error(e)

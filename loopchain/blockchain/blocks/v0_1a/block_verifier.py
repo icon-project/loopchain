@@ -6,22 +6,19 @@ from ... import TransactionVerifier, TransactionVersions
 if TYPE_CHECKING:
     from . import BlockHeader, BlockBody
     from .. import Block
+    from ... import ExternalAddress
 
 
 class BlockVerifier(BaseBlockVerifier):
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None):
-        invoke_result = self.verify_common(block, prev_block, blockchain)
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         self.verify_transactions(block, blockchain)
+        return self.verify_common(block, prev_block, generator)
 
-        return invoke_result
-
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None):
-        invoke_result = self.verify_common(block, prev_block, blockchain)
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         self.verify_transactions_loosely(block, blockchain)
+        return self.verify_common(block, prev_block, generator)
 
-        return invoke_result
-
-    def verify_common(self, block: 'Block', prev_block: 'Block', blockchain=None):
+    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -63,7 +60,10 @@ class BlockVerifier(BaseBlockVerifier):
             self.verify_signature(block)
 
         if prev_block:
-            self.verify_by_prev_block(block, prev_block)
+            self.verify_prev_block(block, prev_block)
+
+        if generator:
+            self.verify_generator(block, generator)
 
         return invoke_result
 
@@ -79,7 +79,7 @@ class BlockVerifier(BaseBlockVerifier):
             tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
             tv.verify_loosely(tx, blockchain)
 
-    def verify_by_prev_block(self, block: 'Block', prev_block: 'Block'):
+    def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
                                f"PrevHash({block.header.prev_hash.hex()}), "
@@ -89,3 +89,9 @@ class BlockVerifier(BaseBlockVerifier):
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
                                f"Height({block.header.height}), "
                                f"Expected({prev_block.header.height + 1}).")
+
+    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
+        if block.header.peer_id != generator:
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+                               f"Generator({block.header.peer_id.hex_xx()}), "
+                               f"Expected({generator.hex_xx()}).")
