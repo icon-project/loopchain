@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from secp256k1 import PublicKey, PrivateKey
 from ..hashing import build_hash_generator
-from .. import Hash32, Address
+from .. import Hash32, ExternalAddress
 if TYPE_CHECKING:
     from . import Transaction
 
@@ -27,13 +27,13 @@ class TransactionVerifier(ABC):
 
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
-            raise RuntimeError
+            raise RuntimeError(f"tx hash {tx.hash.hex()} is already exist in blockcahin.")
 
     def verify_hash(self, tx: 'Transaction'):
         params = self._tx_serializer.to_origin_data(tx)
         tx_hash_expected = self._hash_generator.generate_hash(params)
         if tx_hash_expected != tx.hash:
-            raise RuntimeError(f"tx hash {tx.hash.hex_0x()}, expected {Hash32(tx_hash_expected).hex_0x()}")
+            raise RuntimeError(f"tx hash {tx.hash.hex()}, expected {Hash32(tx_hash_expected).hex()}")
 
     def verify_signature(self, tx: 'Transaction'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -49,7 +49,7 @@ class TransactionVerifier(ABC):
         expect_address = hash_pub[-20:]
         if expect_address != tx.from_address:
             raise RuntimeError(f"tx from address {tx.from_address.hex_xx()}, "
-                               f"expected {Address(expect_address).hex_xx()}")
+                               f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     @classmethod
     def new(cls, version: str, hash_generator_version: int):
@@ -61,4 +61,4 @@ class TransactionVerifier(ABC):
         elif version == v3.version:
             return v3.TransactionVerifier(hash_generator_version)
 
-        raise RuntimeError
+        raise RuntimeError(f"Not supported tx version({version})")
