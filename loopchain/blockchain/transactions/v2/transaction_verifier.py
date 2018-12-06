@@ -16,10 +16,12 @@ class TransactionVerifier(BaseTransactionVerifier):
 
     def verify(self, tx: 'Transaction', blockchain=None):
         if isinstance(tx.to_address, MalformedAddress):
-            raise RuntimeError
+            raise RuntimeError(f"Tx({tx.hash}), "
+                               f"To Address({tx.to_address.hex_xx()} is malformed.")
 
         if isinstance(tx.from_address, MalformedAddress):
-            raise RuntimeError
+            raise RuntimeError(f"Tx({tx.hash}), "
+                               f"To Address({tx.from_address.hex_xx()} is malformed.")
 
         self.verify_loosely(tx, blockchain)
 
