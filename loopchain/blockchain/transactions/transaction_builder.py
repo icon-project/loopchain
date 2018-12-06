@@ -36,7 +36,7 @@ class TransactionBuilder(ABC):
 
     def build_hash(self):
         if self.from_address is None:
-            raise RuntimeError
+            raise RuntimeError(f"from_address is required. Run build_from_address.")
 
         self.hash = self._build_hash()
         return self.hash
@@ -47,7 +47,7 @@ class TransactionBuilder(ABC):
 
     def build_from_address(self):
         if self.private_key is None:
-            raise RuntimeError
+            raise RuntimeError(f"private_key is required.")
 
         self.from_address = self._build_from_address()
         return self.from_address
@@ -82,4 +82,4 @@ class TransactionBuilder(ABC):
         elif version == v3.version:
             return v3.TransactionBuilder(hash_generator_version)
 
-        raise RuntimeError
+        raise RuntimeError(f"Not supported tx version({version})")

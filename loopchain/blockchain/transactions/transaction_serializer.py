@@ -42,4 +42,4 @@ class TransactionSerializer(ABC):
         elif version == v3.version:
             return v3.TransactionSerializer(hash_generator_version)
 
-        raise RuntimeError
+        raise RuntimeError(f"Not supported tx version({version})")

@@ -50,8 +50,8 @@ class BlockVerifier(BaseBlockVerifier):
         builder.build_merkle_tree_root_hash()
         if header.merkle_tree_root_hash != builder.merkle_tree_root_hash:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                               f"MerkleTreeRootHash({header.merkle_tree_root_hash}), "
-                               f"Expected({builder.merkle_tree_root_hash}).")
+                               f"MerkleTreeRootHash({header.merkle_tree_root_hash.hex()}), "
+                               f"Expected({builder.merkle_tree_root_hash.hex()}).")
 
         builder.build_hash()
         if header.hash != builder.hash:
@@ -82,8 +82,8 @@ class BlockVerifier(BaseBlockVerifier):
     def verify_by_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
-                               f"PrevHash({block.header.prev_hash}), "
-                               f"Expected({prev_block.header.hash}).")
+                               f"PrevHash({block.header.prev_hash.hex()}), "
+                               f"Expected({prev_block.header.hash.hex()}).")
 
         if block.header.height != prev_block.header.height + 1:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
