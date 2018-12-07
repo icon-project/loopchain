@@ -78,10 +78,7 @@ class ConsensusSiever(ConsensusBase):
             block_verifier = BlockVerifier.new("0.1a", self._blockchain.tx_versioner)
             block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
-            logging.info(f"candidate block height: {candidate_block.header.height}")
-            logging.info(f"candidate block hash: {candidate_block.header.hash.hex()}")
-            logging.info(f"candidate block next leader: {candidate_block.header.next_leader.hex()}")
-            logging.info(f"candidate block confirm_prev_block: {candidate_block.body.confirm_prev_block}")
+            logging.info(f"candidate block : {candidate_block.header}")
 
             vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
             vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)

@@ -191,12 +191,17 @@ class ChannelInnerTask:
         except TransactionInvalidError as e:
             result_code = e.message_code
             exception = e
+            traceback.print_exc()
         except BaseException as e:
             result_code = TransactionInvalidError.message_code
             exception = e
+            traceback.print_exc()
         finally:
             if exception:
-                logging.warning(f"create_icx_tx: tx restore fail for kwargs({kwargs}), {exception}")
+                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
+                                f"kwargs({kwargs})\n\n"
+                                f"tx({tx})\n\n"
+                                f"exception({exception})")
                 return result_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)

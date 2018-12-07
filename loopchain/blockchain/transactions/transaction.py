@@ -1,5 +1,5 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, _FIELD, _FIELDS
 from typing import TYPE_CHECKING
 from .. import Hash32, Signature
 
@@ -16,6 +16,15 @@ class Transaction:
     timestamp: int
 
     version = ''
+
+    def __str__(self):
+        fields = getattr(self, _FIELDS, None)
+        if fields is None:
+            return ""
+
+        fields = [f for f in fields.values() if f._field_type is _FIELD]
+        fields_str = ', '.join(f"{f.name}={getattr(self, f.name)}" for f in fields)
+        return f"{self.__class__.__qualname__}({fields_str})"
 
     def size(self, versioner: 'TransactionVersioner'):
         from .. import TransactionSerializer

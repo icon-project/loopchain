@@ -274,6 +274,7 @@ class BlockChain:
                 f"ADD BLOCK HEIGHT : {block.header.height} , "
                 f"HASH : {block.header.hash.hex()} , "
                 f"CHANNEL : {self.__channel_name}")
+            logging.debug(f"ADDED BLOCK HEADER : {block.header}")
 
             util.apm_event(self.__peer_id, {
                 'event_type': 'AddBlock',

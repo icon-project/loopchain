@@ -19,6 +19,10 @@ class Bytes(bytes):
         type_name = type(self).__name__
         return type_name + "(" + super().__repr__() + ")"
 
+    def __str__(self):
+        type_name = type(self).__name__
+        return type_name + "(" + self.hex() + ")"
+
     @classmethod
     def fromhex(cls, value: Union[str, int]):
         if isinstance(value, str):
@@ -104,6 +108,10 @@ class Signature(Bytes):
 
     def to_base64str(self):
         return self.to_base64().decode('utf-8')
+
+    def __str__(self):
+        type_name = type(self).__name__
+        return type_name + "(" + self.to_base64str() + ")"
 
     @classmethod
     def from_base64(cls, base64_bytes: bytes):

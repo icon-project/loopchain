@@ -33,7 +33,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
 from cryptography.x509.oid import NameOID
 
 from loopchain.utils import loggers
-from loopchain.blockchain import Hash32, TransactionSerializer, TransactionVersions
+from loopchain.blockchain import Hash32, TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.hashing import build_hash_generator
 
 import testcase.unittest.test_util as test_util
@@ -423,9 +423,9 @@ class TestCrypto(unittest.TestCase):
                  "timestamp.1000000000000.to.hx5bfdb090f43a808005ffc27c25b213145e80b7cd." \
                  "value.0xde0b6b3a7640000"
 
-        tv = TransactionVersions()
+        tv = TransactionVersioner()
         version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        ts = TransactionSerializer.new(version, tv)
         tx = ts.from_(question)
 
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
@@ -481,9 +481,9 @@ class TestCrypto(unittest.TestCase):
                  "dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x2.nonce.0x1.stepLimit.0x12345." \
                  "timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        tv = TransactionVersions()
+        tv = TransactionVersioner()
         version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        ts = TransactionSerializer.new(version, tv)
         tx = ts.from_(question)
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
@@ -539,9 +539,9 @@ class TestCrypto(unittest.TestCase):
                  r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x2.nonce.0x1.stepLimit.0x12345." \
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        tv = TransactionVersions()
+        tv = TransactionVersioner()
         version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        ts = TransactionSerializer.new(version, tv)
         tx = ts.from_(question)
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
@@ -597,10 +597,10 @@ class TestCrypto(unittest.TestCase):
                  r"dataType.call.from.hxbe258ceb872e08851f1f59694dac2558708ece11.nid.0x1.nonce.0x1.stepLimit.0x12345." \
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
-        tv = TransactionVersions()
+        tv = TransactionVersioner()
         version = tv.get_version(question)
 
-        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        ts = TransactionSerializer.new(version, tv)
         tx = ts.from_(question)
 
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
@@ -665,9 +665,9 @@ class TestCrypto(unittest.TestCase):
 
         question = request["params"]
 
-        tv = TransactionVersions()
+        tv = TransactionVersioner()
         version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv.get_hash_generator_version(version))
+        ts = TransactionSerializer.new(version, tv)
         tx = ts.from_(question)
 
         result_new_hash = self.hash_generator.generate_hash(ts.to_origin_data(tx))

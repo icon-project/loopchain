@@ -13,6 +13,7 @@
 # limitations under the License.
 """A base class of consensus for the loopchain"""
 import logging
+import traceback
 from abc import ABCMeta, abstractmethod
 from loopchain import configure as conf
 from loopchain.blockchain import BlockBuilder
@@ -66,7 +67,10 @@ class ConsensusBase(metaclass=ABCMeta):
             try:
                 tv.verify(tx, self._blockchain)
             except Exception as e:
-                logging.warning(f"tx hash invalid. tx: {tx}")
+                logging.warning(f"tx hash invalid.\n"
+                                f"tx: {tx}\n"
+                                f"exception: {e}")
+                traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
 
