@@ -777,8 +777,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
-            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["genesis_tx_hash_version"]
-            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
             transaction = {
                 "method": method,
                 "params": {
@@ -801,7 +800,7 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
-        block_builder = BlockBuilder.from_new(block)
+        block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
@@ -812,8 +811,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in _block.body.transactions.values():
-            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["tx_hash_version"]
-            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
 
             transaction = {
                 "method": method,
@@ -835,7 +833,7 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
-        block_builder = BlockBuilder.from_new(_block)
+        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }

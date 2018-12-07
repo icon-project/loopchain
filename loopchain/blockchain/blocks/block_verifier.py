@@ -6,21 +6,23 @@ from .. import ExternalAddress
 
 if TYPE_CHECKING:
     from . import Block
+    from .. import TransactionVersioner
 
 
 class BlockVerifier(ABC):
     _ecdsa = PrivateKey()
 
-    def __init__(self):
+    def __init__(self, tx_versioner: 'TransactionVersioner'):
+        self._tx_versioner = tx_versioner
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     @abstractmethod
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
-        raise RuntimeError
+        raise NotImplementedError
 
     @abstractmethod
     def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
-        raise RuntimeError
+        raise NotImplementedError
 
     def verify_signature(self, block: 'Block'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -39,9 +41,9 @@ class BlockVerifier(ABC):
                                f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     @classmethod
-    def new(cls, version: str) -> 'BlockVerifier':
+    def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockVerifier()
+            return v0_1a.BlockVerifier(tx_versioner)
 
         raise RuntimeError

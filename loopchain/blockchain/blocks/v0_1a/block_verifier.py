@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from . import BlockBuilder
 from .. import BlockVerifier as BaseBlockVerifier
-from ... import TransactionVerifier, TransactionVersions
+from ... import TransactionVerifier
 
 if TYPE_CHECKING:
     from . import BlockHeader, BlockBody
@@ -19,6 +19,7 @@ class BlockVerifier(BaseBlockVerifier):
         return self.verify_common(block, prev_block, generator)
 
     def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+        import logging
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -28,7 +29,7 @@ class BlockVerifier(BaseBlockVerifier):
         if header.height > 0 and header.prev_hash is None:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
 
-        builder = BlockBuilder()
+        builder = BlockBuilder(self._tx_versioner)
         builder.height = header.height
         builder.prev_hash = header.prev_hash
         builder.fixed_timestamp = header.timestamp
@@ -51,6 +52,9 @@ class BlockVerifier(BaseBlockVerifier):
                                f"Expected({builder.merkle_tree_root_hash.hex()}).")
 
         builder.build_hash()
+        logging.info(f"Block({header.height}, {header.hash.hex()}"
+                     f"Hash({header.hash.hex()}, "
+                     f"Expected({builder.hash.hex()}).")
         if header.hash != builder.hash:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}"
                                f"Hash({header.hash.hex()}, "
@@ -68,15 +72,13 @@ class BlockVerifier(BaseBlockVerifier):
         return invoke_result
 
     def verify_transactions(self, block: 'Block', blockchain=None):
-        tx_versions = TransactionVersions()
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
+            tv = TransactionVerifier.new(tx.version, self._tx_versioner)
             tv.verify(tx, blockchain)
 
     def verify_transactions_loosely(self, block: 'Block', blockchain=None):
-        tx_versions = TransactionVersions()
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, tx_versions.get_hash_generator_version(tx.version))
+            tv = TransactionVerifier.new(tx.version, self._tx_versioner)
             tv.verify_loosely(tx, blockchain)
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):

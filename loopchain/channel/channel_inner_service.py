@@ -24,7 +24,7 @@ from earlgrey import *
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersions,
+from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier,
                                   Block, BlockBuilder, BlockSerializer, blocks)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -71,7 +71,8 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
-            bs = BlockSerializer.new(new_block.header.version)
+            blockchain = self._channel_service.block_manager.get_blockchain()
+            bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block))
 
     @message_queue_task
@@ -170,14 +171,13 @@ class ChannelInnerTask:
         exception = None
 
         try:
-            tv = TransactionVersions()
-            tx_version = tv.get_version(kwargs)
-            tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+            tx_version = tx_versioner.get_version(kwargs)
 
-            ts = TransactionSerializer.new(tx_version, tx_hash_version)
+            ts = TransactionSerializer.new(tx_version, tx_versioner)
             tx = ts.from_(kwargs)
 
-            tv = TransactionVerifier.new(tx_version, tx_hash_version)
+            tv = TransactionVerifier.new(tx_version, tx_versioner)
             tv.verify(tx)
 
             block_manager = self._channel_service.block_manager
@@ -185,7 +185,7 @@ class ChannelInnerTask:
 
             logging.debug(f"create icx input : {kwargs}")
 
-            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, tx)
+            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, tx_versioner))
             return message_code.Response.success, tx.hash.hex()
 
         except TransactionInvalidError as e:
@@ -203,14 +203,13 @@ class ChannelInnerTask:
     def add_tx(self, request) -> None:
         tx_json = request.tx_json
 
-        tv = TransactionVersions()
-        tx_version = tv.get_version(tx_json)
-        tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        tx_version = tx_versioner.get_version(tx_json)
 
-        ts = TransactionSerializer.new(tx_version, tx_hash_version)
+        ts = TransactionSerializer.new(tx_version, tx_versioner)
         tx = ts.from_(tx_json)
 
-        tv = TransactionVerifier.new(tx_version, tx_hash_version)
+        tv = TransactionVerifier.new(tx_version, tx_versioner)
         tv.verify(tx)
 
         object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
@@ -230,14 +229,13 @@ class ChannelInnerTask:
         for tx_item in request.tx_list:
             tx_json = json.loads(tx_item.tx_json)
 
-            tv = TransactionVersions()
-            tx_version = tv.get_version(tx_json)
-            tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+            tx_version = tx_versioner.get_version(tx_json)
 
-            ts = TransactionSerializer.new(tx_version, tx_hash_version)
+            ts = TransactionSerializer.new(tx_version, tx_versioner)
             tx = ts.from_(tx_json)
 
-            tv = TransactionVerifier.new(tx_version, tx_hash_version)
+            tv = TransactionVerifier.new(tx_version, tx_versioner)
             tv.verify(tx)
 
             # util.logger.spam(f"channel_inner_service:add_tx tx({tx.get_data_string()})")
@@ -309,7 +307,8 @@ class ChannelInnerTask:
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
         try:
-            bs = BlockSerializer.new("0.1a")
+            blockchain = self._channel_service.block_manager.get_blockchain()
+            bs = BlockSerializer.new("0.1a", blockchain.tx_versioner)
             json_block = json.loads(serialized_block)
             confirmed_block = bs.deserialize(json_block)
             util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
@@ -319,7 +318,7 @@ class ChannelInnerTask:
 
             header: blocks.v0_1a.BlockHeader = confirmed_block.header
             if not header.commit_state:
-                bb = BlockBuilder.from_new(confirmed_block)
+                bb = BlockBuilder.from_new(confirmed_block, blockchain.tx_versioner)
                 confirmed_block = bb.build()  # to generate commit_state
                 header = confirmed_block.header
             try:
@@ -488,7 +487,8 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        bs = BlockSerializer.new(block.header.version)
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_data_dict = bs.serialize(block)
 
         if block.header.height == 0:
@@ -497,15 +497,14 @@ class ChannelInnerTask:
         confirmed_tx_list = block_data_dict["confirmed_transaction_list"]
         confirmed_tx_list_without_fail = []
 
-        tv = TransactionVersions()
         tss = {
-            "genesis": TransactionSerializer.new("genesis", tv.get_hash_generator_version("genesis")),
-            "0x2": TransactionSerializer.new("0x2", tv.get_hash_generator_version("0x2")),
-            "0x3": TransactionSerializer.new("0x3", tv.get_hash_generator_version("0x3"))
+            "genesis": TransactionSerializer.new("genesis", tx_versioner),
+            "0x2": TransactionSerializer.new("0x2", tx_versioner),
+            "0x3": TransactionSerializer.new("0x3", tx_versioner)
         }
 
         for tx in confirmed_tx_list:
-            version = tv.get_version(tx)
+            version = tx_versioner.get_version(tx)
             tx_hash = tss[version].get_hash(tx)
 
             invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
@@ -513,7 +512,7 @@ class ChannelInnerTask:
             if 'failure' in invoke_result:
                 continue
 
-            if tv.get_version(tx) == "0x3":
+            if tx_versioner.get_version(tx) == "0x3":
                 step_used, step_price = int(invoke_result["stepUsed"], 16), int(invoke_result["stepPrice"], 16)
                 tx["fee"] = hex(step_used * step_price)
 
@@ -536,7 +535,8 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        bs = BlockSerializer.new(block.header.version)
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_dict = bs.serialize(block)
         return message_code.Response.success, block.header.hash, json.dumps(block_dict), []
 

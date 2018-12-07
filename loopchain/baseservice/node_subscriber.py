@@ -90,8 +90,9 @@ class NodeSubscriber:
             ObjectManager().channel_service.timer_service.stop_timer(timer_key)
 
     async def __add_confirmed_block(self, block_json: str):
+        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
         block_dict = json.loads(block_json)
-        block_serializer = BlockSerializer.new(block_dict["version"])
+        block_serializer = BlockSerializer.new(block_dict["version"], blockchain.tx_versioner)
         confirmed_block = block_serializer.deserialize(block_dict)
 
         logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "

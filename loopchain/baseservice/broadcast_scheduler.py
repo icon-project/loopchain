@@ -29,7 +29,6 @@ from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, \
     RestStubManager, TimerService, Timer
 from loopchain.baseservice.tx_item_helper import *
-from loopchain.blockchain import Transaction
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
@@ -332,7 +331,7 @@ class BroadcastScheduler(CommonThread):
     def __handler_create_tx(self, create_tx_param):
         # logging.debug(f"Broadcast create_tx....")
         try:
-            tx_item = TxItemJson.create_tx_item(create_tx_param, self.__channel)
+            tx_item = TxItem.create_tx_item(create_tx_param, self.__channel)
             # util.logger.spam(f"broadcast_process:__handler_create_tx "
             #                  f"send_tx_type({create_tx_param.meta[Transaction.SEND_TX_TYPE_KEY]})")
         except Exception as e:

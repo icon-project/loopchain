@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import Address, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer, TransactionVersions
+from ... import Address, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer, TransactionVersioner
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -12,11 +12,9 @@ class BlockSerializer(BaseBlockSerializer):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
-        tv = TransactionVersions()
         transactions = list()
         for tx in body.transactions.values():
-            tx_hash_generator_version = tv.get_hash_generator_version(tx.version)
-            ts = TransactionSerializer.new(tx.version, tx_hash_generator_version)
+            ts = TransactionSerializer.new(tx.version, self._tx_versioner)
             tx_serialized = ts.to_full_data(tx)
             transactions.append(tx_serialized)
 
@@ -64,12 +62,10 @@ class BlockSerializer(BaseBlockSerializer):
             commit_state=json_data.get("commit_state")
         )
 
-        tv = TransactionVersions()
         transactions = OrderedDict()
         for tx_data in json_data['confirmed_transaction_list']:
-            tx_version = tv.get_version(tx_data)
-            tx_hash_generator_version = tv.get_hash_generator_version(tx_version)
-            ts = TransactionSerializer.new(tx_version, tx_hash_generator_version)
+            tx_version = self._tx_versioner.get_version(tx_data)
+            ts = TransactionSerializer.new(tx_version, self._tx_versioner)
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 

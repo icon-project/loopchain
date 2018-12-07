@@ -7,7 +7,7 @@ from ..hashing import build_hash_generator
 
 if TYPE_CHECKING:
     from secp256k1 import PrivateKey
-    from . import Transaction
+    from . import Transaction, TransactionVersioner
     from .. import Hash32
 
 
@@ -73,8 +73,9 @@ class TransactionBuilder(ABC):
         return Signature(signature)
 
     @classmethod
-    def new(cls, version: str, hash_generator_version: int):
+    def new(cls, version: str, versioner: 'TransactionVersioner'):
         from . import genesis, v2, v3
+        hash_generator_version = versioner.get_hash_generator_version(version)
         if version == genesis.version:
             return genesis.TransactionBuilder(hash_generator_version)
         elif version == v2.version:

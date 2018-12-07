@@ -7,6 +7,7 @@ from ..hashing import build_hash_generator
 from .. import Hash32, ExternalAddress
 if TYPE_CHECKING:
     from . import Transaction
+    from .. import TransactionVersioner
 
 
 class TransactionVerifier(ABC):
@@ -52,8 +53,9 @@ class TransactionVerifier(ABC):
                                f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     @classmethod
-    def new(cls, version: str, hash_generator_version: int):
+    def new(cls, version: str, versioner: 'TransactionVersioner'):
         from . import genesis, v2, v3
+        hash_generator_version = versioner.get_hash_generator_version(version)
         if version == genesis.version:
             return genesis.TransactionVerifier(hash_generator_version)
         elif version == v2.version:

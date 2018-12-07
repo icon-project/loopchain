@@ -1,8 +1,12 @@
 import json
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 from .. import Hash32, Signature
 
-length_attr_name = "_length"
+if TYPE_CHECKING:
+    from .. import TransactionVersioner
+
+size_dict_name = "_size_dict"
 
 
 @dataclass(frozen=True)
@@ -13,18 +17,19 @@ class Transaction:
 
     version = ''
 
-    def __len__(self):
-        if not hasattr(self, length_attr_name):
-            from . import TransactionSerializer, TransactionVersions
+    def size(self, versioner: 'TransactionVersioner'):
+        from .. import TransactionSerializer
 
-            tv = TransactionVersions()
-            hash_version = tv.get_hash_generator_version(self.version)
+        if not hasattr(self, size_dict_name):
+            object.__setattr__(self, size_dict_name, dict())
 
-            ts = TransactionSerializer.new(self.version, hash_version)
-            tx_serialized = ts.to_raw_data(self)
+        size_dict = getattr(self, size_dict_name)
+        hash_generator_version = versioner.get_hash_generator_version(self.version)
+        if hash_generator_version not in size_dict:
+            ts = TransactionSerializer.new(self.version, versioner)
+            tx_serialized = ts.to_full_data(self)
             tx_serialized = json.dumps(tx_serialized)
             tx_serialized = tx_serialized.encode('utf-8')
+            size_dict[hash_generator_version] = len(tx_serialized)
 
-            object.__setattr__(self, length_attr_name, len(tx_serialized))
-
-        return getattr(self, length_attr_name)
+        return size_dict[hash_generator_version]

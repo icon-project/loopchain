@@ -23,8 +23,8 @@ from enum import Enum
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVerifier,
-                                  Transaction, TransactionBuilder, TransactionSerializer,
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer,
+                                  Transaction, TransactionBuilder, TransactionSerializer, TransactionVersioner,
                                   Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
@@ -81,6 +81,15 @@ class BlockChain:
 
         self.__total_tx = 0
 
+        channel_option = conf.CHANNEL_OPTION[channel_name]
+        self.__tx_versioner = TransactionVersioner()
+        if "genesis_tx_hash_version" in channel_option:
+            self.__tx_versioner.hash_generator_versions['genesis'] = channel_option["genesis_tx_hash_version"]
+
+        if "tx_hash_version" in channel_option:
+            self.__tx_versioner.hash_generator_versions['0x2'] = channel_option["tx_hash_version"]
+            self.__tx_versioner.hash_generator_versions['0x3'] = channel_option["tx_hash_version"]
+
     def __set_send_tx_type(self, send_tx_type):
         if send_tx_type == conf.SendTxType.icx:
             self.__save_tx_by_address_strategy = self.__save_tx_by_address
@@ -112,6 +121,10 @@ class BlockChain:
     @property
     def made_block_count(self):
         return self.__made_block_count
+
+    @property
+    def tx_versioner(self):
+        return self.__tx_versioner
 
     def increase_made_block_count(self):
         self.__made_block_count += 1
@@ -147,7 +160,7 @@ class BlockChain:
     def _rebuild_transaction_count_from_blocks(self):
         total_tx = 0
         block_hash = self.__last_block.header.hash.hex()
-        block_serializer = BlockSerializer.new("0.1a")
+        block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
         while block_hash != "":
             block_dump = self.__confirmed_block_db.Get(block_hash.encode(encoding='UTF-8'))
             block = block_serializer.deserialize(json.loads(block_dump))
@@ -167,7 +180,7 @@ class BlockChain:
         try:
             block_bytes = self.__confirmed_block_db.Get(key)
             block_dumped = json.loads(block_bytes)
-            return BlockSerializer.new("0.1a").deserialize(block_dumped)
+            return BlockSerializer.new("0.1a", self.tx_versioner).deserialize(block_dumped)
         except KeyError as e:
             logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
@@ -238,7 +251,7 @@ class BlockChain:
             byte_length = (bit_length + 7) // 8
             next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-            block_serializer = BlockSerializer.new("0.1a")
+            block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
             block_serialized = json.dumps(block_serializer.serialize(block))
             block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
@@ -339,12 +352,11 @@ class BlockChain:
         # util.logger.spam(
         #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
 
-        tx_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["tx_hash_version"]
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
             invoke_result = invoke_results[tx_hash]
 
-            tx_serializer = TransactionSerializer.new(tx.version, tx_hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.__tx_versioner)
             tx_info = {
                 'block_hash': block.header.hash.hex(),
                 'block_height': block.header.height,
@@ -530,8 +542,7 @@ class BlockChain:
         :return:
         """
         logging.info("Make Genesis Block....")
-        genesis_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["genesis_tx_hash_version"]
-        tx_builder = TransactionBuilder.new("genesis", genesis_hash_version)
+        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner)
 
         nid = tx_info.get("nid")
         if nid is not None:
@@ -541,7 +552,7 @@ class BlockChain:
         tx_builder.message = tx_info["message"]
         tx = tx_builder.build()
 
-        block_builder = BlockBuilder.new("0.1a")
+        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None
@@ -574,7 +585,7 @@ class BlockChain:
             self.__precommit_tx(precommit_block)
             util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 
-            block_serializer = BlockSerializer.new("0.1a")
+            block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
             block_serialized = block_serializer.serialize(precommit_block)
             block_serialized = json.dumps(block_serialized)
             block_serialized = block_serialized.encode('utf-8')
@@ -655,7 +666,7 @@ class BlockChain:
 
         if last_block_key:
             block_dump = self.__confirmed_block_db.Get(last_block_key)
-            self.__last_block = BlockSerializer.new("0.1a").deserialize(json.loads(block_dump))
+            self.__last_block = BlockSerializer.new("0.1a", self.tx_versioner).deserialize(json.loads(block_dump))
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")

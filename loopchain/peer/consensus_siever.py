@@ -75,7 +75,7 @@ class ConsensusSiever(ConsensusBase):
             candidate_block = block_builder.build()
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
 
-            block_verifier = BlockVerifier.new("0.1a")
+            block_verifier = BlockVerifier.new("0.1a", self._blockchain.tx_versioner)
             block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
             logging.info(f"candidate block height: {candidate_block.header.height}")
@@ -98,7 +98,7 @@ class ConsensusSiever(ConsensusBase):
             pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
                                                           TransactionStatusInQueue.normal)
             if not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
-                block_builder = BlockBuilder.new("0.1a")
+                block_builder = BlockBuilder.new("0.1a", self._blockchain.tx_versioner)
                 block_builder.prev_hash = candidate_block.header.hash
                 block_builder.height = candidate_block.header.height + 1
                 block_builder.next_leader = candidate_block.header.next_leader
