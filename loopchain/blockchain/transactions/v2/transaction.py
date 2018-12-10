@@ -22,7 +22,7 @@ class Transaction(BaseTransition):
 
     def __init__(self, hash: 'Hash32', signature: 'Signature', timestamp: int,
                  from_address: 'Address', to_address: 'Address',
-                 value: str, fee: str, nonce: str, extra: Mapping[str, str], method: str):
+                 value: str, fee: str, nonce: str, extra: Mapping[str, str]):
         super().__init__(hash, signature, timestamp)
 
         object.__setattr__(self, "from_address", from_address)
@@ -31,8 +31,7 @@ class Transaction(BaseTransition):
         object.__setattr__(self, "fee", fee)
         object.__setattr__(self, "nonce", nonce)
 
-        object.__setattr__(self, "extra", MappingProxyType(dict(extra)))
-        object.__setattr__(self, "method", method)
+        object.__setattr__(self, "extra", dict(extra))
 
 
 HASH_SALT = "icx_sendTransaction"

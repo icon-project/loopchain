@@ -52,11 +52,8 @@ class BlockVerifier(BaseBlockVerifier):
                                f"Expected({builder.merkle_tree_root_hash.hex()}).")
 
         builder.build_hash()
-        logging.info(f"Block({header.height}, {header.hash.hex()}"
-                     f"Hash({header.hash.hex()}, "
-                     f"Expected({builder.hash.hex()}).")
         if header.hash != builder.hash:
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}"
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                f"Hash({header.hash.hex()}, "
                                f"Expected({builder.hash.hex()}).")
 
@@ -83,17 +80,17 @@ class BlockVerifier(BaseBlockVerifier):
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"PrevHash({block.header.prev_hash.hex()}), "
                                f"Expected({prev_block.header.hash.hex()}).")
 
         if block.header.height != prev_block.header.height + 1:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Height({block.header.height}), "
                                f"Expected({prev_block.header.height + 1}).")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Generator({block.header.peer_id.hex_xx()}), "
                                f"Expected({generator.hex_xx()}).")

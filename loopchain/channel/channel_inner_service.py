@@ -169,6 +169,7 @@ class ChannelInnerTask:
     async def create_icx_tx(self, kwargs: dict):
         result_code = None
         exception = None
+        tx = None
 
         try:
             tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner

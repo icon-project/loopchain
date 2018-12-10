@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import Address, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer, TransactionVersioner
+from ... import ExternalAddress, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -37,28 +37,28 @@ class BlockSerializer(BaseBlockSerializer):
                                        "The block of this version cannot be deserialized by the serializer.")
 
         prev_hash = json_data.get('prev_block_hash')
-        prev_hash = Hash32.fromhex(prev_hash) if prev_hash else None
+        prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
 
         peer_id = json_data.get('peer_id')
-        peer_id = Address.fromhex(peer_id) if peer_id else None
+        peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
 
         signature = json_data.get('signature')
         signature = Signature.from_base64str(signature) if signature else None
 
         next_leader = json_data.get("next_leader")
-        next_leader = Address.fromhex(next_leader) if next_leader else None
+        next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
         confirm_prev_block = json_data.get("confirm_prev_block")
 
         header = BlockHeader(
-            hash=Hash32.fromhex(json_data["block_hash"]),
+            hash=Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
             prev_hash=prev_hash,
             height=json_data["height"],
             timestamp=json_data["time_stamp"],
             peer_id=peer_id,
             signature=signature,
             next_leader=next_leader,
-            merkle_tree_root_hash=Hash32.fromhex(json_data["merkle_tree_root_hash"]),
+            merkle_tree_root_hash=Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
             commit_state=json_data.get("commit_state")
         )
 

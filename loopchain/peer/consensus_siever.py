@@ -18,7 +18,7 @@ import logging
 import time
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager, Timer, TimerService
-from loopchain.blockchain import Address, Block, BlockBuilder, BlockVerifier, TransactionStatusInQueue
+from loopchain.blockchain import ExternalAddress, Block, BlockBuilder, BlockVerifier, TransactionStatusInQueue
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import Vote
 from loopchain.peer.consensus_base import ConsensusBase
@@ -68,7 +68,7 @@ class ConsensusSiever(ConsensusBase):
             last_block = self._blockchain.last_block
             block_builder.height = last_block.header.height + 1
             block_builder.prev_hash = last_block.header.hash
-            block_builder.next_leader = Address.fromhex(peer_manager.get_next_leader_peer().peer_id)
+            block_builder.next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
             block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
             block_builder.confirm_prev_block = (self._made_block_count > 0)
 

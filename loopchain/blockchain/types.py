@@ -1,6 +1,4 @@
 import base64
-from math import ceil
-from typing import Union
 from abc import ABCMeta
 
 
@@ -16,23 +14,42 @@ class Bytes(bytes):
         return self
 
     def __repr__(self):
-        type_name = type(self).__name__
+        type_name = type(self).__qualname__
         return type_name + "(" + super().__repr__() + ")"
 
     def __str__(self):
-        type_name = type(self).__name__
-        return type_name + "(" + self.hex() + ")"
+        type_name = type(self).__qualname__
+        return type_name + "(" + self.hex_xx() + ")"
+
+    def hex_xx(self):
+        if self.prefix:
+            return self.prefix + self.hex()
+        return self.hex()
 
     @classmethod
-    def fromhex(cls, value: Union[str, int]):
-        if isinstance(value, str):
-            if cls.prefix and cls.prefix == value[:2]:
-                value = value[2:]
-            result = bytes.fromhex(value)
-        else:
-            byte_length = ceil(value.bit_length() / 8)
-            result = value.to_bytes(byte_length, 'big')
-        return cls(result)
+    def fromhex(cls, value: str, ignore_prefix=False, allow_malformed=False):
+        if isinstance(cls, Address):
+            raise TypeError("Address.fromhex() cannot be used. Because Address is ABC.")
+
+        try:
+            if cls.prefix and not ignore_prefix:
+                prefix, contents = value[:len(cls.prefix)], value[len(cls.prefix):]
+                if prefix != cls.prefix:
+                    raise ValueError(f"Invalid prefix. {cls.__qualname__}, {value}")
+            else:
+                contents = value
+
+            if len(contents) != cls.size * 2:
+                raise ValueError(f"Invalid size. {cls.__qualname__}, {value}")
+            if contents.lower() != contents:
+                raise ValueError(f"All elements of value must be lower cases. {cls.__qualname__}, {value}")
+
+            return cls(bytes.fromhex(contents))
+        except:
+            if not allow_malformed:
+                raise
+
+        return MalformedStr(cls, value)
 
 
 class Hash32(Bytes):
@@ -46,23 +63,28 @@ class Hash32(Bytes):
 class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
-    def hex_xx(self):
-        return self.prefix + self.hex()
-
     @classmethod
-    def fromhex(cls, value: Union[str, int]):
-        if isinstance(value, int):
-            return super().fromhex(value)
+    def fromhex_address(cls, value: int, allow_malformed=False):
+        try:
+            prefix, contents = value[:2], value[2:]
 
-        prefix, contents = value[:2], value[2:]
-        if len(contents) == cls.size * 2 and contents.lower() == contents:
+            if len(contents) != cls.size * 2:
+                raise ValueError(f"Invalid size. {cls.__qualname__}, {value}")
+            if contents.lower() != contents:
+                raise ValueError(f"All elements of value must be lower cases. {cls.__qualname__}, {value}")
+
             if prefix == ContractAddress.prefix:
                 return ContractAddress(bytes.fromhex(contents))
 
             if prefix == ExternalAddress.prefix:
                 return ExternalAddress(bytes.fromhex(contents))
 
-        return MalformedAddress(value)
+            raise ValueError(f"Invalid prefix. {cls.__qualname__}, {value}")
+        except:
+            if not allow_malformed:
+                raise
+
+        return MalformedStr(cls, value)
 
 
 class ExternalAddress(Address):
@@ -77,21 +99,6 @@ class ContractAddress(Address):
 
     def hex_cx(self):
         return self.prefix + self.hex()
-
-
-class MalformedAddress(str):
-    @classmethod
-    def fromhex(cls, value: str):
-        return MalformedAddress(value)
-
-    def hex(self):
-        return self
-
-    def hex_xx(self):
-        return self
-
-    def hex_hx(self):
-        return self
 
 
 class Signature(Bytes):
@@ -110,7 +117,7 @@ class Signature(Bytes):
         return self.to_base64().decode('utf-8')
 
     def __str__(self):
-        type_name = type(self).__name__
+        type_name = type(self).__qualname__
         return type_name + "(" + self.to_base64str() + ")"
 
     @classmethod
@@ -122,3 +129,32 @@ class Signature(Bytes):
     def from_base64str(cls, base64_str: str):
         base64_bytes = base64_str.encode('utf-8')
         return cls.from_base64(base64_bytes)
+
+
+class MalformedStr(str):
+    def __new__(cls, origin_type, *args, **kwargs):
+        self = super().__new__(cls, *args, **kwargs)
+        self.origin_type = origin_type
+        return self
+
+    def hex(self):
+        return super().__str__()
+
+    def hex_xx(self):
+        return super().__str__()
+
+    def hex_hx(self):
+        return super().__str__()
+
+    def hex_0x(self):
+        return super().__str__()
+
+    def __repr__(self):
+        type_name = type(self).__qualname__
+        origin_type_name = self.origin_type.__qualname__
+        return type_name + f"({origin_type_name}, {super().__repr__()})"
+
+    def __str__(self):
+        type_name = type(self).__qualname__
+        origin_type_name = self.origin_type.__qualname__
+        return type_name + f"({origin_type_name}, {super().__str__()})"

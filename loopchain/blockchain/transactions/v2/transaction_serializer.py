@@ -1,6 +1,6 @@
 from . import Transaction, HASH_SALT
 from .. import TransactionSerializer as BaseTransactionSerializer
-from ... import Hash32, Signature, Address
+from ... import Hash32, Signature, ExternalAddress
 
 
 class TransactionSerializer(BaseTransactionSerializer):
@@ -23,18 +23,19 @@ class TransactionSerializer(BaseTransactionSerializer):
 
     def to_raw_data(self, tx: 'Transaction'):
         params = self.to_origin_data(tx)
-        params['method'] = tx.method
         params['tx_hash'] = tx.hash.hex()
         params['signature'] = tx.signature.to_base64str()
         return params
 
     def to_full_data(self, tx: 'Transaction'):
-        return self.to_raw_data(tx)
+        params = self.to_raw_data(tx)
+        params['method'] = tx.method
+        return params
 
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data = dict(tx_data)
 
-        method = tx_data.pop('method', None)
+        tx_data.pop('method', None)
         hash = tx_data.pop('tx_hash', None)
         signature = tx_data.pop('signature', None)
         timestamp = tx_data.pop('timestamp', None)
@@ -46,16 +47,15 @@ class TransactionSerializer(BaseTransactionSerializer):
         extra = tx_data
 
         return Transaction(
-            hash=Hash32.fromhex(hash),
+            hash=Hash32.fromhex(hash, ignore_prefix=True, allow_malformed=False),
             signature=Signature.from_base64str(signature),
             timestamp=int(timestamp) if timestamp is not None else None,
-            from_address=Address.fromhex(from_address),
-            to_address=Address.fromhex(to_address),
+            from_address=ExternalAddress.fromhex(from_address, ignore_prefix=False, allow_malformed=True),
+            to_address=ExternalAddress.fromhex(to_address, ignore_prefix=False, allow_malformed=True),
             value=value,
             fee=fee,
             nonce=nonce,
             extra=extra,
-            method=method
         )
 
     def get_hash(self, tx_dumped: dict) -> str:

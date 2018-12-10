@@ -87,7 +87,7 @@ class BlockBuilder(BaseBlockBuilder):
             merkle_tree_root_hash = mt_list[0]
 
         if merkle_tree_root_hash:
-            return Hash32.fromhex(merkle_tree_root_hash)
+            return Hash32.fromhex(merkle_tree_root_hash, True)
 
         return Hash32(bytes(Hash32.size))
 

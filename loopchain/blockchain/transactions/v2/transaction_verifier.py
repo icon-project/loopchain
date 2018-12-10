@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from . import TransactionSerializer, HASH_SALT
 from .. import TransactionVerifier as BaseTransactionVerifier
-from ... import MalformedAddress
+from ... import MalformedStr
 
 if TYPE_CHECKING:
     from . import Transaction
@@ -15,13 +15,13 @@ class TransactionVerifier(BaseTransactionVerifier):
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
     def verify(self, tx: 'Transaction', blockchain=None):
-        if isinstance(tx.to_address, MalformedAddress):
-            raise RuntimeError(f"Tx({tx.hash.hex()}), "
-                               f"To Address({tx.to_address.hex_xx()} is malformed.")
+        if isinstance(tx.to_address, MalformedStr):
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"To Address({tx.to_address} is malformed.")
 
-        if isinstance(tx.from_address, MalformedAddress):
-            raise RuntimeError(f"Tx({tx.hash.hex()}), "
-                               f"To Address({tx.from_address.hex_xx()} is malformed.")
+        if isinstance(tx.from_address, MalformedStr):
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"To Address({tx.from_address} is malformed.")
 
         self.verify_loosely(tx, blockchain)
 
