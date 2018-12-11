@@ -13,6 +13,7 @@
 # limitations under the License.
 """Candidate Blocks"""
 import threading
+import time
 
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
@@ -33,6 +34,7 @@ class CandidateBlock:
         else:
             audience = None
 
+        self.start_time = time.time()
         self.hash = block_hash
         self.vote = Vote(block_hash.hex(), audience)
         self.__block = None
@@ -63,7 +65,7 @@ class CandidateBlock:
 
 class CandidateBlocks:
     def __init__(self):
-        self.blocks = {}  # {block_hash(Hash32) : CandidateBlocks}
+        self.blocks = {}  # {block_hash(Hash32) : CandidateBlock}
         self.__blocks_lock = threading.Lock()
 
     def add_vote(self, block_hash: Hash32, group_id, peer_id, vote):

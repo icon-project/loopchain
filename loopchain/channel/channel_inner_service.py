@@ -434,20 +434,16 @@ class ChannelInnerTask:
 
         logging.info("Peer vote to : " + block_hash.hex() + " " + str(vote_code) + f"from {peer_id}")
 
-        consensus = block_manager.consensus_algorithm
-        if isinstance(consensus, ConsensusSiever):
-            self._channel_service.block_manager.candidate_blocks.add_vote(
-                block_hash,
-                group_id,
-                peer_id,
-                (False, True)[vote_code == message_code.Response.success_validate_block]
-            )
+        self._channel_service.block_manager.candidate_blocks.add_vote(
+            block_hash,
+            group_id,
+            peer_id,
+            (False, True)[vote_code == message_code.Response.success_validate_block]
+        )
 
-            consensus.vote(
-                block_hash,
-                (False, True)[vote_code == message_code.Response.success_validate_block],
-                peer_id,
-                group_id)
+        consensus = block_manager.consensus_algorithm
+        if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+            consensus.count_votes(block_hash)
 
     @message_queue_task
     async def broadcast_vote(self, vote: VoteMessage):
