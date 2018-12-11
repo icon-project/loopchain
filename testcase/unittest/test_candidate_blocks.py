@@ -19,7 +19,7 @@ import unittest
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import BlockBuilder
+from loopchain.blockchain import BlockBuilder, CandidateBlocks
 from loopchain.blockchain import CandidateBlock
 from loopchain.utils import loggers
 
@@ -34,12 +34,17 @@ class TestCandidateBlocks(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def test_generate_candidate_block_by_block(self):
-        # GIVEN
+    @staticmethod
+    def __get_test_block():
         block_builder = BlockBuilder.new("0.1a")
         block_builder.height = 0
         block_builder.prev_hash = None
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
+        return block
+
+    def test_generate_candidate_block_by_block(self):
+        # GIVEN
+        block = self.__get_test_block()
 
         # WHEN
         candidate_block = CandidateBlock.from_block(block)
@@ -51,10 +56,7 @@ class TestCandidateBlocks(unittest.TestCase):
 
     def test_generate_candidate_block_by_hash_first(self):
         # GIVEN
-        block_builder = BlockBuilder.new("0.1a")
-        block_builder.height = 0
-        block_builder.prev_hash = None
-        block = block_builder.build()  # It does not have commit state. It will be rebuilt.
+        block = self.__get_test_block()
 
         # WHEN CandidateBlock.from_hash
         candidate_block = CandidateBlock.from_hash(block.header.hash)
@@ -70,6 +72,23 @@ class TestCandidateBlocks(unittest.TestCase):
         # THEN
         self.assertEqual(block.header.hash, candidate_block.hash)
         self.assertIsNotNone(candidate_block.block)
+
+    def test_add_remove_block_to_candidate_blocks(self):
+        # GIVEN
+        block = self.__get_test_block()
+        candidate_blocks = CandidateBlocks()
+
+        # WHEN add
+        candidate_blocks.add_block(block)
+
+        # THEN
+        self.assertTrue(block.header.hash in candidate_blocks.blocks)
+
+        # WHEN remove
+        candidate_blocks.remove_block(block.header.hash)
+
+        # THEN
+        self.assertFalse(block.header.hash in candidate_blocks.blocks)
 
 
 if __name__ == '__main__':

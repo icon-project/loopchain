@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Candidate Blocks"""
-import loopchain.utils as util
-from loopchain.blockchain import Block
+from loopchain.baseservice import ObjectManager
+from loopchain.blockchain import Block, Vote
 
 
 class CandidateBlockSetBlock(Exception):
@@ -21,23 +21,27 @@ class CandidateBlockSetBlock(Exception):
 
 
 class CandidateBlock:
-    def __init__(self):
+    def __init__(self, block_hash):
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        self.hash = ""
-        self.votes = {}
+        self.hash = block_hash
+        if ObjectManager().channel_service:
+            audience = ObjectManager().channel_service.peer_manager
+        else:
+            audience = None
+        self.votes = Vote(block_hash.hex(), audience)
         self.__block = None
 
     @classmethod
     def from_hash(cls, block_hash):
-        candidate_block = CandidateBlock()
+        candidate_block = CandidateBlock(block_hash)
         candidate_block.hash = block_hash
         return candidate_block
 
     @classmethod
     def from_block(cls, block: Block):
-        candidate_block = CandidateBlock()
+        candidate_block = CandidateBlock(block.header.hash)
         candidate_block.block = block
         return candidate_block
 
@@ -50,11 +54,9 @@ class CandidateBlock:
 
     @block.setter
     def block(self, block: Block):
-        util.logger.spam(f"setter")
-        if self.hash != "" and self.hash != block.header.hash:
+        if self.hash != block.header.hash:
             raise CandidateBlockSetBlock
         else:
-            self.hash = block.header.hash
             self.__block = block
 
 
@@ -62,11 +64,11 @@ class CandidateBlocks:
     def __init__(self):
         self.blocks = {}  # {block_hash : CandidateBlocks}
 
-    def add_vote(self, block_hash, vote):
+    def add_vote(self, block_hash, peer_id, vote):
         pass
 
-    def add_block(self, block):
-        pass
+    def add_block(self, block: Block):
+        self.blocks[block.header.hash] = block
 
     def remove_block(self, block_hash):
-        pass
+        self.blocks.pop(block_hash, None)

@@ -12,15 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
-
 import asyncio
 import logging
 import time
+
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager, Timer, TimerService
-from loopchain.blockchain import ExternalAddress, Block, BlockBuilder, BlockVerifier, TransactionStatusInQueue
+from loopchain.blockchain import ExternalAddress, Block, BlockBuilder, BlockVerifier, TransactionStatusInQueue, Vote
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.peer import Vote
 from loopchain.peer.consensus_base import ConsensusBase
 
 
@@ -47,6 +46,10 @@ class ConsensusSiever(ConsensusBase):
             coroutine = self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
             asyncio.run_coroutine_threadsafe(coroutine, self._loop)
             return
+
+        #### 바뀐 리더가 이전 리더가 보낸 빈블록에 대한 다른 피어들의 vote 를 수집했다가
+        #### 다음 자기가 생성하는 첫블록에 해당 vote 를 담아서 전송해야 한다.
+        #### 이때 만약 네트워크가 종료되면 해당 빈블록은 unconfirmed block 상태로 머물다가 삭제 된다.
 
         raise RuntimeError("Cannot vote before starting consensus.")
 

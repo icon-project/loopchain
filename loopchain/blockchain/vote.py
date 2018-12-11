@@ -60,6 +60,9 @@ class Vote:
 
     @staticmethod
     def __make_vote_init(audience):
+        if not audience:
+            return None
+
         vote_init = {}
         if isinstance(audience, PeerManager):
             for group_id in list(audience.peer_list.keys()):

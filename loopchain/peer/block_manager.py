@@ -59,6 +59,7 @@ class BlockManager(Subscriber):
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
+        self.candidate_blocks = CandidateBlocks()
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
