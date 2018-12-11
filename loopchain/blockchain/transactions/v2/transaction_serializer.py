@@ -1,6 +1,6 @@
 from . import Transaction, HASH_SALT
 from .. import TransactionSerializer as BaseTransactionSerializer
-from ... import Hash32, Signature, ExternalAddress
+from ... import Hash32, Signature, ExternalAddress, MalformedStr, int_fromhex, int_tohex
 
 
 class TransactionSerializer(BaseTransactionSerializer):
@@ -10,8 +10,8 @@ class TransactionSerializer(BaseTransactionSerializer):
         params = {
             "from": tx.from_address.hex_xx(),
             "to": tx.to_address.hex_xx(),
-            "value": tx.value,
-            "fee": tx.fee
+            "value": int_tohex(tx.value),
+            "fee": int_tohex(tx.fee),
         }
         if tx.timestamp is not None:
             params['timestamp'] = str(tx.timestamp)
@@ -45,6 +45,9 @@ class TransactionSerializer(BaseTransactionSerializer):
         fee = tx_data.pop('fee', None)
         nonce = tx_data.pop('nonce', None)
         extra = tx_data
+
+        value = int_fromhex(value)
+        fee = int_fromhex(fee)
 
         return Transaction(
             hash=Hash32.fromhex(hash, ignore_prefix=True, allow_malformed=False),

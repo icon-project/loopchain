@@ -1,5 +1,6 @@
 import base64
 from abc import ABCMeta
+from typing import Union
 
 
 class Bytes(bytes):
@@ -158,3 +159,23 @@ class MalformedStr(str):
         type_name = type(self).__qualname__
         origin_type_name = self.origin_type.__qualname__
         return type_name + f"({origin_type_name}, {super().__str__()})"
+
+
+def int_fromhex(value: str):
+    if value == value.replace("0x", ""):
+        return MalformedStr(int, value)
+
+    if value != value.lower():
+        return MalformedStr(int, value)
+
+    try:
+        return int(value, 16)
+    except ValueError:
+        return MalformedStr(int, value)
+
+
+def int_tohex(value: Union[int, MalformedStr]):
+    if isinstance(value, int):
+        return hex(value)
+
+    return value.hex_xx()

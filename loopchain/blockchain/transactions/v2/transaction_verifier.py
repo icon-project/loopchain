@@ -15,13 +15,21 @@ class TransactionVerifier(BaseTransactionVerifier):
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
     def verify(self, tx: 'Transaction', blockchain=None):
+        if isinstance(tx.from_address, MalformedStr):
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"To Address({tx.from_address} is malformed.")
+
         if isinstance(tx.to_address, MalformedStr):
             raise RuntimeError(f"Tx({tx})\n"
                                f"To Address({tx.to_address} is malformed.")
 
-        if isinstance(tx.from_address, MalformedStr):
+        if isinstance(tx.value, MalformedStr):
             raise RuntimeError(f"Tx({tx})\n"
-                               f"To Address({tx.from_address} is malformed.")
+                               f"Value({tx.value} is malformed.")
+
+        if isinstance(tx.fee, MalformedStr):
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"Fee({tx.fee} is malformed.")
 
         self.verify_loosely(tx, blockchain)
 

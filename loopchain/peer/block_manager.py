@@ -512,8 +512,6 @@ class BlockManager(Subscriber):
                                     util.exit_and_msg(f"This peer already tried to synchronize {my_height} block "
                                                       f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
                                                       f"Peer will be down.")
-                            if my_height == 41046:
-                                util.exit_and_msg("aaa")
 
                         if target_height is None:
                             if max_block_height > max_height:
