@@ -701,7 +701,7 @@ class BlockManager(Subscriber):
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.__blockchain.add_unconfirm_block(unconfirmed_block)
         finally:
-            self.__vote_unconfirmed_block(unconfirmed_block.header.hash.hex(), exception is None)
+            self.__vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 
     def callback_complete_consensus(self, **kwargs):
         self.__prev_epoch = kwargs.get("prev_epoch", None)

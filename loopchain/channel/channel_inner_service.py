@@ -23,9 +23,9 @@ from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier,
-                                  Block, BlockBuilder, BlockSerializer, blocks)
+from loopchain.baseservice import BroadcastCommand, ScoreResponse
+from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, Block, BlockBuilder,
+                                  BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Epoch, VoteMessage
@@ -421,7 +421,7 @@ class ChannelInnerTask:
         self._channel_service.peer_manager.remove_peer(peer_id, group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def vote_unconfirmed_block(self, peer_id, group_id, block_hash, vote_code) -> None:
+    def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
@@ -432,10 +432,17 @@ class ChannelInnerTask:
                 #                     f"({ChannelProperty().name}) Not Leader Peer!")
                 return
 
-        logging.info("Peer vote to : " + block_hash + " " + str(vote_code) + f"from {peer_id}")
+        logging.info("Peer vote to : " + block_hash.hex() + " " + str(vote_code) + f"from {peer_id}")
 
         consensus = block_manager.consensus_algorithm
         if isinstance(consensus, ConsensusSiever):
+            self._channel_service.block_manager.candidate_blocks.add_vote(
+                block_hash,
+                group_id,
+                peer_id,
+                (False, True)[vote_code == message_code.Response.success_validate_block]
+            )
+
             consensus.vote(
                 block_hash,
                 (False, True)[vote_code == message_code.Response.success_validate_block],

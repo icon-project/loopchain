@@ -138,13 +138,13 @@ class ConsensusSiever(ConsensusBase):
                 if vote_result is None:  # sentinel
                     return False
 
-                vote_block_hash, vote_code, peer_id, group_id = vote_result
-                self._blockmanager.candidate_blocks.add_vote(
-                    candidate_block.header.hash,
-                    group_id,
-                    peer_id,
-                    vote_code
-                )
+                # vote_block_hash, vote_code, peer_id, group_id = vote_result
+                # self._blockmanager.candidate_blocks.add_vote(
+                #     vote_block_hash,
+                #     group_id,
+                #     peer_id,
+                #     vote_code
+                # )
 
             except asyncio.TimeoutError:
                 logging.warning("Timed Out Block not confirmed duration: " +
