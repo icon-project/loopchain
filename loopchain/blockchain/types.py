@@ -162,6 +162,9 @@ class MalformedStr(str):
 
 
 def int_fromhex(value: str):
+    if not isinstance(value, str):
+        raise ValueError(f"This is not string. {value}")
+
     if value == value.replace("0x", ""):
         return MalformedStr(int, value)
 
