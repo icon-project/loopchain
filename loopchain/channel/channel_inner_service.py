@@ -492,7 +492,7 @@ class ChannelInnerTask:
         block_data_dict = bs.serialize(block)
 
         if block.header.height == 0:
-            return message_code.Response.success, block.header.hash.hex(), json.dumps(block_data_dict), []
+            return message_code.Response.success, block_hash, json.dumps(block_data_dict), []
 
         confirmed_tx_list = block_data_dict["confirmed_transaction_list"]
         confirmed_tx_list_without_fail = []
@@ -526,7 +526,7 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), []
 
-        return message_code.Response.success, block.header.hash.hex(), block_data_json, []
+        return message_code.Response.success, block_hash, block_data_json, []
 
     @message_queue_task
     async def get_block(self, block_height, block_hash, block_data_filter, tx_data_filter):
@@ -538,7 +538,7 @@ class ChannelInnerTask:
 
         bs = BlockSerializer.new(block.header.version)
         block_dict = bs.serialize(block)
-        return message_code.Response.success, block.header.hash, json.dumps(block_dict), []
+        return message_code.Response.success, block_hash, json.dumps(block_dict), []
 
     async def __get_block(self, block_data_filter, block_hash, block_height, tx_data_filter):
         block_manager = self._channel_service.block_manager
