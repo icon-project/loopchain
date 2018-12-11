@@ -83,11 +83,15 @@ class ConsensusSiever(ConsensusBase):
 
             logging.info(f"candidate block : {candidate_block.header}")
 
-            vote = Vote(candidate_block.header.hash.hex(), ObjectManager().channel_service.peer_manager)
-            vote.add_vote(ChannelProperty().group_id, ChannelProperty().peer_id, True)
+            self._blockmanager.candidate_blocks.add_vote(
+                candidate_block.header.hash,
+                ChannelProperty().group_id,
+                ChannelProperty().peer_id,
+                True
+            )
 
             self._blockmanager.broadcast_send_unconfirmed_block(candidate_block)
-            success = await self._wait_for_voting(candidate_block, vote)
+            success = await self._wait_for_voting(candidate_block)
             if not success:
                 return
 
@@ -118,9 +122,9 @@ class ConsensusSiever(ConsensusBase):
                 delay_time = conf.INTERVAL_BLOCKGENERATION - elapsed_time
                 self._start_consensus_timer(delay_time)
 
-    async def _wait_for_voting(self, candidate_block: 'Block', vote: 'Vote'):
+    async def _wait_for_voting(self, candidate_block: 'Block'):
         while True:
-            result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
+            result = self._blockmanager.candidate_blocks.get_vote_result(candidate_block.header.hash)
             if result:
                 return True
 
@@ -135,8 +139,12 @@ class ConsensusSiever(ConsensusBase):
                     return False
 
                 vote_block_hash, vote_code, peer_id, group_id = vote_result
-                if vote.target_hash == vote_block_hash:
-                    vote.add_vote(group_id, peer_id, vote_code)
+                self._blockmanager.candidate_blocks.add_vote(
+                    candidate_block.header.hash,
+                    group_id,
+                    peer_id,
+                    vote_code
+                )
 
             except asyncio.TimeoutError:
                 logging.warning("Timed Out Block not confirmed duration: " +

@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Candidate Blocks"""
+import threading
+
+from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Block, Vote
+from loopchain.blockchain import Block, Vote, Hash32
 
 
 class CandidateBlockSetBlock(Exception):
@@ -21,20 +24,21 @@ class CandidateBlockSetBlock(Exception):
 
 
 class CandidateBlock:
-    def __init__(self, block_hash):
+    def __init__(self, block_hash: Hash32):
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        self.hash = block_hash
         if ObjectManager().channel_service:
             audience = ObjectManager().channel_service.peer_manager
         else:
             audience = None
-        self.votes = Vote(block_hash.hex(), audience)
+
+        self.hash = block_hash
+        self.vote = Vote(block_hash.hex(), audience)
         self.__block = None
 
     @classmethod
-    def from_hash(cls, block_hash):
+    def from_hash(cls, block_hash: Hash32):
         candidate_block = CandidateBlock(block_hash)
         candidate_block.hash = block_hash
         return candidate_block
@@ -44,9 +48,6 @@ class CandidateBlock:
         candidate_block = CandidateBlock(block.header.hash)
         candidate_block.block = block
         return candidate_block
-
-    def add_vote(self):
-        pass
 
     @property
     def block(self):
@@ -62,13 +63,28 @@ class CandidateBlock:
 
 class CandidateBlocks:
     def __init__(self):
-        self.blocks = {}  # {block_hash : CandidateBlocks}
+        self.blocks = {}  # {block_hash(Hash32) : CandidateBlocks}
+        self.__blocks_lock = threading.Lock()
 
-    def add_vote(self, block_hash, peer_id, vote):
-        pass
+    def add_vote(self, block_hash: Hash32, group_id, peer_id, vote):
+        with self.__blocks_lock:
+            if block_hash not in self.blocks:
+                self.blocks[block_hash] = CandidateBlock.from_hash(block_hash)
+
+        self.blocks[block_hash].vote.add_vote(group_id, peer_id, vote)
+
+    def get_vote_result(self, block_hash):
+        return self.blocks[block_hash].vote.get_result(block_hash.hex(), conf.VOTING_RATIO)
 
     def add_block(self, block: Block):
-        self.blocks[block.header.hash] = block
+        with self.__blocks_lock:
+            if block.header.hash not in self.blocks:
+                self.blocks[block.header.hash] = CandidateBlock.from_block(block)
+            else:
+                self.blocks[block.header.hash].block = block
 
     def remove_block(self, block_hash):
-        self.blocks.pop(block_hash, None)
+        for _block_hash in list(self.blocks.keys()):
+            if self.blocks[_block_hash].block.header.prev_hash == block_hash:
+                continue
+            self.blocks.pop(_block_hash, None)
