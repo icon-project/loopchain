@@ -362,7 +362,7 @@ class BlockChain:
                 'block_hash': block.header.hash.hex(),
                 'block_height': block.header.height,
                 'tx_index': hex(index),
-                'transaction': tx_serializer.to_raw_data(tx),
+                'transaction': tx_serializer.to_db_data(tx),
                 'result': invoke_result
             }
 

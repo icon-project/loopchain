@@ -26,6 +26,10 @@ class TransactionSerializer(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def to_db_data(self, tx: 'Transaction'):
+        raise NotImplementedError
+
+    @abstractmethod
     def from_(self, tx_dumped: dict) -> 'Transaction':
         raise NotImplementedError
 

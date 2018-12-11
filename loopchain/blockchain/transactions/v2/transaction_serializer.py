@@ -32,6 +32,9 @@ class TransactionSerializer(BaseTransactionSerializer):
         params['method'] = tx.method
         return params
 
+    def to_db_data(self, tx: 'Transaction'):
+        return self.to_full_data(tx)
+
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data = dict(tx_data)
 

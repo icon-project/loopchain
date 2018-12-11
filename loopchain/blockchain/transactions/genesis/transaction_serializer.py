@@ -24,6 +24,9 @@ class TransactionSerializer(BaseTransactionSerializer):
     def to_full_data(self, tx: 'Transaction'):
         return self.to_raw_data(tx)
 
+    def to_db_data(self, tx: 'Transaction'):
+        return self.to_full_data(tx)
+
     def from_(self, tx_data: dict) -> 'Transaction':
         hash_ = self._hash_generator.generate_hash(tx_data)
         nid = tx_data.get('nid')

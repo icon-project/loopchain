@@ -40,6 +40,9 @@ class TransactionSerializer(BaseTransactionSerializer):
         params['txHash'] = tx.hash.hex()
         return params
 
+    def to_db_data(self, tx: 'Transaction'):
+        return self.to_raw_data(tx)
+
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data_copied = dict(tx_data)
         tx_data_copied.pop('signature', None)
