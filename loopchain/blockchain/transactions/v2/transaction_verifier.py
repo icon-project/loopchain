@@ -31,6 +31,10 @@ class TransactionVerifier(BaseTransactionVerifier):
             raise RuntimeError(f"Tx({tx})\n"
                                f"Fee({tx.fee} is malformed.")
 
+        if tx.extra:
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"Unexpected params {tx.extra}.")
+
         self.verify_loosely(tx, blockchain)
 
     def verify_loosely(self, tx: 'Transaction', blockchain=None):
