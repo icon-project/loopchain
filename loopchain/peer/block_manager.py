@@ -454,6 +454,9 @@ class BlockManager(Subscriber):
 
         logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
+        next_block_height = my_height + 1
+        self.get_blockchain().prevent_next_block_mismatch(next_block_height)
+
         try:
             while max_height > my_height:
                 for peer_stub in peer_stubs:
@@ -472,6 +475,7 @@ class BlockManager(Subscriber):
                             commit_state = block.header.commit_state
                             logging.debug(f"block_manager.py >> block_height_sync :: "
                                           f"height({block.header.height}) commit_state({commit_state})")
+
                             block_verifier = BlockVerifier.new("0.1a", self.get_blockchain().tx_versioner)
                             if block.header.height == 0:
                                 block_verifier.invoke_func = self.__channel_service.genesis_invoke

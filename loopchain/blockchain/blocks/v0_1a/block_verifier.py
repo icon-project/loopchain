@@ -19,7 +19,6 @@ class BlockVerifier(BaseBlockVerifier):
         return self.verify_common(block, prev_block, generator)
 
     def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
-        import logging
         header: BlockHeader = block.header
         body: BlockBody = block.body
 

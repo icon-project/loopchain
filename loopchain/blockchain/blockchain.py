@@ -215,15 +215,13 @@ class BlockChain:
 
     def add_block(self, block: Block) -> bool:
         with self.__add_block_lock:
-            if not self.__prevent_next_block_mismatch(block):
+            if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
             return self.__add_block(block)
 
     def __add_block(self, block: Block):
         with self.__add_block_lock:
-            need_to_commit = True
-
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
                 if block.header.height == 0:
@@ -232,9 +230,8 @@ class BlockChain:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                if need_to_commit:
-                    self.__add_tx_to_block_db(block, invoke_results)
-                    ObjectManager().channel_service.score_write_precommit_state(block)
+                self.__add_tx_to_block_db(block, invoke_results)
+                ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
                 logging.warning(f"blockchain:add_block FAIL "
                                 f"channel_service.score_write_precommit_state")
@@ -290,7 +287,7 @@ class BlockChain:
 
             return True
 
-    def __prevent_next_block_mismatch(self, next_block: Block) -> bool:
+    def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
         score_stub = StubCollection().icon_score_stubs[self.__channel_name]
         request = {
@@ -301,35 +298,38 @@ class BlockChain:
         response = score_stub.sync_task().query(request)
         score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
 
-        if score_last_block_height == next_block.header.height:
+        if score_last_block_height == next_height:
             logging.debug(f"already invoked block in score...")
             return False
 
-        if score_last_block_height < next_block.header.height:
-            for invoke_block_height in range(score_last_block_height + 1, next_block.header.height):
+        if score_last_block_height < next_height:
+            for invoke_block_height in range(score_last_block_height + 1, next_height):
                 logging.debug(f"mismatch invoke_block_height({invoke_block_height}) "
                               f"score_last_block_height({score_last_block_height}) "
-                              f"next_block_height({next_block.header.height})")
+                              f"next_block_height({next_height})")
 
                 invoke_block = self.find_block_by_height(invoke_block_height)
                 if invoke_block is None:
                     raise RuntimeError("Error raised during prevent mismatch block, "
                                        f"Cannot find block({invoke_block_height}")
 
-                invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
+                if invoke_block_height == 0:
+                    invoke_block, invoke_block_result = ObjectManager().channel_service.genesis_invoke(invoke_block)
+                else:
+                    invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
 
                 self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
 
-        if score_last_block_height == next_block.header.height + 1:
+        if score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
                     self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
-                if invoke_result_block_height == next_block.header.height:
+                if invoke_result_block_height == next_height:
                     logging.debug(f"already saved invoke result...")
                     return False
             except KeyError:
@@ -337,7 +337,7 @@ class BlockChain:
         else:
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
-                              f"loopchain({next_block.header.height})/score({score_last_block_height})")
+                              f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
     def __add_tx_to_block_db(self, block, invoke_results):
