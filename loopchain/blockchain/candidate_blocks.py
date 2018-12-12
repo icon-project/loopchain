@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Candidate Blocks"""
+import logging
 import threading
 import time
 
@@ -60,6 +61,7 @@ class CandidateBlock:
         if self.hash != block.header.hash:
             raise CandidateBlockSetBlock
         else:
+            logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
 

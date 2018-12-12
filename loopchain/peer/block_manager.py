@@ -242,7 +242,7 @@ class BlockManager(Subscriber):
 
     def confirm_block(self, block: Block):
         try:
-            self.__blockchain.confirm_block(block.header.prev_hash.hex())
+            self.__blockchain.confirm_block(block.header.prev_hash)
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.block_height_sync()
@@ -699,7 +699,8 @@ class BlockManager(Subscriber):
             traceback.print_exc()
         else:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
-            self.__blockchain.add_unconfirm_block(unconfirmed_block)
+            self.candidate_blocks.add_block(unconfirmed_block)
+            # self.__blockchain.add_unconfirm_block(unconfirmed_block)  # TODO substitute this to candidate_blocks
         finally:
             self.__vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 
