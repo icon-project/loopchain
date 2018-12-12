@@ -132,33 +132,44 @@ class Signature(Bytes):
         return cls.from_base64(base64_bytes)
 
 
-class MalformedStr(str):
-    def __new__(cls, origin_type, *args, **kwargs):
-        self = super().__new__(cls, *args, **kwargs)
+class MalformedStr:
+    def __init__(self, origin_type, value):
         self.origin_type = origin_type
-        return self
+        self.value = value
 
     def hex(self):
-        return super().__str__()
+        return self.value
 
     def hex_xx(self):
-        return super().__str__()
+        return self.value
 
     def hex_hx(self):
-        return super().__str__()
+        return self.value
 
     def hex_0x(self):
-        return super().__str__()
+        return self.value
+
+    def str(self):
+        return self.value
+
+    def __eq__(self, other):
+        if type(self) is not type(other):
+            return False
+
+        return self.origin_type == other.origin_type and self.value == other.value
+
+    def __hash__(self):
+        return hash(self.origin_type) ^ hash(self.value)
 
     def __repr__(self):
         type_name = type(self).__qualname__
         origin_type_name = self.origin_type.__qualname__
-        return type_name + f"({origin_type_name}, {super().__repr__()})"
+        return type_name + f"({origin_type_name}, {repr(self.value)})"
 
     def __str__(self):
         type_name = type(self).__qualname__
         origin_type_name = self.origin_type.__qualname__
-        return type_name + f"({origin_type_name}, {super().__str__()})"
+        return type_name + f"({origin_type_name}, {self.value})"
 
 
 def int_fromhex(value: str):
@@ -182,3 +193,17 @@ def int_tohex(value: Union[int, MalformedStr]):
         return hex(value)
 
     return value.hex_xx()
+
+
+def int_fromstr(value: Union[str, int]):
+    try:
+        return int(value)
+    except ValueError:
+        return MalformedStr(int, value)
+
+
+def int_tostr(value: Union[int, MalformedStr]):
+    if isinstance(value, int):
+        return str(value)
+
+    return value.str()

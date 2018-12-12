@@ -13,7 +13,7 @@ class Transaction(BaseTransition):
     to_address: Address
     value: Union[int, MalformedStr]
     fee: Union[int, MalformedStr]
-    nonce: str
+    nonce: Union[int, MalformedStr]
 
     extra: Mapping[str, str]
     method = "icx_sendTransaction"
@@ -21,7 +21,7 @@ class Transaction(BaseTransition):
 
     def __init__(self, hash: 'Hash32', signature: 'Signature', timestamp: int,
                  from_address: 'Address', to_address: 'Address',
-                 value: Union[int, MalformedStr], fee: Union[int, MalformedStr], nonce: str, extra: Mapping[str, str]):
+                 value: Union[int, MalformedStr], fee: Union[int, MalformedStr], nonce: int, extra: Mapping[str, str]):
         super().__init__(hash, signature, timestamp)
 
         object.__setattr__(self, "from_address", from_address)

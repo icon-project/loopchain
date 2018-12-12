@@ -31,6 +31,10 @@ class TransactionVerifier(BaseTransactionVerifier):
             raise RuntimeError(f"Tx({tx})\n"
                                f"Fee({tx.fee} is malformed.")
 
+        if isinstance(tx.nonce, MalformedStr):
+            raise RuntimeError(f"Tx({tx})\n"
+                               f"Nonce({tx.fee} is malformed.")
+
         if tx.extra:
             raise RuntimeError(f"Tx({tx})\n"
                                f"Unexpected params {tx.extra}.")
