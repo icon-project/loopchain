@@ -635,9 +635,13 @@ class BlockChain:
                 # unconfirmed_block_byte = self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY)
                 unconfirmed_block = candidate_blocks.blocks[confirmed_block_hash].block
                 # unconfirmed_block = pickle.loads(self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY))
-                logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
                 logging.debug("confirmed_block_hash: " + confirmed_block_hash.hex())
-                logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                if unconfirmed_block:
+                    logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
+                    logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                else:
+                    logging.warning("There is no unconfirmed_block in candidate_blocks")
+                    return
 
             except KeyError:
                 if self.last_block.header.hash == confirmed_block_hash:

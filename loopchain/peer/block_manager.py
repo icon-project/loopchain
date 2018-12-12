@@ -184,17 +184,19 @@ class BlockManager(Subscriber):
     def broadcast_send_unconfirmed_block(self, block_: Block):
         """생성된 unconfirmed block 을 피어들에게 broadcast 하여 검증을 요청한다.
         """
-        logging.debug(f"BroadCast AnnounceUnconfirmedBlock...peers: "
-                      f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
+        if self.__channel_service.state_machine.state == "BlockGenerate":
+            logging.debug(f"BroadCast AnnounceUnconfirmedBlock "
+                          f"height({block_.header.height}) block({block_.header.hash}) peers: "
+                          f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
 
-        # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
-        block_dump = util.block_dumps(block_)
+            # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
+            block_dump = util.block_dumps(block_)
 
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(
-                block=block_dump,
-                channel=self.__channel_name))
+            ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+                "AnnounceUnconfirmedBlock",
+                loopchain_pb2.BlockSend(
+                    block=block_dump,
+                    channel=self.__channel_name))
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.

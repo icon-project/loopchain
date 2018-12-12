@@ -13,6 +13,7 @@
 # limitations under the License.
 """loopchain timer service."""
 from loopchain.baseservice import TimerService, Timer
+import loopchain.utils as util
 
 
 class SlotTimer:
@@ -37,17 +38,17 @@ class SlotTimer:
         self.call()
 
     def __timer_callback(self):
-        # util.logger.spam(f"__timer_callback slot({self.__slot}) delayed({self.__delayed})")
+        util.logger.spam(f"__timer_callback slot({self.__slot}) delayed({self.__delayed})")
         self.__slot += 1
         if self.__delayed:
             self.__delayed = False
             self.call()
-        if self.__slot > 10:
-            # something broken!
-            pass
+        elif self.__slot > 10:
+            util.logger.warning(f"consensus timer loop broken slot({self.__slot}) delayed({self.__delayed})")
+            # self.call()
 
     def call(self):
-        # util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
+        util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
         if self.__slot > 0:
             self.__slot -= 1
             self.__timer_service.get_event_loop().create_task(self.__callback())
