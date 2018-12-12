@@ -409,22 +409,11 @@ class BlockManager(Subscriber):
                 self.__consensus_algorithm.stop()
 
             self.__consensus_algorithm = ConsensusSiever(self)
-            util.logger.spam(f"add timer block generate")
-            timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.INTERVAL_BLOCKGENERATION,
-                    is_repeat=False,
-                    callback=self.__create_block_generation_schedule
-                )
-            )
+            self.__consensus_algorithm.start_timer(timer_service)
 
     def stop_block_generate_timer(self):
-        timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
-        timer_service: TimerService = self.__channel_service.timer_service
-        if timer_key in timer_service.timer_list:
-            timer_service.stop_timer(timer_key)
+        if self.__consensus_algorithm:
+            self.__consensus_algorithm.stop()
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
