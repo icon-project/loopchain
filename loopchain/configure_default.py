@@ -172,6 +172,7 @@ VOTING_RATIO = 0.66
 BLOCK_HEIGHT_BYTES_LEN = 12
 # Block vote timeout
 BLOCK_VOTE_TIMEOUT = 60 * 5  # seconds
+CANDIDATE_BLOCK_TIMEOUT = 60 * 60  # seconds
 # default storage path
 DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_ROOT_PATH, '.storage'))
 # max tx list size by address

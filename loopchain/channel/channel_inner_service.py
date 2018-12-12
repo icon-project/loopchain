@@ -295,7 +295,7 @@ class ChannelInnerTask:
         logging.debug(f"#block \n"
                       f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
                       f"height({unconfirmed_block.header.height})\n"
-                      f"hash({unconfirmed_block.header.hash})")
+                      f"hash({unconfirmed_block.header.hash.hex()})")
 
         self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
         self._channel_service.state_machine.vote()

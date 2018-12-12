@@ -14,8 +14,8 @@
 """Candidate Blocks"""
 import logging
 import threading
-import time
 
+import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import Block, Vote, Hash32
@@ -35,7 +35,7 @@ class CandidateBlock:
         else:
             audience = None
 
-        self.start_time = time.time()
+        self.start_time = util.get_time_stamp()  # timestamp
         self.hash = block_hash
         self.vote = Vote(block_hash.hex(), audience)
         self.__block = None
@@ -88,7 +88,13 @@ class CandidateBlocks:
                 self.blocks[block.header.hash].block = block
 
     def remove_block(self, block_hash):
-        for _block_hash in list(self.blocks.keys()):
-            if self.blocks[_block_hash].block.header.prev_hash == block_hash:
-                continue
-            self.blocks.pop(_block_hash, None)
+        if self.blocks[block_hash].block is not None:
+            prev_block_hash = self.blocks[block_hash].block.header.prev_hash
+
+            for _block_hash in list(self.blocks.keys()):
+                if self.blocks[_block_hash].block is not None:
+                    if self.blocks[_block_hash].block.header.prev_hash == prev_block_hash:
+                        self.blocks.pop(_block_hash, None)
+                else:
+                    if util.diff_in_seconds(self.blocks[_block_hash].start_time) > conf.CANDIDATE_BLOCK_TIMEOUT:
+                        continue
