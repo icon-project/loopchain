@@ -791,7 +791,7 @@ class TestCrypto(unittest.TestCase):
         genesis_hash_generator = build_hash_generator(0, "genesis_tx")
         genesis_tx_hash = genesis_hash_generator.generate_hash(genesis_init_data["transaction_data"])
         self.assertEqual(genesis_tx_hash,
-                         Hash32.fromhex("6dbc389370253739f28b8c236f4e7acdcfcdb9cfe8386c32d809114d5b00ac65"))
+                         Hash32.fromhex("0x6dbc389370253739f28b8c236f4e7acdcfcdb9cfe8386c32d809114d5b00ac65"))
 
 
 if __name__ == '__main__':
