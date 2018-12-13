@@ -43,8 +43,11 @@ loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
-def run_peer_server(port, rs_port=conf.PORT_RADIOSTATION, group_id=None, score=None, event_for_init=None):
-    ObjectManager().peer_service = PeerService(group_id, conf.IP_RADIOSTATION, rs_port)
+def run_peer_server(port, rs_port=None, group_id=None, score=None, event_for_init=None):
+    if rs_port is None:
+        rs_port = conf.PORT_RADIOSTATION
+    radio_station_target = f"{conf.IP_RADIOSTATION}:{rs_port}"
+    ObjectManager().peer_service = PeerService(group_id, radio_station_target)
 
     if score is not None:
         ObjectManager().peer_service.set_chain_code(score)
