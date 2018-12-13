@@ -29,7 +29,7 @@ class TransactionVerifier(ABC):
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
             raise RuntimeError(f"tx({tx})\n"
-                               f"hash {tx.hash.hex()} is already exist in blockcahin.")
+                               f"hash {tx.hash.hex()} already exists in blockchain.")
 
     def verify_hash(self, tx: 'Transaction'):
         params = self._tx_serializer.to_origin_data(tx)
