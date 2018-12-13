@@ -88,13 +88,15 @@ class CandidateBlocks:
                 self.blocks[block.header.hash].block = block
 
     def remove_block(self, block_hash):
-        if self.blocks[block_hash].block is not None:
+        if self.blocks[block_hash].block:
             prev_block_hash = self.blocks[block_hash].block.header.prev_hash
 
             for _block_hash in list(self.blocks.keys()):
-                if self.blocks[_block_hash].block is not None:
-                    if self.blocks[_block_hash].block.header.prev_hash == prev_block_hash:
-                        self.blocks.pop(_block_hash, None)
-                else:
-                    if util.diff_in_seconds(self.blocks[_block_hash].start_time) > conf.CANDIDATE_BLOCK_TIMEOUT:
+                if self.blocks[_block_hash].block:
+                    if self.blocks[_block_hash].block.header.prev_hash != prev_block_hash:
                         continue
+
+                if util.diff_in_seconds(self.blocks[_block_hash].start_time) < conf.CANDIDATE_BLOCK_TIMEOUT:
+                    continue
+
+                self.blocks.pop(_block_hash, None)
