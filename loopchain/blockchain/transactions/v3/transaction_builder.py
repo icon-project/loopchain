@@ -62,11 +62,13 @@ class TransactionBuilder(BaseTransactionBuilder):
             "version": "0x3",
             "from": self.from_address.hex_xx(),
             "to": self.to_address.hex_xx(),
-            "value": hex(int(self.value)),
             "stepLimit": hex(self.step_limit),
-            "timestamp": hex(int(self._timestamp)),
+            "timestamp": hex(self._timestamp),
             "nid": hex(self.nid)
         }
+
+        if self.value is not None:
+            params["value"] = hex(self.value)
 
         if self.nonce is not None:
             params["nonce"] = hex(self.nonce)
