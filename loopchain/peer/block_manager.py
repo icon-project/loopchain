@@ -345,7 +345,8 @@ class BlockManager(Subscriber):
             if max_height_result.status_code != 200:
                 raise ConnectionError
 
-            block_serializer = BlockSerializer.new("0.1a", self.get_blockchain().tx_versioner)
+            block_version = self.get_blockchain().block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
             block = block_serializer.deserialize(get_block_result['block'])
 
             return block, json.loads(max_height_result.text)['block_height'], message_code.Response.success
@@ -476,7 +477,8 @@ class BlockManager(Subscriber):
                             logging.debug(f"block_manager.py >> block_height_sync :: "
                                           f"height({block.header.height}) commit_state({commit_state})")
 
-                            block_verifier = BlockVerifier.new("0.1a", self.get_blockchain().tx_versioner)
+                            block_version = self.get_blockchain().block_versioner.get_version(block.header.height)
+                            block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
                             if block.header.height == 0:
                                 block_verifier.invoke_func = self.__channel_service.genesis_invoke
                             else:
@@ -680,7 +682,8 @@ class BlockManager(Subscriber):
 
         leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
 
-        block_verifier = BlockVerifier.new("0.1a", self.get_blockchain().tx_versioner)
+        block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
+        block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
         block_verifier.invoke_func = self.__channel_service.score_invoke
 
         exception = None

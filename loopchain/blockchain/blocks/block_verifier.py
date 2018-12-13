@@ -42,8 +42,12 @@ class BlockVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
-        from . import v0_1a
+        from . import v0_1a, v0_2
         if version == v0_1a.version:
             return v0_1a.BlockVerifier(tx_versioner)
 
-        raise RuntimeError
+        if version == v0_2.version:
+            return v0_2.BlockVerifier(tx_versioner)
+
+        raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")
+

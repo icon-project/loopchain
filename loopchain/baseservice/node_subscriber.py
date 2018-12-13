@@ -71,9 +71,12 @@ class NodeSubscriber:
                 await self.__add_confirmed_block(block_json=response)
 
     async def __add_confirmed_block(self, block_json: str):
-        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
         block_dict = json.loads(block_json)
-        block_serializer = BlockSerializer.new(block_dict["version"], blockchain.tx_versioner)
+        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
+
+        block_height = blockchain.block_versioner.get_version(block_dict)
+        block_version = blockchain.block_versioner.get_version(block_height)
+        block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
         confirmed_block = block_serializer.deserialize(block_dict)
 
         logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "

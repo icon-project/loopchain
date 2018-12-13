@@ -41,6 +41,9 @@ class BlockBuilder(BaseBlockBuilder):
             self.build_peer_id()
             self.sign()
 
+        return self._build()
+
+    def _build(self):
         header = BlockHeader(
             hash=self.hash,
             prev_hash=self.prev_hash,

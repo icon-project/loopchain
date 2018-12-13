@@ -83,11 +83,14 @@ class BlockBuilder(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
-        from . import v0_1a
+        from . import v0_1a, v0_2
         if version == v0_1a.version:
             return v0_1a.BlockBuilder(tx_versioner)
 
-        raise RuntimeError
+        if version == v0_2.version:
+            return v0_2.BlockBuilder(tx_versioner)
+
+        raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")
 
     @classmethod
     def from_new(cls, block: 'Block', tx_versioner: 'TransactionVersioner'):

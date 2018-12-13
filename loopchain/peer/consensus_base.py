@@ -45,7 +45,9 @@ class ConsensusBase(metaclass=ABCMeta):
         pass
 
     def _makeup_block(self):
-        block_builder = BlockBuilder.new("0.1a", self._blockchain.tx_versioner)
+        block_height = self._blockchain.last_block.header.height + 1
+        block_version = self._blockchain.block_versioner.get_version(block_height)
+        block_builder = BlockBuilder.new(block_version, self._blockchain.tx_versioner)
 
         tx_versioner = self._blockchain.tx_versioner
         while self._txQueue:

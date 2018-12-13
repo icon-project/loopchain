@@ -28,7 +28,7 @@ class BlockVerifier(BaseBlockVerifier):
         if header.height > 0 and header.prev_hash is None:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
 
-        builder = BlockBuilder(self._tx_versioner)
+        builder = BlockBuilder.new(block.header.version, self._tx_versioner)
         builder.height = header.height
         builder.prev_hash = header.prev_hash
         builder.fixed_timestamp = header.timestamp

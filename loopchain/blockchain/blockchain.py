@@ -23,9 +23,9 @@ from enum import Enum
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer,
-                                  Transaction, TransactionBuilder, TransactionSerializer, TransactionVersioner,
-                                  Hash32)
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
+                                  Transaction, TransactionBuilder, TransactionSerializer,
+                                  Hash32, TransactionVersioner)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -82,13 +82,14 @@ class BlockChain:
         self.__total_tx = 0
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
-        self.__tx_versioner = TransactionVersioner()
-        if "genesis_tx_hash_version" in channel_option:
-            self.__tx_versioner.hash_generator_versions['genesis'] = channel_option["genesis_tx_hash_version"]
 
-        if "tx_hash_version" in channel_option:
-            self.__tx_versioner.hash_generator_versions['0x2'] = channel_option["tx_hash_version"]
-            self.__tx_versioner.hash_generator_versions['0x3'] = channel_option["tx_hash_version"]
+        self.__block_versioner = BlockVersioner()
+        for version, height in channel_option.get("block_versions", {}).items():
+            self.__block_versioner.add_version(height, version)
+
+        self.__tx_versioner = TransactionVersioner()
+        for tx_version, tx_hash_version in channel_option.get("hash_versions", {}).items():
+            self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
     def __set_send_tx_type(self, send_tx_type):
         if send_tx_type == conf.SendTxType.icx:
@@ -121,6 +122,10 @@ class BlockChain:
     @property
     def made_block_count(self):
         return self.__made_block_count
+
+    @property
+    def block_versioner(self):
+        return self.__block_versioner
 
     @property
     def tx_versioner(self):
@@ -160,15 +165,20 @@ class BlockChain:
     def _rebuild_transaction_count_from_blocks(self):
         total_tx = 0
         block_hash = self.__last_block.header.hash.hex()
-        block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
+        block_height = self.__last_block.header.height
+
         while block_hash != "":
             block_dump = self.__confirmed_block_db.Get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
             # Count only normal block`s tx count, not genesis block`s
             if block.header.height > 0:
                 total_tx += len(block.body.transactions)
 
+            # next loop
+            block_height -= 1
             block_hash = block.header.prev_hash.hex()
         return total_tx
 
@@ -180,7 +190,9 @@ class BlockChain:
         try:
             block_bytes = self.__confirmed_block_db.Get(key)
             block_dumped = json.loads(block_bytes)
-            return BlockSerializer.new("0.1a", self.tx_versioner).deserialize(block_dumped)
+            block_height = self.__block_versioner.get_height(block_dumped)
+            block_version = self.__block_versioner.get_version(block_height)
+            return BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dumped)
         except KeyError as e:
             logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
@@ -248,7 +260,8 @@ class BlockChain:
             byte_length = (bit_length + 7) // 8
             next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-            block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
+            block_version = self.__block_versioner.get_version(block.header.height)
+            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
             block_serialized = json.dumps(block_serializer.serialize(block))
             block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
@@ -553,7 +566,8 @@ class BlockChain:
         tx_builder.message = tx_info["message"]
         tx = tx_builder.build()
 
-        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_version = self.block_versioner.get_version(0)
+        block_builder = BlockBuilder.new(block_version, self.tx_versioner)
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None
@@ -582,11 +596,11 @@ class BlockChain:
         # write precommit block to DB
         logging.debug(
             f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
-        if self.__last_block.header.height < precommit_block.header.header.height:
+        if self.__last_block.header.height < precommit_block.header.height:
             self.__precommit_tx(precommit_block)
             util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 
-            block_serializer = BlockSerializer.new("0.1a", self.tx_versioner)
+            block_serializer = BlockSerializer.new(precommit_block.header.version, self.tx_versioner)
             block_serialized = block_serializer.serialize(precommit_block)
             block_serialized = json.dumps(block_serialized)
             block_serialized = block_serialized.encode('utf-8')
@@ -667,7 +681,10 @@ class BlockChain:
 
         if last_block_key:
             block_dump = self.__confirmed_block_db.Get(last_block_key)
-            self.__last_block = BlockSerializer.new("0.1a", self.tx_versioner).deserialize(json.loads(block_dump))
+            block_dump = json.loads(block_dump)
+            block_height = self.__block_versioner.get_height(block_dump)
+            block_version = self.__block_versioner.get_version(block_height)
+            self.__last_block = BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dump)
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
