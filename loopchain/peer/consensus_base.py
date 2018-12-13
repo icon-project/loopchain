@@ -13,10 +13,11 @@
 # limitations under the License.
 """A base class of consensus for the loopchain"""
 import logging
+import traceback
 from abc import ABCMeta, abstractmethod
 from loopchain import configure as conf
 from loopchain.blockchain import BlockBuilder
-from loopchain.blockchain import TransactionVersions, Transaction, TransactionStatusInQueue, TransactionVerifier
+from loopchain.blockchain import TransactionVersioner, Transaction, TransactionStatusInQueue, TransactionVerifier
 
 
 class ConsensusBase(metaclass=ABCMeta):
@@ -44,12 +45,12 @@ class ConsensusBase(metaclass=ABCMeta):
         pass
 
     def _makeup_block(self):
-        block_builder = BlockBuilder.new("0.1a")
+        block_builder = BlockBuilder.new("0.1a", self._blockchain.tx_versioner)
 
-        tx_versions = TransactionVersions()
+        tx_versioner = self._blockchain.tx_versioner
         while self._txQueue:
-            if len(block_builder) >= conf.MAX_TX_SIZE_IN_BLOCK:
-                logging.debug(f"consensus_base total size({len(block_builder)}) "
+            if block_builder.size() >= conf.MAX_TX_SIZE_IN_BLOCK:
+                logging.debug(f"consensus_base total size({block_builder.size()}) "
                               f"count({len(block_builder.transactions)}) "
                               f"_txQueue size ({len(self._txQueue)})")
                 break
@@ -61,13 +62,15 @@ class ConsensusBase(metaclass=ABCMeta):
             if tx is None:
                 break
 
-            tx_hash_version = tx_versions.get_hash_generator_version(tx.version)
-            tv = TransactionVerifier.new(tx.version, tx_hash_version)
+            tv = TransactionVerifier.new(tx.version, tx_versioner)
 
             try:
                 tv.verify(tx, self._blockchain)
             except Exception as e:
-                logging.warning(f"tx hash invalid. tx: {tx}")
+                logging.warning(f"tx hash invalid.\n"
+                                f"tx: {tx}\n"
+                                f"exception: {e}")
+                traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
 

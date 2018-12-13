@@ -40,6 +40,9 @@ class TransactionSerializer(BaseTransactionSerializer):
         params['txHash'] = tx.hash.hex()
         return params
 
+    def to_db_data(self, tx: 'Transaction'):
+        return self.to_raw_data(tx)
+
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data_copied = dict(tx_data)
         tx_data_copied.pop('signature', None)
@@ -59,8 +62,8 @@ class TransactionSerializer(BaseTransactionSerializer):
             hash=Hash32(tx_hash),
             signature=Signature.from_base64str(tx_data['signature']),
             timestamp=int(tx_data['timestamp'], 16),
-            from_address=Address.fromhex(tx_data['from']),
-            to_address=Address.fromhex(tx_data['to']),
+            from_address=Address.fromhex_address(tx_data['from']),
+            to_address=Address.fromhex_address(tx_data['to']),
             value=value,
             step_limit=int(tx_data['stepLimit'], 16),
             nonce=nonce,

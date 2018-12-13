@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 from ..hashing import build_hash_generator
 
 if TYPE_CHECKING:
+    from . import TransactionVersioner
     from .transaction import Transaction
 
 
@@ -25,6 +26,10 @@ class TransactionSerializer(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def to_db_data(self, tx: 'Transaction'):
+        raise NotImplementedError
+
+    @abstractmethod
     def from_(self, tx_dumped: dict) -> 'Transaction':
         raise NotImplementedError
 
@@ -33,8 +38,9 @@ class TransactionSerializer(ABC):
         raise NotImplementedError
 
     @classmethod
-    def new(cls, version: str, hash_generator_version: int):
+    def new(cls, version: str, versioner: 'TransactionVersioner'):
         from . import genesis, v2, v3
+        hash_generator_version = versioner.get_hash_generator_version(version)
         if version == genesis.version:
             return genesis.TransactionSerializer(hash_generator_version)
         elif version == v2.version:

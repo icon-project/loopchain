@@ -345,7 +345,7 @@ class BlockManager(Subscriber):
             if max_height_result.status_code != 200:
                 raise ConnectionError
 
-            block_serializer = BlockSerializer.new("0.1a")
+            block_serializer = BlockSerializer.new("0.1a", self.get_blockchain().tx_versioner)
             block = block_serializer.deserialize(get_block_result['block'])
 
             return block, json.loads(max_height_result.text)['block_height'], message_code.Response.success
@@ -454,6 +454,9 @@ class BlockManager(Subscriber):
 
         logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
+        next_block_height = my_height + 1
+        self.get_blockchain().prevent_next_block_mismatch(next_block_height)
+
         try:
             while max_height > my_height:
                 for peer_stub in peer_stubs:
@@ -472,7 +475,8 @@ class BlockManager(Subscriber):
                             commit_state = block.header.commit_state
                             logging.debug(f"block_manager.py >> block_height_sync :: "
                                           f"height({block.header.height}) commit_state({commit_state})")
-                            block_verifier = BlockVerifier.new("0.1a")
+
+                            block_verifier = BlockVerifier.new("0.1a", self.get_blockchain().tx_versioner)
                             if block.header.height == 0:
                                 block_verifier.invoke_func = self.__channel_service.genesis_invoke
                             else:
@@ -674,17 +678,17 @@ class BlockManager(Subscriber):
         if is_vote_type_block:
             return
 
-        leader_peer_id = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
-        if unconfirmed_block.header.peer_id.hex_hx() != leader_peer_id:
-            self.__vote_unconfirmed_block(unconfirmed_block.header.hash.hex(), False)
-            return
+        leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
 
-        block_verifier = BlockVerifier.new("0.1a")
+        block_verifier = BlockVerifier.new("0.1a", self.get_blockchain().tx_versioner)
         block_verifier.invoke_func = self.__channel_service.score_invoke
 
         exception = None
         try:
-            invoke_results = block_verifier.verify(unconfirmed_block, self.__blockchain.last_block, self.__blockchain)
+            invoke_results = block_verifier.verify(unconfirmed_block,
+                                                   self.__blockchain.last_block,
+                                                   self.__blockchain,
+                                                   ExternalAddress.fromhex(leader_peer_id))
         except Exception as e:
             exception = e
             logging.error(e)

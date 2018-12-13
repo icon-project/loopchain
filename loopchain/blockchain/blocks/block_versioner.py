@@ -1,7 +1,7 @@
 import bisect
 
 
-class BlockVersions:
+class BlockVersioner:
     def __init__(self):
         self._version_heights = []
         self._version_names = []

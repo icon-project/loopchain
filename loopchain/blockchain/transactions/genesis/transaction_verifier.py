@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from . import TransactionSerializer, HASH_SALT
 from .. import TransactionVerifier as BaseTransactionVerifier
-from ... import Address
+from ... import ExternalAddress
 
 if TYPE_CHECKING:
     from . import Transaction
@@ -43,4 +43,4 @@ class TransactionVerifier(BaseTransactionVerifier):
                                    '"balance" value is None in an account of genesis tx.')
 
             # An exception will be raised if 'address' is invalid.
-            Address.fromhex(account['address'])
+            ExternalAddress.fromhex(account['address'])

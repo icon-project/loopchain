@@ -6,11 +6,11 @@ from typing import Dict
 
 from . import Block
 from .. import Hash32, ExternalAddress, Signature
-from ..transactions import Transaction
+from ..transactions import Transaction, TransactionVersioner
 
 
 class BlockBuilder(ABC):
-    def __init__(self):
+    def __init__(self, tx_versioner: 'TransactionVersioner'):
         # Attributes that must be assigned
         self.height: int = None
         self.prev_hash: 'Hash32' = None
@@ -24,8 +24,10 @@ class BlockBuilder(ABC):
         self.signature: Signature = None
         self.peer_id: 'ExternalAddress' = None
 
-    def __len__(self):
-        return sum(len(tx) for tx in self.transactions.values())
+        self._tx_versioner = tx_versioner
+
+    def size(self):
+        return sum(tx.size(self._tx_versioner) for tx in self.transactions.values())
 
     def reset_cache(self):
         self.block = None
@@ -80,16 +82,16 @@ class BlockBuilder(ABC):
         return Signature(signature)
 
     @classmethod
-    def new(cls, version: str):
+    def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockBuilder()
+            return v0_1a.BlockBuilder(tx_versioner)
 
         raise RuntimeError
 
     @classmethod
-    def from_new(cls, block: 'Block'):
-        block_builder = cls.new(block.header.version)
+    def from_new(cls, block: 'Block', tx_versioner: 'TransactionVersioner'):
+        block_builder = cls.new(block.header.version, tx_versioner)
         block_builder.from_(block)
         return block_builder
 
