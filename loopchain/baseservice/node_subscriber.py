@@ -74,7 +74,7 @@ class NodeSubscriber:
         block_dict = json.loads(block_json)
         blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
 
-        block_height = blockchain.block_versioner.get_version(block_dict)
+        block_height = blockchain.block_versioner.get_height(block_dict)
         block_version = blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
         confirmed_block = block_serializer.deserialize(block_dict)
