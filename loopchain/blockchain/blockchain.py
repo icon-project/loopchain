@@ -25,7 +25,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, TransactionVersioner)
+                                  Hash32, ExternalAddress, TransactionVersioner)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -56,11 +56,8 @@ class BlockChain:
         self.__last_block = None
         self.__save_tx_by_address_strategy = None
         self.__channel_name = channel_name
+        self.__peer_id = ChannelProperty().peer_id
         self.__set_send_tx_type(conf.CHANNEL_OPTION[channel_name]["send_tx_type"])
-
-        self.__peer_id = None
-        if ObjectManager().peer_service is not None:
-            self.__peer_id = ObjectManager().peer_service.peer_id
 
         # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
         self.__confirmed_block_db = blockchain_db
@@ -571,6 +568,7 @@ class BlockChain:
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None
+        block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
         block_builder.transactions[tx.hash] = tx
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
