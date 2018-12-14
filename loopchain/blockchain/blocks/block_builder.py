@@ -10,6 +10,10 @@ from ..transactions import Transaction, TransactionVersioner
 
 
 class BlockBuilder(ABC):
+    version = None
+    BlockHeaderClass = None
+    BlockBodyClass = None
+
     def __init__(self, tx_versioner: 'TransactionVersioner'):
         # Attributes that must be assigned
         self.height: int = None

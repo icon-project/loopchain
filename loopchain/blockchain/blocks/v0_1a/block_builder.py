@@ -12,6 +12,10 @@ if TYPE_CHECKING:
 
 
 class BlockBuilder(BaseBlockBuilder):
+    version = BlockHeader.version
+    BlockHeaderClass = BlockHeader
+    BlockBodyClass = BlockBody
+
     def __init__(self, tx_versioner: 'TransactionVersioner'):
         super().__init__(tx_versioner)
 
@@ -41,10 +45,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.build_peer_id()
             self.sign()
 
-        return self._build()
-
-    def _build(self):
-        header = BlockHeader(
+        header = self.BlockHeaderClass(
             hash=self.hash,
             prev_hash=self.prev_hash,
             height=self.height,
@@ -54,7 +55,7 @@ class BlockBuilder(BaseBlockBuilder):
             next_leader=self.next_leader,
             merkle_tree_root_hash=self.merkle_tree_root_hash,
             commit_state=self.commit_state)
-        body = BlockBody(self.transactions, self.confirm_prev_block)
+        body = self.BlockBodyClass(self.transactions, self.confirm_prev_block)
         self.block = Block(header, body)
         return self.block
 

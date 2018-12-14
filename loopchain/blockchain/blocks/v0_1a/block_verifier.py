@@ -1,15 +1,17 @@
 from typing import TYPE_CHECKING
-from . import BlockBuilder
-from .. import BlockVerifier as BaseBlockVerifier
+from . import BlockHeader
+from .. import BlockBuilder, BlockVerifier as BaseBlockVerifier
 from ... import TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import BlockHeader, BlockBody
+    from . import BlockBody
     from .. import Block
     from ... import ExternalAddress
 
 
 class BlockVerifier(BaseBlockVerifier):
+    version = BlockHeader.version
+
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         self.verify_transactions(block, blockchain)
         return self.verify_common(block, prev_block, generator)
@@ -28,7 +30,7 @@ class BlockVerifier(BaseBlockVerifier):
         if header.height > 0 and header.prev_hash is None:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
 
-        builder = BlockBuilder.new(block.header.version, self._tx_versioner)
+        builder = BlockBuilder.new(self.version, self._tx_versioner)
         builder.height = header.height
         builder.prev_hash = header.prev_hash
         builder.fixed_timestamp = header.timestamp

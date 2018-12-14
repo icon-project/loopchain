@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class BlockVerifier(ABC):
+    version = None
     _ecdsa = PrivateKey()
 
     def __init__(self, tx_versioner: 'TransactionVersioner'):

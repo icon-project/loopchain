@@ -7,6 +7,10 @@ if TYPE_CHECKING:
 
 
 class BlockSerializer(ABC):
+    version = None
+    BlockHeaderClass = None
+    BlockBodyClass = None
+
     def __init__(self, tx_versioner: 'TransactionVersioner'):
         self._tx_versioner = tx_versioner
 

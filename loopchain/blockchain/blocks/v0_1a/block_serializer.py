@@ -5,13 +5,14 @@ from ... import ExternalAddress, Signature, Hash32, BlockVersionNotMatch, Transa
 
 
 class BlockSerializer(BaseBlockSerializer):
-    def serialize(self, block: 'Block'):
-        if block.header.version != BlockHeader.version:
-            raise BlockVersionNotMatch(block.header.version, BlockHeader.version,
-                                       "The block of this version cannot be serialized by the serializer.")
-        return self._serialize(block)
+    version = BlockHeader.version
+    BlockHeaderClass = BlockHeader
+    BlockBodyClass = BlockBody
 
-    def _serialize(self, block: 'Block'):
+    def serialize(self, block: 'Block'):
+        if block.header.version != self.version:
+            raise BlockVersionNotMatch(block.header.version, self.version,
+                                       "The block of this version cannot be serialized by the serializer.")
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -35,20 +36,12 @@ class BlockSerializer(BaseBlockSerializer):
         }
 
     def deserialize(self, json_data):
-        if json_data['version'] != BlockHeader.version:
-            raise BlockVersionNotMatch(json_data['version'], BlockHeader.version,
+        if json_data['version'] != self.version:
+            raise BlockVersionNotMatch(json_data['version'], self.version,
                                        "The block of this version cannot be deserialized by the serializer.")
-
-        return self._deserialize(*self._deserialize_data(json_data))
-
-    def _deserialize_data(self, json_data):
-        hash = Hash32.fromhex(json_data["block_hash"], ignore_prefix=True)
 
         prev_hash = json_data.get('prev_block_hash')
         prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
-
-        height = json_data["height"]
-        timestamp = json_data["time_stamp"]
 
         peer_id = json_data.get('peer_id')
         peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
@@ -59,11 +52,19 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("next_leader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
-        merkle_tree_root_hash = Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True)
-
-        commit_state = json_data.get("commit_state")
-
         confirm_prev_block = json_data.get("confirm_prev_block")
+
+        header = self.BlockHeaderClass(
+            hash=Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
+            prev_hash=prev_hash,
+            height=json_data["height"],
+            timestamp=json_data["time_stamp"],
+            peer_id=peer_id,
+            signature=signature,
+            next_leader=next_leader,
+            merkle_tree_root_hash=Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
+            commit_state=json_data.get("commit_state")
+        )
 
         transactions = OrderedDict()
         for tx_data in json_data['confirmed_transaction_list']:
@@ -72,22 +73,5 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        return hash, prev_hash, height, timestamp, peer_id, signature, next_leader, commit_state, \
-               merkle_tree_root_hash, confirm_prev_block, transactions
-
-    def _deserialize(self, hash, prev_hash, height, timestamp, peer_id, signature, next_leader, commit_state,
-                     merkle_tree_root_hash, confirm_prev_block, transactions):
-        header = BlockHeader(
-            hash=hash,
-            prev_hash=prev_hash,
-            height=height,
-            timestamp=timestamp,
-            peer_id=peer_id,
-            signature=signature,
-            next_leader=next_leader,
-            merkle_tree_root_hash=merkle_tree_root_hash,
-            commit_state=commit_state
-        )
-
-        body = BlockBody(transactions, confirm_prev_block)
+        body = self.BlockBodyClass(transactions, confirm_prev_block)
         return Block(header, body)
