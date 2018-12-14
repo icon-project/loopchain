@@ -7,12 +7,17 @@ BlockVersion = namedtuple("BlockVersion", ("height", "name"))
 
 class BlockVersioner:
     def __init__(self):
-        self._versions: List[BlockVersion] = list(default_block_versions)
+        self._versions: List[BlockVersion] = default_block_versions
 
     def add_version(self, height: int, version: str):
+        if self._versions is default_block_versions:
+            self._versions = []
+
         index = next((i for i, version in enumerate(self._versions) if height <= version.height), None)
         if index is not None:
-            self._versions.index(BlockVersion(height, version))
+            if self._versions[index].height == height:
+                raise ValueError(f"Duplicated block version. {version}, {height}")
+            self._versions.insert(index, BlockVersion(height, version))
         else:
             self._versions.append(BlockVersion(height, version))
 
