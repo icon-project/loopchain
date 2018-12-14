@@ -9,24 +9,27 @@ class BlockVersioner:
     def __init__(self):
         self._versions: List[BlockVersion] = default_block_versions
 
-    def add_version(self, height: int, version: str):
+    def add_version(self, height: int, version_name: str):
         if self._versions is default_block_versions:
             self._versions = []
 
-        index = next((i for i, version in enumerate(self._versions) if height <= version.height), None)
-        if index is not None:
-            if self._versions[index].height == height:
-                raise ValueError(f"Duplicated block version. {version}, {height}")
-            self._versions.insert(index, BlockVersion(height, version))
+        try:
+            next(version for version in self._versions if version.height == height)
+        except StopIteration:  # Not duplicated
+            pass
         else:
-            self._versions.append(BlockVersion(height, version))
+            raise ValueError(f"Duplicated block version. {version_name}, {height}. {self._versions}")
+
+        self._versions.append(BlockVersion(height, version_name))
+        self._versions.sort(key=lambda version: version.height)
 
     def get_version(self, height: int):
-        version = next((version for version in reversed(self._versions) if height >= version.height), None)
-        if version is None:
+        try:
+            version = next(version for version in reversed(self._versions) if version.height <= height)
+        except StopIteration:
             raise RuntimeError(f"There is no block version for the height. height: {height}")
-
-        return version.name
+        else:
+            return version.name
 
     def get_height(self, block_dumped: Union[str, dict]):
         if isinstance(block_dumped, str):
