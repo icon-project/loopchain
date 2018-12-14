@@ -1,12 +1,14 @@
 from typing import TYPE_CHECKING
+from . import BlockHeader
 from .. import v0_1a
 
 if TYPE_CHECKING:
-    from . import BlockHeader
     from .. import Block
 
 
 class BlockVerifier(v0_1a.BlockVerifier):
+    version = BlockHeader.version
+
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         super().verify_prev_block(block, prev_block)
 

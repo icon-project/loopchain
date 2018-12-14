@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+from .. import BlockVersionNotMatch
+from ..blocks import Block
 
 if TYPE_CHECKING:
     from .. import TransactionVersioner
-    from ..blocks import Block
 
 
 class BlockSerializer(ABC):
@@ -14,12 +15,25 @@ class BlockSerializer(ABC):
     def __init__(self, tx_versioner: 'TransactionVersioner'):
         self._tx_versioner = tx_versioner
 
-    @abstractmethod
     def serialize(self, block: 'Block') -> dict:
-        raise NotImplementedError
+        if block.header.version != self.version:
+            raise BlockVersionNotMatch(block.header.version, self.version,
+                                       "The block of this version cannot be serialized by the serializer.")
+
+        return self._serialize(block)
 
     @abstractmethod
+    def _serialize(self, block: 'Block') -> dict:
+        raise NotImplementedError
+
     def deserialize(self, block_dumped: dict) -> 'Block':
+        if block_dumped['version'] != self.version:
+            raise BlockVersionNotMatch(block_dumped['version'], self.version,
+                                       "The block of this version cannot be deserialized by the serializer.")
+        return self._deserialize(block_dumped)
+
+    @abstractmethod
+    def _deserialize(self, block_dumped: dict) -> 'Block':
         raise NotImplementedError
 
     @classmethod

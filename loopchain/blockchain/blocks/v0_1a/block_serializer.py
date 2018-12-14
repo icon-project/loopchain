@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import ExternalAddress, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer
+from ... import ExternalAddress, Signature, Hash32, TransactionSerializer
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -9,10 +9,7 @@ class BlockSerializer(BaseBlockSerializer):
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
 
-    def serialize(self, block: 'Block'):
-        if block.header.version != self.version:
-            raise BlockVersionNotMatch(block.header.version, self.version,
-                                       "The block of this version cannot be serialized by the serializer.")
+    def _serialize(self, block: 'Block'):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -35,11 +32,7 @@ class BlockSerializer(BaseBlockSerializer):
             "commit_state": header.commit_state
         }
 
-    def deserialize(self, json_data):
-        if json_data['version'] != self.version:
-            raise BlockVersionNotMatch(json_data['version'], self.version,
-                                       "The block of this version cannot be deserialized by the serializer.")
-
+    def _deserialize(self, json_data):
         prev_hash = json_data.get('prev_block_hash')
         prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
 
