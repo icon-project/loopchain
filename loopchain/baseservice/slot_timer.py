@@ -20,10 +20,11 @@ class SlotTimer:
     """Slot Timer"""
 
     def __init__(self, timer_key, duration, timer_service: TimerService, callback):
-        self.__slot = 1
-        self.__delayed = False
+        self.__slot = 0
+        self.__delayed = True
         self.__timer_key = timer_key
         self.__timer_service = timer_service
+        self.__callback = callback
 
         timer_service.add_timer(
             timer_key,
@@ -31,11 +32,10 @@ class SlotTimer:
                 target=timer_key,
                 duration=duration,
                 is_repeat=True,
+                is_run_at_start=True,
                 callback=self.__timer_callback
             )
         )
-        self.__callback = callback
-        self.call()
 
     def __timer_callback(self):
         util.logger.spam(f"__timer_callback slot({self.__slot}) delayed({self.__delayed})")

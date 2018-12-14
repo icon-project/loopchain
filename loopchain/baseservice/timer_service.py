@@ -43,6 +43,7 @@ class Timer:
         self.__duration = kwargs.get("duration")
         self.__start_time = time.time()
         self.__is_repeat = kwargs.get("is_repeat", False)
+        self.is_run_at_start = kwargs.get("is_run_at_start", False)
         self.__callback = kwargs.get("callback", None)
         self.__kwargs = kwargs.get("callback_kwargs", {})
 
@@ -127,6 +128,8 @@ class TimerService(CommonThread):
             self.__timer_list[key] = timer
             asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
             timer.on()
+            if timer.is_run_at_start:
+                self.restart_timer(key)
         else:  # old timer
             timer.reset()
 
