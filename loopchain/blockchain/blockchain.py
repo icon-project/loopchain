@@ -175,7 +175,7 @@ class BlockChain:
                 total_tx += len(block.body.transactions)
 
             # next loop
-            block_height -= 1
+            block_height = block.header.height - 1
             block_hash = block.header.prev_hash.hex()
         return total_tx
 
