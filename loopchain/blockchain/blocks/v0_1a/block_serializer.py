@@ -1,14 +1,15 @@
 from collections import OrderedDict
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import ExternalAddress, Signature, Hash32, BlockVersionNotMatch, TransactionSerializer
+from ... import ExternalAddress, Signature, Hash32, TransactionSerializer
 
 
 class BlockSerializer(BaseBlockSerializer):
-    def serialize(self, block: 'Block'):
-        if block.header.version != BlockHeader.version:
-            raise BlockVersionNotMatch(block.header.version, BlockHeader.version,
-                                       "The block of this version cannot be serialized by the serializer.")
+    version = BlockHeader.version
+    BlockHeaderClass = BlockHeader
+    BlockBodyClass = BlockBody
+
+    def _serialize(self, block: 'Block'):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -31,11 +32,7 @@ class BlockSerializer(BaseBlockSerializer):
             "commit_state": header.commit_state
         }
 
-    def deserialize(self, json_data):
-        if json_data['version'] != BlockHeader.version:
-            raise BlockVersionNotMatch(json_data['version'], BlockHeader.version,
-                                       "The block of this version cannot be deserialized by the serializer.")
-
+    def _deserialize(self, json_data):
         prev_hash = json_data.get('prev_block_hash')
         prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
 
@@ -50,7 +47,7 @@ class BlockSerializer(BaseBlockSerializer):
 
         confirm_prev_block = json_data.get("confirm_prev_block")
 
-        header = BlockHeader(
+        header = self.BlockHeaderClass(
             hash=Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
             prev_hash=prev_hash,
             height=json_data["height"],
@@ -69,5 +66,5 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        body = BlockBody(transactions, confirm_prev_block)
+        body = self.BlockBodyClass(transactions, confirm_prev_block)
         return Block(header, body)

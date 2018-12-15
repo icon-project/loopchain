@@ -2,7 +2,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
-from .. import ExternalAddress
+from .. import ExternalAddress, BlockVersionNotMatch
 
 if TYPE_CHECKING:
     from . import Block
@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 
 class BlockVerifier(ABC):
+    version = None
     _ecdsa = PrivateKey()
 
     def __init__(self, tx_versioner: 'TransactionVersioner'):
@@ -23,6 +24,11 @@ class BlockVerifier(ABC):
     @abstractmethod
     def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
         raise NotImplementedError
+
+    def verify_version(self, block: 'Block'):
+        if block.header.version != self.version:
+            raise BlockVersionNotMatch(block.header.version, self.version,
+                                       f"The block version is incorrect. Block({block.header})")
 
     def verify_signature(self, block: 'Block'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -42,8 +48,12 @@ class BlockVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
-        from . import v0_1a
+        from . import v0_1a, v0_2
         if version == v0_1a.version:
             return v0_1a.BlockVerifier(tx_versioner)
 
-        raise RuntimeError
+        if version == v0_2.version:
+            return v0_2.BlockVerifier(tx_versioner)
+
+        raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")
+

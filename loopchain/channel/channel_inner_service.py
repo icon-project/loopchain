@@ -71,7 +71,6 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
-            blockchain = self._channel_service.block_manager.get_blockchain()
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block))
 
@@ -314,8 +313,12 @@ class ChannelInnerTask:
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
         try:
             blockchain = self._channel_service.block_manager.get_blockchain()
-            bs = BlockSerializer.new("0.1a", blockchain.tx_versioner)
             json_block = json.loads(serialized_block)
+
+            block_height = blockchain.block_versioner.get_height(json_block)
+            block_version = blockchain.block_versioner.get_version(block_height)
+            bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
+
             confirmed_block = bs.deserialize(json_block)
             util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
                              f"hash({confirmed_block.header.hash.hex()}) "

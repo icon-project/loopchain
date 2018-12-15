@@ -361,22 +361,34 @@ TOKEN_TYPE_SIGN = "02"
 ###############
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
+        "block_versions": {
+            "0.2": 0
+        },
+        "hash_versions": {
+            "genesis": 1,
+            "0x2": 1,
+            "0x3": 1
+        },
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "tx_hash_version": 1,
-        "genesis_tx_hash_version": 0,
         "key_load_type": KeyLoadType.FILE_LOAD,
         "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
         "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
         "private_password": b'test'
     },
     LOOPCHAIN_TEST_CHANNEL: {
+        "block_versions": {
+            "0.2": 0
+        },
+        "hash_versions": {
+            "genesis": 1,
+            "0x2": 1,
+            "0x3": 1
+        },
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "tx_hash_version": 1,
-        "genesis_tx_hash_version": 0,
         "key_load_type": KeyLoadType.FILE_LOAD,
         "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
         "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
