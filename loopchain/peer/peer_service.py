@@ -91,6 +91,7 @@ class PeerService:
         self.__rest_target = None
         self.__inner_target = None
         self.__peer_port = 0
+        self.__peer_cert = None
 
         # gRPC service for Peer
         self.__inner_service: PeerInnerService = None
@@ -165,6 +166,10 @@ class PeerService:
         return self.__peer_id
 
     @property
+    def peer_cert(self):
+        return self.__peer_cert
+
+    @property
     def group_id(self):
         if self.__group_id is None:
             self.__group_id = self.__peer_id
@@ -236,7 +241,9 @@ class PeerService:
         """네트워크에서 Peer 를 식별하기 위한 UUID를 level db 에 생성한다.
         """
         if util.channel_use_icx(conf.LOOPCHAIN_DEFAULT_CHANNEL):
-            self.__peer_id = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
+            auth = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL)
+            self.__peer_id = auth.address
+            self.__peer_cert = auth.peer_cert
         else:
             try:
                 uuid_bytes = bytes(self.__level_db.Get(conf.LEVEL_DB_KEY_FOR_PEER_ID))

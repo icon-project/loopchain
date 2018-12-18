@@ -11,6 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import base64
+
 from typing import TYPE_CHECKING
 from earlgrey import *
 
@@ -41,6 +43,14 @@ class PeerInnerTask:
             self._peer_service.peer_port, self._peer_service.peer_target, self._peer_service.rest_target, \
             self._peer_service.radio_station_target, self._peer_service.peer_id, self._peer_service.group_id, \
             self._peer_service.node_type.value, channels_info[channel_name]['score_package']
+
+    @message_queue_task
+    async def get_peer_info(self):
+        return {
+            'peer_id': self._peer_service.peer_id,
+            'peer_target': self._peer_service.peer_target,
+            'peer_cert': base64.b64encode(self._peer_service.peer_cert)
+        }
 
     @message_queue_task
     async def stop_outer(self):

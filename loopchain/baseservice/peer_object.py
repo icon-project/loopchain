@@ -29,6 +29,27 @@ class PeerStatus(IntEnum):
     disconnected = 2
 
 
+class PriorPeerInfo:
+    """PriorPeerInfo is prior peer info to get peer deatils. Get PriorPeerInfo from icon service"""
+
+    def __init__(self, peer_id: str, leader_order: int, url: str):
+        self._peer_id = peer_id
+        self._leader_order = leader_order
+        self._url = url
+
+    @property
+    def peer_id(self) -> str:
+        return self._peer_id
+
+    @property
+    def leader_order(self) -> int:
+        return self._leader_order
+
+    @property
+    def url(self) -> str:
+        return self._url
+
+
 class PeerInfo:
     """Peer Object"""
 

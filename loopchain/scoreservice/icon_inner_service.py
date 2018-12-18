@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from earlgrey import message_queue_task, MessageQueueService, MessageQueueStub
+from typing import Any
 from loopchain import utils
 
 
@@ -30,7 +31,7 @@ class IconScoreInnerTask:
         pass
 
     @message_queue_task
-    async def query(self, request: dict) -> dict:
+    async def query(self, request: dict) -> Any:
         pass
 
     @message_queue_task

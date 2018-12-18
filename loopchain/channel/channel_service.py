@@ -449,16 +449,7 @@ class ChannelService:
             return
 
         if response and response.status == message_code.Response.success:
-            peer_list_data = pickle.loads(response.peer_list)
-            self.__peer_manager.load(peer_list_data, False)
-            peers, peer_list = self.__peer_manager.get_peers_for_debug()
-            logging.debug("peer list update: " + peers)
-
-            # add connected peer to processes audience
-            for each_peer in peer_list:
-                util.logger.spam(f"peer_service:connect_to_radio_station peer({each_peer.target}-{each_peer.status})")
-                if each_peer.status == PeerStatus.connected:
-                    self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
+            self.__peer_manager.reset_peer_list()
 
     async def subscribe_to_radio_station(self):
         await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)

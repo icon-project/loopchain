@@ -17,11 +17,18 @@ import logging
 import pickle
 import threading
 import math
+import aiohttp
+import asyncio
+import functools
+import base64
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, \
+    PeerStatus, PeerObject, PeerInfo, PriorPeerInfo
 from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.utils.message_queue import StubCollection
+from loopchain.channel.channel_property import ChannelProperty
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
@@ -38,6 +45,8 @@ class PeerListData:
         self.__peer_leader: dict = {}
         # { group_id : { order:peer_id } 인 order 순서 정보
         self.__peer_order_list: dict = {}
+        # { peer_id:PrioPeerInfo } 인 사전 Peer 정보, url을 이용해 Peer 상세 정보를 가져온다.
+        self.__prior_peer_info_list: dict[str, PriorPeerInfo] = {}
 
     @property
     def peer_leader(self):
@@ -63,6 +72,14 @@ class PeerListData:
     def peer_info_list(self, peer_info_list):
         self.__peer_info_list = peer_info_list
 
+    @property
+    def prior_peer_info_list(self):
+        return self.__prior_peer_info_list
+
+    @prior_peer_info_list.setter
+    def prior_peer_info_list(self, prior_peer_info_list):
+        self.__prior_peer_info_list = prior_peer_info_list
+
 
 class PeerManager:
     def __init__(self, channel_name):
@@ -80,6 +97,8 @@ class PeerManager:
 
         self.__leader_complain_count = 0
         self.__highest_block_height = -1    # for RS heartbeat
+
+        self.__peer_details_futures: dict[str, asyncio.Task] = {}
 
     @property
     def peer_object_list(self) -> dict:
@@ -946,3 +965,111 @@ class PeerManager:
         complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
 
         return quorum, complain_quorum
+
+    def reset_peer_list(self):
+        asyncio.ensure_future(self._reset_peer_list_async())
+
+    def _reinit_peer_list(self):
+        self.peer_list_data = PeerListData()
+        self.__peer_object_list = {}
+        self.__leader_complain_count = 0
+        self.__highest_block_height = -1
+        self.__init_peer_group(conf.ALL_GROUP_ID)
+        for future in self.__peer_details_futures.values():
+            try:
+                future.cancel()
+            except asyncio.CancelledError as e:
+                logging.error(f"exception : {e}")
+        self.__peer_details_futures.clear()
+
+    async def _get_peer_list_from_icon_service(self):
+        request = {
+            'method': "ise_getPeers",
+            'params': {}
+        }
+        return await StubCollection().icon_score_stubs[self.__channel_name].async_task().query(request)
+
+    async def _reset_peer_list_async(self):
+        self._reinit_peer_list()
+
+        def _done_peer_details(pid, fut):
+            try:
+                if fut == self.__peer_details_futures[pid]:
+                    self.__peer_details_futures.pop(pid)
+                else:
+                    logging.warning(f"Future is not same with current Future for {pid}")
+            except KeyError:
+                logging.warning(f"Future has been already removed. peer_id={pid}")
+
+        peer_list = await self._get_peer_list_from_icon_service()
+        for i, peer in enumerate(peer_list):
+            peer_id = peer['peerId']
+            leader_order = i + 1
+            prior_peer_info = PriorPeerInfo(peer_id, leader_order, peer['url'])
+            self.peer_list_data.prior_peer_info_list[peer_id] = prior_peer_info
+
+            if peer_id == ChannelProperty().peer_id:
+                peer_info = PeerInfo(peer_id, group_id=peer_id,
+                                     target=ChannelProperty().peer_target, status=PeerStatus.connected,
+                                     cert=ObjectManager().channel_service.peer_auth.peer_cert, order=leader_order)
+                self.add_peer(peer_info)
+                continue
+
+            future: asyncio.Task = asyncio.ensure_future(self._request_peer_details(prior_peer_info))
+            future.add_done_callback(functools.partial(_done_peer_details, peer_id))
+            self.__peer_details_futures[peer_id] = future
+
+    async def _update_initial_peer_connection(self, peer_info: PeerInfo):
+        peer_id = peer_info.peer_id
+        stub_manager = self.get_peer_stub_manager(peer_info)
+        if not stub_manager:
+            logging.warning(f"Peer({peer_id}) was already removed")
+            return
+
+        response = await stub_manager.call_async(
+            "Request",
+            loopchain_pb2.Message(code=message_code.Request.status, channel=self.__channel_name),
+            is_stub_reuse=True
+        )
+        if not response and response.code != message_code.Response.success:
+            logging.error(f"Can not connect peer. peer_id={peer_id}, target={peer_info.target}")
+            return
+        try:
+            if peer_info != self.peer_list[conf.ALL_GROUP_ID][peer_id]:
+                logging.warning(f"Peer({peer_id}) was already removed")
+                return
+            if peer_info.status == PeerStatus.connected:
+                logging.debug(f"Peer status has already been changed to connected. peer_id={peer_id}")
+                return
+
+            self.update_peer_status(peer_id, peer_status=PeerStatus.connected)
+            peer_object: PeerObject = self.peer_object_list[conf.ALL_GROUP_ID][peer_id]
+            peer_object.no_response_count_reset()
+
+            broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
+            broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
+        except KeyError as e:
+            logging.warning(f"Has no peer. peer_id={peer_id}")
+            logging.warning(f"exception : {e}")
+
+    async def _request_peer_details(self, prior_peer_info: PriorPeerInfo):
+        # TODO: Make retry
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(prior_peer_info.url) as response:
+                    # FIXME: response에 에러 처리는 어떻게 되는지 확인해보자. server연결은 됐는데 404 에러가 발생한다던가
+                    details = await response.json()
+                    peer_id = details['peer_id']
+                    logging.debug(f"Received Peer details. peer_id={peer_id}, peer_target={details['peer_target']}")
+                    if peer_id not in self.peer_list_data.prior_peer_info_list:
+                        logging.warning(f"Peer({peer_id}) was already removed")
+                        return
+                    peer_info = PeerInfo(peer_id, group_id=peer_id, target=details['peer_target'],
+                                         status=PeerStatus.unknown, cert=base64.b64decode(details['peer_cert']),
+                                         order=prior_peer_info.leader_order)
+                    self.add_peer(peer_info)
+                    peer_info = self.peer_list[conf.ALL_GROUP_ID][peer_id]
+                    await self._update_initial_peer_connection(peer_info)
+        except (KeyError, ValueError, aiohttp.ClientError, base64.binascii.Error) as e:
+            logging.error(f"Failed to get peer details. peer_id={prior_peer_info.peer_id}, url={prior_peer_info.url}")
+            logging.error(f"exception : {e}")
