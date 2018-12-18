@@ -43,8 +43,7 @@ class BlockManager(Subscriber):
 
         self.__channel_service: ChannelService = channel_manager
         self.__channel_name = channel_name
-        self.__pre_validate_strategy = None
-        self.__set_send_tx_type(conf.CHANNEL_OPTION[channel_name]["send_tx_type"])
+        self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
         self.__level_db = None
         self.__level_db_path = ""
@@ -72,12 +71,6 @@ class BlockManager(Subscriber):
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = name
         self.__service_status = status_code.Service.online
-
-    def __set_send_tx_type(self, send_tx_type):
-        if send_tx_type == conf.SendTxType.icx:
-            self.__pre_validate_strategy = self.__pre_validate
-        else:
-            self.__pre_validate_strategy = self.__pre_validate_pass
 
     @property
     def channel_name(self):

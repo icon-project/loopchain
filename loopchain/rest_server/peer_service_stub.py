@@ -66,10 +66,7 @@ class PeerServiceStub(metaclass=SingletonMetaClass):
     def get_block(self, channel: str, block_hash: str= "", block_height: int=-1):
         block_data_filter = "prev_block_hash, height, block_hash, merkle_tree_root_hash," \
                             " time_stamp, peer_id, signature"
-        if conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx:
-            tx_data_filter = "icx_origin_data"
-        else:
-            tx_data_filter = "tx_hash, timestamp, data_string, peer_id"
+        tx_data_filter = "icx_origin_data"
 
         response = self.call("GetBlock",
                              loopchain_pb2.GetBlockRequest(

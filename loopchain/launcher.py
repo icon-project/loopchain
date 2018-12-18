@@ -149,7 +149,7 @@ def start_as_score(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    if util.channel_use_icx(channel) and conf.USE_EXTERNAL_SCORE:
+    if conf.USE_EXTERNAL_SCORE:
         if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
             from iconservice.icon_service import IconService
             from iconservice.icon_config import default_icon_config

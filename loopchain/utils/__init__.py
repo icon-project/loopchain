@@ -343,10 +343,6 @@ def get_private_ip():
         return get_private_ip3()
 
 
-def channel_use_icx(channel):
-    return conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx
-
-
 def dict_to_binary(the_dict):
     return str.encode(json.dumps(the_dict))
 

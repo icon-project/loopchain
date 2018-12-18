@@ -252,10 +252,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         stubs = {
             "peer": StubCollection().peer_stub,
             "channel": StubCollection().channel_stubs.get(channel_name),
-            "score":
-                StubCollection().icon_score_stubs.get(channel_name)
-                if util.channel_use_icx(channel_name) else
-                StubCollection().score_stubs.get(channel_name)
+            "score": StubCollection().icon_score_stubs.get(channel_name)
         }
 
         mq_status_data = {}
