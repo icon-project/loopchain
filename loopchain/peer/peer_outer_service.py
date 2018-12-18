@@ -191,7 +191,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
-        util.logger.spam(f"peer_outer_service:__status_update channel({channel}) result({future.result()})")
+        util.logger.spam(f"status_update channel({channel}) result({future.result()})")
         self.__status_cache_update_time[channel] = datetime.datetime.now()
         self.peer_service.status_cache[channel] = future.result()
 

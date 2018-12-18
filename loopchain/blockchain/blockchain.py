@@ -103,12 +103,6 @@ class BlockChain:
 
     @property
     def last_block(self) -> Block:
-        try:
-            logging.debug(f"ENGINE-303 blockchain last_block: "
-                          f"{self.__last_block.header.height}, "
-                          f"{self.__last_block.header.hash.hex()}")
-        except:
-            pass
         return self.__last_block
 
     @property
