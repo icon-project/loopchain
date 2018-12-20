@@ -58,3 +58,5 @@ class SlotTimer:
     def stop(self):
         if self.__timer_key in self.__timer_service.timer_list:
             self.__timer_service.stop_timer(self.__timer_key)
+        self.__slot = 0
+        self.__delayed = False

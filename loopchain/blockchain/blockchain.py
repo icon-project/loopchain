@@ -477,25 +477,31 @@ class BlockChain:
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
             return None
-        block_key = tx_info_json['block_hash']
-        logging.debug("block_key: " + str(block_key))
 
-        # block 의 hash 로 block object 를 구한다.
-        block = self.find_block_by_hash(block_key)
-        logging.debug("block: " + block.header.hash)
-        if block is None:
-            logging.error("There is No Block, block_hash: " + block.block_hash)
-            return None
+        tx_data = tx_info_json["transaction"]
+        tx_version = self.tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
+        return tx_serializer.deserialize(tx_data)
 
-        # block object 에서 저장된 tx 를 구한다.
-        tx = block.find_tx_by_hash(tx_hash_key)
-        if not tx:
-            logging.error(f"block.find_tx_by_hash tx_hash error({tx_hash_key})")
-            return None
-
-        logging.debug("find tx: " + tx.tx_hash)
-
-        return tx
+        # block_key = tx_info_json['block_hash']
+        # logging.debug("block_key: " + str(block_key))
+        #
+        # # block 의 hash 로 block object 를 구한다.
+        # block = self.find_block_by_hash(block_key)
+        # logging.debug(f"block: {block.header.hash}")
+        # if block is None:
+        #     logging.error("There is No Block, block_hash: " + block.block_hash)
+        #     return None
+        #
+        # # block object 에서 저장된 tx 를 구한다.
+        # tx = block.find_tx_by_hash(tx_hash_key)
+        # if not tx:
+        #     logging.error(f"block.find_tx_by_hash tx_hash error({tx_hash_key})")
+        #     return None
+        #
+        # logging.debug("find tx: " + tx.tx_hash)
+        #
+        # return tx
 
     def find_invoke_result_by_tx_hash(self, tx_hash):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay

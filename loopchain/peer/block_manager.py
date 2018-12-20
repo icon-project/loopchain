@@ -410,8 +410,8 @@ class BlockManager(Subscriber):
             if self.__consensus_algorithm:
                 self.__consensus_algorithm.stop()
 
-            self.__consensus_algorithm = ConsensusSiever(self)
-            self.__consensus_algorithm.start_timer(timer_service)
+        self.__consensus_algorithm = ConsensusSiever(self)
+        self.__consensus_algorithm.start_timer(timer_service)
 
     def stop_block_generate_timer(self):
         if self.__consensus_algorithm:
