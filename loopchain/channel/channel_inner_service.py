@@ -273,9 +273,13 @@ class ChannelInnerTask:
     def get_tx_info(self, tx_hash):
         tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
+            blockchain = self._channel_service.block_manager.get_blockchain()
+            tx_serializer = TransactionSerializer.new(tx.version, blockchain.tx_versioner)
+            tx_origin = tx_serializer.to_origin_data(tx)
+
             logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
             tx_info = dict()
-            tx_info["transaction"] = tx.icx_origin_data_v3
+            tx_info["transaction"] = tx_origin
             tx_info["tx_index"] = None
             tx_info["block_height"] = None
             tx_info["block_hash"] = None
