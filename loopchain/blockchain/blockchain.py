@@ -461,17 +461,17 @@ class BlockChain:
         return True
 
     def find_tx_by_key(self, tx_hash_key):
-        """tx 의 hash 로 저장된 tx 를 구한다.
+        """find tx by hash
 
-        :param tx_hash_key: tx 의 tx_hash
-        :return tx_hash_key 에 해당하는 transaction, 예외인 경우 None 을 리턴한다.
+        :param tx_hash_key: tx hash
+        :return None: There is no tx by hash or transaction object.
         """
-        # levle db 에서 tx 가 저장된 block 의 hash 를 구한다.
+
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # Client 의 잘못된 요청이 있을 수 있으므로 Warning 처리후 None 을 리턴한다.
-            # 시스템 Error 로 처리하지 않는다.
+            # This case is not an error.
+            # Client send wrong tx_hash..
             # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
@@ -481,27 +481,7 @@ class BlockChain:
         tx_data = tx_info_json["transaction"]
         tx_version = self.tx_versioner.get_version(tx_data)
         tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
-        return tx_serializer.deserialize(tx_data)
-
-        # block_key = tx_info_json['block_hash']
-        # logging.debug("block_key: " + str(block_key))
-        #
-        # # block 의 hash 로 block object 를 구한다.
-        # block = self.find_block_by_hash(block_key)
-        # logging.debug(f"block: {block.header.hash}")
-        # if block is None:
-        #     logging.error("There is No Block, block_hash: " + block.block_hash)
-        #     return None
-        #
-        # # block object 에서 저장된 tx 를 구한다.
-        # tx = block.find_tx_by_hash(tx_hash_key)
-        # if not tx:
-        #     logging.error(f"block.find_tx_by_hash tx_hash error({tx_hash_key})")
-        #     return None
-        #
-        # logging.debug("find tx: " + tx.tx_hash)
-        #
-        # return tx
+        return tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
@@ -534,10 +514,10 @@ class BlockChain:
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
-            logging.warning("blockchain::find_tx_by_key: UnicodeDecodeError: " + str(e))
+            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
         # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_by_key: not found tx: " + str(e))
+        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
         #     return None
 
         return tx_info_json
