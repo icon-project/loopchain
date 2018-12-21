@@ -93,10 +93,8 @@ class CandidateBlocks:
 
             for _block_hash in list(self.blocks.keys()):
                 if self.blocks[_block_hash].block:
-                    if self.blocks[_block_hash].block.header.prev_hash != prev_block_hash:
+                    if self.blocks[_block_hash].block.header.prev_hash == prev_block_hash:
+                        self.blocks.pop(_block_hash, None)
                         continue
-
-                if util.diff_in_seconds(self.blocks[_block_hash].start_time) < conf.CANDIDATE_BLOCK_TIMEOUT:
-                    continue
-
-                self.blocks.pop(_block_hash, None)
+                if util.diff_in_seconds(self.blocks[_block_hash].start_time) >= conf.CANDIDATE_BLOCK_TIMEOUT:
+                    self.blocks.pop(_block_hash, None)

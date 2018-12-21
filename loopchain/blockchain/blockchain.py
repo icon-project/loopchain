@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
-import copy
 import json
 import leveldb
 import pickle
@@ -42,7 +40,6 @@ class BlockChain:
     """Block chain with only committed blocks."""
 
     NID_KEY = b'NID_KEY'
-    UNCONFIRM_BLOCK_KEY = b'UNCONFIRM_BLOCK'
     PRECOMMIT_BLOCK_KEY = b'PRECOMMIT_BLOCK'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
@@ -551,20 +548,6 @@ class BlockChain:
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
 
-    # def __put_block_to_db(self, block_key, block):
-    #     self.__confirmed_block_db.Put(block_key, pickle.dumps(block))
-    #
-    # def add_unconfirm_block(self, unconfirmed_block):
-    #     """인증되지 않은 Unconfirm블럭을 추가 합니다.
-    #
-    #     :param unconfirmed_block: 인증되지 않은 Unconfirm블럭
-    #     :return:인증값 : True 인증 , False 미인증
-    #     """
-    #     logging.debug(
-    #         f"blockchain:add_unconfirmed_block ({self.__channel_name}), hash ({unconfirmed_block.header.hash.hex()})")
-    #
-    #     self.__put_block_to_db(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block)
-
     def put_precommit_block(self, precommit_block: Block):
         # write precommit block to DB
         logging.debug(
@@ -617,10 +600,7 @@ class BlockChain:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
             try:
-                # Save and Get Unconfirmed block using pickle for unserialized info(commit_state)
-                # unconfirmed_block_byte = self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY)
                 unconfirmed_block = candidate_blocks.blocks[confirmed_block_hash].block
-                # unconfirmed_block = pickle.loads(self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY))
                 logging.debug("confirmed_block_hash: " + confirmed_block_hash.hex())
                 if unconfirmed_block:
                     logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
@@ -644,7 +624,6 @@ class BlockChain:
 
             self.add_block(unconfirmed_block)
             candidate_blocks.remove_block(confirmed_block_hash)
-            # self.__confirmed_block_db.Delete(BlockChain.UNCONFIRM_BLOCK_KEY)
 
             return unconfirmed_block
 

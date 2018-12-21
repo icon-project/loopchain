@@ -691,7 +691,6 @@ class BlockManager(Subscriber):
         else:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
-            # self.__blockchain.add_unconfirm_block(unconfirmed_block)  # TODO substitute this to candidate_blocks
         finally:
             self.__vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 

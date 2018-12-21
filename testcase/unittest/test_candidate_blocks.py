@@ -19,7 +19,7 @@ import unittest
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import BlockBuilder, CandidateBlocks
+from loopchain.blockchain import BlockBuilder, CandidateBlocks, TransactionVersioner
 from loopchain.blockchain import CandidateBlock
 from loopchain.utils import loggers
 
@@ -36,7 +36,7 @@ class TestCandidateBlocks(unittest.TestCase):
 
     @staticmethod
     def __get_test_block():
-        block_builder = BlockBuilder.new("0.1a")
+        block_builder = BlockBuilder.new("0.1a", TransactionVersioner())
         block_builder.height = 0
         block_builder.prev_hash = None
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
