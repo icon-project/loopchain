@@ -13,6 +13,7 @@
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
 import logging
+import threading
 from functools import partial
 
 import loopchain.utils as util
@@ -27,13 +28,15 @@ class ConsensusSiever(ConsensusBase):
     def __init__(self, block_manager):
         super().__init__(block_manager)
         self.__block_generation_timer = None
+        self.__lock = threading.Lock()
 
     def start_timer(self, timer_service):
         self.__block_generation_timer = SlotTimer(
             TimerService.TIMER_KEY_BLOCK_GENERATE,
             conf.INTERVAL_BLOCKGENERATION,
             timer_service,
-            self.consensus
+            self.consensus,
+            self.__lock
         )
 
     def stop(self):
@@ -41,42 +44,43 @@ class ConsensusSiever(ConsensusBase):
         self.__stop_broadcast_send_unconfirmed_block_timer()
 
     async def consensus(self):
-        block_builder = self._makeup_block()
+        with self.__lock:
+            block_builder = self._makeup_block()
 
-        if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
-            util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
-            return self.__block_generation_timer.call()
+            if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+                util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
+                return self.__block_generation_timer.call()
 
-        peer_manager = ObjectManager().channel_service.peer_manager
+            peer_manager = ObjectManager().channel_service.peer_manager
 
-        last_block = self._blockchain.last_block
-        block_builder.height = last_block.header.height + 1
-        block_builder.prev_hash = last_block.header.hash
-        block_builder.next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
-        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
-        block_builder.confirm_prev_block = (self._made_block_count > 0)
+            last_block = self._blockchain.last_block
+            block_builder.height = last_block.header.height + 1
+            block_builder.prev_hash = last_block.header.hash
+            block_builder.next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
+            block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
+            block_builder.confirm_prev_block = (self._made_block_count > 0)
 
-        candidate_block = block_builder.build()
-        candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
-        self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
+            candidate_block = block_builder.build()
+            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
+            self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
-        block_verifier = BlockVerifier.new(candidate_block.header.version, self._blockchain.tx_versioner)
-        block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
+            block_verifier = BlockVerifier.new(candidate_block.header.version, self._blockchain.tx_versioner)
+            block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
-        logging.debug(f"candidate block : {candidate_block.header}")
+            logging.debug(f"candidate block : {candidate_block.header}")
 
-        self._blockmanager.candidate_blocks.add_vote(
-            candidate_block.header.hash,
-            ChannelProperty().group_id,
-            ChannelProperty().peer_id,
-            True
-        )
-        self._blockmanager.candidate_blocks.add_block(candidate_block)
+            self._blockmanager.candidate_blocks.add_vote(
+                candidate_block.header.hash,
+                ChannelProperty().group_id,
+                ChannelProperty().peer_id,
+                True
+            )
+            self._blockmanager.candidate_blocks.add_block(candidate_block)
 
-        broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
-        self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
-        self.count_votes(candidate_block.header.hash)
-        self.__block_generation_timer.call()
+            broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
+            self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
+            self.count_votes(candidate_block.header.hash)
+            self.__block_generation_timer.call()
 
     def count_votes(self, block_hash: Hash32):
         # count votes
