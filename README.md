@@ -56,17 +56,17 @@ $ rabbitmq-plugins enable rabbitmq_management
 
 If you have generated ssh key for github, you can install with below commands.
 ```
-$ pip3 install git+ssh://git@github.com/icon-project/icon-service.git
-$ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git
-$ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git
+$ pip3 install git+ssh://git@github.com/icon-project/icon-service.git@master
+$ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git@master
+$ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git@master
 $ pip3 install -r requirements.txt
 ```
 
 Also, you can install with below commands too.
 ```
-$ pip3 install git+https://github.com/icon-project/icon-service.git
-$ pip3 install git+https://github.com/icon-project/icon-commons.git
-$ pip3 install git+https://github.com/icon-project/icon-rpc-server.git
+$ pip3 install git+https://github.com/icon-project/icon-service.git@master
+$ pip3 install git+https://github.com/icon-project/icon-commons.git@master
+$ pip3 install git+https://github.com/icon-project/icon-rpc-server.git@master
 $ pip3 install -r requirements.txt
 ```
 

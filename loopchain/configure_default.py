@@ -146,6 +146,7 @@ class ConsensusAlgorithm(IntEnum):
 
 # 블록 생성 간격, tx 가 없을 경우 다음 간격까지 건너 뛴다.
 INTERVAL_BLOCKGENERATION = 2
+INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK = INTERVAL_BLOCKGENERATION
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
 # default level db path
@@ -172,6 +173,7 @@ VOTING_RATIO = 0.66
 BLOCK_HEIGHT_BYTES_LEN = 12
 # Block vote timeout
 BLOCK_VOTE_TIMEOUT = 60 * 5  # seconds
+CANDIDATE_BLOCK_TIMEOUT = 60 * 60  # seconds
 # default storage path
 DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_ROOT_PATH, '.storage'))
 # max tx list size by address

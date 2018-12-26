@@ -274,7 +274,7 @@ message BlockVote {
     required int32 vote_code = 1;  // has same values of response_code
     optional string channel = 2; // channel ID for multichain network
     required string message = 3;
-    required string block_hash = 4;
+    required bytes block_hash = 4;
     required string peer_id = 5;
     required string group_id = 6;
 }

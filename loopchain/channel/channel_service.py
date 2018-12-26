@@ -811,7 +811,7 @@ class ChannelService:
         stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
-        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash}")
+        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")
 
         request = {
             "blockHeight": block.header.height,

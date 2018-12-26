@@ -40,6 +40,9 @@
 *.sublime-project
 *.sublime-workspace
 
+# VSCode
+.vscode
+
 # mpeltonen/sbt-idea plugin
 .idea_modules/
 

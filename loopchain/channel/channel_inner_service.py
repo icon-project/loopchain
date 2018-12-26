@@ -23,9 +23,9 @@ from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier,
-                                  Block, BlockBuilder, BlockSerializer, blocks)
+from loopchain.baseservice import BroadcastCommand, ScoreResponse
+from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, Block, BlockBuilder,
+                                  BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Epoch, VoteMessage
@@ -273,9 +273,13 @@ class ChannelInnerTask:
     def get_tx_info(self, tx_hash):
         tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
+            blockchain = self._channel_service.block_manager.get_blockchain()
+            tx_serializer = TransactionSerializer.new(tx.version, blockchain.tx_versioner)
+            tx_origin = tx_serializer.to_origin_data(tx)
+
             logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
             tx_info = dict()
-            tx_info["transaction"] = tx.icx_origin_data_v3
+            tx_info["transaction"] = tx_origin
             tx_info["tx_index"] = None
             tx_info["block_height"] = None
             tx_info["block_hash"] = None
@@ -295,7 +299,7 @@ class ChannelInnerTask:
         logging.debug(f"#block \n"
                       f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
                       f"height({unconfirmed_block.header.height})\n"
-                      f"hash({unconfirmed_block.header.hash})")
+                      f"hash({unconfirmed_block.header.hash.hex()})")
 
         self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
         self._channel_service.state_machine.vote()
@@ -421,7 +425,7 @@ class ChannelInnerTask:
         self._channel_service.peer_manager.remove_peer(peer_id, group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def vote_unconfirmed_block(self, peer_id, group_id, block_hash, vote_code) -> None:
+    def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
@@ -432,15 +436,18 @@ class ChannelInnerTask:
                 #                     f"({ChannelProperty().name}) Not Leader Peer!")
                 return
 
-        logging.info("Peer vote to : " + block_hash + " " + str(vote_code) + f"from {peer_id}")
+        logging.info("Peer vote to : " + block_hash.hex() + " " + str(vote_code) + f"from {peer_id}")
+
+        self._channel_service.block_manager.candidate_blocks.add_vote(
+            block_hash,
+            group_id,
+            peer_id,
+            (False, True)[vote_code == message_code.Response.success_validate_block]
+        )
 
         consensus = block_manager.consensus_algorithm
-        if isinstance(consensus, ConsensusSiever):
-            consensus.vote(
-                block_hash,
-                (False, True)[vote_code == message_code.Response.success_validate_block],
-                peer_id,
-                group_id)
+        if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+            consensus.count_votes(block_hash)
 
     @message_queue_task
     async def broadcast_vote(self, vote: VoteMessage):

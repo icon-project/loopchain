@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
-import copy
 import json
 import leveldb
 import pickle
@@ -42,7 +40,6 @@ class BlockChain:
     """Block chain with only committed blocks."""
 
     NID_KEY = b'NID_KEY'
-    UNCONFIRM_BLOCK_KEY = b'UNCONFIRM_BLOCK'
     PRECOMMIT_BLOCK_KEY = b'PRECOMMIT_BLOCK'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
@@ -70,7 +67,6 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
-        self.__made_block_count = 0
         self.__invoke_results = {}
 
         self.__add_block_lock = threading.RLock()
@@ -117,22 +113,12 @@ class BlockChain:
         return self.__last_block
 
     @property
-    def made_block_count(self):
-        return self.__made_block_count
-
-    @property
     def block_versioner(self):
         return self.__block_versioner
 
     @property
     def tx_versioner(self):
         return self.__tx_versioner
-
-    def increase_made_block_count(self):
-        self.__made_block_count += 1
-
-    def reset_made_block_count(self):
-        self.__made_block_count = 0
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -472,41 +458,27 @@ class BlockChain:
         return True
 
     def find_tx_by_key(self, tx_hash_key):
-        """tx 의 hash 로 저장된 tx 를 구한다.
+        """find tx by hash
 
-        :param tx_hash_key: tx 의 tx_hash
-        :return tx_hash_key 에 해당하는 transaction, 예외인 경우 None 을 리턴한다.
+        :param tx_hash_key: tx hash
+        :return None: There is no tx by hash or transaction object.
         """
-        # levle db 에서 tx 가 저장된 block 의 hash 를 구한다.
+
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # Client 의 잘못된 요청이 있을 수 있으므로 Warning 처리후 None 을 리턴한다.
-            # 시스템 Error 로 처리하지 않는다.
+            # This case is not an error.
+            # Client send wrong tx_hash..
             # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
             return None
-        block_key = tx_info_json['block_hash']
-        logging.debug("block_key: " + str(block_key))
 
-        # block 의 hash 로 block object 를 구한다.
-        block = self.find_block_by_hash(block_key)
-        logging.debug("block: " + block.header.hash)
-        if block is None:
-            logging.error("There is No Block, block_hash: " + block.block_hash)
-            return None
-
-        # block object 에서 저장된 tx 를 구한다.
-        tx = block.find_tx_by_hash(tx_hash_key)
-        if not tx:
-            logging.error(f"block.find_tx_by_hash tx_hash error({tx_hash_key})")
-            return None
-
-        logging.debug("find tx: " + tx.tx_hash)
-
-        return tx
+        tx_data = tx_info_json["transaction"]
+        tx_version = self.tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
+        return tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
@@ -539,10 +511,10 @@ class BlockChain:
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
-            logging.warning("blockchain::find_tx_by_key: UnicodeDecodeError: " + str(e))
+            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
         # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_by_key: not found tx: " + str(e))
+        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
         #     return None
 
         return tx_info_json
@@ -575,20 +547,6 @@ class BlockChain:
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
-
-    def __put_block_to_db(self, block_key, block):
-        self.__confirmed_block_db.Put(block_key, pickle.dumps(block))
-
-    def add_unconfirm_block(self, unconfirmed_block):
-        """인증되지 않은 Unconfirm블럭을 추가 합니다.
-
-        :param unconfirmed_block: 인증되지 않은 Unconfirm블럭
-        :return:인증값 : True 인증 , False 미인증
-        """
-        logging.debug(
-            f"blockchain:add_unconfirmed_block ({self.__channel_name}), hash ({unconfirmed_block.header.hash.hex()})")
-
-        self.__put_block_to_db(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block)
 
     def put_precommit_block(self, precommit_block: Block):
         # write precommit block to DB
@@ -631,41 +589,41 @@ class BlockChain:
 
         return results
 
-    def confirm_block(self, confirmed_block_hash):
+    def confirm_block(self, confirmed_block_hash: Hash32):
         """인증완료후 Block을 Confirm해 줍니다.
 
         :param confirmed_block_hash: 인증된 블럭의 hash
         :return: confirm_Block
         """
+        candidate_blocks = ObjectManager().channel_service.block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
             try:
-                # Save and Get Unconfirmed block using pickle for unserialized info(commit_state)
-                # unconfirmed_block_byte = self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY)
-                unconfirmed_block = pickle.loads(self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY))
-                logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
-                logging.debug("confirmed_block_hash: " + confirmed_block_hash)
-                logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                unconfirmed_block = candidate_blocks.blocks[confirmed_block_hash].block
+                logging.debug("confirmed_block_hash: " + confirmed_block_hash.hex())
+                if unconfirmed_block:
+                    logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
+                    logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                else:
+                    logging.warning("There is no unconfirmed_block in candidate_blocks")
+                    return
 
             except KeyError:
                 if self.last_block.header.hash == confirmed_block_hash:
-                    logging.warning(f"Already added block hash({confirmed_block_hash})")
+                    logging.warning(f"Already added block hash({confirmed_block_hash.hex()})")
                     return
                 else:
-                    except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash})"
+                    except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash.hex()})"
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 
-            # unconfirmed_block = Block(channel_name=self.__channel_name)
-            # unconfirmed_block.deserialize_block(unconfirmed_block_byte)
-
-            if unconfirmed_block.header.hash.hex() != confirmed_block_hash:
+            if unconfirmed_block.header.hash != confirmed_block_hash:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
             self.add_block(unconfirmed_block)
-            self.__confirmed_block_db.Delete(BlockChain.UNCONFIRM_BLOCK_KEY)
+            candidate_blocks.remove_block(confirmed_block_hash)
 
             return unconfirmed_block
 

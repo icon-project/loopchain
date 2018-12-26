@@ -17,7 +17,6 @@ from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine

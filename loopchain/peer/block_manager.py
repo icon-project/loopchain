@@ -59,6 +59,7 @@ class BlockManager(Subscriber):
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
+        self.candidate_blocks = CandidateBlocks()
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
@@ -183,17 +184,19 @@ class BlockManager(Subscriber):
     def broadcast_send_unconfirmed_block(self, block_: Block):
         """생성된 unconfirmed block 을 피어들에게 broadcast 하여 검증을 요청한다.
         """
-        logging.debug(f"BroadCast AnnounceUnconfirmedBlock...peers: "
-                      f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
+        if self.__channel_service.state_machine.state == "BlockGenerate":
+            logging.debug(f"BroadCast AnnounceUnconfirmedBlock "
+                          f"height({block_.header.height}) block({block_.header.hash}) peers: "
+                          f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
 
-        # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
-        block_dump = util.block_dumps(block_)
+            # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
+            block_dump = util.block_dumps(block_)
 
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(
-                block=block_dump,
-                channel=self.__channel_name))
+            ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+                "AnnounceUnconfirmedBlock",
+                loopchain_pb2.BlockSend(
+                    block=block_dump,
+                    channel=self.__channel_name))
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
@@ -241,7 +244,7 @@ class BlockManager(Subscriber):
 
     def confirm_block(self, block: Block):
         try:
-            self.__blockchain.confirm_block(block.header.prev_hash.hex())
+            self.__blockchain.confirm_block(block.header.prev_hash)
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.block_height_sync()
@@ -407,23 +410,12 @@ class BlockManager(Subscriber):
             if self.__consensus_algorithm:
                 self.__consensus_algorithm.stop()
 
-            self.__consensus_algorithm = ConsensusSiever(self)
-            util.logger.spam(f"add timer block generate")
-            timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.INTERVAL_BLOCKGENERATION,
-                    is_repeat=False,
-                    callback=self.__create_block_generation_schedule
-                )
-            )
+        self.__consensus_algorithm = ConsensusSiever(self)
+        self.__consensus_algorithm.start_timer(timer_service)
 
     def stop_block_generate_timer(self):
-        timer_key = TimerService.TIMER_KEY_BLOCK_GENERATE
-        timer_service: TimerService = self.__channel_service.timer_service
-        if timer_key in timer_service.timer_list:
-            timer_service.stop_timer(timer_key)
+        if self.__consensus_algorithm:
+            self.__consensus_algorithm.stop()
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
@@ -698,9 +690,9 @@ class BlockManager(Subscriber):
             traceback.print_exc()
         else:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
-            self.__blockchain.add_unconfirm_block(unconfirmed_block)
+            self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            self.__vote_unconfirmed_block(unconfirmed_block.header.hash.hex(), exception is None)
+            self.__vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 
     def callback_complete_consensus(self, **kwargs):
         self.__prev_epoch = kwargs.get("prev_epoch", None)
