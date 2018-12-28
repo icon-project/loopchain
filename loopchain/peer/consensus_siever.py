@@ -84,15 +84,15 @@ class ConsensusSiever(ConsensusBase):
 
     def count_votes(self, block_hash: Hash32):
         # count votes
-        result = self._blockmanager.candidate_blocks.get_vote_result(block_hash)
-        if not result:
+        vote = self._blockmanager.candidate_blocks.get_vote(block_hash)
+        if not vote.get_result(block_hash.hex(), conf.VOTING_RATIO):
             return True  # vote not complete yet
 
         self.__stop_broadcast_send_unconfirmed_block_timer()
 
         # vote done
         block = self._blockmanager.candidate_blocks.blocks[block_hash].block
-        self._blockmanager.add_block(block)
+        self._blockmanager.add_block(block, vote)
         self._made_block_count += 1
 
         pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,

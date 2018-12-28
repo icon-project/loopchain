@@ -77,8 +77,8 @@ class CandidateBlocks:
 
         self.blocks[block_hash].vote.add_vote(group_id, peer_id, vote)
 
-    def get_vote_result(self, block_hash):
-        return self.blocks[block_hash].vote.get_result(block_hash.hex(), conf.VOTING_RATIO)
+    def get_vote(self, block_hash):
+        return self.blocks[block_hash].vote
 
     def add_block(self, block: Block):
         with self.__blocks_lock:

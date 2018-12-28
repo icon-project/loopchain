@@ -242,9 +242,9 @@ class BlockManager(Subscriber):
         """
         return len(self.__txQueue)
 
-    def confirm_block(self, block: Block):
+    def confirm_prev_block(self, current_block: Block):
         try:
-            self.__blockchain.confirm_block(block.header.prev_hash)
+            self.__blockchain.confirm_prev_block(current_block)
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.block_height_sync()
@@ -252,7 +252,7 @@ class BlockManager(Subscriber):
     def add_unconfirmed_block(self, unconfirmed_block):
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
         if unconfirmed_block.body.confirm_prev_block:
-            self.confirm_block(unconfirmed_block)
+            self.confirm_prev_block(unconfirmed_block)
 
         self.__unconfirmedBlockQueue.put(unconfirmed_block)
 
@@ -261,8 +261,16 @@ class BlockManager(Subscriber):
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
-    def add_block(self, block_: Block) -> bool:
-        result = self.__blockchain.add_block(block_)
+    # TODO The current block height sync message does not include voting.
+    #  You need to change it and remove the default None parameter here.
+    def add_block(self, block_: Block, vote_: Vote = None) -> bool:
+        """
+
+        :param block_: block to add
+        :param vote_: additional info for this block, but It came from next block
+        :return:
+        """
+        result = self.__blockchain.add_block(block_, vote_)
 
         last_block = self.__blockchain.last_block
 
