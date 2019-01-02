@@ -13,6 +13,7 @@
 # limitations under the License.
 """Class for websocket client between child node and RS peer"""
 
+import asyncio
 import json
 import logging
 import traceback
@@ -25,7 +26,7 @@ from jsonrpcserver.aio import AsyncMethods
 from jsonrpcclient.request import Request
 
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager
+from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import BlockSerializer
 from loopchain.channel.channel_property import ChannelProperty
 
@@ -40,6 +41,11 @@ class NodeSubscriber:
         self.__channel = channel
         self.__rs_target = rs_target
         self.__target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{self.__rs_target}/api/node/{channel}"
+        self.__exception = None
+
+        ws_methods.add(self.node_ws_PublishHeartbeat)
+        ws_methods.add(self.node_ws_PublishNewBlock)
+
         logging.debug(f"websocket target uri : {self.__target_uri}")
 
     @property
@@ -47,6 +53,8 @@ class NodeSubscriber:
         return self.__target_uri
 
     async def subscribe(self, block_height, event: Event):
+        self.__exception = None
+
         try:
             # set websocket payload maxsize to 4MB.
             async with websockets.connect(self.__target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK) as websocket:
@@ -68,14 +76,18 @@ class NodeSubscriber:
 
     async def __subscribe_loop(self, websocket):
         while True:
-            response = await websocket.recv()
-            response_dict = json.loads(response)
+            if self.__exception:
+                raise self.__exception
 
-            await ws_methods.dispatch(response_dict)
+            try:
+                response = await asyncio.wait_for(websocket.recv(), timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT)
+            except asyncio.TimeoutError:
+                continue
+            else:
+                response_dict = json.loads(response)
+                await ws_methods.dispatch(response_dict)
 
-    @staticmethod
-    @ws_methods.add
-    async def node_ws_PublishNewBlock(**kwargs):
+    async def node_ws_PublishNewBlock(self, **kwargs):
         if 'error' in kwargs:
             return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
@@ -90,10 +102,25 @@ class NodeSubscriber:
 
             ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
 
-    @staticmethod
-    @ws_methods.add
-    async def node_ws_PublishHeartbeat(**kwargs):
+    async def node_ws_PublishHeartbeat(self, **kwargs):
+        def _callback(exception):
+            self.__exception = exception
+
         if 'error' in kwargs:
-            raise ConnectionError(kwargs['error'])
+            _callback(ConnectionError(kwargs['error']))
+            return
 
         logging.debug("websocket heartbeat.")
+
+        timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
+        timer_service = ObjectManager().channel_service.timer_service
+        if timer_key in timer_service.timer_list:
+            timer_service.reset_timer(timer_key)
+        else:
+            timer = Timer(
+                target=timer_key,
+                duration=3 * conf.TIMEOUT_FOR_WS_HEARTBEAT,
+                callback=_callback,
+                callback_kwargs={'exception': ConnectionError("No Heartbeat.")}
+            )
+            timer_service.add_timer(timer_key, timer)
