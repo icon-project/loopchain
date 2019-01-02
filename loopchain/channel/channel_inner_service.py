@@ -75,16 +75,20 @@ class ChannelInnerTask:
             return json.dumps(bs.serialize(new_block))
 
     @message_queue_task
-    async def register_subscriber(self, remote_address):
+    async def register_subscriber(self, peer_id):
         if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
             return False
         else:
-            self._citizen_set.add(remote_address)
+            self._citizen_set.add(peer_id)
+            logging.info(f"register new subscriber: {peer_id}")
+            logging.debug(f"remaining all subscribers: {self._citizen_set}")
             return True
 
     @message_queue_task
-    async def unregister_subscriber(self, remote_address):
-        self._citizen_set.remove(remote_address)
+    async def unregister_subscriber(self, peer_id):
+        logging.info(f"unregister subscriber: {peer_id}")
+        self._citizen_set.remove(peer_id)
+        logging.debug(f"remaining all subscribers: {self._citizen_set}")
 
     @message_queue_task
     def get_peer_list(self):
