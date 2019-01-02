@@ -45,7 +45,7 @@ class ConsensusSiever(ConsensusBase):
 
         if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK:
             util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
-            return self.__block_generation_timer.call()
+            return
 
         peer_manager = ObjectManager().channel_service.peer_manager
 
@@ -76,7 +76,6 @@ class ConsensusSiever(ConsensusBase):
         broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
         self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
         self.count_votes(candidate_block.header.hash)
-        self.__block_generation_timer.call()
 
     def count_votes(self, block_hash: Hash32):
         # count votes

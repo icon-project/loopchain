@@ -42,16 +42,20 @@ class SlotTimer:
         self.__slot += 1
         if self.__delayed:
             self.__delayed = False
-            self.call()
+            self.__call()
         elif self.__slot > 10:
             util.logger.warning(f"consensus timer loop broken slot({self.__slot}) delayed({self.__delayed})")
-            # self.call()
+            # self.__call()
 
-    def call(self):
-        util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
+    async def __dispatch_callback(self):
+        await self.__callback()
+        self.__call()
+
+    def __call(self):
+        util.logger.spam(f"__call slot({self.__slot}) delayed({self.__delayed})")
         if self.__slot > 0:
             self.__slot -= 1
-            self.__timer_service.get_event_loop().create_task(self.__callback())
+            self.__timer_service.get_event_loop().create_task(self.__dispatch_callback())
         else:
             self.__delayed = True
 
