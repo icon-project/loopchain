@@ -24,6 +24,7 @@ from websockets.exceptions import InvalidStatusCode, InvalidMessage
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import BlockSerializer
+from loopchain.channel.channel_property import ChannelProperty
 
 
 class NodeSubscriber:
@@ -44,7 +45,8 @@ class NodeSubscriber:
                 logging.debug(f"Websocket connection is Completed.")
                 event.set()
                 request = json.dumps({
-                    'height': block_height
+                    'height': block_height,
+                    'peer_id': ChannelProperty().peer_id
                 })
                 await websocket.send(request)
                 await self.__subscribe_loop(websocket)
