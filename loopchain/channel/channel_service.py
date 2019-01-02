@@ -486,6 +486,7 @@ class ChannelService:
 
     async def __subscribe_call_from_citizen(self):
         def _handle_exception(future: asyncio.Future):
+            logging.debug("error" + str(future.exception()))
             if isinstance(future.exception(), NotImplementedError):
                 asyncio.ensure_future(self.__subscribe_call_by_rest_stub())
 

@@ -72,7 +72,7 @@ class ChannelInnerTask:
                 continue
 
             bs = BlockSerializer.new(new_block.header.version)
-            return json.dumps(bs.serialize(new_block))
+            return bs.serialize(new_block)
 
     @message_queue_task
     async def register_subscriber(self, peer_id):
@@ -89,6 +89,10 @@ class ChannelInnerTask:
         logging.info(f"unregister subscriber: {peer_id}")
         self._citizen_set.remove(peer_id)
         logging.debug(f"remaining all subscribers: {self._citizen_set}")
+
+    @message_queue_task
+    async def is_registered_subscriber(self, peer_id):
+        return peer_id in self._citizen_set
 
     @message_queue_task
     def get_peer_list(self):
