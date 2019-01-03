@@ -122,14 +122,9 @@ class TimerService(CommonThread):
         :param timer: timer object
         :return:
         """
-        try:
-            timer = self.__timer_list[key]
-        except KeyError:  # new timer
-            self.__timer_list[key] = timer
-            asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
-            timer.on()
-        else:  # old timer
-            timer.reset()
+        self.__timer_list[key] = timer
+        asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+        timer.on()
 
     def remove_timer(self, key):
         """remove timer from self.__timer_list
@@ -212,9 +207,15 @@ class TimerService(CommonThread):
             util.logger.spam(f"sleep {timer.remain_time()}, {key}")
             await asyncio.sleep(timer.remain_time())
 
-        if key not in self.__timer_list.keys():
+        try:
+            timer_in_list = self.__timer_list[key]
+        except KeyError:
             pass
-        elif timer.is_repeat:
-            self.restart_timer(key)
         else:
-            self.stop_timer(key, OffType.time_out)
+            if timer is not timer_in_list:
+                return
+
+            if timer.is_repeat:
+                self.restart_timer(key)
+            else:
+                self.stop_timer(key, OffType.time_out)
