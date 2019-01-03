@@ -346,8 +346,6 @@ class ChannelInnerTask:
                 logging.debug(f"channel_inner_service:announce_confirmed_block "
                               f"already synced block height({confirmed_block.header.height})")
             response_code = message_code.Response.success
-            # stop subscribe timer
-            self._channel_service.stop_subscribe_timer()
         except Exception as e:
             logging.error(f"announce confirmed block error : {e}")
             response_code = message_code.Response.fail

@@ -110,8 +110,6 @@ class NodeSubscriber:
             _callback(ConnectionError(kwargs['error']))
             return
 
-        logging.debug("websocket heartbeat.")
-
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
