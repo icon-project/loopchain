@@ -486,9 +486,9 @@ class ChannelService:
 
     async def __subscribe_call_from_citizen(self):
         def _handle_exception(future: asyncio.Future):
-            logging.debug("error" + str(future.exception()))
+            logging.debug(f"error: {type(future.exception())}, {str(future.exception())}")
             if isinstance(future.exception(), NotImplementedError):
-                asyncio.ensure_future(self.__subscribe_call_by_rest_stub())
+                asyncio.ensure_future(self.__subscribe_call_by_rest_stub(subscribe_event))
 
             elif isinstance(future.exception(), ConnectionError):
                 logging.warning(f"Waiting for next subscribe request...")
@@ -505,7 +505,7 @@ class ChannelService:
         )).add_done_callback(_handle_exception)
         await subscribe_event.wait()
 
-    async def __subscribe_call_by_rest_stub(self):
+    async def __subscribe_call_by_rest_stub(self, event):
         if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
             peer_target = ChannelProperty().rest_target
         else:
@@ -526,6 +526,7 @@ class ChannelService:
 
         if response and response['response_code'] == message_code.Response.success:
             logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
+            event.set()
             self.start_check_last_block_rs_timer()
 
     def __check_last_block_to_rs(self):
