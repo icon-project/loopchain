@@ -48,13 +48,13 @@ class MockChannelService:
     def __init__(self):
         self.block_manager = MockBlockManager()
 
-    def block_height_sync_channel(self):
+    async def block_height_sync_channel(self):
         pass
 
-    def evaluate_network(self):
+    async def evaluate_network(self):
         pass
 
-    def subscribe_network(self):
+    async def subscribe_network(self):
         pass
 
     def start_subscribe_timer(self):
@@ -71,13 +71,13 @@ class MockChannelService:
 
 
 class MockChannelServiceCitizen:
-    def block_height_sync_channel(self):
+    async def block_height_sync_channel(self):
         pass
 
-    def evaluate_network(self):
+    async def evaluate_network(self):
         pass
 
-    def subscribe_network(self):
+    async def subscribe_network(self):
         pass
 
     def start_subscribe_timer(self):

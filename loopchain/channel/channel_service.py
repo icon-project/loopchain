@@ -859,7 +859,7 @@ class ChannelService:
                     target=timer_key,
                     duration=conf.SUBSCRIBE_RETRY_TIMER,
                     is_repeat=True,
-                    callback=self.subscribe_to_radio_station
+                    callback=self.subscribe_network
                 )
             )
 
