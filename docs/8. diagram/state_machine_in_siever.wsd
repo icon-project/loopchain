@@ -10,6 +10,8 @@ Timer: * Connect to Radiostation
 Timer: * heartbeat to peers
 Timer: * leader complain
 Timer: * block generate
+Timer: * Subscribe
+Timer: * Shutdown
 
 state Consensus {
     Consensus: on_enter { block_height_sync }
@@ -25,7 +27,15 @@ state Consensus {
         BlockSync: Check Highest Block in Network
         BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
 
+        SubscribeNetwork: on_enter {
+        SubscribeNetwork: \tStartTimer: Subscribe
+        SubscribeNetwork: \tStartTimer: Shutdown
+        SubscribeNetwork:}
         SubscribeNetwork: Connect Network (Subscribe to Radiostation, Join a quorum if not yet)
+        SubscribeNetwork: on_exit {
+        SubscribeNetwork: \tStopTimer: Subscribe
+        SubscribeNetwork: \tStopTimer: Shutdown
+        SubscribeNetwork:}
         SubscribeNetwork -up-> EvaluateNetwork
         SubscribeNetwork -right-> [*]
     }
@@ -35,7 +45,7 @@ state Consensus {
     BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
     
     Watch: Wait for new block announcement (subscribe_loop)
-    Watch --> BlockHeightSync: Reconnect to Mother Peer\n(after connection error)
+    Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)
     Vote: on_enter {
     Vote: \tAddTimer: leader complain
     Vote: }

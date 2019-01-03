@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import urlparse, ParseResult
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -161,13 +162,7 @@ def start_as_score(args):
                 load_conf = json.load(file)
 
             additional_conf = {
-                "log": {
-                    "logger": "iconservice",
-                    "colorLog": True,
-                    "level": "info",
-                    "filePath": f"./log/icon_service_{channel}.log",
-                    "outputType": "console|file"
-                },
+                "log": load_conf.get("log"),
                 "scoreRootPath": f".storage/.score{amqp_key}_{channel}",
                 "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
                 "channel": channel,
@@ -239,10 +234,7 @@ def start_as_peer(args, node_type=None):
 
     # apply default configure values
     port = args.port or conf.PORT_PEER
-    radio_station_ip = conf.IP_RADIOSTATION
-    radio_station_port = conf.PORT_RADIOSTATION
-    radio_station_ip_sub = conf.IP_RADIOSTATION
-    radio_station_port_sub = conf.PORT_RADIOSTATION
+    radio_station_target = f"{conf.IP_RADIOSTATION}:{conf.PORT_RADIOSTATION}"
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
@@ -260,34 +252,18 @@ def start_as_peer(args, node_type=None):
 
     if args.radio_station_target:
         try:
-            is_set_https = False
-            if "https://" in args.radio_station_target:
-                is_set_https = True
-                args.radio_station_target = args.radio_station_target.split("https://")[1]
-                util.logger.spam(f"args.radio_station_target({args.radio_station_target})")
-            elif ':' in args.radio_station_target:
-                target_list = util.parse_target_list(args.radio_station_target)
-                if len(target_list) == 2:
-                    radio_station_ip, radio_station_port = target_list[0]
-                    radio_station_ip_sub, radio_station_port_sub = target_list[1]
-                else:
-                    radio_station_ip, radio_station_port = target_list[0]
-                    # util.logger.spam(f"peer "
-                    #                  f"radio_station_ip({radio_station_ip}) "
-                    #                  f"radio_station_port({radio_station_port}) "
-                    #                  f"radio_station_ip_sub({radio_station_ip_sub}) "
-                    #                  f"radio_station_port_sub({radio_station_port_sub})")
-            elif len(args.radio_station_target.split('.')) == 4:
-                radio_station_ip = args.radio_station_target
-            elif len(args.radio_station_target.split('.')) >= 2:
-                is_set_https = True
-            else:
-                raise Exception("Invalid IP format")
+            parse_result: ParseResult = urlparse(args.radio_station_target)
 
-            if is_set_https:
-                radio_station_ip = args.radio_station_target
-                radio_station_port = 443
-                util.logger.spam(f"start_as_peer:radio_station_ip {radio_station_ip}")
+            if conf.SUBSCRIBE_USE_HTTPS:
+                if not parse_result.scheme:
+                    parse_result = urlparse(f"https://{args.radio_station_target}")
+            else:
+                if not parse_result.scheme:
+                    parse_result = urlparse(f"http://{args.radio_station_target}")
+                    if not parse_result.port:
+                        parse_result = urlparse(f"http://{args.radio_station_target}:{conf.PORT_RADIOSTATION}")
+
+            radio_station_target = parse_result.netloc
 
         except Exception as e:
             util.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
@@ -296,11 +272,10 @@ def start_as_peer(args, node_type=None):
 
     # run peer service with parameters
     logging.info(f"loopchain peer run with: port({port}) "
-                 f"radio station({radio_station_ip}:{radio_station_port})")
+                 f"radio station target({radio_station_target})")
 
     PeerService(
-        radio_station_ip=radio_station_ip,
-        radio_station_port=radio_station_port,
+        radio_station_target=radio_station_target,
         node_type=node_type
     ).serve(
         port=port,

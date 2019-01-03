@@ -172,7 +172,7 @@ class ChannelService:
             self.__broadcast_scheduler.stop()
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
-            logging.info("Cleanup BroadcastSchuduler.")
+            logging.info("Cleanup BroadcastScheduler.")
 
         if self.__consensus:
             self.__consensus.stop()
@@ -182,7 +182,7 @@ class ChannelService:
         if self.__timer_service.is_run():
             self.__timer_service.stop()
             self.__timer_service.wait()
-            logging.info("Cleanup TimerSerivce.")
+            logging.info("Cleanup TimerService.")
 
     async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id, group_id, node_type, score_package):
         loggers.get_preset().peer_id = peer_id
@@ -229,12 +229,14 @@ class ChannelService:
             self.__state_machine.block_sync()
 
     async def subscribe_network(self):
-        # Subscribe to block_sync_target_stub and radiostation
-        loop = self.timer_service.get_event_loop()
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            asyncio.run_coroutine_threadsafe(self.subscribe_to_radio_station(), loop)
-        asyncio.run_coroutine_threadsafe(
-            self.subscribe_to_target_stub(self.block_manager.subscribe_target_peer_stub), loop)
+        # Subscribe to radiostation and block_sync_target_stub
+        await self.subscribe_to_radio_station()
+
+        if self.is_support_node_function(conf.NodeFunction.Vote) and self.block_manager.peer_type == loopchain_pb2.PEER:
+            await self.__subscribe_call_to_stub(
+                peer_stub=self.block_manager.subscribe_target_peer_stub,
+                peer_type=loopchain_pb2.PEER
+            )
 
         self.generate_genesis_block()
 
@@ -461,9 +463,6 @@ class ChannelService:
     async def subscribe_to_radio_station(self):
         await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)
 
-    async def subscribe_to_target_stub(self, target_stub):
-        await self.__subscribe_call_to_stub(target_stub, loopchain_pb2.PEER)
-
     async def subscribe_to_peer(self, peer_id, peer_type):
         peer = self.peer_manager.get_peer(peer_id)
         peer_stub = self.peer_manager.get_peer_stub_manager(peer)
@@ -483,20 +482,30 @@ class ChannelService:
                 ),
             )
         else:
-            await self.__subscribe_call_from_citizen(peer_stub)
+            await self.__subscribe_call_from_citizen()
 
-    async def __subscribe_call_from_citizen(self, rs_rest_stub):
-        util.logger.spam(f"channel_service:__subscribe_call_by_citizen target({ChannelProperty().rest_target})")
-        try:
-            await self.__subscribe_call_by_websocket()
-        except NotImplementedError:
-            await self.__subscribe_call_by_rest_stub(rs_rest_stub)
+    async def __subscribe_call_from_citizen(self):
+        def _handle_exception(future: asyncio.Future):
+            logging.debug("error" + str(future.exception()))
+            if isinstance(future.exception(), NotImplementedError):
+                asyncio.ensure_future(self.__subscribe_call_by_rest_stub())
 
-    async def __subscribe_call_by_websocket(self):
-        await self.__node_subscriber.subscribe(self.__node_subscriber.target_uri,
-                                               block_height=self.block_manager.get_blockchain().block_height)
+            elif isinstance(future.exception(), ConnectionError):
+                logging.warning(f"Waiting for next subscribe request...")
+                if self.__state_machine.state != "SubscribeNetwork":
+                    self.__state_machine.subscribe_network()
 
-    async def __subscribe_call_by_rest_stub(self, rs_rest_stub):
+        subscribe_event = asyncio.Event()
+        util.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
+
+        # try websocket connection, and handle exception in callback
+        asyncio.ensure_future(self.__node_subscriber.subscribe(
+            block_height=self.block_manager.get_blockchain().block_height,
+            event=subscribe_event
+        )).add_done_callback(_handle_exception)
+        await subscribe_event.wait()
+
+    async def __subscribe_call_by_rest_stub(self):
         if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
             peer_target = ChannelProperty().rest_target
         else:
@@ -504,7 +513,7 @@ class ChannelService:
 
         response = None
         try:
-            response = await rs_rest_stub.call_async(
+            response = await self.__radio_station_stub.call_async(
                 "Subscribe", {
                     'channel': ChannelProperty().name,
                     'peer_target': peer_target
@@ -516,64 +525,18 @@ class ChannelService:
                             f"automatically retrying subscribe call")
 
         if response and response['response_code'] == message_code.Response.success:
-            if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list:
-                self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
-                logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
+            logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
+            self.start_check_last_block_rs_timer()
 
-            if TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE in self.__timer_service.timer_list:
-                self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
-
-            # start next get_status timer
-            timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-            if timer_key not in self.__timer_service.timer_list:
-                util.logger.spam(f"add timer for check_block_height_call to radiostation...")
-                self.__timer_service.add_timer(
-                    timer_key,
-                    Timer(
-                        target=timer_key,
-                        duration=conf.GET_LAST_BLOCK_TIMER,
-                        is_repeat=True,
-                        callback=self.__check_block_height_call_to_rs_stub,
-                        callback_kwargs={"rs_rest_stub": rs_rest_stub}
-                    )
-                )
-        else:
-            timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-            if timer_key not in self.__timer_service.timer_list:
-                error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER})"
-                self.__timer_service.add_timer(
-                    timer_key,
-                    Timer(
-                        target=timer_key,
-                        duration=conf.SHUTDOWN_TIMER,
-                        callback=self.shutdown_peer,
-                        callback_kwargs={"message": error}
-                    )
-                )
-
-    async def __check_block_height_call_to_rs_stub(self, **kwargs):
-        rs_rest_stub = kwargs.get("rs_rest_stub", None)
-        last_block = await rs_rest_stub.call_async("GetLastBlock")
+    def __check_last_block_to_rs(self):
+        last_block = self.__radio_station_stub.call_async("GetLastBlock")
         if last_block['height'] <= self.__block_manager.get_blockchain().block_height:
             return
 
-        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key in self.__timer_service.timer_list:
-            util.logger.spam(f"stop timer for check_block_height_call to radiostation...")
-            self.__timer_service.stop_timer(timer_key)
-
-        timer_key = TimerService.TIMER_KEY_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.SUBSCRIBE_RETRY_TIMER,
-                    is_repeat=True,
-                    callback=self.__subscribe_call_from_citizen,
-                    callback_kwargs={"rs_rest_stub": rs_rest_stub}
-                )
-            )
+        # RS peer didn't announced new block
+        self.stop_check_last_block_rs_timer()
+        if self.__state_machine.state != "SubscribeNetwork":
+            self.__state_machine.subscribe_network()
 
     def shutdown_peer(self, **kwargs):
         logging.debug(f"channel_service:shutdown_peer")
@@ -888,3 +851,58 @@ class ChannelService:
             object_has_queue = self.__block_manager
 
         return object_has_queue
+
+    def start_subscribe_timer(self):
+        timer_key = TimerService.TIMER_KEY_SUBSCRIBE
+        if timer_key not in self.__timer_service.timer_list:
+            self.__timer_service.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=conf.SUBSCRIBE_RETRY_TIMER,
+                    is_repeat=True,
+                    callback=self.subscribe_network
+                )
+            )
+
+    def stop_subscribe_timer(self):
+        if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list:
+            self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
+
+    def start_check_last_block_rs_timer(self):
+        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
+        if timer_key not in self.__timer_service.timer_list:
+            util.logger.spam(f"add timer for check_block_height_call to radiostation...")
+            self.__timer_service.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=conf.GET_LAST_BLOCK_TIMER,
+                    is_repeat=True,
+                    callback=self.__check_last_block_to_rs
+                )
+            )
+
+    def stop_check_last_block_rs_timer(self):
+        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
+        if timer_key in self.__timer_service.timer_list:
+            self.__timer_service.stop_timer(timer_key)
+
+    def start_shutdown_timer(self):
+        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
+        if timer_key not in self.__timer_service.timer_list:
+            error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
+            self.__timer_service.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=conf.SHUTDOWN_TIMER,
+                    callback=self.shutdown_peer,
+                    callback_kwargs={"message": error}
+                )
+            )
+
+    def stop_shutdown_timer(self):
+        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
+        if timer_key in self.__timer_service.timer_list:
+            self.__timer_service.stop_timer(timer_key)
