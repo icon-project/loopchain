@@ -44,6 +44,7 @@ class ConsensusSiever(ConsensusBase):
         self.__stop_broadcast_send_unconfirmed_block_timer()
 
     async def consensus(self):
+        util.logger.notice(f"-------------------consensus")
         with self.__lock:
             block_builder = self._makeup_block()
 
@@ -75,6 +76,7 @@ class ConsensusSiever(ConsensusBase):
                 ChannelProperty().peer_id,
                 True
             )
+            # self._blockmanager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._blockmanager.candidate_blocks.add_block(candidate_block)
 
             broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
@@ -97,7 +99,9 @@ class ConsensusSiever(ConsensusBase):
 
         pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
                                                       TransactionStatusInQueue.normal)
-        if not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+
+        if block.header.next_leader != ChannelProperty().peer_id and \
+                not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
             block_height = block.header.height + 1
             block_version = self._blockchain.block_versioner.get_version(block_height)
 

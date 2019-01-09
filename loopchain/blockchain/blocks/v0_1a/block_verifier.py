@@ -43,7 +43,10 @@ class BlockVerifier(BaseBlockVerifier):
         invoke_result = None
         if self.invoke_func:
             new_block, invoke_result = self.invoke_func(block)
-            if header.commit_state != new_block.header.commit_state:
+            if not header.commit_state and len(body.transactions) == 0:
+                # vote block
+                pass
+            elif header.commit_state != new_block.header.commit_state:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                    f"CommitState({header.commit_state}), "
                                    f"Expected({new_block.header.commit_state}).")

@@ -251,6 +251,9 @@ class BlockManager(Subscriber):
 
     def add_unconfirmed_block(self, unconfirmed_block):
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
+        util.logger.notice(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
+                           f"tx count({len(unconfirmed_block.body.transactions)}), "
+                           f"height({unconfirmed_block.header.height})")
         if unconfirmed_block.body.confirm_prev_block:
             self.confirm_prev_block(unconfirmed_block)
 
@@ -638,8 +641,8 @@ class BlockManager(Subscriber):
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
-    def __vote_unconfirmed_block(self, block_hash, is_validated):
-        logging.debug(f"block_manager:__vote_unconfirmed_block ({self.channel_name}/{is_validated})")
+    def vote_unconfirmed_block(self, block_hash, is_validated):
+        logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
         if is_validated:
             vote_code, message = message_code.get_response(message_code.Response.success_validate_block)
@@ -676,9 +679,9 @@ class BlockManager(Subscriber):
 
         logging.info("PeerService received unconfirmed block: " + unconfirmed_block.header.hash.hex())
 
-        is_vote_type_block = len(unconfirmed_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK
-        if is_vote_type_block:
-            return
+        # is_vote_type_block = len(unconfirmed_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK
+        # if is_vote_type_block:
+        #     return
 
         leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
 
@@ -700,7 +703,13 @@ class BlockManager(Subscriber):
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            self.__vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
+            # self.candidate_blocks.add_vote(
+            #     unconfirmed_block.header.hash,
+            #     ChannelProperty().group_id,
+            #     ChannelProperty().peer_id,
+            #     exception is None
+            # )
+            self.vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 
     def callback_complete_consensus(self, **kwargs):
         self.__prev_epoch = kwargs.get("prev_epoch", None)
