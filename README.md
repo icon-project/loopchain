@@ -87,11 +87,9 @@ $ ./run_test.sh
 
 ```
 $ mkdir -p resources/my_pki
-$ cd resources/my_pki
-$ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out my_private.pem    # generate private key
-$ openssl ec -in my_private.pem  -pubout -out my_public.pem                                # generate public key
+$ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out ./resources/my_pki/my_private.pem    # generate private key
+$ openssl ec -in ./resources/my_pki/my_private.pem  -pubout -out ./resources/my_pki/my_public.pem             # generate public key
 $ export PW_icon_dex={ENTER_MY_PASSWORD}
-$ cd ../../
 ```
 
 #### Run loopchain as a Citizen Node

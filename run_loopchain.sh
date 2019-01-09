@@ -11,7 +11,7 @@ fi
 touch $PID_FILE
 
 echo "Run loopchain for citizen start!"
-./loopchain.py citizen -r https://cicon.net.solidwallet.io -o ./conf/loopchain_conf.json &
+./loopchain.py citizen -r https://test-ctz.solidwallet.io -o ./conf/loopchain_conf.json &
 echo $! > $PID_FILE
 
 echo "Run iconservice for citizenstart!"
