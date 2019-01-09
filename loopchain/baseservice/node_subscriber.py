@@ -92,9 +92,12 @@ class NodeSubscriber:
             return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
         block_dict = kwargs.get('block')
-        new_block_height = block_dict.get('height')
-        if new_block_height > ObjectManager().channel_service.block_manager.get_blockchain().block_height:
-            block_serializer = BlockSerializer.new(block_dict["version"])
+        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
+
+        new_block_height = blockchain.block_versioner.get_height(block_dict)
+        if new_block_height > blockchain.block_height:
+            block_version = blockchain.block_versioner.get_version(new_block_height)
+            block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
             confirmed_block = block_serializer.deserialize(block_dict)
 
             logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "

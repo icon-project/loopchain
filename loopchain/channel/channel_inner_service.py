@@ -71,7 +71,7 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
-            bs = BlockSerializer.new(new_block.header.version)
+            bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return bs.serialize(new_block)
 
     @message_queue_task
