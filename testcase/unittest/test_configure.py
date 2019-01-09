@@ -85,8 +85,6 @@ class TestConfigure(unittest.TestCase):
         conf.DISABLE_V1_API = False
         conf.CHANNEL_OPTION = {
             conf.LOOPCHAIN_DEFAULT_CHANNEL: {
-                "store_valid_transaction_only": True,
-                "send_tx_type": conf.SendTxType.icx,
                 "load_cert": False,
                 "consensus_cert_use": False,
                 "tx_cert_use": False,
@@ -96,8 +94,6 @@ class TestConfigure(unittest.TestCase):
                 "private_password": b'test'
             },
             conf.LOOPCHAIN_TEST_CHANNEL: {
-                "store_valid_transaction_only": False,
-                "send_tx_type": conf.SendTxType.pickle,
                 "load_cert": False,
                 "consensus_cert_use": False,
                 "tx_cert_use": False,
