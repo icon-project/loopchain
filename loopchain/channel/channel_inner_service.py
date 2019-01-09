@@ -72,19 +72,27 @@ class ChannelInnerTask:
                 continue
 
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
-            return json.dumps(bs.serialize(new_block))
+            return bs.serialize(new_block)
 
     @message_queue_task
-    async def register_subscriber(self, remote_address):
+    async def register_subscriber(self, peer_id):
         if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
             return False
         else:
-            self._citizen_set.add(remote_address)
+            self._citizen_set.add(peer_id)
+            logging.info(f"register new subscriber: {peer_id}")
+            logging.debug(f"remaining all subscribers: {self._citizen_set}")
             return True
 
     @message_queue_task
-    async def unregister_subscriber(self, remote_address):
-        self._citizen_set.remove(remote_address)
+    async def unregister_subscriber(self, peer_id):
+        logging.info(f"unregister subscriber: {peer_id}")
+        self._citizen_set.remove(peer_id)
+        logging.debug(f"remaining all subscribers: {self._citizen_set}")
+
+    @message_queue_task
+    async def is_registered_subscriber(self, peer_id):
+        return peer_id in self._citizen_set
 
     @message_queue_task
     def get_peer_list(self):
@@ -350,8 +358,6 @@ class ChannelInnerTask:
                 logging.debug(f"channel_inner_service:announce_confirmed_block "
                               f"already synced block height({confirmed_block.header.height})")
             response_code = message_code.Response.success
-            # stop subscribe timer
-            self._channel_service.stop_subscribe_timer()
         except Exception as e:
             logging.error(f"announce confirmed block error : {e}")
             response_code = message_code.Response.fail

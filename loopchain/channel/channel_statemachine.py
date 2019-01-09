@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """State Machine for Channel Service"""
+import asyncio
 from earlgrey import MessageQueueService
 from transitions import State
 
@@ -104,7 +105,7 @@ class ChannelStateMachine(object):
 
     def _do_block_sync(self):
         loop = MessageQueueService.loop
-        loop.create_task(self.__channel_service.block_height_sync_channel())
+        asyncio.run_coroutine_threadsafe(self.__channel_service.block_height_sync_channel(), loop)
 
     def _blocksync_on_enter(self):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
@@ -115,11 +116,11 @@ class ChannelStateMachine(object):
 
     def _do_evaluate_network(self):
         loop = MessageQueueService.loop
-        loop.create_task(self.__channel_service.evaluate_network())
+        asyncio.run_coroutine_threadsafe(self.__channel_service.evaluate_network(), loop)
 
     def _do_subscribe_network(self):
         loop = MessageQueueService.loop
-        loop.create_task(self.__channel_service.subscribe_network())
+        asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_network(), loop)
 
     def _subscribe_network_on_enter(self):
         self.__channel_service.start_subscribe_timer()

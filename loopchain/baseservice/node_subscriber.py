@@ -13,6 +13,7 @@
 # limitations under the License.
 """Class for websocket client between child node and RS peer"""
 
+import asyncio
 import json
 import logging
 import traceback
@@ -20,10 +21,19 @@ from asyncio import Event
 
 import websockets
 from websockets.exceptions import InvalidStatusCode, InvalidMessage
+from jsonrpcserver import config
+from jsonrpcserver.aio import AsyncMethods
+from jsonrpcclient.request import Request
 
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager
+from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import BlockSerializer
+from loopchain.channel.channel_property import ChannelProperty
+
+
+config.log_requests = False
+config.log_responses = False
+ws_methods = AsyncMethods()
 
 
 class NodeSubscriber:
@@ -31,6 +41,11 @@ class NodeSubscriber:
         self.__channel = channel
         self.__rs_target = rs_target
         self.__target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{self.__rs_target}/api/node/{channel}"
+        self.__exception = None
+
+        ws_methods.add(self.node_ws_PublishHeartbeat)
+        ws_methods.add(self.node_ws_PublishNewBlock)
+
         logging.debug(f"websocket target uri : {self.__target_uri}")
 
     @property
@@ -38,15 +53,16 @@ class NodeSubscriber:
         return self.__target_uri
 
     async def subscribe(self, block_height, event: Event):
+        self.__exception = None
+
         try:
             # set websocket payload maxsize to 4MB.
             async with websockets.connect(self.__target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK) as websocket:
-                logging.debug(f"Websocket connection is Completed.")
                 event.set()
-                request = json.dumps({
-                    'height': block_height
-                })
-                await websocket.send(request)
+
+                logging.debug(f"Websocket connection is Completed.")
+                request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
+                await websocket.send(json.dumps(request))
                 await self.__subscribe_loop(websocket)
 
         except (InvalidStatusCode, InvalidMessage) as e:
@@ -60,26 +76,52 @@ class NodeSubscriber:
 
     async def __subscribe_loop(self, websocket):
         while True:
-            response = await websocket.recv()
-            response_dict = json.loads(response)
+            if self.__exception:
+                raise self.__exception
 
-            if 'error' in response_dict:
-                return ObjectManager().channel_service.shutdown_peer(message=response_dict.get('error'))
+            try:
+                response = await asyncio.wait_for(websocket.recv(), timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT)
+            except asyncio.TimeoutError:
+                continue
+            else:
+                response_dict = json.loads(response)
+                await ws_methods.dispatch(response_dict)
 
-            new_block_height = response_dict.get('height')
-            if new_block_height > ObjectManager().channel_service.block_manager.get_blockchain().block_height:
-                await self.__add_confirmed_block(block_json=response)
+    async def node_ws_PublishNewBlock(self, **kwargs):
+        if 'error' in kwargs:
+            return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
-    async def __add_confirmed_block(self, block_json: str):
-        block_dict = json.loads(block_json)
+        block_dict = kwargs.get('block')
         blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
 
-        block_height = blockchain.block_versioner.get_height(block_dict)
-        block_version = blockchain.block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
-        confirmed_block = block_serializer.deserialize(block_dict)
+        new_block_height = blockchain.block_versioner.get_height(block_dict)
+        if new_block_height > blockchain.block_height:
+            block_version = blockchain.block_versioner.get_version(new_block_height)
+            block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
+            confirmed_block = block_serializer.deserialize(block_dict)
 
-        logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
-                      f"hash({confirmed_block.header.hash.hex()})")
+            logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
+                          f"hash({confirmed_block.header.hash.hex()})")
 
-        ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
+            ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
+
+    async def node_ws_PublishHeartbeat(self, **kwargs):
+        def _callback(exception):
+            self.__exception = exception
+
+        if 'error' in kwargs:
+            _callback(ConnectionError(kwargs['error']))
+            return
+
+        timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
+        timer_service = ObjectManager().channel_service.timer_service
+        if timer_key in timer_service.timer_list:
+            timer_service.reset_timer(timer_key)
+        else:
+            timer = Timer(
+                target=timer_key,
+                duration=3 * conf.TIMEOUT_FOR_WS_HEARTBEAT,
+                callback=_callback,
+                callback_kwargs={'exception': ConnectionError("No Heartbeat.")}
+            )
+            timer_service.add_timer(timer_key, timer)

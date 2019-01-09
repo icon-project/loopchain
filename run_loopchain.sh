@@ -1,5 +1,6 @@
 #!/bin/sh
 
+export REDIRECT_PROTOCOL=https
 PID_FILE="loopchain.pid"
 
 if [ -f $PID_FILE ]; then
