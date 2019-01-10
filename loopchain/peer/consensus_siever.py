@@ -52,6 +52,7 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
                 return self.__block_generation_timer.call()
 
+            util.logger.notice(f"-------------------transactions({len(block_builder.transactions)})")
             peer_manager = ObjectManager().channel_service.peer_manager
 
             last_block = self._blockchain.last_block
@@ -70,13 +71,7 @@ class ConsensusSiever(ConsensusBase):
 
             logging.debug(f"candidate block : {candidate_block.header}")
 
-            self._blockmanager.candidate_blocks.add_vote(
-                candidate_block.header.hash,
-                ChannelProperty().group_id,
-                ChannelProperty().peer_id,
-                True
-            )
-            # self._blockmanager.vote_unconfirmed_block(candidate_block.header.hash, True)
+            self._blockmanager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._blockmanager.candidate_blocks.add_block(candidate_block)
 
             broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
@@ -94,14 +89,19 @@ class ConsensusSiever(ConsensusBase):
 
         # vote done
         block = self._blockmanager.candidate_blocks.blocks[block_hash].block
+        if block and len(block.body.transactions) == 0:
+            return True  # Vote block trigger by vote_unconfirmed_block of Channel Inner Service.
+
         self._blockmanager.add_block(block, vote)
         self._made_block_count += 1
 
         pending_tx = self._txQueue.get_item_in_status(TransactionStatusInQueue.normal,
                                                       TransactionStatusInQueue.normal)
 
-        if block.header.next_leader != ChannelProperty().peer_id and \
+        if block.header.next_leader.hex_hx() != ChannelProperty().peer_id and \
                 not pending_tx and not conf.ALLOW_MAKE_EMPTY_BLOCK:
+            util.logger.notice(f"-------------------count_votes next_leader({block.header.next_leader}), "
+                               f"peer_id({ChannelProperty().peer_id})")
             block_height = block.header.height + 1
             block_version = self._blockchain.block_versioner.get_version(block_height)
 
@@ -113,8 +113,11 @@ class ConsensusSiever(ConsensusBase):
             block_builder.confirm_prev_block = True
             empty_block = block_builder.build()
 
+            self._blockmanager.vote_unconfirmed_block(empty_block.header.hash, True)
+            self._blockmanager.candidate_blocks.add_block(empty_block)
             self._blockmanager.broadcast_send_unconfirmed_block(empty_block)
 
+            util.logger.notice(f"-------------------turn_to_peer")
             ObjectManager().channel_service.state_machine.turn_to_peer()
 
     # async def _wait_for_voting(self, candidate_block: 'Block'):

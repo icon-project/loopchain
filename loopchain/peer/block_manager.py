@@ -657,6 +657,12 @@ class BlockManager(Subscriber):
             peer_id=self.__peer_id,
             group_id=ChannelProperty().group_id)
 
+        self.candidate_blocks.add_vote(
+            block_hash,
+            ChannelProperty().group_id,
+            ChannelProperty().peer_id,
+            is_validated
+        )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
     def vote_as_peer(self):
@@ -679,10 +685,6 @@ class BlockManager(Subscriber):
 
         logging.info("PeerService received unconfirmed block: " + unconfirmed_block.header.hash.hex())
 
-        # is_vote_type_block = len(unconfirmed_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK
-        # if is_vote_type_block:
-        #     return
-
         leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
 
         block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
@@ -703,12 +705,6 @@ class BlockManager(Subscriber):
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            # self.candidate_blocks.add_vote(
-            #     unconfirmed_block.header.hash,
-            #     ChannelProperty().group_id,
-            #     ChannelProperty().peer_id,
-            #     exception is None
-            # )
             self.vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
 
     def callback_complete_consensus(self, **kwargs):
