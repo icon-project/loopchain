@@ -11,7 +11,7 @@ class Transaction(BaseTransition):
     value: int
     nid: int
     step_limit: int
-    nonce: int
+    nonce: str
     data_type: str
     data: Union[str, dict]
 

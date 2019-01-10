@@ -20,7 +20,7 @@ class TransactionSerializer(BaseTransactionSerializer):
             params["value"] = hex(tx.value)
 
         if tx.nonce is not None:
-            params['nonce'] = hex(tx.nonce)
+            params['nonce'] = tx.nonce
 
         if tx.data is not None and tx.data_type is not None:
             if isinstance(tx.data, str):
@@ -49,7 +49,7 @@ class TransactionSerializer(BaseTransactionSerializer):
 
         nonce = tx_data.get('nonce')
         if nonce is not None:
-            nonce = int(nonce, 16)
+            nonce = nonce
 
         value = tx_data.get('value')
         if value is not None:

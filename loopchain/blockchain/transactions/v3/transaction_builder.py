@@ -19,7 +19,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.value: int = None
         self.step_limit: int = None
         self.nid: int = None
-        self.nonce: int = None
+        self.nonce: str = None
         self.data: Union[str, dict] = None
         self.data_type: str = None
 
@@ -69,7 +69,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         }
 
         if self.nonce is not None:
-            params["nonce"] = hex(self.nonce)
+            params["nonce"] = self.nonce
 
         if self.data is not None and self.data_type is not None:
             if isinstance(self.data, str):
