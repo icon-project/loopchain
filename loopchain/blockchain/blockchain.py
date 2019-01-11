@@ -250,7 +250,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash, None)
 
-            next_total_tx = self.__write_block_data(block)
+            next_total_tx = self.__write_block_data(block, vote)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -277,7 +277,7 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block):
+    def __write_block_data(self, block: Block, vote: Vote = None):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -300,6 +300,12 @@ class BlockChain:
             BlockChain.BLOCK_HEIGHT_KEY +
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
+
+        if vote:
+            batch.Put(
+                BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
+                Vote.save_to(vote)
+            )
 
         self.__confirmed_block_db.Write(batch)
 

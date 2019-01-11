@@ -79,11 +79,8 @@ class ConsensusSiever(ConsensusBase):
                     peer_manager = ObjectManager().channel_service.peer_manager
                     next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
                 else:
-                    # util.logger.debug(f"-------------------consensus logic-wait tx")
-                    util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
+                    # util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
                     return self.__block_generation_timer.call()
-
-            util.logger.notice(f"-------------------transactions({len(block_builder.transactions)})")
 
             last_block = self._blockchain.last_block
             block_builder.height = last_block.header.height + 1

@@ -685,8 +685,6 @@ class BlockManager(Subscriber):
 
         logging.info("PeerService received unconfirmed block: " + unconfirmed_block.header.hash.hex())
 
-        leader_peer_id: str = self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
-
         block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
         block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
         block_verifier.invoke_func = self.__channel_service.score_invoke
@@ -696,7 +694,7 @@ class BlockManager(Subscriber):
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,
-                                                   ExternalAddress.fromhex(leader_peer_id))
+                                                   self.__blockchain.last_block.header.next_leader)
         except Exception as e:
             exception = e
             logging.error(e)
