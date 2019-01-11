@@ -24,10 +24,13 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.nid_generated = None
 
     def build(self):
+        self.build_origin_data()
         self.build_hash()
         self.build_nid()
 
+        self.build_raw_data()
         return Transaction(
+            raw_data=self.raw_data,
             hash=self.hash,
             signature=None,
             timestamp=0,
@@ -36,25 +39,19 @@ class TransactionBuilder(BaseTransactionBuilder):
             message=self.message
         )
 
-    def build_hash(self):
-        if self.accounts is None:
-            raise RuntimeError
-
-        if self.message is None:
-            raise RuntimeError
-
-        self.hash = self._build_hash()
-        return self.hash
-
-    def _build_hash(self):
-        params = {
+    def build_origin_data(self):
+        origin_data = {
             "accounts": self.accounts,
             "message": self.message
         }
         if self.nid is not None:
-            params["nid"] = hex(self.nid)
+            origin_data["nid"] = hex(self.nid)
+        self.origin_data = origin_data
+        return self.origin_data
 
-        return Hash32(self._hash_generator.generate_hash(params))
+    def build_raw_data(self):
+        self.raw_data = dict(self.origin_data)
+        return self.raw_data
 
     def build_nid(self):
         if self.hash is None:

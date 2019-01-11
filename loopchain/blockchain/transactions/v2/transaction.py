@@ -19,11 +19,11 @@ class Transaction(BaseTransition):
     method = "icx_sendTransaction"
     version = "0x2"
 
-    def __init__(self, hash: 'Hash32', signature: 'Signature', timestamp: int,
+    def __init__(self, raw_data: dict, hash: 'Hash32', signature: 'Signature', timestamp: int,
                  from_address: 'Address', to_address: 'Address',
                  value: Union[int, MalformedStr], fee: Union[int, MalformedStr], nonce: Union[int, MalformedStr],
                  extra: Mapping[str, str]):
-        super().__init__(hash, signature, timestamp)
+        super().__init__(raw_data, hash, signature, timestamp)
 
         object.__setattr__(self, "from_address", from_address)
         object.__setattr__(self, "to_address", to_address)

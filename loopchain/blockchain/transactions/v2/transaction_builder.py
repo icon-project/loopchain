@@ -35,10 +35,13 @@ class TransactionBuilder(BaseTransactionBuilder):
 
     def build(self):
         self.build_from_address()
+        self.build_origin_data()
         self.build_hash()
         self.sign()
+        self.build_raw_data()
 
         return Transaction(
+            raw_data=self.raw_data,
             hash=self.hash,
             signature=self.signature,
             timestamp=self._timestamp,
@@ -49,13 +52,13 @@ class TransactionBuilder(BaseTransactionBuilder):
             nonce=self.nonce
         )
 
-    def _build_hash(self):
+    def build_origin_data(self):
         if self.fixed_timestamp is None:
             self._timestamp = int(time.time() * 1_000_000)
         else:
             self._timestamp = self.fixed_timestamp
 
-        params = {
+        origin_data = {
             "from": self.from_address.hex_xx(),
             "to": self.to_address.hex_xx(),
             "value": hex(self.value),
@@ -63,6 +66,14 @@ class TransactionBuilder(BaseTransactionBuilder):
             "timestamp": str(self._timestamp)
         }
         if self.nonce is not None:
-            params["nonce"] = str(self.nonce)
+            origin_data["nonce"] = str(self.nonce)
 
-        return Hash32(self._hash_generator.generate_hash(params))
+        self.origin_data = origin_data
+        return self.origin_data
+
+    def build_raw_data(self):
+        raw_data = dict(self.origin_data)
+        raw_data["signature"] = self.signature.to_base64str()
+        raw_data["tx_hash"] = self.hash.hex()
+        self.raw_data = raw_data
+        return self.raw_data

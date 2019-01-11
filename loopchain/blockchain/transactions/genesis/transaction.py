@@ -16,9 +16,9 @@ class Transaction(BaseTransition):
 
     version = "genesis"
 
-    def __init__(self, hash: 'Hash32', signature: Union['Signature', None], timestamp: int,
+    def __init__(self, raw_data: dict, hash: 'Hash32', signature: Union['Signature', None], timestamp: int,
                  nid: int, accounts: list, message: str):
-        super().__init__(hash, signature, timestamp)
+        super().__init__(raw_data, hash, signature, timestamp)
 
         object.__setattr__(self, "nid", nid)
         object.__setattr__(self, "accounts", tuple(accounts))
