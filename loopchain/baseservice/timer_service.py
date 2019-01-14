@@ -126,6 +126,8 @@ class TimerService(CommonThread):
         self.__timer_list[key] = timer
         asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
         timer.on()
+        if timer.is_run_at_start:
+            self.restart_timer(key)
 
     def remove_timer(self, key):
         """remove timer from self.__timer_list

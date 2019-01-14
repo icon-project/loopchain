@@ -439,7 +439,7 @@ class BlockManager(Subscriber):
 
         # The adjustment of block height and the process for data synchronization of peer
         # === Love&Hate Algorithm === #
-        logging.info("try block height sync...with love&hate")
+        util.logger.info("try block height sync...with love&hate")
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         # max_height: current max height
