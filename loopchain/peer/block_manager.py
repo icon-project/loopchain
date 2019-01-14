@@ -251,9 +251,9 @@ class BlockManager(Subscriber):
 
     def add_unconfirmed_block(self, unconfirmed_block):
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-        util.logger.notice(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
-                           f"tx count({len(unconfirmed_block.body.transactions)}), "
-                           f"height({unconfirmed_block.header.height})")
+        # util.logger.notice(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
+        #                    f"tx count({len(unconfirmed_block.body.transactions)}), "
+        #                    f"height({unconfirmed_block.header.height})")
         if unconfirmed_block.body.confirm_prev_block:
             self.confirm_prev_block(unconfirmed_block)
 

@@ -436,7 +436,7 @@ class ChannelInnerTask:
         util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
 
-        util.logger.notice("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
+        util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 
         self._channel_service.block_manager.candidate_blocks.add_vote(
             block_hash,
