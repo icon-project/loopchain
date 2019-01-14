@@ -22,6 +22,7 @@ class BlockHeader:
 class BlockBody:
     transactions: Mapping[Hash32, Transaction]
 
+    # TODO: Make sure that subclass of `BlockBody` call `BlockBody.__init__`
     def __init__(self, transactions: Mapping[Hash32, Transaction]):
         transactions = OrderedDict(transactions)
         transactions.__str__ = _dict__str__

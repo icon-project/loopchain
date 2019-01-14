@@ -21,6 +21,7 @@ class TransactionVerifier(BaseTransactionVerifier):
         self.verify_hash(tx)
         self.verify_accounts(tx)
         if blockchain:
+            self.verify_empty_blockchain(tx, blockchain)
             self.verify_tx_hash_unique(tx, blockchain)
 
     def verify_signature(self, tx: 'Transaction'):
@@ -44,3 +45,8 @@ class TransactionVerifier(BaseTransactionVerifier):
 
             # An exception will be raised if 'address' is invalid.
             ExternalAddress.fromhex(account['address'])
+
+    def verify_empty_blockchain(self, tx: 'Transaction', blockchain):
+        if blockchain.block_height >= 0:
+            raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                               f"Genesis Tx cannot be added blockchain height {blockchain.block_height}.")

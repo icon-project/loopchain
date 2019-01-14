@@ -11,6 +11,9 @@ _size_attr_name_ = "_size_attr_"
 
 @dataclass(frozen=True)
 class Transaction:
+    # TODO wrap `raw_data` to `MappingProxy`
+    raw_data: dict
+
     hash: Hash32
     signature: Signature
     timestamp: int
