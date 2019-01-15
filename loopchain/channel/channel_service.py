@@ -681,6 +681,14 @@ class ChannelService:
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
+
+            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
+                self.peer_manager.announce_new_leader(
+                    self.peer_manager.get_leader_peer().peer_id,
+                    new_leader_id,
+                    is_broadcast=True,
+                    self_peer_id=ChannelProperty().peer_id
+                )
         else:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
