@@ -626,7 +626,7 @@ class BlockChain:
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
-        # util.logger.notice(f"-------------------confirm_prev_block---current_block is "
+        # util.logger.debug(f"-------------------confirm_prev_block---current_block is "
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
@@ -659,7 +659,7 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            # util.logger.notice(f"-------------------confirm_prev_block---before add block,"
+            # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
             self.add_block(unconfirmed_block)
             self.last_unconfirmed_block = current_block

@@ -47,11 +47,11 @@ class ConsensusBase(metaclass=ABCMeta):
         pass
 
     def _check_unconfirmed_block(self):
-        # util.logger.notice(f"-------------------_check_unconfirmed_block, "
+        # util.logger.debug(f"-------------------_check_unconfirmed_block, "
         #                    f"candidate_blocks({len(self._blockmanager.candidate_blocks.blocks)})")
         if self._blockchain.last_unconfirmed_block:
             vote = self._blockmanager.candidate_blocks.get_vote(self._blockchain.last_unconfirmed_block.header.hash)
-            # util.logger.notice(f"-------------------_check_unconfirmed_block, "
+            # util.logger.debug(f"-------------------_check_unconfirmed_block, "
             #                    f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block.header.hash}), "
             #                    f"vote({vote.votes})")
             vote_result = vote.get_result(self._blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)

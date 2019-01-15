@@ -251,7 +251,7 @@ class BlockManager(Subscriber):
 
     def add_unconfirmed_block(self, unconfirmed_block):
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-        # util.logger.notice(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
+        # util.logger.debug(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
         #                    f"tx count({len(unconfirmed_block.body.transactions)}), "
         #                    f"height({unconfirmed_block.header.height})")
         if unconfirmed_block.body.confirm_prev_block:
@@ -556,7 +556,7 @@ class BlockManager(Subscriber):
             return False
 
         if my_height >= max_height:
-            util.logger.notice(f"block_manager:block_height_sync is complete.")
+            util.logger.info(f"block_manager:block_height_sync is complete.")
             self.__channel_service.state_machine.subscribe_network()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"

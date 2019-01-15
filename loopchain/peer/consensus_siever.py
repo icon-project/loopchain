@@ -110,7 +110,7 @@ class ConsensusSiever(ConsensusBase):
 
             if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex() != ChannelProperty().peer_id:
-                # util.logger.notice(f"-------------------turn_to_peer")
+                # util.logger.debug(f"-------------------turn_to_peer")
                 ObjectManager().channel_service.state_machine.turn_to_peer()
             else:
                 self.__block_generation_timer.call()

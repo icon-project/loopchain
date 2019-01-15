@@ -285,8 +285,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.StatusReply(
             status=json.dumps(status_data),
             block_height=status_data["block_height"],
-            unconfirmed_block_height=status_data["unconfirmed_block_height"],
             total_tx=status_data["total_tx"],
+            unconfirmed_block_height=status_data["unconfirmed_block_height"],
             is_leader_complaining=status_data['leader_complaint'],
             peer_id=status_data['peer_id'])
 
