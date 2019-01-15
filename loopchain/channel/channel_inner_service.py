@@ -112,8 +112,11 @@ class ChannelInnerTask:
 
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
+        unconfirmed_block_height = None
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.header.height
+            if block_manager.get_blockchain().last_unconfirmed_block:
+                unconfirmed_block_height = block_manager.get_blockchain().last_unconfirmed_block.header.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
                           + str(block_manager.get_blockchain().last_block.header.hash.hex()))
             logging.debug("getstatus block hash(block_manager.get_blockchain().block_height): "
@@ -129,6 +132,7 @@ class ChannelInnerTask:
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
+        status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = total_tx
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
