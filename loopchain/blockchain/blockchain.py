@@ -211,6 +211,9 @@ class BlockChain:
             key = self.__confirmed_block_db.Get(BlockChain.BLOCK_HEIGHT_KEY +
                                                 block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
         except KeyError:
+            if self.last_unconfirmed_block:
+                if self.last_unconfirmed_block.header.height == block_height:
+                    return self.last_unconfirmed_block
             return None
 
         return self.__find_block_by_key(key)

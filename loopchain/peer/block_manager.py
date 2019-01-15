@@ -428,6 +428,32 @@ class BlockManager(Subscriber):
         if self.__consensus_algorithm:
             self.__consensus_algorithm.stop()
 
+    def __current_block_height(self):
+        unconfirmed_block_height = -1
+        if self.__blockchain.last_unconfirmed_block:
+            unconfirmed_block_height = self.__blockchain.last_unconfirmed_block.header.height
+        return max(unconfirmed_block_height, self.__blockchain.block_height)
+
+    def __next_block_height(self):
+        return self.__current_block_height() + 1
+
+    def __add_block_by_sync(self, block_):
+        commit_state = block_.header.commit_state
+        logging.debug(f"block_manager.py >> block_height_sync :: "
+                      f"height({block_.header.height}) commit_state({commit_state})")
+
+        block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
+        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        if block_.header.height == 0:
+            block_verifier.invoke_func = self.__channel_service.genesis_invoke
+        else:
+            block_verifier.invoke_func = self.__channel_service.score_invoke
+        invoke_results = block_verifier.verify_loosely(block_,
+                                                       self.__blockchain.last_block,
+                                                       self.__blockchain)
+        self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
+        return self.add_block(block_)
+
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
         channel_service = ObjectManager().channel_service
@@ -448,7 +474,7 @@ class BlockManager(Subscriber):
         if target_height is not None:
             max_height = target_height
 
-        my_height = self.__blockchain.block_height
+        my_height = self.__current_block_height()
         retry_number = 0
         util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
 
@@ -476,21 +502,12 @@ class BlockManager(Subscriber):
 
                         try:
                             result = False
-                            commit_state = block.header.commit_state
-                            logging.debug(f"block_manager.py >> block_height_sync :: "
-                                          f"height({block.header.height}) commit_state({commit_state})")
-
-                            block_version = self.get_blockchain().block_versioner.get_version(block.header.height)
-                            block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
-                            if block.header.height == 0:
-                                block_verifier.invoke_func = self.__channel_service.genesis_invoke
+                            if max_height > 0 and max_height == block.header.height:
+                                self.candidate_blocks.add_block(block)
+                                self.__blockchain.last_unconfirmed_block = block
+                                result = True
                             else:
-                                block_verifier.invoke_func = self.__channel_service.score_invoke
-                            invoke_results = block_verifier.verify_loosely(block,
-                                                                           self.__blockchain.last_block,
-                                                                           self.__blockchain)
-                            self.__blockchain.set_invoke_results(block.header.hash.hex(), invoke_results)
-                            result = self.add_block(block)
+                                result = self.__add_block_by_sync(block)
 
                             if result:
                                 if block.header.height == 0:
@@ -539,7 +556,7 @@ class BlockManager(Subscriber):
             return False
 
         if my_height >= max_height:
-            logging.debug(f"block_manager:block_height_sync is complete.")
+            util.logger.notice(f"block_manager:block_height_sync is complete.")
             self.__channel_service.state_machine.subscribe_network()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -614,7 +631,10 @@ class BlockManager(Subscriber):
                         response = target_peer_stub.call("Status")
                         util.logger.spam('{/api/v1/status/peer} response: ' + response.text)
                         response.block_height = int(json.loads(response.text)["block_height"])
+                        response.unconfirmed_block_height = int(json.loads(response.text)["unconfirmed_block_height"])
                         stub.target = target
+
+                    response.block_height = max(response.block_height, response.unconfirmed_block_height)
 
                     if response.block_height > max_height:
                         # Add peer as higher than this
