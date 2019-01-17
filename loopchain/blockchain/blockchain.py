@@ -211,12 +211,14 @@ class BlockChain:
             key = self.__confirmed_block_db.Get(BlockChain.BLOCK_HEIGHT_KEY +
                                                 block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
         except KeyError:
-            if self.last_unconfirmed_block:
-                if self.last_unconfirmed_block.header.height == block_height:
-                    return self.last_unconfirmed_block
             return None
 
         return self.__find_block_by_key(key)
+
+    def find_unconfirmed_block(self, block_height):
+        if self.last_unconfirmed_block and self.last_unconfirmed_block.header.height == block_height:
+            return self.last_unconfirmed_block
+        return None
 
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
@@ -649,9 +651,8 @@ class BlockChain:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     return
                 else:
-                    except_msg = \
-                        f"there is no unconfirmed block in this peer " \
-                        f"block_hash({current_block.header.prev_hash.hex()})"
+                    except_msg = ("there is no unconfirmed block in this peer "
+                                  f"block_hash({current_block.header.prev_hash.hex()})")
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 

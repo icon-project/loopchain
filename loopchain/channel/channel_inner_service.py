@@ -385,7 +385,7 @@ class ChannelInnerTask:
         if block_hash != "":
             block = blockchain.find_block_by_hash(block_hash)
         elif block_height != -1:
-            block = blockchain.find_block_by_height(block_height)
+            block = blockchain.find_block_by_height(block_height) or blockchain.find_unconfirmed_block(block_height)
         else:
             response_message = message_code.Response.fail_not_enough_data
 
