@@ -15,6 +15,8 @@ import ast
 import json
 import pickle
 import re
+import signal
+import multiprocessing as mp
 from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
@@ -23,15 +25,328 @@ from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, ScoreResponse
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, Block, BlockBuilder,
-                                  BlockSerializer, blocks, Hash32)
+from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, ScoreResponse
+from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
+from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
+                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, )
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
+from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+
+
+class ChannelTxCreatorInnerTask:
+    def __init__(self, channel_name: str, peer_target: str, tx_versioner: TransactionVersioner):
+        self.__channel_name = channel_name
+        self.__tx_versioner = tx_versioner
+
+        scheduler = BroadcastScheduler(channel=channel_name, self_target=peer_target)
+        scheduler.start()
+
+        self.__broadcast_scheduler = scheduler
+
+        future = scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
+        future.result(conf.TIMEOUT_FOR_FUTURE)
+
+    def __pre_validate(self, tx: Transaction):
+        if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
+            raise TransactionInvalidOutOfTimeBound(tx.hash.hex(), tx.timestamp, util.get_now_time_stamp())
+
+    def cleanup(self):
+        self.__broadcast_scheduler.stop()
+        self.__broadcast_scheduler.wait()
+        self.__broadcast_scheduler: BroadcastScheduler = None
+
+    @message_queue_task
+    async def create_icx_tx(self, kwargs: dict):
+        result_code = None
+        exception = None
+        tx = None
+
+        try:
+            tx_version = self.__tx_versioner.get_version(kwargs)
+
+            ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
+            tx = ts.from_(kwargs)
+
+            tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
+            tv.verify(tx)
+
+            self.__pre_validate(tx)
+
+            logging.debug(f"create icx input : {kwargs}")
+
+            self.__broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, self.__tx_versioner))
+            return message_code.Response.success, tx.hash.hex()
+
+        except TransactionInvalidError as e:
+            result_code = e.message_code
+            exception = e
+            traceback.print_exc()
+        except BaseException as e:
+            result_code = TransactionInvalidError.message_code
+            exception = e
+            traceback.print_exc()
+        finally:
+            if exception:
+                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
+                                f"kwargs({kwargs})\n\n"
+                                f"tx({tx})\n\n"
+                                f"exception({exception})")
+                return result_code, None
+
+    async def schedule_job(self, command, params):
+        self.__broadcast_scheduler.schedule_job(command, params)
+
+
+class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask]):
+    TaskType = ChannelTxCreatorInnerTask
+
+    def __init__(self, broadcast_queue: mp.Queue, amqp_target, route_key, username=None, password=None, **task_kwargs):
+        super().__init__(amqp_target, route_key, username, password, **task_kwargs)
+
+        self.__is_running = True
+        self.__broadcast_queue = broadcast_queue
+
+        async def _stop_loop():
+            self.loop.stop()
+
+        def _schedule_job():
+            while True:
+                command, params = broadcast_queue.get()
+                if not self.__is_running or command is None:
+                    break
+                asyncio.run_coroutine_threadsafe(self._task.schedule_job(command, params), self.loop)
+
+            while not broadcast_queue.empty():
+                broadcast_queue.get()
+
+            asyncio.run_coroutine_threadsafe(_stop_loop(), self.loop)
+
+        self.__broadcast_thread = threading.Thread(target=_schedule_job)
+        self.__broadcast_thread.start()
+
+    def _callback_connection_lost_callback(self, connection: RobustConnection):
+        util.exit_and_msg("MQ Connection lost.")
+
+    def stop(self):
+        self.__broadcast_queue.put((None, None))
+        self.__is_running = False  # even if broadcast queue has some items, the loop will be stopped immediately.
+
+    def cleanup(self):
+        self.__broadcast_thread.join()
+        self._task.cleanup()
+
+    @staticmethod
+    def main(channel_name: str, amqp_target: str, amqp_key: str, peer_target: str,
+             tx_versioner: TransactionVersioner, broadcast_queue: mp.Queue, properties: ModuleProcessProperties=None):
+        if properties is not None:
+            ModuleProcess.load_properties(properties, "txcreator")
+
+        logging.info(f"Channel TX Creator start")
+
+        broadcast_queue.cancel_join_thread()
+
+        queue_name = conf.CHANNEL_TX_CREATOR_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
+        service = ChannelTxCreatorInnerService(broadcast_queue,
+                                               amqp_target,
+                                               queue_name,
+                                               conf.AMQP_USERNAME,
+                                               conf.AMQP_PASSWORD,
+                                               channel_name=channel_name,
+                                               peer_target=peer_target,
+                                               tx_versioner=tx_versioner)
+
+        def _on_signal(signal_num):
+            logging.error(f"Channel TX Creator has been received signal({signal_num})")
+            service.stop()
+
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+
+        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPS,
+                      retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
+        logging.info("ChannelTxCreatorInnerService: started")
+        service.serve_all()
+
+        service.cleanup()
+        service.loop.close()
+        logging.info("ChannelTxCreatorInnerService: stopped")
+
+
+class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
+    TaskType = ChannelTxCreatorInnerTask
+
+    def _callback_connection_lost_callback(self, connection: RobustConnection):
+        util.exit_and_msg("MQ Connection lost.")
+
+
+class ChannelTxReceiverInnerTask:
+    def __init__(self, tx_versioner: TransactionVersioner, tx_queue: mp.Queue):
+        self.__tx_versioner = tx_versioner
+        self.__tx_queue = tx_queue
+
+    @message_queue_task(type_=MessageQueueType.Worker)
+    def add_tx_list(self, request) -> tuple:
+        tx_list = []
+        for tx_item in request.tx_list:
+            tx_json = json.loads(tx_item.tx_json)
+
+            tx_version = self.__tx_versioner.get_version(tx_json)
+
+            ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
+            tx = ts.from_(tx_json)
+
+            tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
+            tv.verify(tx)
+
+            tx.size(self.__tx_versioner)
+
+            tx_list.append(tx)
+
+        tx_len = len(tx_list)
+        if tx_len == 0:
+            response_code = message_code.Response.fail
+            message = "fail tx validate while AddTxList"
+        else:
+            self.__tx_queue.put(tx_list)
+            response_code = message_code.Response.success
+            message = f"success ({len(tx_list)})/({len(request.tx_list)})"
+
+        return response_code, message
+
+
+class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTask]):
+    TaskType = ChannelTxReceiverInnerTask
+
+    def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
+        super().__init__(amqp_target, route_key, username, password, **task_kwargs)
+
+    def _callback_connection_lost_callback(self, connection: RobustConnection):
+        util.exit_and_msg("MQ Connection lost.")
+
+    @staticmethod
+    def main(channel_name: str, amqp_target: str, amqp_key: str, tx_versioner: TransactionVersioner, tx_queue: mp.Queue,
+             properties: ModuleProcessProperties=None):
+        if properties is not None:
+            ModuleProcess.load_properties(properties, "txreceiver")
+
+        logging.info(f"Channel TX Receiver start")
+
+        tx_queue.cancel_join_thread()
+
+        queue_name = conf.CHANNEL_TX_RECEIVER_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
+        service = ChannelTxReceiverInnerService(amqp_target, queue_name,
+                                                conf.AMQP_USERNAME, conf.AMQP_PASSWORD,
+                                                tx_versioner=tx_versioner, tx_queue=tx_queue)
+
+        async def _stop_loop():
+            service.loop.stop()
+
+        def _on_signal(signal_num):
+            logging.error(f"Channel TX Receiver has been received signal({signal_num})")
+            asyncio.run_coroutine_threadsafe(_stop_loop(), service.loop)
+
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+
+        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPS,
+                      retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
+        logging.info("ChannelTxReceiverInnerService: started")
+        service.serve_all()
+
+        service.loop.close()
+
+        logging.info("ChannelTxReceiverInnerService: stopped")
+
+
+class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
+    TaskType = ChannelTxReceiverInnerTask
+
+    def _callback_connection_lost_callback(self, connection: RobustConnection):
+        util.exit_and_msg("MQ Connection lost.")
+
+
+class _ChannelTxCreatorProcess(ModuleProcess):
+    def __init__(self, tx_versioner: TransactionVersioner, broadcast_scheduler: BroadcastScheduler,
+                 crash_callback_in_join_thread):
+        super().__init__()
+
+        self.__broadcast_queue = self.Queue()
+        self.__broadcast_queue.cancel_join_thread()
+
+        args = (ChannelProperty().name,
+                StubCollection().amqp_target,
+                StubCollection().amqp_key,
+                ChannelProperty().peer_target,
+                tx_versioner,
+                self.__broadcast_queue)
+        super().start(target=ChannelTxCreatorInnerService.main,
+                      args=args,
+                      crash_callback_in_join_thread=crash_callback_in_join_thread)
+
+        self.__broadcast_scheduler = broadcast_scheduler
+        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE, BroadcastCommand.UPDATE_AUDIENCE)
+        broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
+
+    def start(self, target, args=(), crash_callback_in_join_thread=None):
+        raise AttributeError("Doesn't support this function")
+
+    def join(self):
+        self.__broadcast_scheduler.remove_schedule_listener(self.__broadcast_callback)
+        super().join()
+        self.__broadcast_queue: mp.Queue = None
+
+    def __broadcast_callback(self, command, params):
+        self.__broadcast_queue.put((command, params))
+
+
+class _ChannelTxReceiverProcess(ModuleProcess):
+    def __init__(self, tx_versioner: TransactionVersioner, add_tx_list_callback, loop, crash_callback_in_join_thread):
+        super().__init__()
+
+        self.__is_running = True
+        self.__tx_queue = self.Queue()
+        self.__tx_queue.cancel_join_thread()
+
+        async def _add_tx_list(tx_list):
+            add_tx_list_callback(tx_list)
+
+        def _receive_tx_list(tx_queue):
+            while True:
+                tx_list = tx_queue.get()
+                if not self.__is_running or tx_list is None:
+                    break
+                asyncio.run_coroutine_threadsafe(_add_tx_list(tx_list), loop)
+
+            while not tx_queue.empty():
+                tx_queue.get()
+
+        self.__receive_thread = threading.Thread(target=_receive_tx_list, args=(self.__tx_queue,))
+        self.__receive_thread.start()
+
+        args = (ChannelProperty().name,
+                StubCollection().amqp_target,
+                StubCollection().amqp_key,
+                tx_versioner,
+                self.__tx_queue)
+        super().start(target=ChannelTxReceiverInnerService.main,
+                      args=args,
+                      crash_callback_in_join_thread=crash_callback_in_join_thread)
+
+    def start(self, target, args=(), crash_callback_in_join_thread=None):
+        raise AttributeError("Doesn't support this function")
+
+    def join(self):
+        super().join()
+        self.__tx_queue.put(None)
+        self.__is_running = False  # even if tx queue has some items, the loop will be stopped immediately.
+        self.__receive_thread.join()
+        self.__tx_queue: mp.Queue = None
+        self.__receive_thread: threading.Thread = None
 
 
 class ChannelInnerTask:
@@ -42,6 +357,71 @@ class ChannelInnerTask:
         # Citizen
         self._citizen_condition_new_block: Condition = None
         self._citizen_set = set()
+
+        self.__sub_processes = []
+        self.__loop_for_sub_services = None
+
+    def init_sub_service(self, loop):
+        if len(self.__sub_processes) > 0:
+            raise RuntimeError("Channel sub services have already been initialized")
+
+        if loop is None:
+            raise RuntimeError("Channel sub services need a loop")
+        self.__loop_for_sub_services = loop
+
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+
+        def crash_callback_in_join_thread(process: ModuleProcess):
+            asyncio.run_coroutine_threadsafe(self.__handle_crash_sub_services(process), loop)
+
+        broadcast_scheduler = self._channel_service.broadcast_scheduler
+        tx_creator_process = _ChannelTxCreatorProcess(tx_versioner,
+                                                      broadcast_scheduler,
+                                                      crash_callback_in_join_thread)
+        self.__sub_processes.append(tx_creator_process)
+        logging.info(f"Channel({ChannelProperty().name}) TX Creator: initialized")
+
+        tx_receiver_process = _ChannelTxReceiverProcess(tx_versioner,
+                                                        self.__add_tx_list,
+                                                        loop,
+                                                        crash_callback_in_join_thread)
+        self.__sub_processes.append(tx_receiver_process)
+        logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
+
+    def cleanup_sub_services(self):
+        for process in self.__sub_processes:
+            process.terminate()
+            process.join()
+        self.__sub_processes = []
+
+    async def __handle_crash_sub_services(self, process: ModuleProcess):
+        try:
+            self.__sub_processes.remove(process)
+            process.join()
+
+            logging.critical(f"Channel sub process crash occurred. process={process}")
+
+            async def _close():
+                if not self.__loop_for_sub_services.is_closed():
+                    self._channel_service.close()
+
+            asyncio.ensure_future(_close(), loop=self.__loop_for_sub_services)
+        except ValueError:
+            # Call this function by cleanup
+            pass
+
+    def __add_tx_list(self, tx_list):
+        for tx in tx_list:
+            # util.logger.spam(f"channel_inner_service:add_tx tx({tx.get_data_string()})")
+
+            object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
+            object_has_queue.add_tx_obj(tx)
+            util.apm_event(ChannelProperty().peer_id, {
+                'event_type': 'AddTx',
+                'peer_id': ChannelProperty().peer_id,
+                'peer_name': conf.PEER_NAME,
+                'channel_name': ChannelProperty().name,
+                'data': {'tx_hash': tx.hash.hex()}})
 
     @message_queue_task
     async def hello(self):
@@ -171,46 +551,6 @@ class ChannelInnerTask:
 
         return tx.tx_hash
 
-    @message_queue_task
-    async def create_icx_tx(self, kwargs: dict):
-        result_code = None
-        exception = None
-        tx = None
-
-        try:
-            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
-            tx_version = tx_versioner.get_version(kwargs)
-
-            ts = TransactionSerializer.new(tx_version, tx_versioner)
-            tx = ts.from_(kwargs)
-
-            tv = TransactionVerifier.new(tx_version, tx_versioner)
-            tv.verify(tx)
-
-            block_manager = self._channel_service.block_manager
-            block_manager.pre_validate(tx)
-
-            logging.debug(f"create icx input : {kwargs}")
-
-            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, tx_versioner))
-            return message_code.Response.success, tx.hash.hex()
-
-        except TransactionInvalidError as e:
-            result_code = e.message_code
-            exception = e
-            traceback.print_exc()
-        except BaseException as e:
-            result_code = TransactionInvalidError.message_code
-            exception = e
-            traceback.print_exc()
-        finally:
-            if exception:
-                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
-                                f"kwargs({kwargs})\n\n"
-                                f"tx({tx})\n\n"
-                                f"exception({exception})")
-                return result_code, None
-
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx(self, request) -> None:
         tx_json = request.tx_json
@@ -234,43 +574,6 @@ class ChannelInnerTask:
                 'channel_name': ChannelProperty().name,
                 'data': {'tx_hash': tx.tx_hash}})
 
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx_list(self, request) -> tuple:
-        tx_validate_count = 0
-
-        for tx_item in request.tx_list:
-            tx_json = json.loads(tx_item.tx_json)
-
-            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
-            tx_version = tx_versioner.get_version(tx_json)
-
-            ts = TransactionSerializer.new(tx_version, tx_versioner)
-            tx = ts.from_(tx_json)
-
-            tv = TransactionVerifier.new(tx_version, tx_versioner)
-            tv.verify(tx)
-
-            # util.logger.spam(f"channel_inner_service:add_tx tx({tx.get_data_string()})")
-
-            object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
-            if tx is not None:
-                object_has_queue.add_tx_obj(tx)
-                tx_validate_count += 1
-                util.apm_event(ChannelProperty().peer_id, {
-                    'event_type': 'AddTx',
-                    'peer_id': ChannelProperty().peer_id,
-                    'peer_name': conf.PEER_NAME,
-                    'channel_name': ChannelProperty().name,
-                    'data': {'tx_hash': tx.hash.hex()}})
-
-        if tx_validate_count == 0:
-            response_code = message_code.Response.fail
-            message = "fail tx validate while AddTxList"
-        else:
-            response_code = message_code.Response.success
-            message = f"success ({tx_validate_count})/({len(request.tx_list)})"
-
-        return response_code, message
 
     @message_queue_task
     def get_tx(self, tx_hash):
@@ -659,6 +962,16 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
                 condition.notify_all()
 
         asyncio.run_coroutine_threadsafe(_notify(), self.loop)
+
+    def init_sub_services(self):
+        if self.loop != asyncio.get_event_loop():
+            raise Exception("Must call this function in thread of self.loop")
+        self._task.init_sub_service(self.loop)
+
+    def cleanup(self):
+        if self.loop != asyncio.get_event_loop():
+            raise Exception("Must call this function in thread of self.loop")
+        self._task.cleanup_sub_services()
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):

@@ -51,6 +51,21 @@ def get_preset():
     return _presets[_preset_type]
 
 
+def get_presets():
+    return _presets
+
+
+def set_presets(presets: dict):
+    global develop
+    global production
+    for key, value in presets.items():
+        if key == PresetType.develop:
+            develop = value
+        elif key == PresetType.production:
+            production = value
+        _presets[key] = value
+
+
 def update_preset(update_logger=True):
     preset = get_preset()
 

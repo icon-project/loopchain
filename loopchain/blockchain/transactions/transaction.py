@@ -30,9 +30,8 @@ class Transaction:
         return f"{self.__class__.__qualname__}({fields_str})"
 
     def size(self, versioner: 'TransactionVersioner'):
-        from .. import TransactionSerializer
-
         if not hasattr(self, _size_attr_name_):
+            from .. import TransactionSerializer
             ts = TransactionSerializer.new(self.version, versioner)
             tx_serialized = ts.to_full_data(self)
             tx_serialized = json.dumps(tx_serialized)

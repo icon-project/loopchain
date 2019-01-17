@@ -77,6 +77,7 @@ MONITOR_LOG_MODULE = 'fluent'
 # MULTI PROCESS ###
 ###################
 ENABLE_PROFILING = False
+SUB_PROCESS_JOIN_TIMEOUT = 30
 
 
 ##########
@@ -347,6 +348,8 @@ AMQP_CONNECTION_ATTEMPS = 32
 AMQP_RETRY_DELAY = 5
 PEER_QUEUE_NAME_FORMAT = "Peer.{amqp_key}"
 CHANNEL_QUEUE_NAME_FORMAT = "Channel.{channel_name}.{amqp_key}"
+CHANNEL_TX_CREATOR_QUEUE_NAME_FORMAT = "ChannelTxCreator.{channel_name}.{amqp_key}"
+CHANNEL_TX_RECEIVER_QUEUE_NAME_FORMAT = "ChannelTxReceiver.{channel_name}.{amqp_key}"
 SCORE_QUEUE_NAME_FORMAT = "Score.{score_package_name}.{channel_name}.{amqp_key}"
 ICON_SCORE_QUEUE_NAME_FORMAT = "IconScore.{channel_name}.{amqp_key}"
 AMQP_KEY_DEFAULT = "amqp_key"

@@ -27,10 +27,9 @@ from grpc._channel import _Rendezvous
 
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, PeerManager, ObjectManager, CommonThread, BroadcastCommand, \
-    RestStubManager, TimerService, Timer
+    TimerService, Timer
 from loopchain.baseservice.tx_item_helper import *
-from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.protos import loopchain_pb2_grpc
 
 
 class PeerThreadStatus(Enum):
@@ -86,6 +85,8 @@ class BroadcastScheduler(CommonThread):
 
         self.__timer_service = TimerService()
 
+        self.__schedule_listeners = dict()
+
     def stop(self):
         super().stop()
         self.__broadcast_queue.put((None, None, None, None))
@@ -114,6 +115,38 @@ class BroadcastScheduler(CommonThread):
             return_future = self.__broadcast_pool.submit(func, params)
             return_future.add_done_callback(partial(_callback, future))
 
+    def add_schedule_listener(self, callback, commands=None):
+        if commands is None:
+            commands = self.__handler_map.keys()
+        for cmd in commands:
+            callbacks = self.__schedule_listeners.get(cmd)
+            if callbacks is None:
+                callbacks = []
+                self.__schedule_listeners[cmd] = callbacks
+            elif callback in callbacks:
+                raise ValueError("callback is already in callbacks")
+            callbacks.append(callback)
+
+    def remove_schedule_listener(self, callback):
+        removed = False
+        for cmd in list(self.__schedule_listeners):
+            callbacks = self.__schedule_listeners[cmd]
+            try:
+                callbacks.remove(callback)
+                removed = True
+                if len(callbacks):
+                    del self.__schedule_listeners[cmd]
+            except ValueError:
+                pass
+        if not removed:
+            raise ValueError("callback is not in overserver callbacks")
+
+    def __perform_schedule_listener(self, command, params):
+        callbacks = self.__schedule_listeners.get(command)
+        if callbacks:
+            for cb in callbacks:
+                cb(command, params)
+
     def schedule_job(self, command, params):
         if command == BroadcastCommand.CREATE_TX:
             priority = (10, time.time())
@@ -125,6 +158,7 @@ class BroadcastScheduler(CommonThread):
         future = futures.Future()
         self.__broadcast_queue.put((priority, command, params, future))
         util.logger.spam(f"broadcast_scheduler:schedule_job qsize({self.__broadcast_queue.qsize()})")
+        self.__perform_schedule_listener(command, params)
         return future
 
     def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
@@ -263,7 +297,7 @@ class BroadcastScheduler(CommonThread):
 
     def __handler_update_audience(self, audience_param):
         util.logger.spam(f"broadcast_thread:__handler_update_audience audience_param({audience_param})")
-        peer_manager = PeerManager(ChannelProperty().name)
+        peer_manager = PeerManager(self.__channel)
         peer_list_data = pickle.loads(audience_param)
         peer_manager.load(peer_list_data, False)
 
@@ -382,5 +416,5 @@ class BroadcastScheduler(CommonThread):
             return peer_targets
         else:
             if method_name not in self.__broadcast_with_self_target_methods:
-                peer_targets.remove(ChannelProperty().peer_target)
+                peer_targets.remove(self.__self_target)
             return peer_targets

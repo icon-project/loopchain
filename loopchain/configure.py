@@ -250,4 +250,16 @@ def get_all_configurations():
     return rs_configuration_list
 
 
+def set_origin_type_configurations(configurations: dict):
+    for key, value in configurations.items():
+        set_configuration(key, value)
+
+
+def get_origin_type_configurations():
+    configurations = dict()
+    for key in Configure().configure_info_list:
+        configurations[key] = globals()[key]
+    return configurations
+
+
 Configure()
