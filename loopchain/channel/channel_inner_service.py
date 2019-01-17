@@ -71,8 +71,10 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
+            logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
+                          f"target: {self._citizen_set}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
-            return bs.serialize(new_block)
+            return json.dumps(bs.serialize(new_block))
 
     @message_queue_task
     async def register_subscriber(self, peer_id):
