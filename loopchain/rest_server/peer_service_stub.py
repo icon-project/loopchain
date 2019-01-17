@@ -51,6 +51,7 @@ class PeerServiceStub(metaclass=SingletonMetaClass):
                              self.REST_GRPC_TIMEOUT)
         status_json_data = json.loads(response.status)
         status_json_data['block_height'] = response.block_height
+        status_json_data['unconfirmed_block_height'] = response.unconfirmed_block_height
         status_json_data['total_tx'] = response.total_tx
         status_json_data['leader_complaint'] = response.is_leader_complaining
 

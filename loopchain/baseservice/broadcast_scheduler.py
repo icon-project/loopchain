@@ -202,7 +202,7 @@ class BroadcastScheduler(CommonThread):
         # logging.debug(f"broadcast({method_name}) async... ({len(self.__audience)})")
 
         for target in self.__get_broadcast_targets(method_name):
-            # logging.debug("peer_target: " + peer_target)
+            # util.logger.debug(f"method_name({method_name}), peer_target({target})")
             self.__call_async_to_target(target, method_name, method_param, True, retry_times, timeout)
 
     def __broadcast_run_sync(self, method_name, method_param, retry_times=None, timeout=None):

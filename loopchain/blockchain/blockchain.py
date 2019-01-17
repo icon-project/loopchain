@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner)
+                                  Hash32, ExternalAddress, TransactionVersioner, Vote)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -44,13 +44,20 @@ class BlockChain:
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
+
+    # Additional information of the block is generated when the add_block phase of the consensus is reached.
+    BLOCK_INFO_KEY = b'block_info_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
     def __init__(self, blockchain_db=None, channel_name=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
+
         self.__block_height = -1
+        # last block in block db
         self.__last_block = None
+        # last unconfirmed block that the leader broadcast.
+        self.last_unconfirmed_block = None
         self.__save_tx_by_address_strategy = None
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
@@ -204,18 +211,30 @@ class BlockChain:
             key = self.__confirmed_block_db.Get(BlockChain.BLOCK_HEIGHT_KEY +
                                                 block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
         except KeyError:
+            if self.last_unconfirmed_block:
+                if self.last_unconfirmed_block.header.height == block_height:
+                    return self.last_unconfirmed_block
             return None
 
         return self.__find_block_by_key(key)
 
-    def add_block(self, block: Block) -> bool:
+    # TODO The current Citizen node sync by announce_confirmed_block message.
+    #  However, this message does not include voting.
+    #  You need to change it and remove the default None parameter here.
+    def add_block(self, block: Block, vote: Vote = None) -> bool:
+        """
+
+        :param block:
+        :param vote: additional info for this block, but It came from next block.
+        :return:
+        """
         with self.__add_block_lock:
             if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            return self.__add_block(block)
+            return self.__add_block(block, vote)
 
-    def __add_block(self, block: Block):
+    def __add_block(self, block: Block, vote: Vote = None):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
@@ -234,29 +253,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash, None)
 
-            # a condition for the exception case of genesis block.
-            next_total_tx = self.__total_tx
-            if block.header.height > 0:
-                next_total_tx += len(block.body.transactions)
-
-            bit_length = next_total_tx.bit_length()
-            byte_length = (bit_length + 7) // 8
-            next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
-
-            block_version = self.__block_versioner.get_version(block.header.height)
-            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
-            block_serialized = json.dumps(block_serializer.serialize(block))
-            block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
-
-            batch = leveldb.WriteBatch()
-            batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
-            batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
-            batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-            batch.Put(
-                BlockChain.BLOCK_HEIGHT_KEY +
-                block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-                block_hash_encoded)
-            self.__confirmed_block_db.Write(batch)
+            next_total_tx = self.__write_block_data(block, vote)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -282,6 +279,40 @@ class BlockChain:
             ObjectManager().channel_service.inner_service.notify_new_block()
 
             return True
+
+    def __write_block_data(self, block: Block, vote: Vote = None):
+        # a condition for the exception case of genesis block.
+        next_total_tx = self.__total_tx
+        if block.header.height > 0:
+            next_total_tx += len(block.body.transactions)
+
+        bit_length = next_total_tx.bit_length()
+        byte_length = (bit_length + 7) // 8
+        next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
+
+        block_version = self.__block_versioner.get_version(block.header.height)
+        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serialized = json.dumps(block_serializer.serialize(block))
+        block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+
+        batch = leveldb.WriteBatch()
+        batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
+        batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
+        batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
+        batch.Put(
+            BlockChain.BLOCK_HEIGHT_KEY +
+            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+            block_hash_encoded)
+
+        if vote:
+            batch.Put(
+                BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
+                Vote.save_to(vote)
+            )
+
+        self.__confirmed_block_db.Write(batch)
+
+        return next_total_tx
 
     def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
@@ -589,19 +620,23 @@ class BlockChain:
 
         return results
 
-    def confirm_block(self, confirmed_block_hash: Hash32):
-        """인증완료후 Block을 Confirm해 줍니다.
+    def confirm_prev_block(self, current_block: Block):
+        """confirm prev unconfirmed block by votes in current block
 
-        :param confirmed_block_hash: 인증된 블럭의 hash
+        :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
+        # util.logger.debug(f"-------------------confirm_prev_block---current_block is "
+        #                    f"tx count({len(current_block.body.transactions)}), "
+        #                    f"height({current_block.header.height})")
+
         candidate_blocks = ObjectManager().channel_service.block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
             try:
-                unconfirmed_block = candidate_blocks.blocks[confirmed_block_hash].block
-                logging.debug("confirmed_block_hash: " + confirmed_block_hash.hex())
+                unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
+                logging.debug("confirmed_block_hash: " + current_block.header.prev_hash.hex())
                 if unconfirmed_block:
                     logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
                     logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
@@ -610,20 +645,24 @@ class BlockChain:
                     return
 
             except KeyError:
-                if self.last_block.header.hash == confirmed_block_hash:
-                    logging.warning(f"Already added block hash({confirmed_block_hash.hex()})")
+                if self.last_block.header.hash == current_block.header.prev_hash:
+                    logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     return
                 else:
-                    except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash.hex()})"
+                    except_msg = ("there is no unconfirmed block in this peer "
+                                  f"block_hash({current_block.header.prev_hash.hex()})")
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 
-            if unconfirmed_block.header.hash != confirmed_block_hash:
+            if unconfirmed_block.header.hash != current_block.header.prev_hash:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
+            # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
+            #                    f"height({unconfirmed_block.header.height})")
             self.add_block(unconfirmed_block)
-            candidate_blocks.remove_block(confirmed_block_hash)
+            self.last_unconfirmed_block = current_block
+            candidate_blocks.remove_block(current_block.header.prev_hash)
 
             return unconfirmed_block
 

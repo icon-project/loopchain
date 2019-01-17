@@ -43,7 +43,10 @@ class BlockVerifier(BaseBlockVerifier):
         invoke_result = None
         if self.invoke_func:
             new_block, invoke_result = self.invoke_func(block)
-            if header.commit_state != new_block.header.commit_state:
+            if not header.commit_state and len(body.transactions) == 0:
+                # vote block
+                pass
+            elif header.commit_state != new_block.header.commit_state:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                    f"CommitState({header.commit_state}), "
                                    f"Expected({new_block.header.commit_state}).")
@@ -93,7 +96,9 @@ class BlockVerifier(BaseBlockVerifier):
                                f"Expected({prev_block.header.height + 1}).")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        if block.header.peer_id != generator:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Generator({block.header.peer_id.hex_xx()}), "
-                               f"Expected({generator.hex_xx()}).")
+        pass
+        # TODO Enable the following code after implementation of leader complain.
+        # if block.header.peer_id != generator:
+        #     raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+        #                        f"Generator({block.header.peer_id.hex_xx()}), "
+        #                        f"Expected({generator.hex_xx()}).")

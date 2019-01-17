@@ -73,12 +73,13 @@ class CandidateBlocks:
     def add_vote(self, block_hash: Hash32, group_id, peer_id, vote):
         with self.__blocks_lock:
             if block_hash not in self.blocks:
+                # util.logger.debug(f"-------------block_hash({block_hash}) self.blocks({self.blocks})")
                 self.blocks[block_hash] = CandidateBlock.from_hash(block_hash)
 
         self.blocks[block_hash].vote.add_vote(group_id, peer_id, vote)
 
-    def get_vote_result(self, block_hash):
-        return self.blocks[block_hash].vote.get_result(block_hash.hex(), conf.VOTING_RATIO)
+    def get_vote(self, block_hash):
+        return self.blocks[block_hash].vote
 
     def add_block(self, block: Block):
         with self.__blocks_lock:

@@ -19,12 +19,13 @@ import loopchain.utils as util
 class SlotTimer:
     """Slot Timer"""
 
-    def __init__(self, timer_key, duration, timer_service: TimerService, callback):
+    def __init__(self, timer_key, duration, timer_service: TimerService, callback, callback_lock):
         self.__slot = 0
         self.__delayed = True
         self.__timer_key = timer_key
         self.__timer_service = timer_service
         self.__callback = callback
+        self.__callback_lock = callback_lock
 
         timer_service.add_timer(
             timer_key,
@@ -43,9 +44,11 @@ class SlotTimer:
         if self.__delayed:
             self.__delayed = False
             self.call()
-        elif self.__slot > 10:
-            util.logger.warning(f"consensus timer loop broken slot({self.__slot}) delayed({self.__delayed})")
-            # self.call()
+        elif self.__slot > 0:
+            if self.__callback_lock.acquire(timeout=0):
+                self.__callback_lock.release()
+                util.logger.warning(f"consensus timer loop broken slot({self.__slot}) delayed({self.__delayed})")
+                self.call()
 
     def call(self):
         util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")

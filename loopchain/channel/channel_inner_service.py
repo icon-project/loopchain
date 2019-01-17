@@ -114,8 +114,11 @@ class ChannelInnerTask:
 
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
+        unconfirmed_block_height = None
         if block_manager.get_blockchain().last_block is not None:
             block_height = block_manager.get_blockchain().last_block.header.height
+            if block_manager.get_blockchain().last_unconfirmed_block:
+                unconfirmed_block_height = block_manager.get_blockchain().last_unconfirmed_block.header.height
             logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
                           + str(block_manager.get_blockchain().last_block.header.hash.hex()))
             logging.debug("getstatus block hash(block_manager.get_blockchain().block_height): "
@@ -131,6 +134,7 @@ class ChannelInnerTask:
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
+        status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = total_tx
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
@@ -438,13 +442,7 @@ class ChannelInnerTask:
         util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
 
-        if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-            if self._channel_service.state_machine.state == "Vote":
-                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock "
-                #                     f"({ChannelProperty().name}) Not Leader Peer!")
-                return
-
-        logging.info("Peer vote to : " + block_hash.hex() + " " + str(vote_code) + f"from {peer_id}")
+        util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 
         self._channel_service.block_manager.candidate_blocks.add_vote(
             block_hash,
