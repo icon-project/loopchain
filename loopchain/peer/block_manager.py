@@ -80,7 +80,8 @@ class BlockManager(Subscriber):
     def service_status(self):
         # Return string for compatibility.
         if self.__service_status >= 0:
-            return "Service is online: " + str(self.peer_type)
+            return "Service is online: " + \
+                   str(1 if self.__channel_service.state_machine.state == "BlockGenerate" else 0)
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
 

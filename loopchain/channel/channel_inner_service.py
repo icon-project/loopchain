@@ -123,7 +123,7 @@ class ChannelInnerTask:
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
-        status_data["peer_type"] = str(block_manager.peer_type)
+        status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
@@ -318,7 +318,7 @@ class ChannelInnerTask:
                              f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
                              f"channel({ChannelProperty().name}))")
 
-            if ChannelProperty().peer_id == unconfirmed_block.header.next_leader.hex_hx():
+            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != unconfirmed_block.header.next_leader.hex_hx():
                 await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task

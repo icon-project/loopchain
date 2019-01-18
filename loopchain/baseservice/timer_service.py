@@ -45,7 +45,7 @@ class Timer:
         self.__is_repeat = kwargs.get("is_repeat", False)
         self.is_run_at_start = kwargs.get("is_run_at_start", False)
         self.__callback = kwargs.get("callback", None)
-        self.__kwargs = kwargs.get("callback_kwargs", {})
+        self.__kwargs = kwargs.get("callback_kwargs") or {}
 
     @property
     def target(self):
@@ -129,6 +129,19 @@ class TimerService(CommonThread):
         if timer.is_run_at_start:
             self.restart_timer(key)
 
+    def add_timer_convenient(self, timer_key, duration, is_repeat=False, callback=None, callback_kwargs=None):
+        if timer_key not in self.__timer_list:
+            self.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=duration,
+                    is_repeat=is_repeat,
+                    callback=callback,
+                    callback_kwargs=callback_kwargs
+                )
+            )
+
     def remove_timer(self, key):
         """remove timer from self.__timer_list
 
@@ -192,7 +205,7 @@ class TimerService(CommonThread):
             logging.debug(f"TIMER IS STOP ({key})")
             util.logger.spam(f"remain timers after stop_timer: {self.__timer_list.keys()}")
         else:
-            logging.warning(f'stop_timer:There is no value by this key: {key}')
+            logging.debug(f'stop_timer:There is no value by this key: {key}')
 
     def stop(self):
         super().stop()
