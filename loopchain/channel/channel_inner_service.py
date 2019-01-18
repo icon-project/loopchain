@@ -115,17 +115,11 @@ class ChannelInnerTask:
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
         unconfirmed_block_height = None
-        if block_manager.get_blockchain().last_block is not None:
-            block_height = block_manager.get_blockchain().last_block.header.height
-            if block_manager.get_blockchain().last_unconfirmed_block:
-                unconfirmed_block_height = block_manager.get_blockchain().last_unconfirmed_block.header.height
-            logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
-                          + str(block_manager.get_blockchain().last_block.header.hash.hex()))
-            logging.debug("getstatus block hash(block_manager.get_blockchain().block_height): "
-                          + str(block_manager.get_blockchain().block_height))
-            logging.debug("getstatus block height: " + str(block_height))
-            # Score와 상관없이 TransactionTx는 블럭매니저가 관리 합니다.
+        last_block = block_manager.get_blockchain().last_block
+        if last_block:
+            block_height = last_block.header.height
             total_tx = block_manager.get_total_tx()
+            logging.debug(f"last_block height({block_height}), hash({last_block.header.hash})")
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state

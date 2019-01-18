@@ -198,8 +198,7 @@ class PeerService:
             channels = json.loads(response.channel_infos)
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
-            channels = {channel: value for channel, value in response["channel_infos"].items()
-                        if util.channel_use_icx(channel)}
+            channels = {channel: value for channel, value in response["channel_infos"].items()}
 
         return channels
 
@@ -235,21 +234,7 @@ class PeerService:
     def __make_peer_id(self):
         """네트워크에서 Peer 를 식별하기 위한 UUID를 level db 에 생성한다.
         """
-        if util.channel_use_icx(conf.LOOPCHAIN_DEFAULT_CHANNEL):
-            self.__peer_id = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
-        else:
-            try:
-                uuid_bytes = bytes(self.__level_db.Get(conf.LEVEL_DB_KEY_FOR_PEER_ID))
-                peer_id = uuid.UUID(bytes=uuid_bytes)
-            except KeyError:  # It's first Run
-                peer_id = None
-
-            if peer_id is None:
-                peer_id = uuid.uuid1()
-                logging.info("make new peer_id: " + str(peer_id))
-                self.__level_db.Put(conf.LEVEL_DB_KEY_FOR_PEER_ID, peer_id.bytes)
-
-            self.__peer_id = str(peer_id)
+        self.__peer_id = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
@@ -407,7 +392,4 @@ class PeerService:
         for channel_name, channel_info in self.__channel_infos.items():
             await StubCollection().create_channel_stub(channel_name)
 
-            if util.channel_use_icx(channel_name):
-                await StubCollection().create_icon_score_stub(channel_name)
-            else:
-                await StubCollection().create_score_stub(channel_name, channel_info['score_package'])
+            await StubCollection().create_icon_score_stub(channel_name)

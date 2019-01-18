@@ -58,10 +58,8 @@ class BlockChain:
         self.__last_block = None
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
-        self.__save_tx_by_address_strategy = None
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
-        self.__set_send_tx_type(conf.CHANNEL_OPTION[channel_name]["send_tx_type"])
 
         # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
         self.__confirmed_block_db = blockchain_db
@@ -91,12 +89,6 @@ class BlockChain:
         for tx_version, tx_hash_version in channel_option.get("hash_versions", {}).items():
             self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
-    def __set_send_tx_type(self, send_tx_type):
-        if send_tx_type == conf.SendTxType.icx:
-            self.__save_tx_by_address_strategy = self.__save_tx_by_address
-        else:
-            self.__save_tx_by_address_strategy = self.__save_tx_by_address_pass
-
     def close_blockchain_db(self):
         del self.__confirmed_block_db
         self.__confirmed_block_db = None
@@ -111,12 +103,6 @@ class BlockChain:
 
     @property
     def last_block(self) -> Block:
-        try:
-            logging.debug(f"ENGINE-303 blockchain last_block: "
-                          f"{self.__last_block.header.height}, "
-                          f"{self.__last_block.header.hash.hex()}")
-        except:
-            pass
         return self.__last_block
 
     @property
@@ -407,7 +393,7 @@ class BlockChain:
             # util.logger.spam(f"pop tx from queue:{tx_hash}")
 
             if block.header.height > 0:
-                self.__save_tx_by_address_strategy(tx)
+                self.__save_tx_by_address(tx)
 
         self.__save_invoke_result_block_height(block.header.height)
 
@@ -442,9 +428,6 @@ class BlockChain:
     def __save_tx_by_address(self, tx: 'Transaction'):
         address = tx.from_address.hex_hx()
         return self.add_tx_to_list_by_address(address, tx.hash.hex())
-
-    def __save_tx_by_address_pass(self, tx):
-        return True
 
     @staticmethod
     def __get_tx_list_key(address, index):

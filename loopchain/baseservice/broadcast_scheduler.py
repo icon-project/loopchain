@@ -332,8 +332,6 @@ class BroadcastScheduler(CommonThread):
         # logging.debug(f"Broadcast create_tx....")
         try:
             tx_item = TxItem.create_tx_item(create_tx_param, self.__channel)
-            # util.logger.spam(f"broadcast_process:__handler_create_tx "
-            #                  f"send_tx_type({create_tx_param.meta[Transaction.SEND_TX_TYPE_KEY]})")
         except Exception as e:
             logging.warning(f"tx in channel({self.__channel})")
             logging.warning(f"__handler_create_tx: meta({create_tx_param})")
