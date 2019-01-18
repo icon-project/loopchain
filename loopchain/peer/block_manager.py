@@ -522,7 +522,7 @@ class BlockManager(Subscriber):
                             break
                         finally:
                             if result:
-                                my_height = block.header.height
+                                my_height += 1
                                 retry_number = 0
                             else:
                                 retry_number += 1
