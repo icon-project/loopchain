@@ -249,7 +249,7 @@ class PeerService:
         if conf.GRPC_SSL_KEY_LOAD_TYPE == conf.KeyLoadType.KMS_LOAD:
             return True
         for value in conf.CHANNEL_OPTION.values():
-            if value[PublicVerifier.KEY_LOAD_TYPE] == conf.KeyLoadType.KMS_LOAD:
+            if value["key_load_type"] == conf.KeyLoadType.KMS_LOAD:
                 return True
         return False
 

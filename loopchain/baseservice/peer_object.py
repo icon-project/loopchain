@@ -20,7 +20,6 @@ from enum import IntEnum
 from loopchain import configure as conf
 from loopchain.baseservice import StubManager
 from loopchain.protos import loopchain_pb2_grpc
-from loopchain.tools.signature_helper import PublicVerifier, IcxVerifier
 
 
 class PeerStatus(IntEnum):
@@ -32,8 +31,8 @@ class PeerStatus(IntEnum):
 class PeerInfo:
     """Peer Object"""
 
-    def __init__(self, peer_id: str, group_id: str, target: str = "", status: PeerStatus = PeerStatus.unknown,
-                 cert: bytes = b"", order: int = 0):
+    def __init__(self, peer_id: str, group_id: str,
+                 target: str = "", status: PeerStatus = PeerStatus.unknown, order: int = 0):
         """ create PeerInfo
         if connected peer status PeerStatus.connected
 
@@ -41,7 +40,6 @@ class PeerInfo:
         :param group_id: peer's group_id
         :param target: grpc target info default ""
         :param status: connect status if db loaded peer to PeerStatus.unknown default ""
-        :param cert: peer's signature cert default b""
         :param order:
         :return:
         """
@@ -52,8 +50,6 @@ class PeerInfo:
 
         self.__status_update_time = datetime.datetime.now()
         self.__status = status
-
-        self.__cert: bytes = cert
 
     @property
     def peer_id(self) -> str:
@@ -78,14 +74,6 @@ class PeerInfo:
     @target.setter
     def target(self, target):
         self.__target = target
-
-    @property
-    def cert(self) -> bytes:
-        return self.__cert
-
-    @cert.setter
-    def cert(self, cert):
-        self.__cert = cert
 
     @property
     def status(self):
@@ -120,10 +108,6 @@ class PeerObject:
         self.__create_live_data()
 
     def __create_live_data(self):
-        """create live data that can't serialized
-
-        :param channel: channel_name
-        """
         try:
             self.__stub_manager = StubManager(self.__peer_info.target,
                                               loopchain_pb2_grpc.PeerServiceStub,
@@ -131,13 +115,6 @@ class PeerObject:
         except Exception as e:
             logging.exception(f"Create Peer create stub_manager fail target : {self.__peer_info.target} \n"
                               f"exception : {e}")
-        try:
-            self.__cert_verifier = IcxVerifier()
-            self.__cert_verifier.init_and_verify_address(pubkey=self.peer_info.cert,
-                                                             address=self.peer_info.peer_id)
-        except Exception as e:
-            logging.exception(f"create cert verifier error : {self.__channel} {self.__peer_info.cert} \n"
-                              f"exception {e}")
 
     @property
     def peer_info(self)-> PeerInfo:
@@ -146,10 +123,6 @@ class PeerObject:
     @property
     def stub_manager(self) -> StubManager:
         return self.__stub_manager
-
-    @property
-    def cert_verifier(self):
-        return self.__cert_verifier
 
     @property
     def no_response_count(self):

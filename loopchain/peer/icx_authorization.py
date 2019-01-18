@@ -28,16 +28,16 @@ class SignVerifier:
     def __init__(self):
         self.address: str = None
 
+    def verify_address(self, pubkey: bytes):
+        return self.address_from_pubkey(pubkey) == self.address
+
     def verify_data(self, origin_data: bytes, signature: bytes):
         return self.verify_signature(origin_data, signature, False)
 
     def verify_hash(self, origin_data, signature):
         return self.verify_signature(origin_data, signature, True)
 
-    def verify_address(self, pubkey: bytes):
-        return self.address_from_pubkey(pubkey) != self.address
-
-    def verify_signature(self, origin_data: bytes, signature: bytes, is_hash):
+    def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
         try:
             if is_hash:
                 origin_data = binascii.unhexlify(origin_data)
@@ -85,7 +85,13 @@ class Signer(SignVerifier):
         super().__init__()
         self.private_key: PrivateKey = None
 
-    def sign(self, data, is_hash=False):
+    def sign_data(self, data):
+        return self.sign(data, False)
+
+    def sign_hash(self, data):
+        return self.sign(data, True)
+
+    def sign(self, data, is_hash: bool):
         if is_hash:
             if isinstance(data, str):
                 try:
@@ -99,11 +105,11 @@ class Signer(SignVerifier):
             logging.error(f"data must be bytes \n")
             return None
 
-        signature = self.private_key.ecdsa_sign_recoverable(msg=data,
-                                                            raw=is_hash,
-                                                            digest=hashlib.sha3_256)
-        serialized_sig = self._pri.ecdsa_recoverable_serialize(signature)
-        return b''.join([serialized_sig[0], bytes([serialized_sig[1]])])
+        raw_sig = self.private_key.ecdsa_sign_recoverable(msg=data,
+                                                          raw=is_hash,
+                                                          digest=hashlib.sha3_256)
+        serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
+        return serialized_sig + bytes((recover_id, ))
 
     @classmethod
     def from_channel(cls, channel: str):
@@ -146,7 +152,7 @@ class Signer(SignVerifier):
         auth.address = cls.address_from_prikey(prikey)
 
         # verify
-        sign = auth.sign(b'TEST')
+        sign = auth.sign_data(b'TEST')
         if auth.verify_data(b'TEST', sign) is False:
             raise ValueError("Invalid Signature(Peer Certificate load test)")
         return auth
