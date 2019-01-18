@@ -624,7 +624,9 @@ class BlockManager(Subscriber):
                         response = target_peer_stub.call("Status")
                         util.logger.spam('{/api/v1/status/peer} response: ' + response.text)
                         response.block_height = int(json.loads(response.text)["block_height"])
-                        response.unconfirmed_block_height = int(json.loads(response.text)["unconfirmed_block_height"])
+                        response.unconfirmed_block_height = int(
+                            json.loads(response.text).get("unconfirmed_block_height", -1)
+                        )
                         stub.target = target
 
                     response.block_height = max(response.block_height, response.unconfirmed_block_height)
