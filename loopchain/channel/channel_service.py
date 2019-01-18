@@ -33,7 +33,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus import Consensus, Acceptor, Proposer
 from loopchain.peer import BlockManager
-from loopchain.peer.icx_authorization import Signer
+from loopchain.crypto.signature import Signer
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query

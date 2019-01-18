@@ -26,8 +26,8 @@ from loopchain.baseservice import StubManager, Monitor, ObjectManager, RestStubM
 from loopchain.blockchain import *
 from loopchain.container import RestService, CommonService
 from loopchain.peer import PeerInnerService, PeerOuterService
-from loopchain.peer.icx_authorization import Signer
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
+from loopchain.crypto.signature import Signer
+from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.rest_server import RestProxyServer
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection

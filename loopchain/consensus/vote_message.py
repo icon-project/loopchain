@@ -17,7 +17,7 @@ import json
 
 from enum import IntEnum
 
-from loopchain.blockchain.hashing import build_hash_generator
+from loopchain.crypto.hashing import build_hash_generator
 
 
 class VoteMessageType(IntEnum):
