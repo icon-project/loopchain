@@ -1,5 +1,4 @@
 {
-  "LOOPCHAIN_DEFAULT_CHANNEL": "icon_dex",
   "CHANNEL_OPTION" : {
     "icon_dex": {
       "block_versions": {
@@ -10,8 +9,6 @@
         "0x2": 1,
         "0x3": 1
       },
-      "store_valid_transaction_only": true,
-      "send_tx_type": 2,
       "load_cert": false,
       "consensus_cert_use": false,
       "tx_cert_use": false,

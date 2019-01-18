@@ -1,5 +1,4 @@
 {
-  "LOOPCHAIN_DEFAULT_CHANNEL": "icon_dex",
   "CHANNEL_OPTION" : {
     "icon_dex": {
       "block_versions": {

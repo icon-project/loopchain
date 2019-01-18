@@ -3,15 +3,15 @@
 export REDIRECT_PROTOCOL=https
 PID_FILE="testnet_citizen.pid"
 
-if [ -f $PID_FILE ]; then
-    echo "remove $PID_FILE"
-    rm -f $PID_FILE
+if [ -f ${PID_FILE} ]; then
+    echo "remove ${PID_FILE}"
+    rm -f ${PID_FILE}
 fi
 
 touch $PID_FILE
 
 echo "Run loopchain for citizen start!"
-./loopchain.py citizen -r https://test-ctz.solidwallet.io -o ./conf/testnet/loopchain_conf.json &
+./loopchain.py citizen -r https://int-test-ctz.solidwallet.io -o ./conf/testnet/loopchain_conf.json &
 echo $! > $PID_FILE
 
 echo "Run iconservice for citizen start!"

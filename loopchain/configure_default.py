@@ -54,7 +54,7 @@ LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_
 
 LOG_OUTPUT_TYPE = LogOutputType.console | LogOutputType.file
 
-LOG_FILE_LOCATION = "/var/tmp/"
+LOG_FILE_LOCATION = os.path.join(LOOPCHAIN_ROOT_PATH, 'log')
 LOG_FILE_PREFIX = "loopchain"
 LOG_FILE_EXTENSION = "log"
 
@@ -202,7 +202,8 @@ DEFAULT_SCORE_STORAGE_PATH = os.getenv('DEFAULT_SCORE_STORAGE_PATH', os.path.joi
 DEFAULT_SCORE_PACKAGE = 'loopchain/default'
 DEFAULT_SCORE_BRANCH_MASTER = 'master'
 DEFAULT_SCORE_BRANCH = os.getenv('DEFAULT_SCORE_BRANCH', DEFAULT_SCORE_BRANCH_MASTER)
-DEFAULT_SCORE_CONF_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/iconservice_conf.json')
+DEFAULT_SCORE_CONF_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconservice_conf.json')
+DEFAULT_BUILTIN_SCORE_OWNER = "hx6e1dd0d4432620778b54b2bbc21ac3df961adf89"  # Devnet
 
 # DEFAULT USER / PASSWORD
 DEFAULT_SCORE_BASE_USER = 'score'
@@ -328,7 +329,7 @@ TOKEN_INTERVAL = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
 TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT
 RADIO_STATION_NAME = "RadioStation"
-LOOPCHAIN_DEFAULT_CHANNEL = "loopchain_default"  # Default Channel Name
+LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
 CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = False  # if this option is true, peer only gets channel infos to which it belongs.

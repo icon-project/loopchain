@@ -165,7 +165,7 @@ def start_as_score(args):
                 "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
-                "builtinScoreOwner": load_conf.get("builtinScoreOwner"),
+                "builtinScoreOwner": conf.DEFAULT_BUILTIN_SCORE_OWNER,
                 "service": load_conf.get("service")
             }
 
