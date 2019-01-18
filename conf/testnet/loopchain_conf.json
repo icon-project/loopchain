@@ -10,6 +10,8 @@
         "0x2": 1,
         "0x3": 1
       },
+      "store_valid_transaction_only": true,
+      "send_tx_type": 2,
       "load_cert": false,
       "consensus_cert_use": false,
       "tx_cert_use": false,
@@ -20,10 +22,11 @@
   },
   "USE_EXTERNAL_SCORE": true,
   "USE_EXTERNAL_REST": true,
-  "PORT_PEER": 7100,
-  "AMQP_KEY": "7100",
-  "DEFAULT_STORAGE_PATH": ".storage_test/",
+  "PORT_PEER": 7200,
+  "AMQP_KEY": "7200",
+  "DEFAULT_STORAGE_PATH": ".storage_testnet/",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,
-  "LOOPCHAIN_LOG_LEVEL": "INFO"
+  "LOOPCHAIN_LOG_LEVEL": "INFO",
+  "LOG_FILE_LOCATION": "./log/testnet"
 }
