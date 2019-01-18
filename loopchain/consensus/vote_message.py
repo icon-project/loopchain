@@ -142,7 +142,7 @@ class VoteMessage:
 
     def sign(self, peer_auth):
         vote_hash = self.__get_vote_hash(json_data=self.get_vote_to_json(), need_sign=False)
-        self.__signature = peer_auth.sign_data(vote_hash, is_hash=True)
+        self.__signature = peer_auth.sign(vote_hash, is_hash=True)
 
     def get_vote_data(self):
         vote_json_data = self.get_vote_to_json()

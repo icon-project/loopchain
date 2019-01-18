@@ -89,7 +89,7 @@ class ConsensusSiever(ConsensusBase):
             block_builder.height = last_block.header.height + 1
             block_builder.prev_hash = last_block.header.hash
             block_builder.next_leader = next_leader
-            block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.peer_private_key
+            block_builder.private_key = ObjectManager().channel_service.peer_auth.private_key
             block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
 
             candidate_block = block_builder.build()

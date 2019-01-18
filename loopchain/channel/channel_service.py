@@ -33,8 +33,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus import Consensus, Acceptor, Proposer
 from loopchain.peer import BlockManager
-from loopchain.peer.icx_authorization import IcxAuthorization
-from loopchain.peer.peer_authorization import PeerAuthorization
+from loopchain.peer.icx_authorization import Signer
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -46,7 +45,7 @@ class ChannelService:
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
-        self.__peer_auth: IcxAuthorization = None
+        self.__peer_auth: Signer = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
@@ -252,8 +251,7 @@ class ChannelService:
 
     def __init_peer_auth(self):
         try:
-            self.__peer_auth = IcxAuthorization(ChannelProperty().name)
-
+            self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
             util.exit_and_msg(f"peer auth init fail cause : {e}")
@@ -417,8 +415,7 @@ class ChannelService:
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
                 peer_target=ChannelProperty().peer_target,
-                group_id=ChannelProperty().group_id,
-                cert=self.peer_auth.peer_cert),
+                group_id=ChannelProperty().group_id),
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)

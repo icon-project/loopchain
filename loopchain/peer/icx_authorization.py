@@ -19,11 +19,137 @@ import logging
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from secp256k1 import PrivateKey
+from secp256k1 import PrivateKey, PublicKey
 
-import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.tools.signature_helper import PublicVerifier, IcxVerifier
+
+class SignVerifier:
+    _pri = PrivateKey()
+
+    def __init__(self):
+        self.address: str = None
+
+    def verify_data(self, origin_data: bytes, signature: bytes):
+        return self.verify_signature(origin_data, signature, False)
+
+    def verify_hash(self, origin_data, signature):
+        return self.verify_signature(origin_data, signature, True)
+
+    def verify_address(self, pubkey: bytes):
+        return self.address_from_pubkey(pubkey) != self.address
+
+    def verify_signature(self, origin_data: bytes, signature: bytes, is_hash):
+        try:
+            if is_hash:
+                origin_data = binascii.unhexlify(origin_data)
+            origin_signature, recover_code = signature[:-1], signature[-1]
+            recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
+            pub = self._pri.ecdsa_recover(origin_data,
+                                          recover_sig=recoverable_sig,
+                                          raw=is_hash,
+                                          digest=hashlib.sha3_256)
+            extract_pub = PublicKey(pub).serialize(compressed=False)
+            return self.verify_address(extract_pub)
+        except Exception:
+            logging.debug(f"signature verify fail : {origin_data} {signature}")
+            return False
+
+    @classmethod
+    def from_address(cls, address: str):
+        verifier = SignVerifier()
+        verifier.address = address
+        return verifier
+
+    @classmethod
+    def from_pubkey(cls, pubkey: bytes):
+        address = cls.address_from_pubkey(pubkey)
+        return cls.from_address(address)
+
+    @classmethod
+    def from_prikey(cls, prikey: bytes):
+        address = cls.address_from_prikey(prikey)
+        return cls.from_address(address)
+
+    @classmethod
+    def address_from_pubkey(cls, pubkey: bytes):
+        hash_pub = hashlib.sha3_256(pubkey[1:]).hexdigest()
+        return f"hx{hash_pub[-40:]}"
+
+    @classmethod
+    def address_from_prikey(cls, prikey: bytes):
+        pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
+        return cls.address_from_pubkey(pubkey)
+
+
+class Signer(SignVerifier):
+    def __init__(self):
+        super().__init__()
+        self.private_key: PrivateKey = None
+
+    def sign(self, data, is_hash=False):
+        if is_hash:
+            if isinstance(data, str):
+                try:
+                    data = data.split("0x")[1] if data.startswith("0x") else data
+                    data = binascii.unhexlify(data)
+                except Exception as e:
+                    logging.error(f"hash data must hex string or bytes \n exception : {e}")
+                    return None
+
+        if not isinstance(data, (bytes, bytearray)):
+            logging.error(f"data must be bytes \n")
+            return None
+
+        signature = self.private_key.ecdsa_sign_recoverable(msg=data,
+                                                            raw=is_hash,
+                                                            digest=hashlib.sha3_256)
+        serialized_sig = self._pri.ecdsa_recoverable_serialize(signature)
+        return b''.join([serialized_sig[0], bytes([serialized_sig[1]])])
+
+    @classmethod
+    def from_channel(cls, channel: str):
+        from loopchain import configure as conf
+
+        with open(conf.CHANNEL_OPTION[channel]["private_path"], "rb") as der:
+            private_bytes = der.read()
+        private_pass = conf.CHANNEL_OPTION[channel]["private_password"]
+
+        if isinstance(private_pass, str):
+            private_pass = private_pass.encode()
+        try:
+            try:
+                temp_private = serialization \
+                    .load_der_private_key(private_bytes,
+                                          private_pass,
+                                          default_backend())
+            except Exception as e:
+                # try pem type private load
+                temp_private = serialization \
+                    .load_pem_private_key(private_bytes,
+                                          private_pass,
+                                          default_backend())
+        except Exception as e:
+            raise ValueError("Invalid Password(Peer Certificate load test)")
+
+        no_pass_private = temp_private.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        key_info = keys.PrivateKeyInfo.load(no_pass_private)
+        prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+        return cls.from_prikey(prikey)
+
+    @classmethod
+    def from_prikey(cls, prikey: bytes):
+        auth = Signer()
+        auth.private_key = PrivateKey(prikey)
+        auth.address = cls.address_from_prikey(prikey)
+
+        # verify
+        sign = auth.sign(b'TEST')
+        if auth.verify_data(b'TEST', sign) is False:
+            raise ValueError("Invalid Signature(Peer Certificate load test)")
+        return auth
 
 
 def long_to_bytes (val, endianness='big'):
@@ -59,68 +185,3 @@ def long_to_bytes (val, endianness='big'):
         s = s[::-1]
 
     return s
-
-
-class IcxAuthorization(IcxVerifier):
-    def __init__(self, channel):
-        super().__init__()
-        self.__channel = channel
-        with open(conf.CHANNEL_OPTION[self.__channel][PublicVerifier.PRIVATE_PATH], "rb") as der:
-            private_bytes = der.read()
-        private_pass = conf.CHANNEL_OPTION[self.__channel][PublicVerifier.PRIVATE_PASSWORD]
-
-        if isinstance(private_pass, str):
-            private_pass = private_pass.encode()
-        try:
-            try:
-                temp_private = serialization\
-                    .load_der_private_key(private_bytes,
-                                          private_pass,
-                                          default_backend())
-            except Exception as e:
-                # try pem type private load
-                temp_private = serialization \
-                    .load_pem_private_key(private_bytes,
-                                          private_pass,
-                                          default_backend())
-        except Exception as e:
-            raise ValueError("Invalid Password(Peer Certificate load test)")
-
-        no_pass_private = temp_private.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        key_info = keys.PrivateKeyInfo.load(no_pass_private)
-
-        self.__peer_pri = PrivateKey(long_to_bytes(key_info['private_key'].native['private_key']))
-        self._init_using_pub(self.__peer_pri.pubkey.serialize(compressed=False))
-
-        # 키 쌍 검증
-        sign = self.sign_data(b'TEST')
-        if self.verify_data(b'TEST', sign) is False:
-            raise ValueError("Invalid Signature(Peer Certificate load test)")
-
-    @property
-    def peer_private_key(self):
-        return self.__peer_pri
-
-    def sign_data(self, data, is_hash=False):
-        if is_hash:
-            if isinstance(data, str):
-                try:
-                    data = binascii.unhexlify(util.trim_hex(data))
-                except Exception as e:
-                    logging.error(f"hash data must hex string or bytes \n exception : {e}")
-                    return None
-
-        if not isinstance(data, (bytes, bytearray)):
-            logging.error(f"data must be bytes \n")
-            return None
-
-        signature = self.__peer_pri.ecdsa_sign_recoverable(msg=data,
-                                                           raw=is_hash,
-                                                           digest=hashlib.sha3_256)
-        serialized_sig = self._pri.ecdsa_recoverable_serialize(signature)
-
-        return b''.join([serialized_sig[0], bytes([serialized_sig[1]])])

@@ -26,10 +26,9 @@ from loopchain.baseservice import StubManager, Monitor, ObjectManager, RestStubM
 from loopchain.blockchain import *
 from loopchain.container import RestService, CommonService
 from loopchain.peer import PeerInnerService, PeerOuterService
-from loopchain.peer.icx_authorization import IcxAuthorization
+from loopchain.peer.icx_authorization import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.rest_server import RestProxyServer
-from loopchain.tools.signature_helper import PublicVerifier
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
@@ -234,7 +233,7 @@ class PeerService:
     def __make_peer_id(self):
         """네트워크에서 Peer 를 식별하기 위한 UUID를 level db 에 생성한다.
         """
-        self.__peer_id = IcxAuthorization(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
+        self.__peer_id = Signer.from_channel(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
