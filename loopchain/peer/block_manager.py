@@ -423,13 +423,11 @@ class BlockManager(Subscriber):
             self.__consensus_algorithm.stop()
 
     def __current_block_height(self):
-        unconfirmed_block_height = -1
-        if self.__blockchain.last_unconfirmed_block:
-            unconfirmed_block_height = self.__blockchain.last_unconfirmed_block.header.height
-        return max(unconfirmed_block_height, self.__blockchain.block_height)
-
-    def __next_block_height(self):
-        return self.__current_block_height() + 1
+        if self.__blockchain.last_unconfirmed_block and \
+                self.__blockchain.last_unconfirmed_block.header.height == self.__blockchain.block_height + 1:
+            return self.__blockchain.block_height + 1
+        else:
+            return self.__blockchain.block_height
 
     def __add_block_by_sync(self, block_):
         commit_state = block_.header.commit_state
@@ -478,8 +476,7 @@ class BlockManager(Subscriber):
 
         logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
-        next_block_height = my_height + 1
-        self.get_blockchain().prevent_next_block_mismatch(next_block_height)
+        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height)
 
         try:
             while max_height > my_height:
