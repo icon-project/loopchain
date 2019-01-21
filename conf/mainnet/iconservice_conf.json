@@ -16,7 +16,7 @@
   "scoreRootPath": ".storage_mainnet/.score",
   "stateDbRootPath": ".storage_mainnet/.statedb",
   "channel": "icon_dex",
-  "amqpKey": "7100",
+  "amqpKey": "7200",
   "amqpTarget": "127.0.0.1",
   "builtinScoreOwner": "hx677133298ed5319607a321a38169031a8867085c",
   "service": {

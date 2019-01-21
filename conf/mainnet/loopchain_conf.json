@@ -18,9 +18,9 @@
     }
   },
   "USE_EXTERNAL_SCORE": true,
-  "USE_EXTERNAL_REST": true,
-  "PORT_PEER": 7100,
-  "AMQP_KEY": "7100",
+  "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
+  "PORT_PEER": 7200,
+  "AMQP_KEY": "7200",
   "DEFAULT_STORAGE_PATH": ".storage_mainnet/",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,

@@ -2,8 +2,8 @@
   "log": {
     "logger": "iconrpcserver",
     "colorLog": true,
-    "level": "warning",
-    "filePath": "./log/testnet/iconrpcserver.log",
+    "level": "info",
+    "filePath": "./log/develop/iconrpcserver.log",
     "outputType": "console|file",
     "rotate": {
       "type": "period|bytes",

@@ -202,8 +202,6 @@ DEFAULT_SCORE_STORAGE_PATH = os.getenv('DEFAULT_SCORE_STORAGE_PATH', os.path.joi
 DEFAULT_SCORE_PACKAGE = 'loopchain/default'
 DEFAULT_SCORE_BRANCH_MASTER = 'master'
 DEFAULT_SCORE_BRANCH = os.getenv('DEFAULT_SCORE_BRANCH', DEFAULT_SCORE_BRANCH_MASTER)
-DEFAULT_SCORE_CONF_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconservice_conf.json')
-DEFAULT_BUILTIN_SCORE_OWNER = "hx6e1dd0d4432620778b54b2bbc21ac3df961adf89"  # Devnet
 
 # DEFAULT USER / PASSWORD
 DEFAULT_SCORE_BASE_USER = 'score'
@@ -429,3 +427,18 @@ SLEEP_SECONDS_FOR_INIT_COMMON_PROCESS = 0.5
 # LFT ####
 ####################
 ALLOW_MAKE_EMPTY_BLOCK = True
+
+
+####################
+# ICON ####
+####################
+URL_CITIZEN_TESTNET = 'https://int-test-ctz.solidwallet.io'
+URL_CITIZEN_MAINNET = 'https://int-ctz.solidwallet.io'
+CONF_PATH_LOOPCHAIN_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/loopchain_conf.json')
+CONF_PATH_LOOPCHAIN_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/loopchain_conf.json')
+CONF_PATH_ICONSERVICE_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconservice_conf.json')
+CONF_PATH_ICONSERVICE_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconservice_conf.json')
+CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconservice_conf.json')
+CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
+CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
+CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
