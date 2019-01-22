@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor, Future
 
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import BroadcastCommand, TimerService
+from loopchain.baseservice import TimerService
 from loopchain.consensus import *
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever

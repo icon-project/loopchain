@@ -13,12 +13,12 @@
 # limitations under the License.
 """State Machine for Channel Service"""
 import asyncio
+
 from earlgrey import MessageQueueService
 from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.utils import loggers
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -27,16 +27,19 @@ from loopchain.statemachine import statemachine
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
     states = ['InitComponents',
-              State(name='Consensus', on_enter='_consensus_on_enter'),
-              State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
+              State(name='Consensus', ignore_invalid_triggers=True, on_enter='_consensus_on_enter'),
+              State(name='BlockHeightSync', ignore_invalid_triggers=True, on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
-              State(name='BlockSync', on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
-              State(name='SubscribeNetwork', on_enter='_subscribe_network_on_enter',
+              State(name='BlockSync', ignore_invalid_triggers=True,
+                    on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
+              State(name='SubscribeNetwork', ignore_invalid_triggers=True, on_enter='_subscribe_network_on_enter',
                     on_exit='_subscribe_network_on_exit'),
               'Watch',
-              State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
-              State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
-              'LeaderComplain',
+              State(name='Vote', ignore_invalid_triggers=True, on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
+              State(name='BlockGenerate', ignore_invalid_triggers=True,
+                    on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
+              State(name='LeaderComplain', ignore_invalid_triggers=True,
+                    on_enter='_leadercomplain_on_enter', on_exit='_leadercomplain_on_exit'),
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -89,6 +92,10 @@ class ChannelStateMachine(object):
     def turn_to_leader(self):
         pass
 
+    @statemachine.transition(source='Vote', dest='LeaderComplain')
+    def leader_complain(self):
+        pass
+
     def _is_leader(self):
         return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
 
@@ -135,17 +142,20 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.vote_as_peer()
 
     def _vote_on_enter(self):
-        loggers.get_preset().is_leader = False
-        loggers.get_preset().update_logger()
-        util.logger.spam(f"\nvote_on_enter")
+        pass
 
     def _vote_on_exit(self):
-        util.logger.spam(f"\nvote_on_exit")
+        # util.logger.notice(f"_vote_on_exit")
+        pass
 
     def _blockgenerate_on_enter(self):
-        loggers.get_preset().is_leader = True
-        loggers.get_preset().update_logger()
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
         self.__channel_service.block_manager.stop_block_generate_timer()
+
+    def _leadercomplain_on_enter(self):
+        util.logger.notice(f"_leadercomplain_on_enter")
+
+    def _leadercomplain_on_exit(self):
+        util.logger.notice(f"_leadercomplain_on_exit")

@@ -47,10 +47,8 @@ state Consensus {
     Watch: Wait for new block announcement (subscribe_loop)
     Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)
     Vote: on_enter {
-    Vote: \tAddTimer: leader complain
     Vote: }
     Vote: on_exit {
-    Vote: \tStopTimer: leader complain
     Vote: }
     Vote: 
     Vote: trigger::vote\n(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
@@ -69,12 +67,18 @@ state Consensus {
     BlockGenerate -> Vote : Send AnnounceConfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
 
     state LeaderComplain
-    note right of LeaderComplain
+    note top of LeaderComplain
       keep leader complain Timer
       until new leader elected
+      leader complain timer start by AddTx(List), and stop by AddBlock
     end note
     LeaderComplain -> Vote : Recv AnnounceNewLeader\n(if next leader != self)
     LeaderComplain --> BlockGenerate : Send AnnounceNewLeader\n(if next leader == self)
+    LeaderComplain: on_enter {
+    LeaderComplain: }
+    LeaderComplain: on_exit {
+    LeaderComplain: }
+    LeaderComplain: 
 }
 
 Consensus --> GracefulShutdown
