@@ -1,0 +1,29 @@
+{
+  "CHANNEL_OPTION" : {
+    "icon_dex": {
+      "block_versions": {
+        "0.1a": 0
+      },
+      "hash_versions": {
+        "genesis": 0,
+        "0x2": 1,
+        "0x3": 1
+      },
+      "load_cert": false,
+      "consensus_cert_use": false,
+      "tx_cert_use": false,
+      "key_load_type": 0,
+      "public_path": "./resources/my_pki/my_public.pem",
+      "private_path": "./resources/my_pki/my_private.pem"
+    }
+  },
+  "USE_EXTERNAL_SCORE": true,
+  "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
+  "PORT_PEER": 7100,
+  "AMQP_KEY": "7100",
+  "DEFAULT_STORAGE_PATH": ".storage_testnet/",
+  "ALLOW_MAKE_EMPTY_BLOCK": false,
+  "SUBSCRIBE_USE_HTTPS": true,
+  "LOOPCHAIN_LOG_LEVEL": "INFO",
+  "LOG_FILE_LOCATION": "./log/testnet"
+}

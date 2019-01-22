@@ -41,6 +41,13 @@ def main(argv):
     args = parser.parse_args(argv)
     command_arguments.set_raw_commands(args)
 
+    if args.radio_station_target == 'testnet':
+        args.radio_station_target = conf.URL_CITIZEN_TESTNET
+        args.configure_file_path = conf.CONF_PATH_LOOPCHAIN_TESTNET
+    elif args.radio_station_target == 'mainnet':
+        args.radio_station_target = conf.URL_CITIZEN_MAINNET
+        args.configure_file_path = conf.CONF_PATH_LOOPCHAIN_MAINNET
+
     if args.configure_file_path:
         conf.Configure().load_configure_json(args.configure_file_path)
 
@@ -100,20 +107,24 @@ def start_as_rest_server(args):
     channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(peer_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
+    conf_path = conf.CONF_PATH_ICONRPCSERVER_DEV
+
+    if args.radio_station_target:
+        if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
+            conf_path = conf.CONF_PATH_ICONRPCSERVER_TESTNET
+        elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
+            conf_path = conf.CONF_PATH_ICONRPCSERVER_MAINNET
 
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
     from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
     from iconcommons.icon_config import IconConfig
     from iconcommons.logger import Logger
 
+    with open(conf_path) as file:
+        load_conf = json.load(file)
+
     additional_conf = {
-        "log": {
-            "logger": "iconrpcserver",
-            "colorLog": True,
-            "level": "info",
-            "filePath": "./log/iconrpcserver.log",
-            "outputType": "console|file"
-        },
+        "log": load_conf.get("log"),
         "channel": channel,
         "port": api_port,
         "amqpKey": amqp_key,
@@ -148,6 +159,13 @@ def start_as_score(args):
     score_package = args.score_package or conf.DEFAULT_SCORE_PACKAGE
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
+    conf_path = conf.CONF_PATH_ICONSERVICE_DEV
+
+    if args.radio_station_target:
+        if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
+            conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
+        elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
+            conf_path = conf.CONF_PATH_ICONSERVICE_MAINNET
 
     if conf.USE_EXTERNAL_SCORE:
         if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
@@ -156,13 +174,13 @@ def start_as_score(args):
             from iconcommons.icon_config import IconConfig
             from iconcommons.logger import Logger
 
-            with open(conf.DEFAULT_SCORE_CONF_PATH) as file:
+            with open(conf_path) as file:
                 load_conf = json.load(file)
 
             additional_conf = {
                 "log": load_conf.get("log"),
-                "scoreRootPath": f".storage/.score{amqp_key}_{channel}",
-                "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
+                "scoreRootPath": load_conf.get("scoreRootPath") + f"{amqp_key}_{channel}",
+                "stateDbRootPath": load_conf.get("stateDbRootPath") + f"{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
                 "builtinScoreOwner": load_conf.get("builtinScoreOwner"),
