@@ -45,19 +45,27 @@ class BlockBuilder(BaseBlockBuilder):
             self.build_peer_id()
             self.sign()
 
-        header = self.BlockHeaderClass(
-            hash=self.hash,
-            prev_hash=self.prev_hash,
-            height=self.height,
-            timestamp=self._timestamp,
-            peer_id=self.peer_id,
-            signature=self.signature,
-            next_leader=self.next_leader,
-            merkle_tree_root_hash=self.merkle_tree_root_hash,
-            commit_state=self.commit_state)
-        body = self.BlockBodyClass(self.transactions, self.confirm_prev_block)
-        self.block = Block(header, body)
+        self.block = self.build_block()
         return self.block
+
+    def build_block_header_data(self):
+        return {
+            "hash": self.hash,
+            "prev_hash": self.prev_hash,
+            "height": self.height,
+            "timestamp": self._timestamp,
+            "peer_id": self.peer_id,
+            "signature": self.signature,
+            "next_leader": self.next_leader,
+            "merkle_tree_root_hash": self.merkle_tree_root_hash,
+            "commit_state": self.commit_state
+        }
+
+    def build_block_body_data(self):
+        return {
+            "transactions": self.transactions,
+            "confirm_prev_block": self.confirm_prev_block
+        }
 
     def build_merkle_tree_root_hash(self):
         if self.merkle_tree_root_hash is not None:

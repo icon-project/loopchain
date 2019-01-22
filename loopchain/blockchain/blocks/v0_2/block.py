@@ -4,6 +4,8 @@ from .. import v0_1a
 
 @dataclass(frozen=True)
 class BlockHeader(v0_1a.BlockHeader):
+    is_complain: bool
+
     version = "0.2"
 
 

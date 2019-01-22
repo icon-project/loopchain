@@ -1,5 +1,5 @@
 import hashlib
-from abc import ABC
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 from secp256k1 import PrivateKey
 from typing import Dict
@@ -40,6 +40,19 @@ class BlockBuilder(ABC):
         self.peer_id = None
 
     def build(self) -> 'Block':
+        raise NotImplementedError
+
+    def build_block(self):
+        header = self.BlockHeaderClass(**self.build_block_header_data())
+        body = self.BlockBodyClass(**self.build_block_body_data())
+        return Block(header, body)
+
+    @abstractmethod
+    def build_block_header_data(self) -> dict:
+        raise NotImplementedError
+
+    @abstractmethod
+    def build_block_body_data(self) -> dict:
         raise NotImplementedError
 
     def build_hash(self):
