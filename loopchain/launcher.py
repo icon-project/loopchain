@@ -163,8 +163,8 @@ def start_as_score(args):
 
             additional_conf = {
                 "log": load_conf.get("log"),
-                "scoreRootPath": f".storage/.score{amqp_key}_{channel}",
-                "stateDbRootPath": f".storage/.statedb{amqp_key}_{channel}",
+                "scoreRootPath": load_conf.get("scoreRootPath") + f"{amqp_key}_{channel}",
+                "stateDbRootPath": load_conf.get("stateDbRootPath") + f"{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
                 "builtinScoreOwner": load_conf.get("builtinScoreOwner"),
