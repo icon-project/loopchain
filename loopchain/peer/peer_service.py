@@ -139,17 +139,16 @@ class PeerService:
 
     @property
     def stub_to_radiostation(self):
-        stub_type = loopchain_pb2_grpc.PeerServiceStub
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            stub_type = loopchain_pb2_grpc.RadioStationStub
-
         if self.__radio_station_stub is None:
             if self.is_support_node_function(conf.NodeFunction.Vote):
-                self.__radio_station_stub = StubManager.get_stub_manager_to_server(
-                    self.__radio_station_target,
-                    stub_type,
-                    conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                    ssl_auth_type=conf.GRPC_SSL_TYPE)
+                if conf.ENABLE_REP_RADIO_STATION:
+                    self.__radio_station_stub = StubManager.get_stub_manager_to_server(
+                        self.__radio_station_target,
+                        loopchain_pb2_grpc.RadioStationStub,
+                        conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
+                        ssl_auth_type=conf.GRPC_SSL_TYPE)
+                else:
+                    self.__radio_station_stub = None
             else:
                 self.__radio_station_stub = RestStubManager(self.__radio_station_target)
 
@@ -179,22 +178,35 @@ class PeerService:
     def __get_channel_infos(self):
         # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            response = self.stub_to_radiostation.call_in_times(
-                method_name="GetChannelInfos",
-                message=loopchain_pb2.GetChannelInfosRequest(
-                    peer_id=self.__peer_id,
-                    peer_target=self.__peer_target,
-                    group_id=self.group_id),
-                retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-                is_stub_reuse=False,
-                timeout=conf.CONNECTION_TIMEOUT_TO_RS
-            )
-            # util.logger.spam(f"__get_channel_infos:response::{response}")
+            if conf.ENABLE_REP_RADIO_STATION:
+                response = self.stub_to_radiostation.call_in_times(
+                    method_name="GetChannelInfos",
+                    message=loopchain_pb2.GetChannelInfosRequest(
+                        peer_id=self.__peer_id,
+                        peer_target=self.__peer_target,
+                        group_id=self.group_id),
+                    retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
+                    is_stub_reuse=False,
+                    timeout=conf.CONNECTION_TIMEOUT_TO_RS
+                )
+                # util.logger.spam(f"__get_channel_infos:response::{response}")
 
-            if not response:
-                return None
-            logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
-            channels = json.loads(response.channel_infos)
+                if not response:
+                    return None
+                logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
+                channels = json.loads(response.channel_infos)
+            else:
+                logging.debug(f"try to load channel management data from json file ({conf.CHANNEL_MANAGE_DATA_PATH})")
+                try:
+                    with open(conf.CHANNEL_MANAGE_DATA_PATH) as file:
+                        json_data = json.load(file)
+                        json_string = json.dumps(json_data).replace('[local_ip]', util.get_private_ip())
+                        channels = json.loads(json_string)
+
+                        logging.info(f"loading channel info : {json_data}")
+                except FileNotFoundError as e:
+                    util.exit_and_msg(f"cannot open json file in ({conf.CHANNEL_MANAGE_DATA_PATH}): {e}")
+                    raise  # To make linter happy.
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()}

@@ -196,15 +196,14 @@ class ChannelService:
         ChannelProperty().node_type = conf.NodeType(node_type)
         ChannelProperty().score_package = score_package
 
+        self.__peer_manager = PeerManager(ChannelProperty().name)
         self.__init_peer_auth()
-        self.__init_block_manager()
         self.__init_broadcast_scheduler()
+        self.__init_block_manager()
         self.__init_radio_station_stub()
 
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
-
-        self.__peer_manager = PeerManager(ChannelProperty().name)
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             util.logger.spam(f"init consensus !")
@@ -216,7 +215,10 @@ class ChannelService:
             self.__init_acceptor(peer_id=peer_id)
             
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.connect_to_radio_station()
+            if conf.ENABLE_REP_RADIO_STATION:
+                self.connect_to_radio_station()
+            else:
+                await self.__load_peers_from_file()
         else:
             self.__init_node_subscriber()
 
@@ -229,13 +231,17 @@ class ChannelService:
 
     async def subscribe_network(self):
         # Subscribe to radiostation and block_sync_target_stub
-        await self.subscribe_to_radio_station()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            if conf.ENABLE_REP_RADIO_STATION:
+                await self.subscribe_to_radio_station()
 
-        if self.is_support_node_function(conf.NodeFunction.Vote) and self.block_manager.peer_type == loopchain_pb2.PEER:
-            await self.__subscribe_call_to_stub(
-                peer_stub=self.block_manager.subscribe_target_peer_stub,
-                peer_type=loopchain_pb2.PEER
-            )
+            if self.block_manager.peer_type == loopchain_pb2.PEER:
+                await self.__subscribe_call_to_stub(
+                    peer_stub=self.block_manager.subscribe_target_peer_stub,
+                    peer_type=loopchain_pb2.PEER
+                )
+        else:
+            await self.subscribe_to_radio_station()
 
         self.generate_genesis_block()
 
@@ -307,11 +313,12 @@ class ChannelService:
 
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.__radio_station_stub = StubManager.get_stub_manager_to_server(
-                ChannelProperty().radio_station_target,
-                loopchain_pb2_grpc.RadioStationStub,
-                conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                ssl_auth_type=conf.GRPC_SSL_TYPE)
+            if conf.ENABLE_REP_RADIO_STATION:
+                self.__radio_station_stub = StubManager.get_stub_manager_to_server(
+                    ChannelProperty().radio_station_target,
+                    loopchain_pb2_grpc.RadioStationStub,
+                    conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
+                    ssl_auth_type=conf.GRPC_SSL_TYPE)
         else:
             self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target, ChannelProperty().name)
 
@@ -388,6 +395,13 @@ class ChannelService:
         util.logger.spam(f"peer_service:__load_score --end--")
 
         return score_info
+
+    async def __load_peers_from_file(self):
+        channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
+        for peer_info in channel_info[ChannelProperty().name]["peers"]:
+            self.__peer_manager.add_peer(peer_info)
+            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info["peer_target"])
+        self.show_peers()
 
     def is_support_node_function(self, node_function):
         return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
@@ -662,24 +676,19 @@ class ChannelService:
         peer_type = loopchain_pb2.PEER
 
         if self_peer_object.target == peer_leader.target:
-            loggers.get_preset().is_leader = True
-            loggers.get_preset().update_logger()
-
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
 
             if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                self.peer_manager.announce_new_leader(
-                    self.peer_manager.get_leader_peer().peer_id,
-                    new_leader_id,
-                    is_broadcast=True,
-                    self_peer_id=ChannelProperty().peer_id
-                )
+                if conf.ENABLE_REP_RADIO_STATION:
+                    self.peer_manager.announce_new_leader(
+                        self.peer_manager.get_leader_peer().peer_id,
+                        new_leader_id,
+                        is_broadcast=True,
+                        self_peer_id=ChannelProperty().peer_id
+                    )
         else:
-            loggers.get_preset().is_leader = False
-            loggers.get_preset().update_logger()
-
             logging.debug("Set Peer Type Peer!")
             self.state_machine.turn_to_peer()
 

@@ -332,6 +332,7 @@ LOOPCHAIN_DEFAULT_CHANNEL = "loopchain_default"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
 CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = False  # if this option is true, peer only gets channel infos to which it belongs.
+ENABLE_REP_RADIO_STATION = True
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
 
