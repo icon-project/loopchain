@@ -16,6 +16,7 @@
 import binascii
 import hashlib
 import logging
+from typing import Union
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -54,22 +55,6 @@ class SignVerifier:
             return False
 
     @classmethod
-    def from_address(cls, address: str):
-        verifier = SignVerifier()
-        verifier.address = address
-        return verifier
-
-    @classmethod
-    def from_pubkey(cls, pubkey: bytes):
-        address = cls.address_from_pubkey(pubkey)
-        return cls.from_address(address)
-
-    @classmethod
-    def from_prikey(cls, prikey: bytes):
-        address = cls.address_from_prikey(prikey)
-        return cls.from_address(address)
-
-    @classmethod
     def address_from_pubkey(cls, pubkey: bytes):
         hash_pub = hashlib.sha3_256(pubkey[1:]).hexdigest()
         return f"hx{hash_pub[-40:]}"
@@ -78,6 +63,66 @@ class SignVerifier:
     def address_from_prikey(cls, prikey: bytes):
         pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
+
+    @classmethod
+    def from_address(cls, address: str):
+        verifier = SignVerifier()
+        verifier.address = address
+        return verifier
+
+    @classmethod
+    def from_channel(cls, channel: str):
+        from loopchain import configure as conf
+
+        public_file = conf.CHANNEL_OPTION[channel]["public_path"]
+        return cls.from_pubkey_file(public_file)
+
+    @classmethod
+    def from_pubkey_file(cls, pubkey_file: str):
+        with open(pubkey_file, "rb") as der:
+            pubkey = der.read()
+        return cls.from_pubkey(pubkey)
+
+    @classmethod
+    def from_pubkey(cls, pubkey: bytes):
+        address = cls.address_from_pubkey(pubkey)
+        return cls.from_address(address)
+
+    @classmethod
+    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+        with open(prikey_file, "rb") as der:
+            private_bytes = der.read()
+
+        if isinstance(password, str):
+            password = password.encode()
+        try:
+            try:
+                temp_private = serialization \
+                    .load_der_private_key(private_bytes,
+                                          password,
+                                          default_backend())
+            except Exception as e:
+                # try pem type private load
+                temp_private = serialization \
+                    .load_pem_private_key(private_bytes,
+                                          password,
+                                          default_backend())
+        except Exception as e:
+            raise ValueError("Invalid Password(Peer Certificate load test)")
+
+        no_pass_private = temp_private.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        key_info = keys.PrivateKeyInfo.load(no_pass_private)
+        prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+        return cls.from_prikey(prikey)
+
+    @classmethod
+    def from_prikey(cls, prikey: bytes):
+        address = cls.address_from_prikey(prikey)
+        return cls.from_address(address)
 
 
 class Signer(SignVerifier):
@@ -112,38 +157,28 @@ class Signer(SignVerifier):
         return serialized_sig + bytes((recover_id, ))
 
     @classmethod
+    def from_address(cls, address: str):
+        raise TypeError("Cannot create `Signer` from address")
+
+    @classmethod
     def from_channel(cls, channel: str):
         from loopchain import configure as conf
 
-        with open(conf.CHANNEL_OPTION[channel]["private_path"], "rb") as der:
-            private_bytes = der.read()
-        private_pass = conf.CHANNEL_OPTION[channel]["private_password"]
+        prikey_file = conf.CHANNEL_OPTION[channel]["private_path"]
+        password = conf.CHANNEL_OPTION[channel]["private_password"]
+        return cls.from_prikey_file(prikey_file, password)
 
-        if isinstance(private_pass, str):
-            private_pass = private_pass.encode()
-        try:
-            try:
-                temp_private = serialization \
-                    .load_der_private_key(private_bytes,
-                                          private_pass,
-                                          default_backend())
-            except Exception as e:
-                # try pem type private load
-                temp_private = serialization \
-                    .load_pem_private_key(private_bytes,
-                                          private_pass,
-                                          default_backend())
-        except Exception as e:
-            raise ValueError("Invalid Password(Peer Certificate load test)")
+    @classmethod
+    def from_pubkey(cls, pubkey: bytes):
+        raise TypeError("Cannot create `Signer` from pubkey")
 
-        no_pass_private = temp_private.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        key_info = keys.PrivateKeyInfo.load(no_pass_private)
-        prikey = long_to_bytes(key_info['private_key'].native['private_key'])
-        return cls.from_prikey(prikey)
+    @classmethod
+    def from_pubkey_file(cls, pubkey_file: str):
+        raise TypeError("Cannot create `Signer` from pubkey file")
+
+    @classmethod
+    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+        return super().from_prikey_file(prikey_file, password)
 
     @classmethod
     def from_prikey(cls, prikey: bytes):
