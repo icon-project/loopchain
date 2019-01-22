@@ -436,16 +436,10 @@ class ChannelService:
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
 
         # start next ConnectPeer timer
-        if TimerService.TIMER_KEY_CONNECT_PEER not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                TimerService.TIMER_KEY_CONNECT_PEER,
-                Timer(
-                    target=TimerService.TIMER_KEY_CONNECT_PEER,
-                    duration=conf.CONNECTION_RETRY_TIMER,
-                    callback=self.connect_to_radio_station,
-                    callback_kwargs={"is_reconnect": True}
-                )
-            )
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_CONNECT_PEER,
+                                                  duration=conf.CONNECTION_RETRY_TIMER,
+                                                  callback=self.connect_to_radio_station,
+                                                  callback_kwargs={"is_reconnect": True})
 
         if is_reconnect:
             return
@@ -660,8 +654,11 @@ class ChannelService:
     async def reset_leader(self, new_leader_id, block_height=0):
         logging.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
-        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
-            logging.warning(f"height behind peer can not take leader role.")
+
+        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
+            util.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
+                                f"last_block.header.height("
+                                f"{self.block_manager.get_blockchain().last_block.header.height})")
             return
 
         if leader_peer is None:
@@ -849,56 +846,26 @@ class ChannelService:
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):
-        timer_key = TimerService.TIMER_KEY_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.SUBSCRIBE_RETRY_TIMER,
-                    is_repeat=True,
-                    callback=self.subscribe_network
-                )
-            )
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SUBSCRIBE,
+                                                  duration=conf.SUBSCRIBE_RETRY_TIMER,
+                                                  is_repeat=True, callback=self.subscribe_network)
 
     def stop_subscribe_timer(self):
-        if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
 
     def start_check_last_block_rs_timer(self):
-        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key not in self.__timer_service.timer_list:
-            util.logger.spam(f"add timer for check_block_height_call to radiostation...")
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.GET_LAST_BLOCK_TIMER,
-                    is_repeat=True,
-                    callback=self.__check_last_block_to_rs
-                )
-            )
+        self.__timer_service.add_timer_convenient(
+            timer_key=TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION,
+            duration=conf.GET_LAST_BLOCK_TIMER, is_repeat=True, callback=self.__check_last_block_to_rs)
 
     def stop_check_last_block_rs_timer(self):
-        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(timer_key)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION)
 
     def start_shutdown_timer(self):
-        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list:
-            error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.SHUTDOWN_TIMER,
-                    callback=self.shutdown_peer,
-                    callback_kwargs={"message": error}
-                )
-            )
+        error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE,
+                                                  duration=conf.SHUTDOWN_TIMER, callback=self.shutdown_peer,
+                                                  callback_kwargs={"message": error})
 
     def stop_shutdown_timer(self):
-        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(timer_key)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)

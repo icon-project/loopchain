@@ -107,19 +107,20 @@ class ChannelInnerTask:
 
     @message_queue_task(priority=255)
     async def get_status(self):
-        block_height = 0
-        total_tx = 0
-
         status_data = dict()
-
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
+
+        block_height = 0
         unconfirmed_block_height = None
         last_block = block_manager.get_blockchain().last_block
+        last_unconfirmed_block = block_manager.get_blockchain().last_unconfirmed_block
+
         if last_block:
             block_height = last_block.header.height
-            total_tx = block_manager.get_total_tx()
-            logging.debug(f"last_block height({block_height}), hash({last_block.header.hash})")
+
+        if last_unconfirmed_block:
+            unconfirmed_block_height = last_unconfirmed_block.header.height
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
@@ -129,7 +130,7 @@ class ChannelInnerTask:
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
-        status_data["total_tx"] = total_tx
+        status_data["total_tx"] = block_manager.get_total_tx()
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1

@@ -75,6 +75,7 @@ state Consensus {
     LeaderComplain -> Vote : Recv AnnounceNewLeader\n(if next leader != self)
     LeaderComplain --> BlockGenerate : Send AnnounceNewLeader\n(if next leader == self)
     LeaderComplain: on_enter {
+    LeaderComplain: \tbroadcast complain
     LeaderComplain: }
     LeaderComplain: on_exit {
     LeaderComplain: }

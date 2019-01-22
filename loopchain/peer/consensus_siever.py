@@ -19,7 +19,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, BlockBuilder, BlockVerifier, TransactionStatusInQueue, Hash32
+from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
