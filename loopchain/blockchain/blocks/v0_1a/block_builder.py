@@ -1,15 +1,23 @@
 import hashlib
 import struct
 import time
+from typing import TYPE_CHECKING
 
 from . import BlockHeader, BlockBody
 from .. import Block, BlockBuilder as BaseBlockBuilder
 from ... import Hash32, Address
 
+if TYPE_CHECKING:
+    from ... import TransactionVersioner
+
 
 class BlockBuilder(BaseBlockBuilder):
-    def __init__(self):
-        super().__init__()
+    version = BlockHeader.version
+    BlockHeaderClass = BlockHeader
+    BlockBodyClass = BlockBody
+
+    def __init__(self, tx_versioner: 'TransactionVersioner'):
+        super().__init__(tx_versioner)
 
         # Attributes to be assigned(optional)
         self.next_leader: Address = None
@@ -37,7 +45,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.build_peer_id()
             self.sign()
 
-        header = BlockHeader(
+        header = self.BlockHeaderClass(
             hash=self.hash,
             prev_hash=self.prev_hash,
             height=self.height,
@@ -47,7 +55,7 @@ class BlockBuilder(BaseBlockBuilder):
             next_leader=self.next_leader,
             merkle_tree_root_hash=self.merkle_tree_root_hash,
             commit_state=self.commit_state)
-        body = BlockBody(self.transactions, self.confirm_prev_block)
+        body = self.BlockBodyClass(self.transactions, self.confirm_prev_block)
         self.block = Block(header, body)
         return self.block
 
@@ -83,7 +91,7 @@ class BlockBuilder(BaseBlockBuilder):
             merkle_tree_root_hash = mt_list[0]
 
         if merkle_tree_root_hash:
-            return Hash32.fromhex(merkle_tree_root_hash)
+            return Hash32.fromhex(merkle_tree_root_hash, True)
 
         return Hash32(bytes(Hash32.size))
 

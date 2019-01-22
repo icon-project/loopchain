@@ -51,6 +51,7 @@ class PeerServiceStub(metaclass=SingletonMetaClass):
                              self.REST_GRPC_TIMEOUT)
         status_json_data = json.loads(response.status)
         status_json_data['block_height'] = response.block_height
+        status_json_data['unconfirmed_block_height'] = response.unconfirmed_block_height
         status_json_data['total_tx'] = response.total_tx
         status_json_data['leader_complaint'] = response.is_leader_complaining
 
@@ -65,10 +66,7 @@ class PeerServiceStub(metaclass=SingletonMetaClass):
     def get_block(self, channel: str, block_hash: str= "", block_height: int=-1):
         block_data_filter = "prev_block_hash, height, block_hash, merkle_tree_root_hash," \
                             " time_stamp, peer_id, signature"
-        if conf.CHANNEL_OPTION[channel]['send_tx_type'] == conf.SendTxType.icx:
-            tx_data_filter = "icx_origin_data"
-        else:
-            tx_data_filter = "tx_hash, timestamp, data_string, peer_id"
+        tx_data_filter = "icx_origin_data"
 
         response = self.call("GetBlock",
                              loopchain_pb2.GetBlockRequest(

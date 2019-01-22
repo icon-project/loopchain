@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from . import TransactionSerializer, HASH_SALT
 from .. import TransactionVerifier as BaseTransactionVerifier
-from ... import Address
+from ... import ExternalAddress
 
 if TYPE_CHECKING:
     from . import Transaction
@@ -21,6 +21,7 @@ class TransactionVerifier(BaseTransactionVerifier):
         self.verify_hash(tx)
         self.verify_accounts(tx)
         if blockchain:
+            self.verify_empty_blockchain(tx, blockchain)
             self.verify_tx_hash_unique(tx, blockchain)
 
     def verify_signature(self, tx: 'Transaction'):
@@ -43,4 +44,9 @@ class TransactionVerifier(BaseTransactionVerifier):
                                    '"balance" value is None in an account of genesis tx.')
 
             # An exception will be raised if 'address' is invalid.
-            Address.fromhex(account['address'])
+            ExternalAddress.fromhex(account['address'])
+
+    def verify_empty_blockchain(self, tx: 'Transaction', blockchain):
+        if blockchain.block_height >= 0:
+            raise RuntimeError(f'Genesis Tx({tx.hash.hex()}), '
+                               f"Genesis Tx cannot be added blockchain height {blockchain.block_height}.")

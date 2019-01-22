@@ -2,8 +2,8 @@
   "log": {
     "logger": "iconrpcserver",
     "colorLog": true,
-    "level": "warning",
-    "filePath": "./log/iconrpcserver.log",
+    "level": "info",
+    "filePath": "./log/develop/iconrpcserver.log",
     "outputType": "console|file",
     "rotate": {
       "type": "period|bytes",
@@ -17,6 +17,5 @@
   "port": 9000,
   "amqpTarget": "127.0.0.1",
   "amqpKey": "7100",
-  "gunicornWorkerCount": 1,
-  "subscribeUseHttps": true
+  "gunicornWorkerCount": 1
 }

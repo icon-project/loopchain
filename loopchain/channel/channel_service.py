@@ -252,10 +252,7 @@ class ChannelService:
 
     def __init_peer_auth(self):
         try:
-            channel_authorization = IcxAuthorization if util.channel_use_icx(ChannelProperty().name) \
-                else PeerAuthorization
-
-            self.__peer_auth = channel_authorization(ChannelProperty().name)
+            self.__peer_auth = IcxAuthorization(ChannelProperty().name)
 
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
@@ -350,21 +347,15 @@ class ChannelService:
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
                 command_arguments.Type.Develop,
-                command_arguments.Type.ConfigurationFilePath
+                command_arguments.Type.ConfigurationFilePath,
+                command_arguments.Type.RadioStationTarget
             )
             self.__score_container = CommonSubprocess(process_args)
 
-        if util.channel_use_icx(ChannelProperty().name):
-            await StubCollection().create_icon_score_stub(ChannelProperty().name)
-            await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
-            await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
-            return None
-        else:
-            await StubCollection().create_score_stub(ChannelProperty().name, ChannelProperty().score_package)
-            await StubCollection().score_stubs[ChannelProperty().name].connect()
-            await StubCollection().score_stubs[ChannelProperty().name].async_task().hello()
-
-            return await self.__load_score()
+        await StubCollection().create_icon_score_stub(ChannelProperty().name)
+        await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
+        await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
+        return None
 
     async def __load_score(self):
         channel_name = ChannelProperty().name
@@ -741,8 +732,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
-            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["genesis_tx_hash_version"]
-            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
             transaction = {
                 "method": method,
                 "params": {
@@ -765,7 +755,7 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
-        block_builder = BlockBuilder.from_new(block)
+        block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
@@ -776,8 +766,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in _block.body.transactions.values():
-            hash_version = conf.CHANNEL_OPTION[ChannelProperty().name]["tx_hash_version"]
-            tx_serializer = TransactionSerializer.new(tx.version, hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
 
             transaction = {
                 "method": method,
@@ -799,7 +788,7 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
-        block_builder = BlockBuilder.from_new(_block)
+        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
@@ -815,7 +804,7 @@ class ChannelService:
         stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
-        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash}")
+        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")
 
         request = {
             "blockHeight": block.header.height,
@@ -828,22 +817,10 @@ class ChannelService:
         return True
 
     def score_remove_precommit_state(self, block: Block):
-        if not util.channel_use_icx(ChannelProperty().name):
-            request = {
-                "blockHeight": block.height,
-                "blockHash": block.block_hash,
-            }
-            request = convert_params(request, ParamType.remove_precommit_state)
-
-            stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-            stub.sync_task().remove_precommit_state(request)
-
-            return True
-        else:
-            invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-            stub = StubCollection().score_stubs[ChannelProperty().name]
-            stub.sync_task().remove_precommit_state(invoke_fail_info)
-            return True
+        invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
+        stub = StubCollection().score_stubs[ChannelProperty().name]
+        stub.sync_task().remove_precommit_state(invoke_fail_info)
+        return True
 
     def get_object_has_queue_by_consensus(self):
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:

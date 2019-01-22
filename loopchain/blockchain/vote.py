@@ -12,13 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """data object for peer votes to one block"""
-
 import logging
-
+import pickle
 from enum import Enum
 
-from loopchain.baseservice import PeerManager
 from loopchain import configure as conf
+from loopchain.baseservice import PeerManager
 
 
 class VoteType(Enum):
@@ -60,6 +59,9 @@ class Vote:
 
     @staticmethod
     def __make_vote_init(audience):
+        if not audience:
+            return None
+
         vote_init = {}
         if isinstance(audience, PeerManager):
             for group_id in list(audience.peer_list.keys()):
@@ -75,6 +77,14 @@ class Vote:
 
         logging.debug("vote_init: " + str(vote_init))
         return vote_init
+
+    @staticmethod
+    def save_to(obj):
+        return pickle.dumps(obj)
+
+    @staticmethod
+    def load_from(obj):
+        return pickle.loads(obj)
 
     @staticmethod
     def __parse_vote_sign(vote_sign):

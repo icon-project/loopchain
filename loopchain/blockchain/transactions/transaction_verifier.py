@@ -7,6 +7,7 @@ from ..hashing import build_hash_generator
 from .. import Hash32, ExternalAddress
 if TYPE_CHECKING:
     from . import Transaction
+    from .. import TransactionVersioner
 
 
 class TransactionVerifier(ABC):
@@ -27,13 +28,16 @@ class TransactionVerifier(ABC):
 
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
-            raise RuntimeError(f"tx hash {tx.hash.hex()} is already exist in blockcahin.")
+            raise RuntimeError(f"tx({tx})\n"
+                               f"hash {tx.hash.hex()} already exists in blockchain.")
 
     def verify_hash(self, tx: 'Transaction'):
         params = self._tx_serializer.to_origin_data(tx)
         tx_hash_expected = self._hash_generator.generate_hash(params)
         if tx_hash_expected != tx.hash:
-            raise RuntimeError(f"tx hash {tx.hash.hex()}, expected {Hash32(tx_hash_expected).hex()}")
+            raise RuntimeError(f"tx({tx})\n"
+                               f"hash {tx.hash.hex()}\n"
+                               f"expected {Hash32(tx_hash_expected).hex()}")
 
     def verify_signature(self, tx: 'Transaction'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -48,12 +52,14 @@ class TransactionVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != tx.from_address:
-            raise RuntimeError(f"tx from address {tx.from_address.hex_xx()}, "
+            raise RuntimeError(f"tx({tx})\n"
+                               f"from address {tx.from_address.hex_xx()}\n"
                                f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     @classmethod
-    def new(cls, version: str, hash_generator_version: int):
+    def new(cls, version: str, versioner: 'TransactionVersioner'):
         from . import genesis, v2, v3
+        hash_generator_version = versioner.get_hash_generator_version(version)
         if version == genesis.version:
             return genesis.TransactionVerifier(hash_generator_version)
         elif version == v2.version:

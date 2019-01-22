@@ -255,13 +255,13 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                 ObjectManager().rs_service.channel_manager.\
                     set_peer_manager(channel_name, peer_manager)
 
-        util.logger.spam(f"after load peer_manager "
-                         f"peer_count({peer_manager.get_peer_count()})")
+            util.logger.spam(f"after load peer_manager "
+                            f"peer_count({peer_manager.get_peer_count()})")
 
-        peer_order = peer_manager.add_peer(peer)
+            peer_order = peer_manager.add_peer(peer)
 
-        peer_list_dump = b''
-        status, reason = message_code.get_response(message_code.Response.fail)
+            peer_list_dump = b''
+            status, reason = message_code.get_response(message_code.Response.fail)
 
         if peer_order > 0:
             try:

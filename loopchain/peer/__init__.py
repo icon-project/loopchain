@@ -14,7 +14,6 @@
 """Package for objects which are related with Peer"""
 
 from .status_code import *
-from .vote import *
 from .block_manager import *
 from .peer_inner_service import *
 from .peer_outer_service import *

@@ -14,7 +14,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import argparse
 import json
 import logging
@@ -24,12 +23,11 @@ from urllib.parse import urlparse, ParseResult
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
-from loopchain.rest_server.rest_server import ServerComponents, PeerServiceStub
 from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
 from loopchain.scoreservice import ScoreService
-from loopchain.channel.channel_service import ChannelService
 from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async
 
@@ -42,6 +40,13 @@ def main(argv):
 
     args = parser.parse_args(argv)
     command_arguments.set_raw_commands(args)
+
+    if args.radio_station_target == 'testnet':
+        args.radio_station_target = conf.URL_CITIZEN_TESTNET
+        args.configure_file_path = conf.CONF_PATH_LOOPCHAIN_TESTNET
+    elif args.radio_station_target == 'mainnet':
+        args.radio_station_target = conf.URL_CITIZEN_MAINNET
+        args.configure_file_path = conf.CONF_PATH_LOOPCHAIN_MAINNET
 
     if args.configure_file_path:
         conf.Configure().load_configure_json(args.configure_file_path)
@@ -102,20 +107,24 @@ def start_as_rest_server(args):
     channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(peer_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
+    conf_path = conf.CONF_PATH_ICONRPCSERVER_DEV
+
+    if args.radio_station_target:
+        if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
+            conf_path = conf.CONF_PATH_ICONRPCSERVER_TESTNET
+        elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
+            conf_path = conf.CONF_PATH_ICONRPCSERVER_MAINNET
 
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
     from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
     from iconcommons.icon_config import IconConfig
     from iconcommons.logger import Logger
 
+    with open(conf_path) as file:
+        load_conf = json.load(file)
+
     additional_conf = {
-        "log": {
-            "logger": "iconrpcserver",
-            "colorLog": True,
-            "level": "info",
-            "filePath": "./log/iconrpcserver.log",
-            "outputType": "console|file"
-        },
+        "log": load_conf.get("log"),
         "channel": channel,
         "port": api_port,
         "amqpKey": amqp_key,
@@ -150,15 +159,22 @@ def start_as_score(args):
     score_package = args.score_package or conf.DEFAULT_SCORE_PACKAGE
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
+    conf_path = conf.CONF_PATH_ICONSERVICE_DEV
 
-    if util.channel_use_icx(channel) and conf.USE_EXTERNAL_SCORE:
+    if args.radio_station_target:
+        if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
+            conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
+        elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
+            conf_path = conf.CONF_PATH_ICONSERVICE_MAINNET
+
+    if conf.USE_EXTERNAL_SCORE:
         if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
             from iconservice.icon_service import IconService
             from iconservice.icon_config import default_icon_config
             from iconcommons.icon_config import IconConfig
             from iconcommons.logger import Logger
 
-            with open(conf.DEFAULT_SCORE_CONF_PATH) as file:
+            with open(conf_path) as file:
                 load_conf = json.load(file)
 
             additional_conf = {

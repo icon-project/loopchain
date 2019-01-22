@@ -99,7 +99,8 @@ class Container(CommonProcess, MonitorAdapter):
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
                 command_arguments.Type.Develop,
-                command_arguments.Type.ConfigurationFilePath
+                command_arguments.Type.ConfigurationFilePath,
+                command_arguments.Type.RadioStationTarget
             )
             server = CommonSubprocess(args)
             api_port = self._port + conf.PORT_DIFF_REST_SERVICE_CONTAINER

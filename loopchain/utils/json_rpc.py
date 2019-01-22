@@ -119,10 +119,7 @@ async def get_block_by_params(block_height=None, block_hash="", with_commit_stat
     channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
     block_data_filter = "prev_block_hash, height, block_hash, merkle_tree_root_hash," \
                         " time_stamp, peer_id, signature"
-    if conf.CHANNEL_OPTION[channel_name]['send_tx_type'] == conf.SendTxType.icx:
-        tx_data_filter = "icx_origin_data"
-    else:
-        tx_data_filter = "tx_hash, timestamp, data_string, peer_id"
+    tx_data_filter = "icx_origin_data"
     channel_stub = StubCollection().channel_stubs[channel_name]
     response_code, block_hash, block_data_json, tx_data_json_list = \
         await channel_stub.async_task().get_block(

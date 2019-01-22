@@ -2,13 +2,12 @@ import hashlib
 
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from .. import Signature, ExternalAddress
+from .. import Signature, ExternalAddress, Hash32
 from ..hashing import build_hash_generator
 
 if TYPE_CHECKING:
     from secp256k1 import PrivateKey
-    from . import Transaction
-    from .. import Hash32
+    from . import Transaction, TransactionVersioner
 
 
 class TransactionBuilder(ABC):
@@ -24,26 +23,29 @@ class TransactionBuilder(ABC):
         self.from_address: 'ExternalAddress' = None
         self.hash: 'Hash32' = None
         self.signature: 'Signature' = None
+        self.origin_data: dict = None
+        self.raw_data: dict = None
 
     def reset_cache(self):
         self.from_address = None
         self.hash = None
         self.signature = None
+        self.origin_data = None
+        self.raw_data = None
 
     @abstractmethod
     def build(self) -> 'Transaction':
         raise NotImplementedError
 
     def build_hash(self):
-        if self.from_address is None:
-            raise RuntimeError(f"from_address is required. Run build_from_address.")
+        if self.origin_data is None:
+            raise RuntimeError(f"origin data is required. Run build_origin_data.")
 
         self.hash = self._build_hash()
         return self.hash
 
-    @abstractmethod
-    def _build_hash(self) -> 'Hash32':
-        raise NotImplementedError
+    def _build_hash(self):
+        return Hash32(self._hash_generator.generate_hash(self.origin_data))
 
     def build_from_address(self):
         if self.private_key is None:
@@ -56,6 +58,14 @@ class TransactionBuilder(ABC):
         serialized_pub = self.private_key.pubkey.serialize(compressed=False)
         hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
         return ExternalAddress(hashed_pub[-20:])
+
+    @abstractmethod
+    def build_raw_data(self) -> dict:
+        pass
+
+    @abstractmethod
+    def build_origin_data(self) -> dict:
+        pass
 
     def sign(self):
         if self.hash is None:
@@ -73,8 +83,9 @@ class TransactionBuilder(ABC):
         return Signature(signature)
 
     @classmethod
-    def new(cls, version: str, hash_generator_version: int):
+    def new(cls, version: str, versioner: 'TransactionVersioner'):
         from . import genesis, v2, v3
+        hash_generator_version = versioner.get_hash_generator_version(version)
         if version == genesis.version:
             return genesis.TransactionBuilder(hash_generator_version)
         elif version == v2.version:

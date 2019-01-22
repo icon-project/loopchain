@@ -54,7 +54,7 @@ LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_
 
 LOG_OUTPUT_TYPE = LogOutputType.console | LogOutputType.file
 
-LOG_FILE_LOCATION = "/var/tmp/"
+LOG_FILE_LOCATION = os.path.join(LOOPCHAIN_ROOT_PATH, 'log')
 LOG_FILE_PREFIX = "loopchain"
 LOG_FILE_EXTENSION = "log"
 
@@ -146,6 +146,7 @@ class ConsensusAlgorithm(IntEnum):
 
 # 블록 생성 간격, tx 가 없을 경우 다음 간격까지 건너 뛴다.
 INTERVAL_BLOCKGENERATION = 2
+INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK = INTERVAL_BLOCKGENERATION
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
 # default level db path
@@ -172,6 +173,7 @@ VOTING_RATIO = 0.66
 BLOCK_HEIGHT_BYTES_LEN = 12
 # Block vote timeout
 BLOCK_VOTE_TIMEOUT = 60 * 5  # seconds
+CANDIDATE_BLOCK_TIMEOUT = 60 * 60  # seconds
 # default storage path
 DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_ROOT_PATH, '.storage'))
 # max tx list size by address
@@ -200,7 +202,6 @@ DEFAULT_SCORE_STORAGE_PATH = os.getenv('DEFAULT_SCORE_STORAGE_PATH', os.path.joi
 DEFAULT_SCORE_PACKAGE = 'loopchain/default'
 DEFAULT_SCORE_BRANCH_MASTER = 'master'
 DEFAULT_SCORE_BRANCH = os.getenv('DEFAULT_SCORE_BRANCH', DEFAULT_SCORE_BRANCH_MASTER)
-DEFAULT_SCORE_CONF_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/iconservice_conf.json')
 
 # DEFAULT USER / PASSWORD
 DEFAULT_SCORE_BASE_USER = 'score'
@@ -326,7 +327,7 @@ TOKEN_INTERVAL = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
 TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT
 RADIO_STATION_NAME = "RadioStation"
-LOOPCHAIN_DEFAULT_CHANNEL = "loopchain_default"  # Default Channel Name
+LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
 CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = False  # if this option is true, peer only gets channel infos to which it belongs.
@@ -361,22 +362,34 @@ TOKEN_TYPE_SIGN = "02"
 ###############
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
+        "block_versions": {
+            "0.2": 0
+        },
+        "hash_versions": {
+            "genesis": 1,
+            "0x2": 1,
+            "0x3": 1
+        },
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "tx_hash_version": 1,
-        "genesis_tx_hash_version": 0,
         "key_load_type": KeyLoadType.FILE_LOAD,
         "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
         "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
         "private_password": b'test'
     },
     LOOPCHAIN_TEST_CHANNEL: {
+        "block_versions": {
+            "0.2": 0
+        },
+        "hash_versions": {
+            "genesis": 1,
+            "0x2": 1,
+            "0x3": 1
+        },
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "tx_hash_version": 1,
-        "genesis_tx_hash_version": 0,
         "key_load_type": KeyLoadType.FILE_LOAD,
         "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
         "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
@@ -414,3 +427,18 @@ SLEEP_SECONDS_FOR_INIT_COMMON_PROCESS = 0.5
 # LFT ####
 ####################
 ALLOW_MAKE_EMPTY_BLOCK = True
+
+
+####################
+# ICON ####
+####################
+URL_CITIZEN_TESTNET = 'https://int-test-ctz.solidwallet.io'
+URL_CITIZEN_MAINNET = 'https://int-ctz.solidwallet.io'
+CONF_PATH_LOOPCHAIN_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/loopchain_conf.json')
+CONF_PATH_LOOPCHAIN_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/loopchain_conf.json')
+CONF_PATH_ICONSERVICE_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconservice_conf.json')
+CONF_PATH_ICONSERVICE_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconservice_conf.json')
+CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconservice_conf.json')
+CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
+CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
+CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')

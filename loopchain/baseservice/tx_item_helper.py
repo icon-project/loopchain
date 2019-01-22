@@ -16,16 +16,12 @@
 import json
 import sys
 
-from loopchain.blockchain import Transaction, TransactionVersions, TransactionSerializer
+from loopchain.blockchain import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.protos import loopchain_pb2
 
 
-class TxItemJson:
-    tx_versions = TransactionVersions()
-    tx_serializers = {
-        "0x2": TransactionSerializer.new("0x2", tx_versions.get_hash_generator_version("0x2")),
-        "0x3": TransactionSerializer.new("0x3", tx_versions.get_hash_generator_version("0x3"))
-    }
+class TxItem:
+    tx_serializers = {}
 
     def __init__(self, tx_json: str, channel: str):
         self.channel = channel
@@ -42,12 +38,17 @@ class TxItemJson:
         return message
 
     @classmethod
-    def create_tx_item(cls, tx: Transaction, channel: str):
-        # util.logger.spam(f"tx_item_helper_icx:create_tx_item create_tx_param({create_tx_param})")
-        tx_serializer = cls.tx_serializers[tx.version]
-
-        tx_item = TxItemJson(
+    def create_tx_item(cls, tx_param: tuple, channel: str):
+        tx, tx_versioner = tx_param
+        tx_serializer = cls.get_serializer(tx, tx_versioner)
+        tx_item = TxItem(
             json.dumps(tx_serializer.to_raw_data(tx)),
             channel
         )
         return tx_item
+
+    @classmethod
+    def get_serializer(cls, tx: Transaction, tx_versioner: TransactionVersioner):
+        if tx.version not in cls.tx_serializers:
+            cls.tx_serializers[tx.version] = TransactionSerializer.new(tx.version, tx_versioner)
+        return cls.tx_serializers[tx.version]

@@ -1,30 +1,42 @@
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, _FIELD, _FIELDS
+from typing import TYPE_CHECKING
 from .. import Hash32, Signature
 
-length_attr_name = "_length"
+if TYPE_CHECKING:
+    from .. import TransactionVersioner
+
+_size_attr_name_ = "_size_attr_"
 
 
 @dataclass(frozen=True)
 class Transaction:
+    # TODO wrap `raw_data` to `MappingProxy`
+    raw_data: dict
+
     hash: Hash32
     signature: Signature
     timestamp: int
 
     version = ''
 
-    def __len__(self):
-        if not hasattr(self, length_attr_name):
-            from . import TransactionSerializer, TransactionVersions
+    def __str__(self):
+        fields = getattr(self, _FIELDS, None)
+        if fields is None:
+            return ""
 
-            tv = TransactionVersions()
-            hash_version = tv.get_hash_generator_version(self.version)
+        fields = [f for f in fields.values() if f._field_type is _FIELD]
+        fields_str = ', '.join(f"{f.name}={getattr(self, f.name)}" for f in fields)
+        return f"{self.__class__.__qualname__}({fields_str})"
 
-            ts = TransactionSerializer.new(self.version, hash_version)
-            tx_serialized = ts.to_raw_data(self)
+    def size(self, versioner: 'TransactionVersioner'):
+        from .. import TransactionSerializer
+
+        if not hasattr(self, _size_attr_name_):
+            ts = TransactionSerializer.new(self.version, versioner)
+            tx_serialized = ts.to_full_data(self)
             tx_serialized = json.dumps(tx_serialized)
             tx_serialized = tx_serialized.encode('utf-8')
+            object.__setattr__(self, _size_attr_name_, len(tx_serialized))
 
-            object.__setattr__(self, length_attr_name, len(tx_serialized))
-
-        return getattr(self, length_attr_name)
+        return getattr(self, _size_attr_name_)

@@ -30,7 +30,7 @@ import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
-from loopchain.blockchain import Transaction, TransactionBuilder, Address
+from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
 from loopchain.components import SingletonMetaClass
 from loopchain.peer import PeerService, IcxAuthorization
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
@@ -238,7 +238,7 @@ def create_basic_tx(peer_auth: IcxAuthorization) -> Transaction:
     :param peer_auth:
     :return: transaction
     """
-    tx_builder = TransactionBuilder.new("0x3", 1)
+    tx_builder = TransactionBuilder.new("0x3", TransactionVersioner())
     tx_builder.private_key = peer_auth.peer_private_key
     tx_builder.to_address = Address("hx3f376559204079671b6a8df481c976e7d51b3c7c")
     tx_builder.value = 1

@@ -191,7 +191,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
-        util.logger.spam(f"peer_outer_service:__status_update channel({channel}) result({future.result()})")
+        util.logger.spam(f"status_update channel({channel}) result({future.result()})")
         self.__status_cache_update_time[channel] = datetime.datetime.now()
         self.peer_service.status_cache[channel] = future.result()
 
@@ -252,10 +252,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         stubs = {
             "peer": StubCollection().peer_stub,
             "channel": StubCollection().channel_stubs.get(channel_name),
-            "score":
-                StubCollection().icon_score_stubs.get(channel_name)
-                if util.channel_use_icx(channel_name) else
-                StubCollection().score_stubs.get(channel_name)
+            "score": StubCollection().icon_score_stubs.get(channel_name)
         }
 
         mq_status_data = {}
@@ -286,6 +283,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             status=json.dumps(status_data),
             block_height=status_data["block_height"],
             total_tx=status_data["total_tx"],
+            unconfirmed_block_height=status_data["unconfirmed_block_height"],
             is_leader_complaining=status_data['leader_complaint'],
             peer_id=status_data['peer_id'])
 

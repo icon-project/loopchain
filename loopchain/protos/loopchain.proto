@@ -274,7 +274,7 @@ message BlockVote {
     required int32 vote_code = 1;  // has same values of response_code
     optional string channel = 2; // channel ID for multichain network
     required string message = 3;
-    required string block_hash = 4;
+    required bytes block_hash = 4;
     required string peer_id = 5;
     required string group_id = 6;
 }
@@ -333,8 +333,9 @@ message StatusReply {
     required string status = 1;
     required int32 block_height = 2;
     required int32 total_tx = 3;
-    optional int32 is_leader_complaining = 4;
-    optional string peer_id = 5;
+    optional int32 unconfirmed_block_height = 4;
+    optional int32 is_leader_complaining = 5;
+    optional string peer_id = 6;
 }
 
 

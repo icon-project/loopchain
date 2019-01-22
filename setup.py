@@ -8,6 +8,10 @@ with open('requirements.txt') as requirements:
 
 version = os.environ.get('VERSION')  # 1.21.5
 
+if version is None:
+    with open(os.path.join('.', 'VERSION')) as version_file:
+        version = version_file.read().strip()
+
 setup_options = {
     'name': 'loopchain',
     'version': version,

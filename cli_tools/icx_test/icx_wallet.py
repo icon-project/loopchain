@@ -21,8 +21,11 @@ class IcxWallet:
         self.__address = self.create_address(self.__private_key.pubkey)
         self.__last_tx_hash = ""
 
-        tx_hash_version = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["tx_hash_version"]
-        self.__hash_generator = build_hash_generator(tx_hash_version, "icx_sendTransaction")
+        tx_hash_versions = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["hash_versions"]
+        self.__hash_generators = {
+            "0x2": build_hash_generator(tx_hash_versions["0x2"], "icx_sendTransaction"),
+            "0x3": build_hash_generator(tx_hash_versions["0x3"], "icx_sendTransaction")
+        }
 
         self.to_address = None
         self.value = None
@@ -51,7 +54,7 @@ class IcxWallet:
         params["fee"] = hex(int(self.fee * ICX_FACTOR))
         params["timestamp"] = str(utils.get_now_time_stamp())
 
-        tx_hash = Hash32(self.__hash_generator.generate_hash(params))
+        tx_hash = Hash32(self.__hash_generators["0x2"].generate_hash(params))
         params["tx_hash"] = tx_hash.hex()
         params["signature"] = self.create_signature(tx_hash)
 
@@ -80,7 +83,7 @@ class IcxWallet:
             params["dataType"] = "message"
             params["data"] = self.message.encode('utf-8').hex()
 
-        hash_for_sign = self.__hash_generator.generate_hash(params)
+        hash_for_sign = self.__hash_generators["0x3"].generate_hash(params)
         params["signature"] = self.create_signature(hash_for_sign)
         if self.is_logging:
             logging.debug(f"icx_sendTransaction params for v3: {params}")

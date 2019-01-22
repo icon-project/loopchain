@@ -39,6 +39,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.sign()
 
         return Transaction(
+            raw_data=self.raw_data,
             hash=self.hash,
             signature=self.signature,
             timestamp=self._timestamp,
@@ -52,30 +53,38 @@ class TransactionBuilder(BaseTransactionBuilder):
             data=self.data
         )
 
-    def _build_hash(self):
+    def build_origin_data(self):
         if self.fixed_timestamp is None:
             self._timestamp = int(time.time() * 1_000_000)
         else:
             self._timestamp = self.fixed_timestamp
 
-        params = {
+        origin_data = {
             "version": "0x3",
             "from": self.from_address.hex_xx(),
             "to": self.to_address.hex_xx(),
-            "value": hex(int(self.value)),
             "stepLimit": hex(self.step_limit),
-            "timestamp": hex(int(self._timestamp)),
+            "timestamp": hex(self._timestamp),
             "nid": hex(self.nid)
         }
 
+        if self.value is not None:
+            origin_data["value"] = hex(self.value)
+
         if self.nonce is not None:
-            params["nonce"] = hex(self.nonce)
+            origin_data["nonce"] = hex(self.nonce)
 
         if self.data is not None and self.data_type is not None:
             if isinstance(self.data, str):
-                params["data"] = self.data.encode('utf-8').hex()
+                origin_data["data"] = self.data.encode('utf-8').hex()
             else:
-                params["data"] = self.data
-            params["dataType"] = self.data_type
+                origin_data["data"] = self.data
+            origin_data["dataType"] = self.data_type
+        self.origin_data = origin_data
+        return self.origin_data
 
-        return Hash32(self._hash_generator.generate_hash(params))
+    def build_raw_data(self):
+        raw_data = dict(self.raw_data)
+        raw_data["signature"] = self.signature.to_base64str()
+        self.raw_data = raw_data
+        return self.raw_data

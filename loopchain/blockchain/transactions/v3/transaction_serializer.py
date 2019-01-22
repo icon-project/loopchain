@@ -7,44 +7,27 @@ class TransactionSerializer(BaseTransactionSerializer):
     _hash_salt = HASH_SALT
 
     def to_origin_data(self, tx: 'Transaction'):
-        params = {
-            "version": Transaction.version,
-            "from": tx.from_address.hex_xx(),
-            "to": tx.to_address.hex_xx(),
-            "stepLimit": hex(tx.step_limit),
-            "timestamp": hex(tx.timestamp),
-            "nid": hex(tx.nid)
-        }
-
-        if tx.value is not None:
-            params["value"] = hex(tx.value)
-
-        if tx.nonce is not None:
-            params['nonce'] = hex(tx.nonce)
-
-        if tx.data is not None and tx.data_type is not None:
-            if isinstance(tx.data, str):
-                params["data"] = tx.data
-            else:
-                params["data"] = tx.data
-            params["dataType"] = tx.data_type
-        return params
+        origin_data = dict(tx.raw_data)
+        origin_data.pop("signature", None)
+        return origin_data
 
     def to_raw_data(self, tx: 'Transaction'):
-        params = self.to_origin_data(tx)
-        params['signature'] = tx.signature.to_base64str()
-        return params
+        return dict(tx.raw_data)
 
     def to_full_data(self, tx: 'Transaction'):
-        params = self.to_raw_data(tx)
-        params['txHash'] = tx.hash.hex()
-        return params
+        full_data = dict(tx.raw_data)
+        full_data['txHash'] = tx.hash.hex()
+        return full_data
+
+    def to_db_data(self, tx: 'Transaction'):
+        return dict(tx.raw_data)
 
     def from_(self, tx_data: dict) -> 'Transaction':
         tx_data_copied = dict(tx_data)
-        tx_data_copied.pop('signature', None)
         tx_data_copied.pop('txHash', None)
+        raw_data = dict(tx_data_copied)
 
+        tx_data_copied.pop('signature', None)
         tx_hash = self._hash_generator.generate_hash(tx_data_copied)
 
         nonce = tx_data.get('nonce')
@@ -56,11 +39,12 @@ class TransactionSerializer(BaseTransactionSerializer):
             value = int(value, 16)
 
         return Transaction(
+            raw_data=raw_data,
             hash=Hash32(tx_hash),
             signature=Signature.from_base64str(tx_data['signature']),
             timestamp=int(tx_data['timestamp'], 16),
-            from_address=Address.fromhex(tx_data['from']),
-            to_address=Address.fromhex(tx_data['to']),
+            from_address=Address.fromhex_address(tx_data['from']),
+            to_address=Address.fromhex_address(tx_data['to']),
             value=value,
             step_limit=int(tx_data['stepLimit'], 16),
             nonce=nonce,

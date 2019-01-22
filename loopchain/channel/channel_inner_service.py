@@ -23,9 +23,9 @@ from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, TimerService, ScoreResponse
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersions,
-                                  Block, BlockBuilder, BlockSerializer, blocks)
+from loopchain.baseservice import BroadcastCommand, ScoreResponse
+from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, Block, BlockBuilder,
+                                  BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Epoch, VoteMessage
@@ -114,15 +114,12 @@ class ChannelInnerTask:
 
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
-        if block_manager.get_blockchain().last_block is not None:
-            block_height = block_manager.get_blockchain().last_block.header.height
-            logging.debug("getstatus block hash(block_manager.get_blockchain().last_block.block_hash): "
-                          + str(block_manager.get_blockchain().last_block.header.hash.hex()))
-            logging.debug("getstatus block hash(block_manager.get_blockchain().block_height): "
-                          + str(block_manager.get_blockchain().block_height))
-            logging.debug("getstatus block height: " + str(block_height))
-            # Score와 상관없이 TransactionTx는 블럭매니저가 관리 합니다.
+        unconfirmed_block_height = None
+        last_block = block_manager.get_blockchain().last_block
+        if last_block:
+            block_height = last_block.header.height
             total_tx = block_manager.get_total_tx()
+            logging.debug(f"last_block height({block_height}), hash({last_block.header.hash})")
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
@@ -131,6 +128,7 @@ class ChannelInnerTask:
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
+        status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = total_tx
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
@@ -178,16 +176,16 @@ class ChannelInnerTask:
     async def create_icx_tx(self, kwargs: dict):
         result_code = None
         exception = None
+        tx = None
 
         try:
-            tv = TransactionVersions()
-            tx_version = tv.get_version(kwargs)
-            tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+            tx_version = tx_versioner.get_version(kwargs)
 
-            ts = TransactionSerializer.new(tx_version, tx_hash_version)
+            ts = TransactionSerializer.new(tx_version, tx_versioner)
             tx = ts.from_(kwargs)
 
-            tv = TransactionVerifier.new(tx_version, tx_hash_version)
+            tv = TransactionVerifier.new(tx_version, tx_versioner)
             tv.verify(tx)
 
             block_manager = self._channel_service.block_manager
@@ -195,32 +193,36 @@ class ChannelInnerTask:
 
             logging.debug(f"create icx input : {kwargs}")
 
-            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, tx)
+            self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, tx_versioner))
             return message_code.Response.success, tx.hash.hex()
 
         except TransactionInvalidError as e:
             result_code = e.message_code
             exception = e
+            traceback.print_exc()
         except BaseException as e:
             result_code = TransactionInvalidError.message_code
             exception = e
+            traceback.print_exc()
         finally:
             if exception:
-                logging.warning(f"create_icx_tx: tx restore fail for kwargs({kwargs}), {exception}")
+                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
+                                f"kwargs({kwargs})\n\n"
+                                f"tx({tx})\n\n"
+                                f"exception({exception})")
                 return result_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx(self, request) -> None:
         tx_json = request.tx_json
 
-        tv = TransactionVersions()
-        tx_version = tv.get_version(tx_json)
-        tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        tx_version = tx_versioner.get_version(tx_json)
 
-        ts = TransactionSerializer.new(tx_version, tx_hash_version)
+        ts = TransactionSerializer.new(tx_version, tx_versioner)
         tx = ts.from_(tx_json)
 
-        tv = TransactionVerifier.new(tx_version, tx_hash_version)
+        tv = TransactionVerifier.new(tx_version, tx_versioner)
         tv.verify(tx)
 
         object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
@@ -240,14 +242,13 @@ class ChannelInnerTask:
         for tx_item in request.tx_list:
             tx_json = json.loads(tx_item.tx_json)
 
-            tv = TransactionVersions()
-            tx_version = tv.get_version(tx_json)
-            tx_hash_version = self._channel_service.get_channel_option()["tx_hash_version"]
+            tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+            tx_version = tx_versioner.get_version(tx_json)
 
-            ts = TransactionSerializer.new(tx_version, tx_hash_version)
+            ts = TransactionSerializer.new(tx_version, tx_versioner)
             tx = ts.from_(tx_json)
 
-            tv = TransactionVerifier.new(tx_version, tx_hash_version)
+            tv = TransactionVerifier.new(tx_version, tx_versioner)
             tv.verify(tx)
 
             # util.logger.spam(f"channel_inner_service:add_tx tx({tx.get_data_string()})")
@@ -280,9 +281,13 @@ class ChannelInnerTask:
     def get_tx_info(self, tx_hash):
         tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
+            blockchain = self._channel_service.block_manager.get_blockchain()
+            tx_serializer = TransactionSerializer.new(tx.version, blockchain.tx_versioner)
+            tx_origin = tx_serializer.to_origin_data(tx)
+
             logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
             tx_info = dict()
-            tx_info["transaction"] = tx.icx_origin_data_v3
+            tx_info["transaction"] = tx_origin
             tx_info["tx_index"] = None
             tx_info["block_height"] = None
             tx_info["block_hash"] = None
@@ -302,7 +307,7 @@ class ChannelInnerTask:
         logging.debug(f"#block \n"
                       f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
                       f"height({unconfirmed_block.header.height})\n"
-                      f"hash({unconfirmed_block.header.hash})")
+                      f"hash({unconfirmed_block.header.hash.hex()})")
 
         self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
         self._channel_service.state_machine.vote()
@@ -319,8 +324,13 @@ class ChannelInnerTask:
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
         try:
-            bs = BlockSerializer.new("0.1a")
+            blockchain = self._channel_service.block_manager.get_blockchain()
             json_block = json.loads(serialized_block)
+
+            block_height = blockchain.block_versioner.get_height(json_block)
+            block_version = blockchain.block_versioner.get_version(block_height)
+            bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
+
             confirmed_block = bs.deserialize(json_block)
             util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
                              f"hash({confirmed_block.header.hash.hex()}) "
@@ -329,7 +339,7 @@ class ChannelInnerTask:
 
             header: blocks.v0_1a.BlockHeader = confirmed_block.header
             if not header.commit_state:
-                bb = BlockBuilder.from_new(confirmed_block)
+                bb = BlockBuilder.from_new(confirmed_block, blockchain.tx_versioner)
                 confirmed_block = bb.build()  # to generate commit_state
                 header = confirmed_block.header
             try:
@@ -421,26 +431,23 @@ class ChannelInnerTask:
         self._channel_service.peer_manager.remove_peer(peer_id, group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def vote_unconfirmed_block(self, peer_id, group_id, block_hash, vote_code) -> None:
+    def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
 
-        if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-            if self._channel_service.state_machine.state == "Vote":
-                # util.logger.warning(f"peer_outer_service:VoteUnconfirmedBlock "
-                #                     f"({ChannelProperty().name}) Not Leader Peer!")
-                return
+        util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 
-        logging.info("Peer vote to : " + block_hash + " " + str(vote_code) + f"from {peer_id}")
+        self._channel_service.block_manager.candidate_blocks.add_vote(
+            block_hash,
+            group_id,
+            peer_id,
+            (False, True)[vote_code == message_code.Response.success_validate_block]
+        )
 
         consensus = block_manager.consensus_algorithm
-        if isinstance(consensus, ConsensusSiever):
-            consensus.vote(
-                block_hash,
-                (False, True)[vote_code == message_code.Response.success_validate_block],
-                peer_id,
-                group_id)
+        if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+            consensus.count_votes(block_hash)
 
     @message_queue_task
     async def broadcast_vote(self, vote: VoteMessage):
@@ -495,7 +502,8 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        bs = BlockSerializer.new(block.header.version)
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_data_dict = bs.serialize(block)
 
         if block.header.height == 0:
@@ -504,15 +512,14 @@ class ChannelInnerTask:
         confirmed_tx_list = block_data_dict["confirmed_transaction_list"]
         confirmed_tx_list_without_fail = []
 
-        tv = TransactionVersions()
         tss = {
-            "genesis": TransactionSerializer.new("genesis", tv.get_hash_generator_version("genesis")),
-            "0x2": TransactionSerializer.new("0x2", tv.get_hash_generator_version("0x2")),
-            "0x3": TransactionSerializer.new("0x3", tv.get_hash_generator_version("0x3"))
+            "genesis": TransactionSerializer.new("genesis", tx_versioner),
+            "0x2": TransactionSerializer.new("0x2", tx_versioner),
+            "0x3": TransactionSerializer.new("0x3", tx_versioner)
         }
 
         for tx in confirmed_tx_list:
-            version = tv.get_version(tx)
+            version = tx_versioner.get_version(tx)
             tx_hash = tss[version].get_hash(tx)
 
             invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
@@ -520,7 +527,7 @@ class ChannelInnerTask:
             if 'failure' in invoke_result:
                 continue
 
-            if tv.get_version(tx) == "0x3":
+            if tx_versioner.get_version(tx) == "0x3":
                 step_used, step_price = int(invoke_result["stepUsed"], 16), int(invoke_result["stepPrice"], 16)
                 tx["fee"] = hex(step_used * step_price)
 
@@ -543,7 +550,8 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        bs = BlockSerializer.new(block.header.version)
+        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_dict = bs.serialize(block)
         return message_code.Response.success, block_hash, json.dumps(block_dict), []
 

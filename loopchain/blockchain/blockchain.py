@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
-import copy
 import json
 import leveldb
 import pickle
@@ -23,9 +21,9 @@ from enum import Enum
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVerifier,
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32)
+                                  Hash32, ExternalAddress, TransactionVersioner, Vote)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -42,25 +40,26 @@ class BlockChain:
     """Block chain with only committed blocks."""
 
     NID_KEY = b'NID_KEY'
-    UNCONFIRM_BLOCK_KEY = b'UNCONFIRM_BLOCK'
     PRECOMMIT_BLOCK_KEY = b'PRECOMMIT_BLOCK'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
+
+    # Additional information of the block is generated when the add_block phase of the consensus is reached.
+    BLOCK_INFO_KEY = b'block_info_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
     def __init__(self, blockchain_db=None, channel_name=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
-        self.__block_height = -1
-        self.__last_block = None
-        self.__save_tx_by_address_strategy = None
-        self.__channel_name = channel_name
-        self.__set_send_tx_type(conf.CHANNEL_OPTION[channel_name]["send_tx_type"])
 
-        self.__peer_id = None
-        if ObjectManager().peer_service is not None:
-            self.__peer_id = ObjectManager().peer_service.peer_id
+        self.__block_height = -1
+        # last block in block db
+        self.__last_block = None
+        # last unconfirmed block that the leader broadcast.
+        self.last_unconfirmed_block = None
+        self.__channel_name = channel_name
+        self.__peer_id = ChannelProperty().peer_id
 
         # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
         self.__confirmed_block_db = blockchain_db
@@ -73,7 +72,6 @@ class BlockChain:
                 raise leveldb.LevelDBError("Fail To Create Level DB(path): " + conf.DEFAULT_LEVEL_DB_PATH)
 
         # made block count as a leader
-        self.__made_block_count = 0
         self.__invoke_results = {}
 
         self.__add_block_lock = threading.RLock()
@@ -81,11 +79,15 @@ class BlockChain:
 
         self.__total_tx = 0
 
-    def __set_send_tx_type(self, send_tx_type):
-        if send_tx_type == conf.SendTxType.icx:
-            self.__save_tx_by_address_strategy = self.__save_tx_by_address
-        else:
-            self.__save_tx_by_address_strategy = self.__save_tx_by_address_pass
+        channel_option = conf.CHANNEL_OPTION[channel_name]
+
+        self.__block_versioner = BlockVersioner()
+        for version, height in channel_option.get("block_versions", {}).items():
+            self.__block_versioner.add_version(height, version)
+
+        self.__tx_versioner = TransactionVersioner()
+        for tx_version, tx_hash_version in channel_option.get("hash_versions", {}).items():
+            self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
     def close_blockchain_db(self):
         del self.__confirmed_block_db
@@ -101,23 +103,15 @@ class BlockChain:
 
     @property
     def last_block(self) -> Block:
-        try:
-            logging.debug(f"ENGINE-303 blockchain last_block: "
-                          f"{self.__last_block.header.height}, "
-                          f"{self.__last_block.header.hash.hex()}")
-        except:
-            pass
         return self.__last_block
 
     @property
-    def made_block_count(self):
-        return self.__made_block_count
+    def block_versioner(self):
+        return self.__block_versioner
 
-    def increase_made_block_count(self):
-        self.__made_block_count += 1
-
-    def reset_made_block_count(self):
-        self.__made_block_count = 0
+    @property
+    def tx_versioner(self):
+        return self.__tx_versioner
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -147,15 +141,20 @@ class BlockChain:
     def _rebuild_transaction_count_from_blocks(self):
         total_tx = 0
         block_hash = self.__last_block.header.hash.hex()
-        block_serializer = BlockSerializer.new("0.1a")
+        block_height = self.__last_block.header.height
+
         while block_hash != "":
             block_dump = self.__confirmed_block_db.Get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
             # Count only normal block`s tx count, not genesis block`s
             if block.header.height > 0:
                 total_tx += len(block.body.transactions)
 
+            # next loop
+            block_height = block.header.height - 1
             block_hash = block.header.prev_hash.hex()
         return total_tx
 
@@ -167,7 +166,9 @@ class BlockChain:
         try:
             block_bytes = self.__confirmed_block_db.Get(key)
             block_dumped = json.loads(block_bytes)
-            return BlockSerializer.new("0.1a").deserialize(block_dumped)
+            block_height = self.__block_versioner.get_height(block_dumped)
+            block_version = self.__block_versioner.get_version(block_height)
+            return BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dumped)
         except KeyError as e:
             logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
@@ -196,21 +197,31 @@ class BlockChain:
             key = self.__confirmed_block_db.Get(BlockChain.BLOCK_HEIGHT_KEY +
                                                 block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
         except KeyError:
+            if self.last_unconfirmed_block:
+                if self.last_unconfirmed_block.header.height == block_height:
+                    return self.last_unconfirmed_block
             return None
 
         return self.__find_block_by_key(key)
 
-    def add_block(self, block: Block) -> bool:
+    # TODO The current Citizen node sync by announce_confirmed_block message.
+    #  However, this message does not include voting.
+    #  You need to change it and remove the default None parameter here.
+    def add_block(self, block: Block, vote: Vote = None) -> bool:
+        """
+
+        :param block:
+        :param vote: additional info for this block, but It came from next block.
+        :return:
+        """
         with self.__add_block_lock:
-            if not self.__prevent_next_block_mismatch(block):
+            if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            return self.__add_block(block)
+            return self.__add_block(block, vote)
 
-    def __add_block(self, block: Block):
+    def __add_block(self, block: Block, vote: Vote = None):
         with self.__add_block_lock:
-            need_to_commit = True
-
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
                 if block.header.height == 0:
@@ -219,9 +230,8 @@ class BlockChain:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                if need_to_commit:
-                    self.__add_tx_to_block_db(block, invoke_results)
-                    ObjectManager().channel_service.score_write_precommit_state(block)
+                self.__add_tx_to_block_db(block, invoke_results)
+                ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
                 logging.warning(f"blockchain:add_block FAIL "
                                 f"channel_service.score_write_precommit_state")
@@ -229,28 +239,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash, None)
 
-            # a condition for the exception case of genesis block.
-            next_total_tx = self.__total_tx
-            if block.header.height > 0:
-                next_total_tx += len(block.body.transactions)
-
-            bit_length = next_total_tx.bit_length()
-            byte_length = (bit_length + 7) // 8
-            next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
-
-            block_serializer = BlockSerializer.new("0.1a")
-            block_serialized = json.dumps(block_serializer.serialize(block))
-            block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
-
-            batch = leveldb.WriteBatch()
-            batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
-            batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
-            batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-            batch.Put(
-                BlockChain.BLOCK_HEIGHT_KEY +
-                block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-                block_hash_encoded)
-            self.__confirmed_block_db.Write(batch)
+            next_total_tx = self.__write_block_data(block, vote)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -261,6 +250,7 @@ class BlockChain:
                 f"ADD BLOCK HEIGHT : {block.header.height} , "
                 f"HASH : {block.header.hash.hex()} , "
                 f"CHANNEL : {self.__channel_name}")
+            logging.debug(f"ADDED BLOCK HEADER : {block.header}")
 
             util.apm_event(self.__peer_id, {
                 'event_type': 'AddBlock',
@@ -276,7 +266,41 @@ class BlockChain:
 
             return True
 
-    def __prevent_next_block_mismatch(self, next_block: Block) -> bool:
+    def __write_block_data(self, block: Block, vote: Vote = None):
+        # a condition for the exception case of genesis block.
+        next_total_tx = self.__total_tx
+        if block.header.height > 0:
+            next_total_tx += len(block.body.transactions)
+
+        bit_length = next_total_tx.bit_length()
+        byte_length = (bit_length + 7) // 8
+        next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
+
+        block_version = self.__block_versioner.get_version(block.header.height)
+        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serialized = json.dumps(block_serializer.serialize(block))
+        block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+
+        batch = leveldb.WriteBatch()
+        batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
+        batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
+        batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
+        batch.Put(
+            BlockChain.BLOCK_HEIGHT_KEY +
+            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+            block_hash_encoded)
+
+        if vote:
+            batch.Put(
+                BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
+                Vote.save_to(vote)
+            )
+
+        self.__confirmed_block_db.Write(batch)
+
+        return next_total_tx
+
+    def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
         score_stub = StubCollection().icon_score_stubs[self.__channel_name]
         request = {
@@ -287,35 +311,38 @@ class BlockChain:
         response = score_stub.sync_task().query(request)
         score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
 
-        if score_last_block_height == next_block.header.height:
+        if score_last_block_height == next_height:
             logging.debug(f"already invoked block in score...")
             return False
 
-        if score_last_block_height < next_block.header.height:
-            for invoke_block_height in range(score_last_block_height + 1, next_block.header.height):
+        if score_last_block_height < next_height:
+            for invoke_block_height in range(score_last_block_height + 1, next_height):
                 logging.debug(f"mismatch invoke_block_height({invoke_block_height}) "
                               f"score_last_block_height({score_last_block_height}) "
-                              f"next_block_height({next_block.header.height})")
+                              f"next_block_height({next_height})")
 
                 invoke_block = self.find_block_by_height(invoke_block_height)
                 if invoke_block is None:
                     raise RuntimeError("Error raised during prevent mismatch block, "
                                        f"Cannot find block({invoke_block_height}")
 
-                invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
+                if invoke_block_height == 0:
+                    invoke_block, invoke_block_result = ObjectManager().channel_service.genesis_invoke(invoke_block)
+                else:
+                    invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
 
                 self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
 
-        if score_last_block_height == next_block.header.height + 1:
+        if score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
                     self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
-                if invoke_result_block_height == next_block.header.height:
+                if invoke_result_block_height == next_height:
                     logging.debug(f"already saved invoke result...")
                     return False
             except KeyError:
@@ -323,7 +350,7 @@ class BlockChain:
         else:
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
-                              f"loopchain({next_block.header.height})/score({score_last_block_height})")
+                              f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
     def __add_tx_to_block_db(self, block, invoke_results):
@@ -339,17 +366,16 @@ class BlockChain:
         # util.logger.spam(
         #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
 
-        tx_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["tx_hash_version"]
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
             invoke_result = invoke_results[tx_hash]
 
-            tx_serializer = TransactionSerializer.new(tx.version, tx_hash_version)
+            tx_serializer = TransactionSerializer.new(tx.version, self.__tx_versioner)
             tx_info = {
                 'block_hash': block.header.hash.hex(),
                 'block_height': block.header.height,
                 'tx_index': hex(index),
-                'transaction': tx_serializer.to_raw_data(tx),
+                'transaction': tx_serializer.to_db_data(tx),
                 'result': invoke_result
             }
 
@@ -367,7 +393,7 @@ class BlockChain:
             # util.logger.spam(f"pop tx from queue:{tx_hash}")
 
             if block.header.height > 0:
-                self.__save_tx_by_address_strategy(tx)
+                self.__save_tx_by_address(tx)
 
         self.__save_invoke_result_block_height(block.header.height)
 
@@ -402,9 +428,6 @@ class BlockChain:
     def __save_tx_by_address(self, tx: 'Transaction'):
         address = tx.from_address.hex_hx()
         return self.add_tx_to_list_by_address(address, tx.hash.hex())
-
-    def __save_tx_by_address_pass(self, tx):
-        return True
 
     @staticmethod
     def __get_tx_list_key(address, index):
@@ -449,41 +472,27 @@ class BlockChain:
         return True
 
     def find_tx_by_key(self, tx_hash_key):
-        """tx 의 hash 로 저장된 tx 를 구한다.
+        """find tx by hash
 
-        :param tx_hash_key: tx 의 tx_hash
-        :return tx_hash_key 에 해당하는 transaction, 예외인 경우 None 을 리턴한다.
+        :param tx_hash_key: tx hash
+        :return None: There is no tx by hash or transaction object.
         """
-        # levle db 에서 tx 가 저장된 block 의 hash 를 구한다.
+
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # Client 의 잘못된 요청이 있을 수 있으므로 Warning 처리후 None 을 리턴한다.
-            # 시스템 Error 로 처리하지 않는다.
+            # This case is not an error.
+            # Client send wrong tx_hash..
             # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
             return None
-        block_key = tx_info_json['block_hash']
-        logging.debug("block_key: " + str(block_key))
 
-        # block 의 hash 로 block object 를 구한다.
-        block = self.find_block_by_hash(block_key)
-        logging.debug("block: " + block.header.hash)
-        if block is None:
-            logging.error("There is No Block, block_hash: " + block.block_hash)
-            return None
-
-        # block object 에서 저장된 tx 를 구한다.
-        tx = block.find_tx_by_hash(tx_hash_key)
-        if not tx:
-            logging.error(f"block.find_tx_by_hash tx_hash error({tx_hash_key})")
-            return None
-
-        logging.debug("find tx: " + tx.tx_hash)
-
-        return tx
+        tx_data = tx_info_json["transaction"]
+        tx_version = self.tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
+        return tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
@@ -516,10 +525,10 @@ class BlockChain:
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
-            logging.warning("blockchain::find_tx_by_key: UnicodeDecodeError: " + str(e))
+            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
         # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_by_key: not found tx: " + str(e))
+        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
         #     return None
 
         return tx_info_json
@@ -530,8 +539,7 @@ class BlockChain:
         :return:
         """
         logging.info("Make Genesis Block....")
-        genesis_hash_version = conf.CHANNEL_OPTION[self.__channel_name]["genesis_tx_hash_version"]
-        tx_builder = TransactionBuilder.new("genesis", genesis_hash_version)
+        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner)
 
         nid = tx_info.get("nid")
         if nid is not None:
@@ -541,10 +549,12 @@ class BlockChain:
         tx_builder.message = tx_info["message"]
         tx = tx_builder.build()
 
-        block_builder = BlockBuilder.new("0.1a")
+        block_version = self.block_versioner.get_version(0)
+        block_builder = BlockBuilder.new(block_version, self.tx_versioner)
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None
+        block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
         block_builder.transactions[tx.hash] = tx
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
@@ -552,29 +562,15 @@ class BlockChain:
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
 
-    def __put_block_to_db(self, block_key, block):
-        self.__confirmed_block_db.Put(block_key, pickle.dumps(block))
-
-    def add_unconfirm_block(self, unconfirmed_block):
-        """인증되지 않은 Unconfirm블럭을 추가 합니다.
-
-        :param unconfirmed_block: 인증되지 않은 Unconfirm블럭
-        :return:인증값 : True 인증 , False 미인증
-        """
-        logging.debug(
-            f"blockchain:add_unconfirmed_block ({self.__channel_name}), hash ({unconfirmed_block.header.hash.hex()})")
-
-        self.__put_block_to_db(BlockChain.UNCONFIRM_BLOCK_KEY, unconfirmed_block)
-
     def put_precommit_block(self, precommit_block: Block):
         # write precommit block to DB
         logging.debug(
             f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
-        if self.__last_block.header.height < precommit_block.header.header.height:
+        if self.__last_block.header.height < precommit_block.header.height:
             self.__precommit_tx(precommit_block)
             util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 
-            block_serializer = BlockSerializer.new("0.1a")
+            block_serializer = BlockSerializer.new(precommit_block.header.version, self.tx_versioner)
             block_serialized = block_serializer.serialize(precommit_block)
             block_serialized = json.dumps(block_serialized)
             block_serialized = block_serialized.encode('utf-8')
@@ -607,41 +603,49 @@ class BlockChain:
 
         return results
 
-    def confirm_block(self, confirmed_block_hash):
-        """인증완료후 Block을 Confirm해 줍니다.
+    def confirm_prev_block(self, current_block: Block):
+        """confirm prev unconfirmed block by votes in current block
 
-        :param confirmed_block_hash: 인증된 블럭의 hash
+        :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
+        # util.logger.debug(f"-------------------confirm_prev_block---current_block is "
+        #                    f"tx count({len(current_block.body.transactions)}), "
+        #                    f"height({current_block.header.height})")
+
+        candidate_blocks = ObjectManager().channel_service.block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
             try:
-                # Save and Get Unconfirmed block using pickle for unserialized info(commit_state)
-                # unconfirmed_block_byte = self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY)
-                unconfirmed_block = pickle.loads(self.__confirmed_block_db.Get(BlockChain.UNCONFIRM_BLOCK_KEY))
-                logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
-                logging.debug("confirmed_block_hash: " + confirmed_block_hash)
-                logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
+                logging.debug("confirmed_block_hash: " + current_block.header.prev_hash.hex())
+                if unconfirmed_block:
+                    logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
+                    logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                else:
+                    logging.warning("There is no unconfirmed_block in candidate_blocks")
+                    return
 
             except KeyError:
-                if self.last_block.header.hash == confirmed_block_hash:
-                    logging.warning(f"Already added block hash({confirmed_block_hash})")
+                if self.last_block.header.hash == current_block.header.prev_hash:
+                    logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     return
                 else:
-                    except_msg = f"there is no unconfirmed block in this peer block_hash({confirmed_block_hash})"
+                    except_msg = ("there is no unconfirmed block in this peer "
+                                  f"block_hash({current_block.header.prev_hash.hex()})")
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 
-            # unconfirmed_block = Block(channel_name=self.__channel_name)
-            # unconfirmed_block.deserialize_block(unconfirmed_block_byte)
-
-            if unconfirmed_block.header.hash.hex() != confirmed_block_hash:
+            if unconfirmed_block.header.hash != current_block.header.prev_hash:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
+            # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
+            #                    f"height({unconfirmed_block.header.height})")
             self.add_block(unconfirmed_block)
-            self.__confirmed_block_db.Delete(BlockChain.UNCONFIRM_BLOCK_KEY)
+            self.last_unconfirmed_block = current_block
+            candidate_blocks.remove_block(current_block.header.prev_hash)
 
             return unconfirmed_block
 
@@ -655,7 +659,10 @@ class BlockChain:
 
         if last_block_key:
             block_dump = self.__confirmed_block_db.Get(last_block_key)
-            self.__last_block = BlockSerializer.new("0.1a").deserialize(json.loads(block_dump))
+            block_dump = json.loads(block_dump)
+            block_height = self.__block_versioner.get_height(block_dump)
+            block_version = self.__block_versioner.get_version(block_height)
+            self.__last_block = BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dump)
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")

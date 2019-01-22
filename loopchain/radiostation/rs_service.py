@@ -18,6 +18,7 @@ import multiprocessing
 import random
 import signal
 import timeit
+import time
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -170,6 +171,10 @@ class RadioStationService:
         stopwatch_start = timeit.default_timer()
 
         self.__channel_manager = ChannelManager(self.__common_service)
+    
+        # TODO: Currently, some environments are failing to execute RestServiceRS without this sleep.
+        # This sleep fixes current node's issue but we need to fix it right way by investigating.
+        time.sleep(1)
 
         if conf.ENABLE_REST_SERVICE:
             self.__rest_service = RestServiceRS(int(port))

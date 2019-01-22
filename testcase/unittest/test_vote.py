@@ -15,15 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Vote Object"""
-
 import logging
 import unittest
-import loopchain.utils as util
+
 import testcase.unittest.test_util as test_util
-from loopchain.peer import Vote
-from loopchain.baseservice import PeerManager, PeerInfo
-from loopchain.protos import loopchain_pb2
 from loopchain import configure as conf
+from loopchain.baseservice import PeerManager, PeerInfo
+from loopchain.blockchain import Vote
+from loopchain.protos import loopchain_pb2
 from loopchain.tools.signature_helper import PublicVerifier
 from loopchain.utils import loggers
 
