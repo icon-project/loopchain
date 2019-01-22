@@ -24,7 +24,8 @@ from earlgrey import MessageQueueService
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
+from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
@@ -316,13 +317,14 @@ class ChannelService:
     #     self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
-        scheduler = BroadcastScheduler(channel=ChannelProperty().name, self_target=ChannelProperty().peer_target)
+        scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
+                                                  self_target=ChannelProperty().peer_target)
         scheduler.start()
 
         self.__broadcast_scheduler = scheduler
 
-        future = scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target)
-        future.result(conf.TIMEOUT_FOR_FUTURE)
+        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
+                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):

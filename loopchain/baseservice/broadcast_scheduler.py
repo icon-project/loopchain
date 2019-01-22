@@ -17,7 +17,11 @@ import logging
 import pickle
 import queue
 import threading
+import signal
+import abc
 import time
+import os
+import multiprocessing as mp
 from concurrent import futures
 from enum import Enum
 from functools import partial
@@ -30,6 +34,7 @@ from loopchain.baseservice import StubManager, PeerManager, ObjectManager, Commo
     TimerService, Timer
 from loopchain.baseservice.tx_item_helper import *
 from loopchain.protos import loopchain_pb2_grpc
+from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
 class PeerThreadStatus(Enum):
@@ -37,7 +42,7 @@ class PeerThreadStatus(Enum):
     leader_complained = 1
 
 
-class BroadcastScheduler(CommonThread):
+class _Broadcaster:
     """broadcast class for each channel"""
 
     THREAD_INFO_KEY = "thread_info"
@@ -47,9 +52,7 @@ class BroadcastScheduler(CommonThread):
     SELF_PEER_TARGET_KEY = "self_peer_target"
     LEADER_PEER_TARGET_KEY = "leader_peer_target"
 
-    def __init__(self, channel="", self_target=""):
-        super().__init__()
-
+    def __init__(self, channel: str, self_target: str=None):
         self.__channel = channel
         self.__self_target = self_target
 
@@ -80,101 +83,23 @@ class BroadcastScheduler(CommonThread):
 
         self.stored_tx = queue.Queue()
 
-        self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
-        self.__broadcast_queue = queue.PriorityQueue()
-
         self.__timer_service = TimerService()
 
-        self.__schedule_listeners = dict()
+    @property
+    def is_running(self):
+        return self.__timer_service.is_run()
+
+    def start(self):
+        self.__timer_service.start()
 
     def stop(self):
-        super().stop()
-        self.__broadcast_queue.put((None, None, None, None))
-        self.__broadcast_pool.shutdown(False)
         if self.__timer_service.is_run():
             self.__timer_service.stop()
             self.__timer_service.wait()
 
-    def run(self, event: threading.Event):
-        event.set()
-        self.__timer_service.start()
-
-        def _callback(curr_future: futures.Future, executor_future: futures.Future):
-            if executor_future.exception():
-                curr_future.set_exception(executor_future.exception())
-                logging.error(executor_future.exception())
-            else:
-                curr_future.set_result(executor_future.result())
-
-        while self.is_run():
-            priority, command, params, future = self.__broadcast_queue.get()
-            if command is None:
-                break
-
-            func = self.__handler_map[command]
-            return_future = self.__broadcast_pool.submit(func, params)
-            return_future.add_done_callback(partial(_callback, future))
-
-    def add_schedule_listener(self, callback, commands=None):
-        if commands is None:
-            commands = self.__handler_map.keys()
-        for cmd in commands:
-            callbacks = self.__schedule_listeners.get(cmd)
-            if callbacks is None:
-                callbacks = []
-                self.__schedule_listeners[cmd] = callbacks
-            elif callback in callbacks:
-                raise ValueError("callback is already in callbacks")
-            callbacks.append(callback)
-
-    def remove_schedule_listener(self, callback):
-        removed = False
-        for cmd in list(self.__schedule_listeners):
-            callbacks = self.__schedule_listeners[cmd]
-            try:
-                callbacks.remove(callback)
-                removed = True
-                if len(callbacks):
-                    del self.__schedule_listeners[cmd]
-            except ValueError:
-                pass
-        if not removed:
-            raise ValueError("callback is not in overserver callbacks")
-
-    def __perform_schedule_listener(self, command, params):
-        callbacks = self.__schedule_listeners.get(command)
-        if callbacks:
-            for cb in callbacks:
-                cb(command, params)
-
-    def schedule_job(self, command, params):
-        if command == BroadcastCommand.CREATE_TX:
-            priority = (10, time.time())
-        elif isinstance(params, tuple) and params[0] == "AddTx":
-            priority = (10, time.time())
-        else:
-            priority = (0, time.time())
-
-        future = futures.Future()
-        self.__broadcast_queue.put((priority, command, params, future))
-        util.logger.spam(f"broadcast_scheduler:schedule_job qsize({self.__broadcast_queue.qsize()})")
-        self.__perform_schedule_listener(command, params)
-        return future
-
-    def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
-        """등록된 모든 Peer 의 동일한 gRPC method 를 같은 파라미터로 호출한다.
-        """
-        # logging.warning("broadcast in process ==========================")
-        # logging.debug("pickle method_param: " + str(pickle.dumps(method_param)))
-
-        kwargs = {}
-        if retry_times is not None:
-            kwargs['retry_times'] = retry_times
-
-        if timeout is not None:
-            kwargs['timeout'] = timeout
-
-        self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+    def handle_command(self, command, params):
+        func = self.__handler_map[command]
+        func(params)
 
     def __keep_grpc_connection(self, result, timeout, stub_manager: StubManager):
         return isinstance(result, _Rendezvous) \
@@ -191,7 +116,7 @@ class BroadcastScheduler(CommonThread):
         if retry_times > 0:
             try:
                 stub_manager: StubManager = self.__audience[peer_target]
-                if not stub_manager:
+                if stub_manager is None:
                     logging.warning(f"broadcast_thread:__broadcast_retry_async Failed to connect to ({peer_target}).")
                     return
                 retry_times -= 1
@@ -214,8 +139,8 @@ class BroadcastScheduler(CommonThread):
 
     def __call_async_to_target(self, peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout):
         try:
-            stub_item: StubManager = self.__audience[peer_target]
-            if not stub_item:
+            stub_manager: StubManager = self.__audience[peer_target]
+            if stub_manager is None:
                 logging.debug(f"broadcast_thread:__call_async_to_target Failed to connect to ({peer_target}).")
                 return
             call_back_partial = partial(self.__broadcast_retry_async,
@@ -224,12 +149,12 @@ class BroadcastScheduler(CommonThread):
                                         method_param,
                                         retry_times,
                                         timeout,
-                                        stub_item.stub)
-            stub_item.call_async(method_name=method_name,
-                                 message=method_param,
-                                 is_stub_reuse=is_stub_reuse,
-                                 call_back=call_back_partial,
-                                 timeout=timeout)
+                                        stub_manager.stub)
+            stub_manager.call_async(method_name=method_name,
+                                    message=method_param,
+                                    is_stub_reuse=is_stub_reuse,
+                                    call_back=call_back_partial,
+                                    timeout=timeout)
         except KeyError as e:
             logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
 
@@ -264,18 +189,21 @@ class BroadcastScheduler(CommonThread):
         retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
 
         for target in self.__get_broadcast_targets(method_name):
-            if target in self.__audience.keys():
-                stub_item = self.__audience[target]
+            try:
+                stub_manager: StubManager = self.__audience[target]
+                if stub_manager is None:
+                    logging.debug(f"broadcast_thread:__broadcast_run_sync Failed to connect to ({target}).")
+                    continue
 
-            response = stub_item.call_in_times(
-                method_name=method_name,
-                message=method_param,
-                timeout=timeout,
-                retry_times=retry_times)
-
-            if response is None:
-                logging.warning(f"broadcast_thread:__broadcast_run_sync fail ({method_name}) "
-                                f"target({target}) ")
+                response = stub_manager.call_in_times(method_name=method_name,
+                                                      message=method_param,
+                                                      timeout=timeout,
+                                                      retry_times=retry_times)
+                if response is None:
+                    logging.warning(f"broadcast_thread:__broadcast_run_sync fail ({method_name}) "
+                                    f"target({target}) ")
+            except KeyError as e:
+                logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_subscribe(self, audience_target):
         logging.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
@@ -415,6 +343,213 @@ class BroadcastScheduler(CommonThread):
         if ObjectManager().rs_service:
             return peer_targets
         else:
-            if method_name not in self.__broadcast_with_self_target_methods:
+            if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
                 peer_targets.remove(self.__self_target)
             return peer_targets
+
+
+class BroadcastScheduler(metaclass=abc.ABCMeta):
+    def __init__(self):
+        self.__schedule_listeners = dict()
+
+    @abc.abstractmethod
+    def start(self):
+        raise NotImplementedError("start function is interface method")
+
+    @abc.abstractmethod
+    def stop(self):
+        raise NotImplementedError("stop function is interface method")
+
+    @abc.abstractmethod
+    def wait(self):
+        raise NotImplementedError("stop function is interface method")
+
+    @abc.abstractmethod
+    def _put_command(self, command, params, block=False, block_timeout=None):
+        raise NotImplementedError("_put_command function is interface method")
+
+    def add_schedule_listener(self, callback, commands: tuple):
+        if not commands:
+            raise ValueError("commands parameter is required")
+
+        for cmd in commands:
+            callbacks = self.__schedule_listeners.get(cmd)
+            if callbacks is None:
+                callbacks = []
+                self.__schedule_listeners[cmd] = callbacks
+            elif callback in callbacks:
+                raise ValueError("callback is already in callbacks")
+            callbacks.append(callback)
+
+    def remove_schedule_listener(self, callback):
+        removed = False
+        for cmd in list(self.__schedule_listeners):
+            callbacks = self.__schedule_listeners[cmd]
+            try:
+                callbacks.remove(callback)
+                removed = True
+                if len(callbacks):
+                    del self.__schedule_listeners[cmd]
+            except ValueError:
+                pass
+        if not removed:
+            raise ValueError("callback is not in overserver callbacks")
+
+    def __perform_schedule_listener(self, command, params):
+        callbacks = self.__schedule_listeners.get(command)
+        if callbacks:
+            for cb in callbacks:
+                cb(command, params)
+
+    def schedule_job(self, command, params, block=False, block_timeout=None):
+        self._put_command(command, params, block=block, block_timeout=block_timeout)
+        self.__perform_schedule_listener(command, params)
+
+    def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
+        kwargs = {}
+        if retry_times is not None:
+            kwargs['retry_times'] = retry_times
+        if timeout is not None:
+            kwargs['timeout'] = timeout
+        self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+
+
+class _BroadcastThread(CommonThread):
+    def __init__(self, channel: str, self_target: str=None):
+        self.broadcast_queue = queue.PriorityQueue()
+        self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
+        self.__broadcaster = _Broadcaster(channel, self_target)
+
+    def stop(self):
+        super().stop()
+        self.broadcast_queue.put((None, None, None, None))
+        self.__broadcast_pool.shutdown(False)
+
+    def run(self, event: threading.Event):
+        event.set()
+        self.__broadcaster.start()
+
+        def _callback(curr_future: futures.Future, executor_future: futures.Future):
+            if executor_future.exception():
+                curr_future.set_exception(executor_future.exception())
+                logging.error(executor_future.exception())
+            else:
+                curr_future.set_result(executor_future.result())
+
+        while self.is_run():
+            priority, command, params, future = self.broadcast_queue.get()
+            if command is None:
+                break
+
+            return_future = self.__broadcast_pool.submit(self.__broadcaster.handle_command, command, params)
+            if future is not None:
+                return_future.add_done_callback(partial(_callback, future))
+
+
+class _BroadcastSchedulerThread(BroadcastScheduler):
+    def __init__(self, channel: str, self_target: str=None):
+        super().__init__()
+
+        self.__broadcast_thread = _BroadcastThread(channel, self_target=self_target)
+
+    def start(self):
+        self.__broadcast_thread.start()
+
+    def stop(self):
+        self.__broadcast_thread.stop()
+
+    def wait(self):
+        self.__broadcast_thread.wait()
+
+    def _put_command(self, command, params, block=False, block_timeout=None):
+        if command == BroadcastCommand.CREATE_TX:
+            priority = (10, time.time())
+        elif isinstance(params, tuple) and params[0] == "AddTx":
+            priority = (10, time.time())
+        else:
+            priority = (0, time.time())
+
+        future = futures.Future() if block else None
+        self.__broadcast_thread.broadcast_queue.put((priority, command, params, future))
+        if future is not None:
+            future.result(block_timeout)
+
+
+class _BroadcastSchedulerMp(BroadcastScheduler):
+    def __init__(self, channel: str, self_target: str=None):
+        super().__init__()
+
+        self.__channel = channel
+        self.__self_target = self_target
+
+        self.__process = ModuleProcess()
+
+        self.__broadcast_queue = self.__process.Queue()
+        self.__broadcast_queue.cancel_join_thread()
+
+    @staticmethod
+    def _main(broadcast_queue: mp.Queue, channel: str, self_target: str, properties: ModuleProcessProperties=None):
+        if properties is not None:
+            ModuleProcess.load_properties(properties, f"{channel}_broadcast")
+
+        logging.info(f"BroadcastScheduler process({channel}) start")
+
+        broadcast_queue.cancel_join_thread()
+
+        broadcaster = _Broadcaster(channel, self_target)
+        broadcaster.start()
+
+        original_sigterm_handler = signal.getsignal(signal.SIGTERM)
+        original_sigint_handler = signal.getsignal(signal.SIGINT)
+
+        def _signal_handler(signal_num, frame):
+            signal.signal(signal.SIGTERM, original_sigterm_handler)
+            signal.signal(signal.SIGINT, original_sigint_handler)
+            logging.error(f"BroadcastScheduler process({channel}) has been received signal({signal_num})")
+            broadcast_queue.put((None, None))
+            broadcaster.stop()
+
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
+
+        while True:
+            command, params = broadcast_queue.get()
+            if not broadcaster.is_running or command is None:
+                break
+            broadcaster.handle_command(command, params)
+
+        while not broadcast_queue.empty():
+            broadcast_queue.get()
+
+        logging.info(f"BroadcastScheduler process({channel}) end")
+
+    def start(self):
+        def crash_callback_in_join_thread(process: ModuleProcess):
+            os.kill(os.getpid(), signal.SIGTERM)
+
+        args = (self.__broadcast_queue, self.__channel, self.__self_target)
+        self.__process.start(target=_BroadcastSchedulerMp._main,
+                             args=args,
+                             crash_callback_in_join_thread=crash_callback_in_join_thread)
+
+    def stop(self):
+        logging.info(f"Terminate BroadcastScheduler process({self})")
+        self.__process.terminate()
+
+    def wait(self):
+        self.__process.join()
+
+    def _put_command(self, command, params, block=False, block_timeout=None):
+        self.__broadcast_queue.put((command, params))
+
+
+class BroadcastSchedulerFactory:
+    @staticmethod
+    def new(channel: str, self_target: str=None, is_multiprocessing: bool=None) -> BroadcastScheduler:
+        if is_multiprocessing is None:
+            is_multiprocessing = conf.IS_BROADCAST_MULTIPROCESSING
+
+        if is_multiprocessing:
+            return _BroadcastSchedulerMp(channel, self_target=self_target)
+        else:
+            return _BroadcastSchedulerThread(channel, self_target=self_target)
