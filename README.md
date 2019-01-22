@@ -269,7 +269,7 @@ Total supply of ICX in hex: 0x2961fff8ca4a62327800000
 Total supply of ICX in decimal: 800460000000000000000000000
 ```
 
-* Create a Keystore
+* Create an account (Skip this if you already have testnet account.)
 
 Create a keystore file in the given path. Generate a private and public key pair using secp256k1 library.
 
@@ -312,7 +312,10 @@ It will create new keystore file like this:
 }
 ```
 
-> For there's no balance at that address, you need to request some testnet icx to your address. The instruction and the link to request testnet icx will be updated soon.
+For there's no balance on new address, you need to request some testnet icx to it. **Please refer to [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#testnet-for-exchanges) for test icx and detailed ICON testnet network information.**
+Please note that the `Testnet node url` of your citizen node is `https://test-ctz.solidwallet.io` when sending the request email.
+
+If you want to load and view your testnet account on ICONex Chrome extension, please refer [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#how-to-change-network-in-iconex-chrome-extension).
 
 * get balance
 
@@ -323,8 +326,8 @@ usage: tbears balance [-h] [-u URI] [-c CONFIG] address
 (venv) $ tbears balance hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
-balance in hex: 0xde0b6b3a7640000
-balance in decimal: 1000000000000000000
+balance in hex: {your balance in hex}
+balance in decimal: {your balance in decimal}
 ```
 
 * Send transaction
@@ -374,7 +377,7 @@ The address to which icx is sent(`to`) is the address the ICON developers usuall
 Example
 
 ```bash
-(venv) $ tbears sendtx -k my_keystore.json send.json
+(venv) $ tbears sendtx -k my_keystore.json sendtx_testnet.json
 
 input your keystore password:
 
@@ -420,7 +423,7 @@ This method returns the last block the Citizen node has currently synced.
 usage: tbears lastblock [-h] [-u URI] [-c CONFIG]
 
 // Example
-(venv) $ tbears lastblock -u http://127.0.0.1:9100/api/v3 // Example (default uri: http://localhost:9000/api/v3)
+(venv) $ tbears lastblock -u http://127.0.0.1:9100/api/v3
 
 // result
 block info : {
@@ -514,13 +517,14 @@ Total supply of ICX in hex: 0x2961fff8ca4a62327800000
 Total supply of ICX in decimal: 800460000000000000000000000
 ```
 
-* Create your account on Mainnet if you don't have one.
-For Mainnet, we recommend you to create your account on Official ICONex application.
+* To send transaction on Mainnet, you need an ICON account and a balance. If you don't have on, please create your account on official ICONex application as guide below.
 
 1. Go to our website at https://icon.foundation
 2. Click ‘Wallet’ button on the top
 3. Move to Chrome extension page (https://chrome.google.com/webstore/detail/iconex-beta/flpiciilemghbmfalicajoolhkkenfel?hl=en)
 4. Click “Add on +CHROME” button on the upper right corner
+
+**For detailed ICON mainnet network information, please refer to [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#mainnet).**
 
 * get balance
 
@@ -531,13 +535,13 @@ usage: tbears balance [-h] [-u URI] [-c CONFIG] address
 (venv) $ tbears balance -u http://127.0.0.1:9100/api/v3 hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
-balance in hex: 0xde0b6b3a7640000
-balance in decimal: 1000000000000000000
+balance in hex: {your balance in hex}
+balance in decimal: {your balance in decimal}
 ```
 
 * Send transaction
 
-Now that you have received a sufficient amount of icx, you can use it to send transactions.
+If you have sufficient amount of icx, you can use it to send transactions.
 
 ```
 usage: tbears sendtx [-h] [-u URI] [-k KEYSTORE] [-c CONFIG] json_file
