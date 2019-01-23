@@ -17,6 +17,7 @@ import logging
 import pickle
 import threading
 import math
+from typing import Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -181,12 +182,16 @@ class PeerManager:
                     channel_manager.remove_audience(
                         channel=self.__channel_name, peer_target=peer_target)
 
-    def add_peer(self, peer_info):
+    def add_peer(self, peer_info: Union[PeerInfo, dict]):
         """add_peer to peer_manager
 
-        :param peer_info: PeerInfo
+        :param peer_info: PeerInfo, dict
         :return: create_peer_order
         """
+
+        if isinstance(peer_info, dict):
+            peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
+
         logging.debug(f"add peer id: {peer_info.peer_id}")
 
         # If exist same peer_target in peer_list, delete exist one.

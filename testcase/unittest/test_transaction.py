@@ -27,7 +27,6 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
 import testcase.unittest.test_util as test_util
-from loopchain.peer import PeerAuthorization
 from loopchain import configure as conf
 from loopchain.utils import loggers
 

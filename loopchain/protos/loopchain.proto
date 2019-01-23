@@ -357,10 +357,9 @@ message PeerRequest {
     required string peer_target = 3;
     required string group_id = 4;
     required PeerType peer_type = 5;
-    optional bytes cert = 6;
-    optional int32 peer_order = 7;
-    optional bytes peer_object = 8;
-    optional NodeType node_type = 9;
+    optional int32 peer_order = 6;
+    optional bytes peer_object = 7;
+    optional NodeType node_type = 8;
 }
 
 message ConnectPeerRequest {
@@ -368,9 +367,8 @@ message ConnectPeerRequest {
     optional string channel = 2;
     required string peer_target = 3;
     required string group_id = 4;
-    optional bytes cert = 5;
-    optional int32 peer_order = 6;
-    optional bytes peer_object = 7;
+    optional int32 peer_order = 5;
+    optional bytes peer_object = 6;
 }
 
 // RadioStation이 Peer에게 줄 정보들
@@ -385,7 +383,6 @@ message GetChannelInfosRequest {
     required string peer_id = 1;
     required string peer_target = 2;
     required string group_id = 3;
-    optional bytes cert = 4;
 }
 
 message GetChannelInfosReply {

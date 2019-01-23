@@ -16,7 +16,6 @@ from .vote import *
 from .exception import *
 from .types import *
 from .score_base import *
-from .hashing import *
 from .transactions import *
 from .blocks import *
 from .blockchain import *
