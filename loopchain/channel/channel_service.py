@@ -691,7 +691,7 @@ class ChannelService:
             self.state_machine.turn_to_peer()
 
             # 새 leader 에게 subscribe 하기
-            await self.subscribe_to_radio_station()
+            # await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)

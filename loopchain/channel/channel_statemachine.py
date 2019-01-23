@@ -22,6 +22,7 @@ from loopchain import configure as conf
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
+from loopchain.utils import loggers
 
 
 @statemachine.StateMachine("Channel State Machine")
@@ -142,13 +143,16 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.vote_as_peer()
 
     def _vote_on_enter(self):
-        pass
+        loggers.get_preset().is_leader = False
+        loggers.get_preset().update_logger()
 
     def _vote_on_exit(self):
         # util.logger.notice(f"_vote_on_exit")
         pass
 
     def _blockgenerate_on_enter(self):
+        loggers.get_preset().is_leader = True
+        loggers.get_preset().update_logger()
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
