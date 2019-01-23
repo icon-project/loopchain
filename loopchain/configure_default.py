@@ -432,8 +432,8 @@ ALLOW_MAKE_EMPTY_BLOCK = True
 ####################
 # ICON ####
 ####################
-URL_CITIZEN_TESTNET = 'https://int-test-ctz.solidwallet.io'
-URL_CITIZEN_MAINNET = 'https://int-ctz.solidwallet.io'
+URL_CITIZEN_TESTNET = 'https://test-ctz.solidwallet.io'
+URL_CITIZEN_MAINNET = 'https://ctz.solidwallet.io'
 CONF_PATH_LOOPCHAIN_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/loopchain_conf.json')
 CONF_PATH_LOOPCHAIN_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/loopchain_conf.json')
 CONF_PATH_ICONSERVICE_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconservice_conf.json')
