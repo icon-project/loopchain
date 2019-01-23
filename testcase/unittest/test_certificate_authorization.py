@@ -26,11 +26,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding, ec
 
-import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.configure_default import KeyLoadType
-from loopchain.peer import PeerAuthorization
-from loopchain.radiostation import CertificateAuthorization, RadioStationService
+from loopchain.radiostation import CertificateAuthorization
 from loopchain import configure as conf
 from loopchain.utils import loggers
 
