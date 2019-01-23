@@ -2,7 +2,7 @@
   "log": {
     "logger": "iconservice",
     "colorLog": true,
-    "level": "info",
+    "level": "warning",
     "filePath": "./log/develop/iconservice.log",
     "outputType": "console|file",
     "rotate": {
