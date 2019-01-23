@@ -28,15 +28,18 @@ from loopchain.utils import loggers
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
     states = ['InitComponents',
-              State(name='Consensus', ignore_invalid_triggers=True, on_enter='_consensus_on_enter'),
-              State(name='BlockHeightSync', ignore_invalid_triggers=True, on_enter='_blockheightsync_on_enter'),
+              State(name='Consensus', ignore_invalid_triggers=True,
+                    on_enter='_consensus_on_enter'),
+              State(name='BlockHeightSync', ignore_invalid_triggers=True,
+                    on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
               State(name='BlockSync', ignore_invalid_triggers=True,
                     on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
-              State(name='SubscribeNetwork', ignore_invalid_triggers=True, on_enter='_subscribe_network_on_enter',
-                    on_exit='_subscribe_network_on_exit'),
+              State(name='SubscribeNetwork', ignore_invalid_triggers=True,
+                    on_enter='_subscribe_network_on_enter', on_exit='_subscribe_network_on_exit'),
               'Watch',
-              State(name='Vote', ignore_invalid_triggers=True, on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
+              State(name='Vote', ignore_invalid_triggers=True,
+                    on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
               State(name='BlockGenerate', ignore_invalid_triggers=True,
                     on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
               State(name='LeaderComplain', ignore_invalid_triggers=True,
@@ -82,6 +85,7 @@ class ChannelStateMachine(object):
     def vote(self):
         pass
 
+    # transition defined in __init__ for multiple conditions.
     def complete_sync(self):
         pass
 
@@ -103,25 +107,12 @@ class ChannelStateMachine(object):
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
-    def _consensus_on_enter(self):
-        self.block_height_sync()
-
-    def _blockheightsync_on_enter(self):
-        self.evaluate_network()
-
     def _enter_block_sync(self):
         self.block_sync()
 
     def _do_block_sync(self):
         loop = MessageQueueService.loop
         asyncio.run_coroutine_threadsafe(self.__channel_service.block_height_sync_channel(), loop)
-
-    def _blocksync_on_enter(self):
-        self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
-
-    def _blocksync_on_exit(self):
-        self.__channel_service.block_manager.stop_block_height_sync_timer()
-        self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
     def _do_evaluate_network(self):
         loop = MessageQueueService.loop
@@ -131,6 +122,24 @@ class ChannelStateMachine(object):
         loop = MessageQueueService.loop
         asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_network(), loop)
 
+    def _do_vote(self):
+        self.__channel_service.block_manager.vote_as_peer()
+
+    # State handlers {
+
+    def _consensus_on_enter(self):
+        self.block_height_sync()
+
+    def _blockheightsync_on_enter(self):
+        self.evaluate_network()
+
+    def _blocksync_on_enter(self):
+        self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
+
+    def _blocksync_on_exit(self):
+        self.__channel_service.block_manager.stop_block_height_sync_timer()
+        self.__channel_service.block_manager.update_service_status(status_code.Service.online)
+
     def _subscribe_network_on_enter(self):
         self.__channel_service.start_subscribe_timer()
         self.__channel_service.start_shutdown_timer()
@@ -138,9 +147,6 @@ class ChannelStateMachine(object):
     def _subscribe_network_on_exit(self):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
-
-    def _do_vote(self):
-        self.__channel_service.block_manager.vote_as_peer()
 
     def _vote_on_enter(self):
         loggers.get_preset().is_leader = False
@@ -160,6 +166,9 @@ class ChannelStateMachine(object):
 
     def _leadercomplain_on_enter(self):
         util.logger.notice(f"_leadercomplain_on_enter")
+        self.__channel_service.block_manager.leader_complain()
 
     def _leadercomplain_on_exit(self):
         util.logger.notice(f"_leadercomplain_on_exit")
+
+    # }

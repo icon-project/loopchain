@@ -19,9 +19,8 @@ from functools import partial
 
 from loopchain.baseservice import ObjectManager, Monitor, TimerService
 from loopchain.blockchain import *
-from loopchain.consensus.vote_message import *
 from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest
 from loopchain.utils.message_queue import StubCollection
 
 # Changing the import location will cause a pickle error.
@@ -339,6 +338,19 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success,
                                          message=request.request)
 
+    def ComplainLeader(self, request: ComplainLeaderRequest, context):
+        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        util.logger.notice(f"ComplainLeader "
+                           f"height({request.block_height}) complained_peer({request.complained_leader_id})")
+
+        channel_stub = StubCollection().channel_stubs[channel]
+        channel_stub.sync_task().complain_leader(
+            complained_leader_id=request.complained_leader_id,
+            new_leader_id=request.new_leader_id,
+            block_height=request.block_height)
+
+        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
+
     def CreateTx(self, request, context):
         """make tx by client request and broadcast it to the network
 
@@ -518,32 +530,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub.sync_task().announce_unconfirmed_block(request.block)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
-    def AnnounceNewBlockForVote(self, request, context):
-        """수집된 tx 로 생성한 Block 을 각 peer 에 전송하여 검증을 요청한다.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"peer_outer_service::AnnounceNewBlockForVote channel({channel_name})")
-
-        block: Block = pickle.loads(request.block)
-        epoch = pickle.loads(request.epoch)
-
-        logging.debug(f"#block \n"
-                      f"epoch({epoch.block_height})\n"
-                      f"prev_epoch({epoch.prev_epoch})\n"
-                      f"block_type({block.block_type})\n"
-                      f"block_hash({block.block_hash})\n"
-                      f"peer_id({block.peer_id})\n"
-                      f"block_type({block.block_type})\n")
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        channel_stub.sync_task().announce_new_block_for_vote(block, epoch)
-
-        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
     def BlockSync(self, request, context):
         # Peer To Peer
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
@@ -660,19 +646,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             group_id=request.group_id,
             block_hash=request.block_hash,
             vote_code=request.vote_code)
-
-        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
-    def BroadcastVote(self, request, context):
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        vote: VoteMessage = VoteMessage().loads(request.vote_data)
-
-        logging.debug(f"peer_outer_service.py:BroadcastVote :: channel({channel_name})")
-        logging.info(f"Peer vote to : {vote.block_hash} / {request.vote_code} from {request.peer_id}")
-        util.logger.spam(f"peer_outer_service.py:BroadcastVote::{vote.print_vote_message()}")
-
-        channel_stub = StubCollection().channel_stubs[request.channel]
-        channel_stub.sync_task().broadcast_vote(vote)
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 

@@ -106,12 +106,15 @@ class ConsensusSiever(ConsensusBase):
 
             self._blockchain.last_unconfirmed_block = candidate_block
             broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
+
+            # TODO Temporary ignore below line for developing leader complain
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
 
             if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex() != ChannelProperty().peer_id:
                 # util.logger.debug(f"-------------------turn_to_peer")
                 ObjectManager().channel_service.state_machine.turn_to_peer()
+                self._blockmanager.epoch.set_epoch_leader(next_leader.hex_hx())
             else:
                 self.__block_generation_timer.call()
 

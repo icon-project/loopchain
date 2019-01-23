@@ -13,7 +13,6 @@
 # limitations under the License.
 """Package for consensus"""
 
-from .epoch import *
 from .subscriber import *
 from .publisher import *
 from .consensus import *

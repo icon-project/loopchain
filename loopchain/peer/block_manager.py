@@ -12,26 +12,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A management class for blockchain."""
+import json
+import logging
+import pickle
 import queue
 import shutil
+import threading
 import traceback
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
+from typing import TYPE_CHECKING
 
 from jsonrpcclient.exceptions import ReceivedErrorResponse
 
-from loopchain.baseservice import TimerService
-from loopchain.consensus import *
+import loopchain.utils as util
+from loopchain import configure as conf
+from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
+from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
+    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, Vote, NID, BlockSerializer, \
+    exception, BlockVerifier
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.protos import loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
+
+if TYPE_CHECKING:
+    from loopchain.channel.channel_service import ChannelService
 
 # Changing the import location will cause a pickle error.
 import loopchain_pb2
 
 
-class BlockManager(Subscriber):
+class BlockManager:
     """Manage the blockchain of a channel. It has objects for consensus and db object.
     """
 
@@ -39,8 +54,6 @@ class BlockManager(Subscriber):
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
     def __init__(self, name: str, channel_manager, peer_id, channel_name, level_db_identity):
-        super().__init__(name)
-
         self.__channel_service: ChannelService = channel_manager
         self.__channel_name = channel_name
         self.__pre_validate_strategy = self.__pre_validate
@@ -64,13 +77,12 @@ class BlockManager(Subscriber):
         self.__block_height_future: Future = None
         self.__subscribe_target_peer_stub = None
         self.__block_generation_scheduler = BlockGenerationScheduler(self.__channel_name)
-        self.__prev_epoch: Epoch = None
         self.__precommit_block: Block = None
-        self.__epoch: Epoch = None
-        self.event_list = [(Consensus.EVENT_COMPLETE_CONSENSUS, self.callback_complete_consensus, 0)]
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = name
         self.__service_status = status_code.Service.online
+
+        self.epoch: Epoch = Epoch(self.__blockchain.last_block.header.height + 1 if self.__blockchain.last_block else 1)
 
     @property
     def channel_name(self):
@@ -106,7 +118,7 @@ class BlockManager(Subscriber):
         return self.__consensus
 
     @consensus.setter
-    def consensus(self, consensus: Consensus):
+    def consensus(self, consensus):
         self.__consensus = consensus
 
     @property
@@ -457,7 +469,7 @@ class BlockManager(Subscriber):
 
         # The adjustment of block height and the process for data synchronization of peer
         # === Love&Hate Algorithm === #
-        util.logger.info("try block height sync...with love&hate")
+        util.logger.debug("try block height sync...with love&hate")
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         # max_height: current max height
@@ -547,7 +559,8 @@ class BlockManager(Subscriber):
             return False
 
         if my_height >= max_height:
-            util.logger.info(f"block_manager:block_height_sync is complete.")
+            util.logger.debug(f"block_manager:block_height_sync is complete.")
+            self.epoch.set_epoch_leader(self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID))
             self.__channel_service.state_machine.subscribe_network()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -654,6 +667,26 @@ class BlockManager(Subscriber):
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
+    def leader_complain(self):
+        complained_leader_id = self.epoch.leader_id
+        new_leader_id = self.__channel_service.peer_manager.get_next_leader_peer(
+            current_leader_peer_id=self.epoch.leader_id
+        )
+
+        if not isinstance(new_leader_id, str):
+            new_leader_id = ""
+
+        if not isinstance(complained_leader_id, str):
+            complained_leader_id = ""
+
+        request = loopchain_pb2.ComplainLeaderRequest(
+            complained_leader_id=complained_leader_id,
+            channel=self.channel_name,
+            new_leader_id=new_leader_id,
+            block_height=self.epoch.height,
+            message="I'm your father.")
+        self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
+
     def vote_unconfirmed_block(self, block_hash, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
@@ -717,38 +750,3 @@ class BlockManager(Subscriber):
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
             self.vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
-
-    def callback_complete_consensus(self, **kwargs):
-        self.__prev_epoch = kwargs.get("prev_epoch", None)
-        self.__epoch = kwargs.get("epoch", None)
-        last_block = self.get_blockchain().last_block
-        last_block_height = last_block.height
-
-        if last_block_height > 0 and self.__precommit_block is None:
-            logging.error("It's weird what a precommit block is None. "
-                          "That's why a timer can't be added to timer service.")
-
-        if self.__prev_epoch:
-            if self.__prev_epoch.status == EpochStatus.success:
-                util.logger.spam(f"BlockManager:callback_complete_consensus::epoch status is success !! "
-                                 f"self.__precommit_block({self.__precommit_block})")
-
-                if self.__precommit_block:
-                    if not self.add_block(self.__precommit_block):
-                        self.__precommit_block = self.__blockchain.get_precommit_block()
-
-                self.__precommit_block = kwargs.get("precommit_block", None)
-                if self.__channel_service.score_write_precommit_state(self.__precommit_block) and \
-                        self.__blockchain.put_precommit_block(self.__precommit_block):
-                    util.logger.spam(f"start timer :: success precommit block info - {self.__precommit_block.height}")
-
-            elif self.__prev_epoch.status == EpochStatus.leader_complain:
-                self.__epoch.fixed_vote_list = self.__prev_epoch.ready_vote_list
-                self.__precommit_block = self.__consensus.precommit_block
-                self.__prev_epoch = self.__prev_epoch.prev_epoch
-                util.logger.spam(f"start timer :: fail precommit block info - {self.__precommit_block.height}")
-
-            self.__channel_service.consensus.start_timer(self.__channel_service.acceptor.callback_leader_complain)
-        else:
-            util.logger.spam(f"start timer :: after genesis or rebuild block / "
-                             f"precommit block info - {last_block_height}")

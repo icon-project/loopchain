@@ -28,7 +28,6 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
                                   BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.consensus import Epoch, VoteMessage
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, message_code
 
@@ -365,15 +364,6 @@ class ChannelInnerTask:
         return response_code
 
     @message_queue_task
-    def announce_new_block_for_vote(self, block: Block, epoch: Epoch):
-        acceptor = self._channel_service.acceptor
-        if acceptor.epoch is None:
-            pass
-        else:
-            acceptor.epoch.block_hash = block.header.hash.hex()
-            acceptor.create_vote(block=block, epoch=epoch)
-
-    @message_queue_task
     def block_sync(self, block_hash, block_height):
         blockchain = self._channel_service.block_manager.get_blockchain()
 
@@ -434,7 +424,7 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
-        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
+        util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
@@ -450,13 +440,21 @@ class ChannelInnerTask:
         if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
             consensus.count_votes(block_hash)
 
-    @message_queue_task
-    async def broadcast_vote(self, vote: VoteMessage):
-        acceptor = self._channel_service.acceptor
-        if acceptor.epoch is None:
-            pass
-        else:
-            await acceptor.apply_vote_into_block(vote)
+    @message_queue_task(type_=MessageQueueType.Worker)
+    def complain_leader(self, complained_leader_id, new_leader_id, block_height) -> None:
+        block_manager = self._channel_service.block_manager
+        util.logger.notice(f"channel_inner_service:complain_leader "
+                           f"complain_leader_id({complained_leader_id}), "
+                           f"new_leader_id({new_leader_id}), "
+                           f"block_height({block_height})")
+
+        block_manager.epoch.add_complain(
+            complained_leader_id, new_leader_id, block_height
+        )
+
+        # consensus = block_manager.consensus_algorithm
+        # if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+        #     consensus.count_votes(block_hash)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

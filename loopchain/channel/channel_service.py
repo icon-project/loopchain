@@ -25,15 +25,14 @@ from earlgrey import MessageQueueService
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
+from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
-from loopchain.baseservice import RestStubManager, Timer, NodeSubscriber
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.consensus import Consensus, Acceptor, Proposer
-from loopchain.peer import BlockManager
 from loopchain.crypto.signature import Signer
+from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -49,9 +48,9 @@ class ChannelService:
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
-        self.__consensus: Consensus = None
-        self.__proposer: Proposer = None
-        self.__acceptor: Acceptor = None
+        self.__consensus = None
+        # self.__proposer: Proposer = None
+        # self.__acceptor: Acceptor = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
 
@@ -205,14 +204,14 @@ class ChannelService:
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            util.logger.spam(f"init consensus !")
-            # load consensus
-            self.__init_consensus()
-            # load proposer
-            self.__init_proposer(peer_id=peer_id)
-            # load acceptor
-            self.__init_acceptor(peer_id=peer_id)
+        # if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+        #     util.logger.spam(f"init consensus !")
+        #     # load consensus
+        #     self.__init_consensus()
+        #     # load proposer
+        #     self.__init_proposer(peer_id=peer_id)
+        #     # load acceptor
+        #     self.__init_acceptor(peer_id=peer_id)
             
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
@@ -275,32 +274,32 @@ class ChannelService:
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
 
-    def __init_consensus(self):
-        consensus = Consensus(self, ChannelProperty().name)
-        self.__consensus = consensus
-        self.__block_manager.consensus = consensus
-        consensus.register_subscriber(self.__block_manager)
-
-    def __init_proposer(self, peer_id: str):
-        proposer = Proposer(
-            name="loopchain.consensus.Proposer",
-            peer_id=peer_id,
-            channel=ChannelProperty().name,
-            channel_service=self
-        )
-        self.__consensus.register_subscriber(proposer)
-        self.__proposer = proposer
-
-    def __init_acceptor(self, peer_id: str):
-        acceptor = Acceptor(
-            name="loopchain.consensus.Acceptor",
-            consensus=self.__consensus,
-            peer_id=peer_id,
-            channel=ChannelProperty().name,
-            channel_service=self
-        )
-        self.__consensus.register_subscriber(acceptor)
-        self.__acceptor = acceptor
+    # def __init_consensus(self):
+    #     consensus = Consensus(self, ChannelProperty().name)
+    #     self.__consensus = consensus
+    #     self.__block_manager.consensus = consensus
+    #     consensus.register_subscriber(self.__block_manager)
+    #
+    # def __init_proposer(self, peer_id: str):
+    #     proposer = Proposer(
+    #         name="loopchain.consensus.Proposer",
+    #         peer_id=peer_id,
+    #         channel=ChannelProperty().name,
+    #         channel_service=self
+    #     )
+    #     self.__consensus.register_subscriber(proposer)
+    #     self.__proposer = proposer
+    #
+    # def __init_acceptor(self, peer_id: str):
+    #     acceptor = Acceptor(
+    #         name="loopchain.consensus.Acceptor",
+    #         consensus=self.__consensus,
+    #         peer_id=peer_id,
+    #         channel=ChannelProperty().name,
+    #         channel_service=self
+    #     )
+    #     self.__consensus.register_subscriber(acceptor)
+    #     self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastScheduler(channel=ChannelProperty().name, self_target=ChannelProperty().peer_target)
@@ -695,6 +694,7 @@ class ChannelService:
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
+        self.block_manager.epoch.set_epoch_leader(peer_leader.peer_id)
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
@@ -836,13 +836,13 @@ class ChannelService:
         return object_has_queue
 
     def start_leader_complain_timer(self):
-        util.logger.notice(f"start_leader_complain_timer in channel service.")
+        # util.logger.debug(f"start_leader_complain_timer in channel service.")
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                   duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                                                   is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):
-        util.logger.notice(f"stop_leader_complain_timer in channel service.")
+        # util.logger.debug(f"stop_leader_complain_timer in channel service.")
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):

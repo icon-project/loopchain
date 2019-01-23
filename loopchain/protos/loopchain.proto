@@ -132,7 +132,8 @@ message ComplainLeaderRequest {
     required string complained_leader_id = 1;
     optional string channel = 2;
     required string new_leader_id = 3;
-    required string message = 4;
+    required int32 block_height = 4;
+    required string message = 5;
 }
 
 

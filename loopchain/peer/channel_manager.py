@@ -12,10 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ A class for Manage Channels """
+import logging
 
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, PeerManager
+from loopchain import configure as conf
+from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, PeerManager, ObjectManager
 from loopchain.container import CommonService
-from loopchain.consensus import *
 
 
 class ChannelManager:
@@ -94,10 +95,10 @@ class ChannelManager:
 
         if channel in self.__broadcast_schedulers.keys():
             kwargs = {}
-            if retry_times is not None:
+            if retry_times:
                 kwargs['retry_times'] = retry_times
 
-            if time is not None:
+            if timeout:
                 kwargs['timeout'] = timeout
 
             self.__broadcast_schedulers[channel].schedule_job(

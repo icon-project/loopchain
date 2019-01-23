@@ -361,7 +361,7 @@ class PeerManager:
         return leader_peer
 
     def get_next_leader_peer(self, group_id=None, current_leader_peer_id=None, is_only_alive=False):
-        util.logger.spam(f"peer_manager:get_next_leader_peer")
+        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
             leader_peer = self.get_leader_peer(group_id, is_complain_to_rs=True)
