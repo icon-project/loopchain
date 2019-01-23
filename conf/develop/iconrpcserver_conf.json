@@ -2,7 +2,7 @@
   "log": {
     "logger": "iconrpcserver",
     "colorLog": true,
-    "level": "info",
+    "level": "warning",
     "filePath": "./log/develop/iconrpcserver.log",
     "outputType": "console|file",
     "rotate": {
