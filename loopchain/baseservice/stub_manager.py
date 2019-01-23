@@ -36,6 +36,7 @@ class StubManager:
         self.__stub = None
         self.__channel = None
         self.__stub_update_time = datetime.datetime.now()
+        self.__last_succeed_time = time.clock_gettime(time.CLOCK_MONOTONIC)
 
         self.__make_stub(False)
 
@@ -47,6 +48,8 @@ class StubManager:
             self.__stub, self.__channel = util.get_stub_to_server(
                 self.__target, self.__stub_type, is_check_status=False, ssl_auth_type=self.__ssl_auth_type)
             self.__stub_update_time = datetime.datetime.now()
+            if self.__stub:
+                self.__update_last_succeed_time()
         else:
             pass
 
@@ -64,6 +67,12 @@ class StubManager:
     def target(self):
         return self.__target
 
+    def elapsed_last_succeed_time(self):
+        return time.clock_gettime(time.CLOCK_MONOTONIC) - self.__last_succeed_time
+
+    def __update_last_succeed_time(self):
+        self.__last_succeed_time = time.clock_gettime(time.CLOCK_MONOTONIC)
+
     def call(self, method_name, message, timeout=None, is_stub_reuse=True, is_raise=False):
         if timeout is None:
             timeout = conf.GRPC_TIMEOUT
@@ -71,7 +80,9 @@ class StubManager:
 
         try:
             stub_method = getattr(self.__stub, method_name)
-            return stub_method(message, timeout)
+            ret = stub_method(message, timeout)
+            self.__update_last_succeed_time()
+            return ret
         except Exception as e:
             logging.warning(f"gRPC call fail method_name({method_name}), message({message}): {e}")
             if is_raise:
@@ -92,10 +103,15 @@ class StubManager:
             call_back = self.print_broadcast_fail
         self.__make_stub(is_stub_reuse)
 
+        def done_callback(result: _Rendezvous):
+            if result.code() == grpc.StatusCode.OK:
+                self.__update_last_succeed_time()
+            call_back(result)
+
         try:
             stub_method = getattr(self.__stub, method_name)
             feature_future = stub_method.future(message, timeout)
-            feature_future.add_done_callback(call_back)
+            feature_future.add_done_callback(done_callback)
             return feature_future
         except Exception as e:
             logging.warning(f"gRPC call_async fail method_name({method_name}), message({message}): {e}, "
