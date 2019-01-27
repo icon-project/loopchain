@@ -218,6 +218,10 @@ class ChannelService:
                 self.connect_to_radio_station()
             else:
                 await self.__load_peers_from_file()
+                # subscribe to other peers
+                self.__subscribe_to_peer_list()
+                # broadcast AnnounceNewPeer to other peers
+                # If allow broadcast AnnounceNewPeer here, complained peer can be leader again.
         else:
             self.__init_node_subscriber()
 
@@ -456,6 +460,17 @@ class ChannelService:
                 util.logger.spam(f"peer_service:connect_to_radio_station peer({each_peer.target}-{each_peer.status})")
                 if each_peer.status == PeerStatus.connected:
                     self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
+
+    def __subscribe_to_peer_list(self):
+        peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
+        peer_request = loopchain_pb2.PeerRequest(
+            channel=ChannelProperty().name,
+            peer_target=ChannelProperty().peer_target,
+            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+            node_type=ChannelProperty().node_type,
+            peer_order=peer_object.order
+        )
+        self.__broadcast_scheduler.schedule_broadcast("Subscribe", peer_request)
 
     async def subscribe_to_radio_station(self):
         await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)

@@ -28,7 +28,6 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
                                   BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, message_code
 
 if TYPE_CHECKING:
@@ -393,6 +392,9 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
+        peer = self._channel_service.peer_manager.get_peer_by_target(peer_target)
+        if not peer:
+            util.logger.debug(f"There is no peer peer_target({peer_target})")
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
@@ -454,7 +456,7 @@ class ChannelInnerTask:
 
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
-            self._channel_service.peer_manager.remove_peer(complained_leader_id)
+            # self._channel_service.peer_manager.remove_peer(complained_leader_id)
             self._channel_service.stop_leader_complain_timer()
             if next_new_leader == ChannelProperty().peer_id:
                 # Turn to Leader and Send Leader Complain Block

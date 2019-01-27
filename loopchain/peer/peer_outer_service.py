@@ -570,8 +570,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
             channel_stub.sync_task().add_audience(peer_target=request.peer_target)
-            util.logger.spam(f"peer_outer_service::Subscribe add_audience "
-                             f"target({request.peer_target}) in channel({request.channel})")
+            util.logger.debug(f"peer_outer_service::Subscribe add_audience "
+                              f"target({request.peer_target}) in channel({request.channel}), "
+                              f"order({request.peer_order})")
         else:
             logging.error(f"This target({request.peer_target}, {request.node_type}) failed to subscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),

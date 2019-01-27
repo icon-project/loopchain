@@ -359,7 +359,7 @@ message PeerRequest {
     optional string channel = 2;
     required string peer_target = 3;
     required string group_id = 4;
-    required PeerType peer_type = 5;
+    optional PeerType peer_type = 5;
     optional int32 peer_order = 6;
     optional bytes peer_object = 7;
     optional NodeType node_type = 8;

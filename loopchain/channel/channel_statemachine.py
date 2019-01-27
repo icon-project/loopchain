@@ -153,7 +153,7 @@ class ChannelStateMachine(object):
         loggers.get_preset().update_logger()
 
     def _vote_on_exit(self):
-        # util.logger.notice(f"_vote_on_exit")
+        # util.logger.debug(f"_vote_on_exit")
         pass
 
     def _blockgenerate_on_enter(self):
@@ -165,10 +165,10 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
     def _leadercomplain_on_enter(self):
-        util.logger.notice(f"_leadercomplain_on_enter")
+        util.logger.debug(f"_leadercomplain_on_enter")
         self.__channel_service.block_manager.leader_complain()
 
     def _leadercomplain_on_exit(self):
-        util.logger.notice(f"_leadercomplain_on_exit")
+        util.logger.debug(f"_leadercomplain_on_exit")
 
     # }

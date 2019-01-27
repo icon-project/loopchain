@@ -11,6 +11,19 @@
  * Strategy
    - leader pick strategy in round n. (normal strategy)
      - pick most picked peer in prev round.
+
+
+#### Terms (new)
+ * Height
+   - Increase after add block when consensus complete.
+ * Epoch 
+   - Candidate blocks, voting and leader complaint management. Handles one block height. And after adding blocks, the new epoch starts.
+ * Round
+   - round 0 is first block generation try of each height.
+   - If leader fail to make a block, round n is to be leader complain round.
+ * Strategy
+   - leader pick strategy in round n. (normal strategy)
+     - pick most picked peer in prev round.
  
 #### Complain Process
   * heartbeat

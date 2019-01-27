@@ -270,6 +270,8 @@ class BlockManager:
         if unconfirmed_block.body.confirm_prev_block:
             self.confirm_prev_block(unconfirmed_block)
 
+        self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
+
         self.__unconfirmedBlockQueue.put(unconfirmed_block)
 
     def add_confirmed_block(self, confirmed_block: Block):
@@ -701,7 +703,7 @@ class BlockManager:
             group_id=ChannelProperty().group_id
         )
 
-        util.logger.notice(f"complain group_id({ChannelProperty().group_id})")
+        util.logger.debug(f"complain group_id({ChannelProperty().group_id})")
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 

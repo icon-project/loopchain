@@ -36,8 +36,7 @@ class Epoch:
 
     @staticmethod
     def new_epoch(height: int, leader_id=None):
-        if leader_id is None and ObjectManager().channel_service.block_manager.epoch.leader_id:
-            leader_id = ObjectManager().channel_service.block_manager.epoch.leader_id
+        leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(height, leader_id)
 
     def set_epoch_leader(self, leader_id):

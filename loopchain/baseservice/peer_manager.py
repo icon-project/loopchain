@@ -161,7 +161,7 @@ class PeerManager:
             map(convert_peer_info_item_to_peer_item, self.peer_list_data.peer_info_list[group_id].items())
         )
 
-    def __get_peer_by_target(self, peer_target):
+    def get_peer_by_target(self, peer_target):
         for group_id in self.peer_list.keys():
             for peer_id in self.peer_list[group_id]:
                 peer_each = self.peer_list[group_id][peer_id]
