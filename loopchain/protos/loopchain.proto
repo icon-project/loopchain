@@ -134,6 +134,8 @@ message ComplainLeaderRequest {
     required string new_leader_id = 3;
     required int32 block_height = 4;
     required string message = 5;
+    required string peer_id = 6;
+    required string group_id = 7;
 }
 
 

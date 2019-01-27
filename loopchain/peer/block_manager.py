@@ -82,7 +82,7 @@ class BlockManager:
         self.name = name
         self.__service_status = status_code.Service.online
 
-        self.epoch: Epoch = Epoch(self.__blockchain.last_block.header.height + 1 if self.__blockchain.last_block else 1)
+        self.epoch: Epoch = None
 
     @property
     def channel_name(self):
@@ -96,6 +96,13 @@ class BlockManager:
                    str(1 if self.__channel_service.state_machine.state == "BlockGenerate" else 0)
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
+
+    def init_epoch(self):
+        """Call this after peer list update
+
+        :return:
+        """
+        self.epoch = Epoch(self.__blockchain.last_block.header.height + 1 if self.__blockchain.last_block else 1)
 
     def update_service_status(self, status):
         self.__service_status = status
@@ -669,9 +676,10 @@ class BlockManager:
 
     def leader_complain(self):
         complained_leader_id = self.epoch.leader_id
-        new_leader_id = self.__channel_service.peer_manager.get_next_leader_peer(
+        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
             current_leader_peer_id=self.epoch.leader_id
         )
+        new_leader_id = new_leader.peer_id if new_leader else None
 
         if not isinstance(new_leader_id, str):
             new_leader_id = ""
@@ -679,12 +687,22 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
+        self.epoch.add_complain(
+            complained_leader_id, new_leader_id, self.epoch.height, self.__peer_id, ChannelProperty().group_id
+        )
+
         request = loopchain_pb2.ComplainLeaderRequest(
             complained_leader_id=complained_leader_id,
             channel=self.channel_name,
             new_leader_id=new_leader_id,
             block_height=self.epoch.height,
-            message="I'm your father.")
+            message="I'm your father.",
+            peer_id=self.__peer_id,
+            group_id=ChannelProperty().group_id
+        )
+
+        util.logger.notice(f"complain group_id({ChannelProperty().group_id})")
+
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 
     def vote_unconfirmed_block(self, block_hash, is_validated):

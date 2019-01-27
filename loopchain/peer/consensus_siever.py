@@ -80,7 +80,8 @@ class ConsensusSiever(ConsensusBase):
                     self._made_block_count += 1
 
                     peer_manager = ObjectManager().channel_service.peer_manager
-                    next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
+                    next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
+                        current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                 else:
                     # util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
                     return self.__block_generation_timer.call()

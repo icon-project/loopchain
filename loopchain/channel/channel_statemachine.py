@@ -89,11 +89,11 @@ class ChannelStateMachine(object):
     def complete_sync(self):
         pass
 
-    @statemachine.transition(source=('BlockGenerate', 'Vote'), dest='Vote')
+    @statemachine.transition(source=('BlockGenerate', 'Vote', 'LeaderComplain'), dest='Vote')
     def turn_to_peer(self):
         pass
 
-    @statemachine.transition(source=('Vote', 'BlockGenerate'), dest='BlockGenerate')
+    @statemachine.transition(source=('Vote', 'BlockGenerate', 'LeaderComplain'), dest='BlockGenerate')
     def turn_to_leader(self):
         pass
 

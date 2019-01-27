@@ -14,14 +14,15 @@
 """A module for managing peer list"""
 import json
 import logging
+import math
 import pickle
 import threading
-import math
 from typing import Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 # Changing the import location will cause a pickle error.
@@ -501,7 +502,9 @@ class PeerManager:
             complained_leader_id=complained_leader_id,
             channel=self.__channel_name,
             new_leader_id=new_leader_id,
-            message="Announce New Leader"
+            message="Announce New Leader",
+            peer_id=ChannelProperty().peer_id,
+            group_id=ChannelProperty().group_id
         )
 
         # new_leader_peer = self.get_peer(new_leader_id)

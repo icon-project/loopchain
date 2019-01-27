@@ -437,11 +437,11 @@ class ChannelInnerTask:
         )
 
         consensus = block_manager.consensus_algorithm
-        if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+        if self._channel_service.state_machine.state == "BlockGenerate":
             consensus.count_votes(block_hash)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def complain_leader(self, complained_leader_id, new_leader_id, block_height) -> None:
+    def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.notice(f"channel_inner_service:complain_leader "
                            f"complain_leader_id({complained_leader_id}), "
@@ -449,12 +449,20 @@ class ChannelInnerTask:
                            f"block_height({block_height})")
 
         block_manager.epoch.add_complain(
-            complained_leader_id, new_leader_id, block_height
+            complained_leader_id, new_leader_id, block_height, peer_id, group_id
         )
 
-        # consensus = block_manager.consensus_algorithm
-        # if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
-        #     consensus.count_votes(block_hash)
+        next_new_leader = block_manager.epoch.complain_result()
+        if next_new_leader:
+            self._channel_service.peer_manager.remove_peer(complained_leader_id)
+            self._channel_service.stop_leader_complain_timer()
+            if next_new_leader == ChannelProperty().peer_id:
+                # Turn to Leader and Send Leader Complain Block
+                util.logger.notice(f"No I'm your father....")
+                self._channel_service.state_machine.turn_to_leader()
+            else:
+                util.logger.notice(f"I'm your Jedi.")
+                self._channel_service.state_machine.turn_to_peer()
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

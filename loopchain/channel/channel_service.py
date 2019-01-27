@@ -221,6 +221,8 @@ class ChannelService:
         else:
             self.__init_node_subscriber()
 
+        self.block_manager.init_epoch()
+
     async def evaluate_network(self):
         await self.set_peer_type_in_channel()
         if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:

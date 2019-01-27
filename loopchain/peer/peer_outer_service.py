@@ -347,7 +347,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub.sync_task().complain_leader(
             complained_leader_id=request.complained_leader_id,
             new_leader_id=request.new_leader_id,
-            block_height=request.block_height)
+            block_height=request.block_height,
+            peer_id=request.peer_id,
+            group_id=request.group_id
+        )
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
