@@ -121,7 +121,7 @@ class Vote:
         agree_vote_group_count = 0
         total_vote_group_count = 0
         agree_vote_peer_count = 0
-        result = False
+        result = None
 
         for group_id in list(self.__votes.keys()):
             # don't treat with null group
@@ -133,10 +133,14 @@ class Vote:
             vote_peer_count_in_group = 0
             for peer_id in list(self.__votes[group_id].keys()):
                 total_peer_count_in_group += 1
-                if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0] is True:
-                    agree_peer_count_in_group += 1
-                    agree_vote_peer_count += 1
-                if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0] is False:
+                if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0]:
+                    if result and result != self.__votes[group_id][peer_id][0]:
+                        result = False
+                    else:
+                        agree_peer_count_in_group += 1
+                        agree_vote_peer_count += 1
+                        result = self.__votes[group_id][peer_id][0]
+                if len(self.__votes[group_id][peer_id]) > 0 and not self.__votes[group_id][peer_id][0]:
                     vote_peer_count_in_group += 1
 
             if agree_peer_count_in_group > total_peer_count_in_group * voting_ratio:
@@ -146,8 +150,8 @@ class Vote:
                     >= total_peer_count_in_group * (1 - voting_ratio):
                 total_vote_group_count += 1
 
-        if agree_vote_group_count > total_group_count * voting_ratio:
-            result = True
+        if agree_vote_group_count < total_group_count * voting_ratio:
+            result = False
 
         logging.debug("==result: " + str(result))
         logging.debug("=agree_vote_group_count: " + str(agree_vote_group_count))

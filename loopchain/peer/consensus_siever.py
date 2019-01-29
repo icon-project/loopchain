@@ -19,7 +19,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, BlockBuilder, BlockVerifier, TransactionStatusInQueue, Hash32
+from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -80,7 +80,8 @@ class ConsensusSiever(ConsensusBase):
                     self._made_block_count += 1
 
                     peer_manager = ObjectManager().channel_service.peer_manager
-                    next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer().peer_id)
+                    next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
+                        current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                 else:
                     # util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
                     return self.__block_generation_timer.call()
@@ -106,12 +107,15 @@ class ConsensusSiever(ConsensusBase):
 
             self._blockchain.last_unconfirmed_block = candidate_block
             broadcast_func = partial(self._blockmanager.broadcast_send_unconfirmed_block, candidate_block)
+
+            # TODO Temporary ignore below line for developing leader complain
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
 
             if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex() != ChannelProperty().peer_id:
                 # util.logger.debug(f"-------------------turn_to_peer")
                 ObjectManager().channel_service.state_machine.turn_to_peer()
+                self._blockmanager.epoch.set_epoch_leader(next_leader.hex_hx())
             else:
                 self.__block_generation_timer.call()
 

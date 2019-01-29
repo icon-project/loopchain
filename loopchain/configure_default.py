@@ -167,8 +167,9 @@ MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx i
 MAX_TX_COUNT_IN_ADDTX_LIST = 10  # AddTxList can send multiple tx in one message.
 SEND_TX_LIST_DURATION = 0.3  # seconds
 USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is different from the running node.
-# 블럭이 합의 되는 투표율 1 = 100%, 0.5 = 50%
-VOTING_RATIO = 0.66
+# Consensus Vote Ratio 1 = 100%, 0.5 = 50%
+VOTING_RATIO = 0.67  # for Add Block
+LEADER_COMPLAIN_RATIO = 0.51  # for Leader Complain
 # Block Height 를 level_db 의 key(bytes)로 변환할때 bytes size
 BLOCK_HEIGHT_BYTES_LEN = 12
 # Block vote timeout
@@ -331,7 +332,7 @@ LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
 CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = False  # if this option is true, peer only gets channel infos to which it belongs.
-ENABLE_REP_RADIO_STATION = True
+ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
 
@@ -443,3 +444,5 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
+# TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 3  # 3 is test value for developing leader complain
+TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 30  # 30 is default for product
