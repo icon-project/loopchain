@@ -1,6 +1,6 @@
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from ..hashing import build_hash_generator
+from loopchain.crypto.hashing import build_hash_generator
 
 if TYPE_CHECKING:
     from . import TransactionVersioner

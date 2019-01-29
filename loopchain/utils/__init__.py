@@ -486,9 +486,6 @@ def is_hex(s):
     return re.fullmatch(r"^(0x)?[0-9a-f]{64}$", s or "") is not None
 
 
-def trim_hex(s):
-    return s.split("0x")[1] if s.startswith("0x") else s
-
 # ------------------- data utils ----------------------------
 
 

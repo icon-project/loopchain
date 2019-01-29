@@ -32,8 +32,20 @@ class BlockSerializer(ABC):
                                        "The block of this version cannot be deserialized by the serializer.")
         return self._deserialize(block_dumped)
 
+    def _deserialize(self, json_data):
+        header_data = self._deserialize_header_data(json_data)
+        header = self.BlockHeaderClass(**header_data)
+
+        body_data = self._deserialize_body_data(json_data)
+        body = self.BlockBodyClass(**body_data)
+        return Block(header, body)
+
     @abstractmethod
-    def _deserialize(self, block_dumped: dict) -> 'Block':
+    def _deserialize_header_data(self, json_data: dict):
+        raise NotImplementedError
+
+    @abstractmethod
+    def _deserialize_body_data(self, json_data: dict):
         raise NotImplementedError
 
     @classmethod

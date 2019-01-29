@@ -34,7 +34,7 @@ from cryptography.x509.oid import NameOID
 
 from loopchain.utils import loggers
 from loopchain.blockchain import Hash32, TransactionSerializer, TransactionVersioner
-from loopchain.blockchain.hashing import build_hash_generator
+from loopchain.crypto.hashing import build_hash_generator
 
 import testcase.unittest.test_util as test_util
 

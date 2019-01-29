@@ -32,7 +32,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
 from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
 from loopchain.components import SingletonMetaClass
-from loopchain.peer import PeerService, IcxAuthorization
+from loopchain.peer import PeerService, Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
@@ -233,13 +233,13 @@ def clean_up_mq():
     os.system("rabbitmqctl start_app")
 
 
-def create_basic_tx(peer_auth: IcxAuthorization) -> Transaction:
+def create_basic_tx(peer_auth: Signer) -> Transaction:
     """
     :param peer_auth:
     :return: transaction
     """
     tx_builder = TransactionBuilder.new("0x3", TransactionVersioner())
-    tx_builder.private_key = peer_auth.peer_private_key
+    tx_builder.private_key = peer_auth.private_key
     tx_builder.to_address = Address("hx3f376559204079671b6a8df481c976e7d51b3c7c")
     tx_builder.value = 1
     tx_builder.step_limit = 100000000
@@ -247,9 +247,9 @@ def create_basic_tx(peer_auth: IcxAuthorization) -> Transaction:
     return tx_builder.build()
 
 
-def create_default_peer_auth() -> IcxAuthorization:
+def create_default_peer_auth() -> Signer:
     channel = list(conf.CHANNEL_OPTION)[0]
-    peer_auth = IcxAuthorization(channel)
+    peer_auth = Signer(channel)
     return peer_auth
 
 

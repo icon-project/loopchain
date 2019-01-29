@@ -235,7 +235,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                       f"\nPeer_target : {request.peer_target}"
                       f"\nChannel : {request.channel}")
 
-        peer = PeerInfo(request.peer_id, request.group_id, request.peer_target, PeerStatus.unknown, cert=request.cert)
+        peer = PeerInfo(request.peer_id, request.group_id, request.peer_target, PeerStatus.unknown)
 
         util.logger.spam(f"service::ConnectPeer try add_peer")
 

@@ -11,6 +11,19 @@
  * Strategy
    - leader pick strategy in round n. (normal strategy)
      - pick most picked peer in prev round.
+
+
+#### Terms (new)
+ * Height
+   - Increase after add block when consensus complete.
+ * Epoch 
+   - Candidate blocks, voting and leader complaint management. Handles one block height. And after adding blocks, the new epoch starts.
+ * Round
+   - round 0 is first block generation try of each height.
+   - If leader fail to make a block, round n is to be leader complain round.
+ * Strategy
+   - leader pick strategy in round n. (normal strategy)
+     - pick most picked peer in prev round.
  
 #### Complain Process
   * heartbeat
@@ -21,7 +34,18 @@
     - If receive 'AnnounceUnconfirmedBlock' in state 'LeaderComplain' then Peer should not vote.
   * Increase block generate time interval
     - After each leader complain phase, next leader get more *2 time interval than prev leader.
-    
+
+
+#### Complain Process (new)
+ * leader complain Timer
+   - start when "AddTx(List)"
+   - stop when "Add Block"
+ * Complain Block
+   - Set is_complain flag True in block header
+   - It made by peer (the order of priority: from prev_leader to next 1 by 1 except complain peer)
+   - No tx in block
+   - Confirm by next block (Normal Voting Block, is_complain=False)
+   - Include prev block votes
 
 #### Complain message
   ```

@@ -28,8 +28,6 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
                                   BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.consensus import Epoch, VoteMessage
-from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, message_code
 
 if TYPE_CHECKING:
@@ -107,29 +105,30 @@ class ChannelInnerTask:
 
     @message_queue_task(priority=255)
     async def get_status(self):
-        block_height = 0
-        total_tx = 0
-
         status_data = dict()
-
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
+
+        block_height = 0
         unconfirmed_block_height = None
         last_block = block_manager.get_blockchain().last_block
+        last_unconfirmed_block = block_manager.get_blockchain().last_unconfirmed_block
+
         if last_block:
             block_height = last_block.header.height
-            total_tx = block_manager.get_total_tx()
-            logging.debug(f"last_block height({block_height}), hash({last_block.header.hash})")
+
+        if last_unconfirmed_block:
+            unconfirmed_block_height = last_unconfirmed_block.header.height
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
-        status_data["peer_type"] = str(block_manager.peer_type)
+        status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
-        status_data["total_tx"] = total_tx
+        status_data["total_tx"] = block_manager.get_total_tx()
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
@@ -318,7 +317,7 @@ class ChannelInnerTask:
                              f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
                              f"channel({ChannelProperty().name}))")
 
-            if ChannelProperty().peer_id == unconfirmed_block.header.next_leader.hex_hx():
+            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != unconfirmed_block.header.next_leader.hex_hx():
                 await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task
@@ -364,15 +363,6 @@ class ChannelInnerTask:
         return response_code
 
     @message_queue_task
-    def announce_new_block_for_vote(self, block: Block, epoch: Epoch):
-        acceptor = self._channel_service.acceptor
-        if acceptor.epoch is None:
-            pass
-        else:
-            acceptor.epoch.block_hash = block.header.hash.hex()
-            acceptor.create_vote(block=block, epoch=epoch)
-
-    @message_queue_task
     def block_sync(self, block_hash, block_height):
         blockchain = self._channel_service.block_manager.get_blockchain()
 
@@ -402,6 +392,9 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
+        peer = self._channel_service.peer_manager.get_peer_by_target(peer_target)
+        if not peer:
+            util.logger.debug(f"There is no peer peer_target({peer_target})")
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
@@ -433,7 +426,7 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
-        util.logger.spam(f"channel_inner_service:VoteUnconfirmedBlock "
+        util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
                          f"({ChannelProperty().name}) block_hash({block_hash})")
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
@@ -446,16 +439,32 @@ class ChannelInnerTask:
         )
 
         consensus = block_manager.consensus_algorithm
-        if isinstance(consensus, ConsensusSiever) and self._channel_service.state_machine.state == "BlockGenerate":
+        if self._channel_service.state_machine.state == "BlockGenerate":
             consensus.count_votes(block_hash)
 
-    @message_queue_task
-    async def broadcast_vote(self, vote: VoteMessage):
-        acceptor = self._channel_service.acceptor
-        if acceptor.epoch is None:
-            pass
-        else:
-            await acceptor.apply_vote_into_block(vote)
+    @message_queue_task(type_=MessageQueueType.Worker)
+    def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
+        block_manager = self._channel_service.block_manager
+        util.logger.notice(f"channel_inner_service:complain_leader "
+                           f"complain_leader_id({complained_leader_id}), "
+                           f"new_leader_id({new_leader_id}), "
+                           f"block_height({block_height})")
+
+        block_manager.epoch.add_complain(
+            complained_leader_id, new_leader_id, block_height, peer_id, group_id
+        )
+
+        next_new_leader = block_manager.epoch.complain_result()
+        if next_new_leader:
+            # self._channel_service.peer_manager.remove_peer(complained_leader_id)
+            self._channel_service.stop_leader_complain_timer()
+            if next_new_leader == ChannelProperty().peer_id:
+                # Turn to Leader and Send Leader Complain Block
+                util.logger.notice(f"No I'm your father....")
+                self._channel_service.state_machine.turn_to_leader()
+            else:
+                util.logger.notice(f"I'm your Jedi.")
+                self._channel_service.state_machine.turn_to_peer()
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

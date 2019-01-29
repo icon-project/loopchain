@@ -14,13 +14,15 @@
 """A module for managing peer list"""
 import json
 import logging
+import math
 import pickle
 import threading
-import math
+from typing import Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 # Changing the import location will cause a pickle error.
@@ -159,7 +161,7 @@ class PeerManager:
             map(convert_peer_info_item_to_peer_item, self.peer_list_data.peer_info_list[group_id].items())
         )
 
-    def __get_peer_by_target(self, peer_target):
+    def get_peer_by_target(self, peer_target):
         for group_id in self.peer_list.keys():
             for peer_id in self.peer_list[group_id]:
                 peer_each = self.peer_list[group_id][peer_id]
@@ -181,12 +183,16 @@ class PeerManager:
                     channel_manager.remove_audience(
                         channel=self.__channel_name, peer_target=peer_target)
 
-    def add_peer(self, peer_info):
+    def add_peer(self, peer_info: Union[PeerInfo, dict]):
         """add_peer to peer_manager
 
-        :param peer_info: PeerInfo
+        :param peer_info: PeerInfo, dict
         :return: create_peer_order
         """
+
+        if isinstance(peer_info, dict):
+            peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
+
         logging.debug(f"add peer id: {peer_info.peer_id}")
 
         # If exist same peer_target in peer_list, delete exist one.
@@ -356,7 +362,7 @@ class PeerManager:
         return leader_peer
 
     def get_next_leader_peer(self, group_id=None, current_leader_peer_id=None, is_only_alive=False):
-        util.logger.spam(f"peer_manager:get_next_leader_peer")
+        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
             leader_peer = self.get_leader_peer(group_id, is_complain_to_rs=True)
@@ -496,7 +502,9 @@ class PeerManager:
             complained_leader_id=complained_leader_id,
             channel=self.__channel_name,
             new_leader_id=new_leader_id,
-            message="Announce New Leader"
+            message="Announce New Leader",
+            peer_id=ChannelProperty().peer_id,
+            group_id=ChannelProperty().group_id
         )
 
         # new_leader_peer = self.get_peer(new_leader_id)

@@ -25,16 +25,14 @@ from earlgrey import MessageQueueService
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
+from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
-from loopchain.baseservice import RestStubManager, Timer, NodeSubscriber
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.consensus import Consensus, Acceptor, Proposer
+from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.peer.icx_authorization import IcxAuthorization
-from loopchain.peer.peer_authorization import PeerAuthorization
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -46,13 +44,13 @@ class ChannelService:
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
-        self.__peer_auth: IcxAuthorization = None
+        self.__peer_auth: Signer = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
-        self.__consensus: Consensus = None
-        self.__proposer: Proposer = None
-        self.__acceptor: Acceptor = None
+        self.__consensus = None
+        # self.__proposer: Proposer = None
+        # self.__acceptor: Acceptor = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
 
@@ -197,29 +195,37 @@ class ChannelService:
         ChannelProperty().node_type = conf.NodeType(node_type)
         ChannelProperty().score_package = score_package
 
+        self.__peer_manager = PeerManager(ChannelProperty().name)
         self.__init_peer_auth()
-        self.__init_block_manager()
         self.__init_broadcast_scheduler()
+        self.__init_block_manager()
         self.__init_radio_station_stub()
 
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
-        self.__peer_manager = PeerManager(ChannelProperty().name)
-
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            util.logger.spam(f"init consensus !")
-            # load consensus
-            self.__init_consensus()
-            # load proposer
-            self.__init_proposer(peer_id=peer_id)
-            # load acceptor
-            self.__init_acceptor(peer_id=peer_id)
+        # if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+        #     util.logger.spam(f"init consensus !")
+        #     # load consensus
+        #     self.__init_consensus()
+        #     # load proposer
+        #     self.__init_proposer(peer_id=peer_id)
+        #     # load acceptor
+        #     self.__init_acceptor(peer_id=peer_id)
             
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.connect_to_radio_station()
+            if conf.ENABLE_REP_RADIO_STATION:
+                self.connect_to_radio_station()
+            else:
+                await self.__load_peers_from_file()
+                # subscribe to other peers
+                self.__subscribe_to_peer_list()
+                # broadcast AnnounceNewPeer to other peers
+                # If allow broadcast AnnounceNewPeer here, complained peer can be leader again.
         else:
             self.__init_node_subscriber()
+
+        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         await self.set_peer_type_in_channel()
@@ -230,13 +236,17 @@ class ChannelService:
 
     async def subscribe_network(self):
         # Subscribe to radiostation and block_sync_target_stub
-        await self.subscribe_to_radio_station()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            if conf.ENABLE_REP_RADIO_STATION:
+                await self.subscribe_to_radio_station()
 
-        if self.is_support_node_function(conf.NodeFunction.Vote) and self.block_manager.peer_type == loopchain_pb2.PEER:
-            await self.__subscribe_call_to_stub(
-                peer_stub=self.block_manager.subscribe_target_peer_stub,
-                peer_type=loopchain_pb2.PEER
-            )
+            if self.block_manager.peer_type == loopchain_pb2.PEER:
+                await self.__subscribe_call_to_stub(
+                    peer_stub=self.block_manager.subscribe_target_peer_stub,
+                    peer_type=loopchain_pb2.PEER
+                )
+        else:
+            await self.subscribe_to_radio_station()
 
         self.generate_genesis_block()
 
@@ -252,8 +262,7 @@ class ChannelService:
 
     def __init_peer_auth(self):
         try:
-            self.__peer_auth = IcxAuthorization(ChannelProperty().name)
-
+            self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
             util.exit_and_msg(f"peer auth init fail cause : {e}")
@@ -271,32 +280,32 @@ class ChannelService:
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
 
-    def __init_consensus(self):
-        consensus = Consensus(self, ChannelProperty().name)
-        self.__consensus = consensus
-        self.__block_manager.consensus = consensus
-        consensus.register_subscriber(self.__block_manager)
-
-    def __init_proposer(self, peer_id: str):
-        proposer = Proposer(
-            name="loopchain.consensus.Proposer",
-            peer_id=peer_id,
-            channel=ChannelProperty().name,
-            channel_service=self
-        )
-        self.__consensus.register_subscriber(proposer)
-        self.__proposer = proposer
-
-    def __init_acceptor(self, peer_id: str):
-        acceptor = Acceptor(
-            name="loopchain.consensus.Acceptor",
-            consensus=self.__consensus,
-            peer_id=peer_id,
-            channel=ChannelProperty().name,
-            channel_service=self
-        )
-        self.__consensus.register_subscriber(acceptor)
-        self.__acceptor = acceptor
+    # def __init_consensus(self):
+    #     consensus = Consensus(self, ChannelProperty().name)
+    #     self.__consensus = consensus
+    #     self.__block_manager.consensus = consensus
+    #     consensus.register_subscriber(self.__block_manager)
+    #
+    # def __init_proposer(self, peer_id: str):
+    #     proposer = Proposer(
+    #         name="loopchain.consensus.Proposer",
+    #         peer_id=peer_id,
+    #         channel=ChannelProperty().name,
+    #         channel_service=self
+    #     )
+    #     self.__consensus.register_subscriber(proposer)
+    #     self.__proposer = proposer
+    #
+    # def __init_acceptor(self, peer_id: str):
+    #     acceptor = Acceptor(
+    #         name="loopchain.consensus.Acceptor",
+    #         consensus=self.__consensus,
+    #         peer_id=peer_id,
+    #         channel=ChannelProperty().name,
+    #         channel_service=self
+    #     )
+    #     self.__consensus.register_subscriber(acceptor)
+    #     self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastScheduler(channel=ChannelProperty().name, self_target=ChannelProperty().peer_target)
@@ -309,11 +318,12 @@ class ChannelService:
 
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.__radio_station_stub = StubManager.get_stub_manager_to_server(
-                ChannelProperty().radio_station_target,
-                loopchain_pb2_grpc.RadioStationStub,
-                conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                ssl_auth_type=conf.GRPC_SSL_TYPE)
+            if conf.ENABLE_REP_RADIO_STATION:
+                self.__radio_station_stub = StubManager.get_stub_manager_to_server(
+                    ChannelProperty().radio_station_target,
+                    loopchain_pb2_grpc.RadioStationStub,
+                    conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
+                    ssl_auth_type=conf.GRPC_SSL_TYPE)
         else:
             self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target, ChannelProperty().name)
 
@@ -392,6 +402,13 @@ class ChannelService:
 
         return score_info
 
+    async def __load_peers_from_file(self):
+        channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
+        for peer_info in channel_info[ChannelProperty().name]["peers"]:
+            self.__peer_manager.add_peer(peer_info)
+            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info["peer_target"])
+        self.show_peers()
+
     def is_support_node_function(self, node_function):
         return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
 
@@ -418,23 +435,16 @@ class ChannelService:
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
                 peer_target=ChannelProperty().peer_target,
-                group_id=ChannelProperty().group_id,
-                cert=self.peer_auth.peer_cert),
+                group_id=ChannelProperty().group_id),
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
 
         # start next ConnectPeer timer
-        if TimerService.TIMER_KEY_CONNECT_PEER not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                TimerService.TIMER_KEY_CONNECT_PEER,
-                Timer(
-                    target=TimerService.TIMER_KEY_CONNECT_PEER,
-                    duration=conf.CONNECTION_RETRY_TIMER,
-                    callback=self.connect_to_radio_station,
-                    callback_kwargs={"is_reconnect": True}
-                )
-            )
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_CONNECT_PEER,
+                                                  duration=conf.CONNECTION_RETRY_TIMER,
+                                                  callback=self.connect_to_radio_station,
+                                                  callback_kwargs={"is_reconnect": True})
 
         if is_reconnect:
             return
@@ -450,6 +460,17 @@ class ChannelService:
                 util.logger.spam(f"peer_service:connect_to_radio_station peer({each_peer.target}-{each_peer.status})")
                 if each_peer.status == PeerStatus.connected:
                     self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
+
+    def __subscribe_to_peer_list(self):
+        peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
+        peer_request = loopchain_pb2.PeerRequest(
+            channel=ChannelProperty().name,
+            peer_target=ChannelProperty().peer_target,
+            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+            node_type=ChannelProperty().node_type,
+            peer_order=peer_object.order
+        )
+        self.__broadcast_scheduler.schedule_broadcast("Subscribe", peer_request)
 
     async def subscribe_to_radio_station(self):
         await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)
@@ -649,8 +670,11 @@ class ChannelService:
     async def reset_leader(self, new_leader_id, block_height=0):
         logging.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
-        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
-            logging.warning(f"height behind peer can not take leader role.")
+
+        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
+            util.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
+                                f"last_block.header.height("
+                                f"{self.block_manager.get_blockchain().last_block.header.height})")
             return
 
         if leader_peer is None:
@@ -666,32 +690,28 @@ class ChannelService:
         peer_type = loopchain_pb2.PEER
 
         if self_peer_object.target == peer_leader.target:
-            loggers.get_preset().is_leader = True
-            loggers.get_preset().update_logger()
-
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
 
             if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                self.peer_manager.announce_new_leader(
-                    self.peer_manager.get_leader_peer().peer_id,
-                    new_leader_id,
-                    is_broadcast=True,
-                    self_peer_id=ChannelProperty().peer_id
-                )
+                if conf.ENABLE_REP_RADIO_STATION:
+                    self.peer_manager.announce_new_leader(
+                        self.peer_manager.get_leader_peer().peer_id,
+                        new_leader_id,
+                        is_broadcast=True,
+                        self_peer_id=ChannelProperty().peer_id
+                    )
         else:
-            loggers.get_preset().is_leader = False
-            loggers.get_preset().update_logger()
-
             logging.debug("Set Peer Type Peer!")
             self.state_machine.turn_to_peer()
 
             # 새 leader 에게 subscribe 하기
-            await self.subscribe_to_radio_station()
+            # await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
+        self.block_manager.epoch.set_epoch_leader(peer_leader.peer_id)
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
@@ -828,59 +848,41 @@ class ChannelService:
         else:
             object_has_queue = self.__block_manager
 
+        self.start_leader_complain_timer()
+
         return object_has_queue
 
+    def start_leader_complain_timer(self):
+        # util.logger.debug(f"start_leader_complain_timer in channel service.")
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
+                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                  is_repeat=True, callback=self.state_machine.leader_complain)
+
+    def stop_leader_complain_timer(self):
+        # util.logger.debug(f"stop_leader_complain_timer in channel service.")
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
+
     def start_subscribe_timer(self):
-        timer_key = TimerService.TIMER_KEY_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.SUBSCRIBE_RETRY_TIMER,
-                    is_repeat=True,
-                    callback=self.subscribe_network
-                )
-            )
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SUBSCRIBE,
+                                                  duration=conf.SUBSCRIBE_RETRY_TIMER,
+                                                  is_repeat=True, callback=self.subscribe_network)
 
     def stop_subscribe_timer(self):
-        if TimerService.TIMER_KEY_SUBSCRIBE in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
 
     def start_check_last_block_rs_timer(self):
-        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key not in self.__timer_service.timer_list:
-            util.logger.spam(f"add timer for check_block_height_call to radiostation...")
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.GET_LAST_BLOCK_TIMER,
-                    is_repeat=True,
-                    callback=self.__check_last_block_to_rs
-                )
-            )
+        self.__timer_service.add_timer_convenient(
+            timer_key=TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION,
+            duration=conf.GET_LAST_BLOCK_TIMER, is_repeat=True, callback=self.__check_last_block_to_rs)
 
     def stop_check_last_block_rs_timer(self):
-        timer_key = TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION
-        if timer_key in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(timer_key)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION)
 
     def start_shutdown_timer(self):
-        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key not in self.__timer_service.timer_list:
-            error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
-            self.__timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.SHUTDOWN_TIMER,
-                    callback=self.shutdown_peer,
-                    callback_kwargs={"message": error}
-                )
-            )
+        error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE,
+                                                  duration=conf.SHUTDOWN_TIMER, callback=self.shutdown_peer,
+                                                  callback_kwargs={"message": error})
 
     def stop_shutdown_timer(self):
-        timer_key = TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE
-        if timer_key in self.__timer_service.timer_list:
-            self.__timer_service.stop_timer(timer_key)
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)

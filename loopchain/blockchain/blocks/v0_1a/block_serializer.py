@@ -32,7 +32,7 @@ class BlockSerializer(BaseBlockSerializer):
             "commit_state": header.commit_state
         }
 
-    def _deserialize(self, json_data):
+    def _deserialize_header_data(self, json_data: dict):
         prev_hash = json_data.get('prev_block_hash')
         prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
 
@@ -45,19 +45,20 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("next_leader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
-        confirm_prev_block = json_data.get("confirm_prev_block")
+        return {
+            "hash": Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
+            "prev_hash": prev_hash,
+            "height": json_data["height"],
+            "timestamp": json_data["time_stamp"],
+            "peer_id": peer_id,
+            "signature": signature,
+            "next_leader": next_leader,
+            "merkle_tree_root_hash": Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
+            "commit_state": json_data["commit_state"]
+        }
 
-        header = self.BlockHeaderClass(
-            hash=Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
-            prev_hash=prev_hash,
-            height=json_data["height"],
-            timestamp=json_data["time_stamp"],
-            peer_id=peer_id,
-            signature=signature,
-            next_leader=next_leader,
-            merkle_tree_root_hash=Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
-            commit_state=json_data.get("commit_state")
-        )
+    def _deserialize_body_data(self, json_data: dict):
+        confirm_prev_block = json_data.get("confirm_prev_block")
 
         transactions = OrderedDict()
         for tx_data in json_data['confirmed_transaction_list']:
@@ -66,5 +67,7 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        body = self.BlockBodyClass(transactions, confirm_prev_block)
-        return Block(header, body)
+        return {
+            "confirm_prev_block": confirm_prev_block,
+            "transactions": transactions
+        }

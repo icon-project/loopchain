@@ -142,7 +142,12 @@ class BroadcastScheduler(CommonThread):
 
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
-    def __broadcast_retry_async(self, peer_target, method_name, method_param, retry_times, timeout, result):
+    def __keep_grpc_connection(self, result, timeout, stub_manager: StubManager):
+        return isinstance(result, _Rendezvous) \
+               and result.code() in (grpc.StatusCode.DEADLINE_EXCEEDED, grpc.StatusCode.UNAVAILABLE) \
+               and stub_manager.elapsed_last_succeed_time() < timeout
+
+    def __broadcast_retry_async(self, peer_target, method_name, method_param, retry_times, timeout, stub, result):
         if isinstance(result, _Rendezvous) and result.code() == grpc.StatusCode.OK:
             return
         if isinstance(result, futures.Future) and not result.exception():
@@ -150,8 +155,16 @@ class BroadcastScheduler(CommonThread):
 
         logging.debug(f"try retry to : peer_target({peer_target})\n")
         if retry_times > 0:
-            retry_times -= 1
-            self.__call_async_to_target(peer_target, method_name, method_param, False, retry_times, timeout)
+            try:
+                stub_manager: StubManager = self.__audience[peer_target]
+                if not stub_manager:
+                    logging.warning(f"broadcast_thread:__broadcast_retry_async Failed to connect to ({peer_target}).")
+                    return
+                retry_times -= 1
+                is_stub_reuse = stub_manager.stub != stub or self.__keep_grpc_connection(result, timeout, stub_manager)
+                self.__call_async_to_target(peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout)
+            except KeyError as e:
+                logging.debug(f"broadcast_thread:__broadcast_retry_async ({peer_target}) not in audience. ({e})")
         else:
             if isinstance(result, _Rendezvous):
                 exception = result.details()
@@ -167,26 +180,24 @@ class BroadcastScheduler(CommonThread):
 
     def __call_async_to_target(self, peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout):
         try:
-            call_back_partial = None
-            stub_item = None
-
-            if peer_target in self.__audience.keys():
-                call_back_partial = partial(self.__broadcast_retry_async,
-                                            peer_target,
-                                            method_name,
-                                            method_param,
-                                            retry_times,
-                                            timeout)
-                stub_item = self.__audience[peer_target]
+            stub_item: StubManager = self.__audience[peer_target]
+            if not stub_item:
+                logging.debug(f"broadcast_thread:__call_async_to_target Failed to connect to ({peer_target}).")
+                return
+            call_back_partial = partial(self.__broadcast_retry_async,
+                                        peer_target,
+                                        method_name,
+                                        method_param,
+                                        retry_times,
+                                        timeout,
+                                        stub_item.stub)
+            stub_item.call_async(method_name=method_name,
+                                 message=method_param,
+                                 is_stub_reuse=is_stub_reuse,
+                                 call_back=call_back_partial,
+                                 timeout=timeout)
         except KeyError as e:
             logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
-        else:
-            if stub_item:
-                stub_item.call_async(method_name=method_name,
-                                     message=method_param,
-                                     is_stub_reuse=is_stub_reuse,
-                                     call_back=call_back_partial,
-                                     timeout=timeout)
 
     def __broadcast_run_async(self, method_name, method_param, retry_times=None, timeout=None):
         """call gRPC interface of audience
@@ -305,6 +316,7 @@ class BroadcastScheduler(CommonThread):
             # Send multiple tx
             remains, message = self.__make_tx_list_message()
             self.__broadcast_run("AddTxList", message)
+            ObjectManager().channel_service.start_leader_complain_timer()
             if remains:
                 self.__send_tx_in_timer()
 

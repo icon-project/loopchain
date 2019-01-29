@@ -13,6 +13,7 @@
 # limitations under the License.
 """State Machine for Channel Service"""
 import asyncio
+
 from earlgrey import MessageQueueService
 from transitions import State
 
@@ -22,21 +23,28 @@ from loopchain.baseservice import TimerService
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
+from loopchain.utils import loggers
 
 
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
     states = ['InitComponents',
-              State(name='Consensus', on_enter='_consensus_on_enter'),
-              State(name='BlockHeightSync', on_enter='_blockheightsync_on_enter'),
+              State(name='Consensus', ignore_invalid_triggers=True,
+                    on_enter='_consensus_on_enter'),
+              State(name='BlockHeightSync', ignore_invalid_triggers=True,
+                    on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
-              State(name='BlockSync', on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
-              State(name='SubscribeNetwork', on_enter='_subscribe_network_on_enter',
-                    on_exit='_subscribe_network_on_exit'),
+              State(name='BlockSync', ignore_invalid_triggers=True,
+                    on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
+              State(name='SubscribeNetwork', ignore_invalid_triggers=True,
+                    on_enter='_subscribe_network_on_enter', on_exit='_subscribe_network_on_exit'),
               'Watch',
-              State(name='Vote', on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
-              State(name='BlockGenerate', on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
-              'LeaderComplain',
+              State(name='Vote', ignore_invalid_triggers=True,
+                    on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
+              State(name='BlockGenerate', ignore_invalid_triggers=True,
+                    on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
+              State(name='LeaderComplain', ignore_invalid_triggers=True,
+                    on_enter='_leadercomplain_on_enter', on_exit='_leadercomplain_on_exit'),
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -78,15 +86,20 @@ class ChannelStateMachine(object):
     def vote(self):
         pass
 
+    # transition defined in __init__ for multiple conditions.
     def complete_sync(self):
         pass
 
-    @statemachine.transition(source=('BlockGenerate', 'Vote'), dest='Vote')
+    @statemachine.transition(source=('BlockGenerate', 'Vote', 'LeaderComplain'), dest='Vote')
     def turn_to_peer(self):
         pass
 
-    @statemachine.transition(source=('Vote', 'BlockGenerate'), dest='BlockGenerate')
+    @statemachine.transition(source=('Vote', 'BlockGenerate', 'LeaderComplain'), dest='BlockGenerate')
     def turn_to_leader(self):
+        pass
+
+    @statemachine.transition(source='Vote', dest='LeaderComplain')
+    def leader_complain(self):
         pass
 
     def _is_leader(self):
@@ -95,25 +108,12 @@ class ChannelStateMachine(object):
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
-    def _consensus_on_enter(self):
-        self.block_height_sync()
-
-    def _blockheightsync_on_enter(self):
-        self.evaluate_network()
-
     def _enter_block_sync(self):
         self.block_sync()
 
     def _do_block_sync(self):
         loop = MessageQueueService.loop
         asyncio.run_coroutine_threadsafe(self.__channel_service.block_height_sync_channel(), loop)
-
-    def _blocksync_on_enter(self):
-        self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
-
-    def _blocksync_on_exit(self):
-        self.__channel_service.block_manager.stop_block_height_sync_timer()
-        self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
     def _do_evaluate_network(self):
         loop = MessageQueueService.loop
@@ -123,6 +123,24 @@ class ChannelStateMachine(object):
         loop = MessageQueueService.loop
         asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_network(), loop)
 
+    def _do_vote(self):
+        self.__channel_service.block_manager.vote_as_peer()
+
+    # State handlers {
+
+    def _consensus_on_enter(self):
+        self.block_height_sync()
+
+    def _blockheightsync_on_enter(self):
+        self.evaluate_network()
+
+    def _blocksync_on_enter(self):
+        self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
+
+    def _blocksync_on_exit(self):
+        self.__channel_service.block_manager.stop_block_height_sync_timer()
+        self.__channel_service.block_manager.update_service_status(status_code.Service.online)
+
     def _subscribe_network_on_enter(self):
         self.__channel_service.start_subscribe_timer()
         self.__channel_service.start_shutdown_timer()
@@ -131,17 +149,27 @@ class ChannelStateMachine(object):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
 
-    def _do_vote(self):
-        self.__channel_service.block_manager.vote_as_peer()
-
     def _vote_on_enter(self):
-        util.logger.spam(f"\nvote_on_enter")
+        loggers.get_preset().is_leader = False
+        loggers.get_preset().update_logger()
 
     def _vote_on_exit(self):
-        util.logger.spam(f"\nvote_on_exit")
+        # util.logger.debug(f"_vote_on_exit")
+        pass
 
     def _blockgenerate_on_enter(self):
+        loggers.get_preset().is_leader = True
+        loggers.get_preset().update_logger()
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self):
         self.__channel_service.block_manager.stop_block_generate_timer()
+
+    def _leadercomplain_on_enter(self):
+        util.logger.debug(f"_leadercomplain_on_enter")
+        self.__channel_service.block_manager.leader_complain()
+
+    def _leadercomplain_on_exit(self):
+        util.logger.debug(f"_leadercomplain_on_exit")
+
+    # }

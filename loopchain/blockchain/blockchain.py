@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, Vote)
+                                  Hash32, ExternalAddress, TransactionVersioner, Vote, Epoch)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -260,6 +260,12 @@ class BlockChain:
                 'data': {
                     'block_height': self.__block_height
                 }})
+
+            # stop leader complain timer
+            ObjectManager().channel_service.stop_leader_complain_timer()
+
+            # start new epoch
+            ObjectManager().channel_service.block_manager.epoch = Epoch.new_epoch(block.header.height + 1)
 
             # notify new block
             ObjectManager().channel_service.inner_service.notify_new_block()

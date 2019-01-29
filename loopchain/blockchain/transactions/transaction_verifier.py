@@ -3,7 +3,7 @@ import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from secp256k1 import PublicKey, PrivateKey
-from ..hashing import build_hash_generator
+from loopchain.crypto.hashing import build_hash_generator
 from .. import Hash32, ExternalAddress
 if TYPE_CHECKING:
     from . import Transaction

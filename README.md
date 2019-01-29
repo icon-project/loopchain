@@ -14,141 +14,64 @@ Loopchain development and execution requires following environments.
   * Windows are not supported yet.
 
 * Python
-  * Make Virtual Env for Python 3.6.5+ (recommended version, 3.7 is not supported)
-  * check your python version
+  * Python 3.6.5+ (recommended version, 3.7 is not supported)
 
-  ```bash
-  $ python3 -V
-  ```
-
-  > If you'd like to easily manage your python version by each projects, we highly recommend to use **pyenv**.
-   * Install **pyenv**
-   ```
-   $ curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
-   ```
-
-   * Append the following commands to `~/.bash_profile`.
-   ```
-   export PATH="/home/centos/.pyenv/bin:$PATH"
-   eval "$(pyenv init -)"
-   eval "$(pyenv virtualenv-init -)"
-   ```
-   * Apply for the profile
-
-   ```
-   $ source ~/.bash_profile
-   ```
-   * Install **python 3.6.5**
-
-   ```
-   $ pyenv install 3.6.5
-   $ pyenv shell 3.6.5
-   ```
-
-   * make virtual env and apply
-
-   ```
-   $ virtualenv -p python3 ./venv
-   $ source ./venv/bin/activate
-   ```
-
-### Setup on MacOS
-
-* install Xcode command tool
-* install brew
-
-  ```bash
-  (venv) $ /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-  ```
-
-* Install third party tools
-
-  ```bash
-  (venv) $ brew install automake pkg-config libtool leveldb rabbitmq openssl
-  ```
-
-* Setup RabbitMQ
-
-  * increase number of RabbitMQ file descriptors
-
-  > Add the below command to the `rabbitmq-env.conf` file to run the command each time rabbitmq starts.
+* Third party tools
+    
+    If you're using package manager, you can install all of them through your package manager.
+    
     ```
-    ulimit -S -n {value: int}
+    automake pkg-config libtool leveldb rabbitmq openssl
     ```
-  > You may find this file (/usr/local/etc/rabbitmq/rabbitmq-env.conf).
-  > Recommended value is 2048 or more. (Local test case only)
-  > You may need to adjust this value depending on your infrastructure environment.
 
-  * start rabbitmq
+* Check all requirements are installed and started properly
 
-  ```bash
-  (venv) $ brew services start rabbitmq
-  (venv) $ rabbitmqctl list_queues
-  ```
+    ```bash
+    $ make requirements
+    ```
 
-  * enable rabbitmq web management
+If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
-  ```bash
-  (venv) $ rabbitmq-plugins enable rabbitmq_management
-  ```
-
-#### Install requirements
-
-If you have generated ssh key for github, you can install with below commands.
-All libraries are recommended to install the master version of github.
+### Install necessary packages
 
 ```bash
-(venv) $ pip3 install git+ssh://git@github.com/icon-project/icon-service.git@master
-(venv) $ pip3 install git+ssh://git@github.com/icon-project/icon-commons.git@master
-(venv) $ pip3 install git+ssh://git@github.com/icon-project/icon-rpc-server.git@master
-(venv) $ pip3 install -r requirements.txt
-```
-
-Also, you can install with below commands as well.
-
-```bash
-(venv) $ pip3 install git+https://github.com/icon-project/icon-service.git@master
-(venv) $ pip3 install git+https://github.com/icon-project/icon-commons.git@master
-(venv) $ pip3 install git+https://github.com/icon-project/icon-rpc-server.git@master
-(venv) $ pip3 install -r requirements.txt
-```
-
-#### generate gRPC code
-This script generates python gRPC code from protocol buffer which is defined in `loopchain.proto`.
-
-```bash
-(venv) $ ./generate_code.sh
+$ make install
 ```
 
 #### Run Unittest
 After installation, run the unittest by following command line in order to check whether it operates well or not.
 
 ```bash
-(venv) $ ./run_test.sh
+$ make test
 ```
 
-## Quick Start
+## Quick Start on OS X
 
 * [Run Citizen Node on ICON Testnet network](#run-citizen-node-on-icon-testnet-network)
 * [Run Citizen Node on ICON Mainnet network](#run-citizen-node-on-icon-mainnet-network)
 
 ### Run Citizen Node on ICON Testnet network
 
-#### Generate Key
+* Setup
+    
+    ```bash
+    $ make setup
+    $ export PW_icon_dex={ENTER_MY_PASSWORD}
+    $ export REDIRECT_PROTOCOL=https
+    ```
 
-```bash
-(venv) $ mkdir -p resources/my_pki
-(venv) $ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out ./resources/my_pki/my_private.pem    # generate private key
-(venv) $ openssl ec -in ./resources/my_pki/my_private.pem  -pubout -out ./resources/my_pki/my_public.pem             # generate public key
-(venv) $ export PW_icon_dex={ENTER_MY_PASSWORD}
-(venv) $ export REDIRECT_PROTOCOL=https
-```
+    This command is for setting up:
+    * start rabbitmq
+    * generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
+    * generates key for citizen node.
 
-This script will enable ICON citizen node on Testnet network, running on port **9000**.
+* Run
+
+This command will enable ICON citizen node on Testnet network, running on port **9000**.
 Once it's connected to the network, it will start to sync all the blocks on the ICON testnet network.
 
 ```bash
-(venv) $ ./loop citizen -r testnet
+$ loop citizen -r testnet
 ```
 
 If you want to browse and search the blocks and transactions in ICON Testnet, please go to [ICON testnet tracker](https://trackerdev.icon.foundation).
@@ -157,12 +80,6 @@ If you want to browse and search the blocks and transactions in ICON Testnet, pl
 
 T-Bears is a suite of development tools for SCORE and provides the command line interface to interact with the ICON network including all the JSON-RPC v3 APIs.
 For a detailed usage guideline, please refer to [T-Bears tutorial](https://github.com/icon-project/t-bears).
-
-* Install t-bears
-
-```bash
-(venv) $ pip3 install tbears
-```
 
 ##### Test jsonRPC APIs
 In v3, parameters in all api request params require the string '0x' at the front.
@@ -175,7 +92,7 @@ This method returns the last block the Citizen node has currently synced.
 usage: tbears lastblock [-h] [-u URI] [-c CONFIG]
 
 // Example
-(venv) $ tbears lastblock  // Example (default uri: http://localhost:9000/api/v3)
+$ tbears lastblock  // Example (default uri: http://localhost:9000/api/v3)
 
 // result
 block info : {
@@ -214,7 +131,7 @@ block info : {
 usage: tbears blockbyheight [-h] [-u URI] [-c CONFIG] height
 
 // Example
-(venv) $ tbears blockbyheight 0x1
+$ tbears blockbyheight 0x1
 
 // result
 block info : {
@@ -251,7 +168,7 @@ usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
 
 // Example
 
-(venv) $ tbears blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+$ tbears blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
 
 // Result is same as above.
 ```
@@ -262,14 +179,14 @@ usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
 usage: tbears totalsupply [-h] [-u URI] [-c CONFIG]
 
 // Example
-(venv) $ tbears totalsupply
+$ tbears totalsupply
 
 // Result
 Total supply of ICX in hex: 0x2961fff8ca4a62327800000
 Total supply of ICX in decimal: 800460000000000000000000000
 ```
 
-* Create a Keystore
+* Create an account (Skip this if you already have testnet account.)
 
 Create a keystore file in the given path. Generate a private and public key pair using secp256k1 library.
 
@@ -277,7 +194,7 @@ Create a keystore file in the given path. Generate a private and public key pair
 usage: tbears keystore [-h] [-p PASSWORD] path
 
 // Example
-(venv) $ tbears keystore ./my_keystore.json
+$ tbears keystore ./my_keystore.json
 
 input your keystore password: (You have to initialize your keystore password)
 
@@ -312,7 +229,10 @@ It will create new keystore file like this:
 }
 ```
 
-> For there's no balance at that address, you need to request some testnet icx to your address. The instruction and the link to request testnet icx will be updated soon.
+For there's no balance on new address, you need to request some testnet icx to it. **Please refer to [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#testnet-for-exchanges) for test icx and detailed ICON testnet network information.**
+Please note that the `Testnet node url` of your citizen node is `https://test-ctz.solidwallet.io` when sending the request email.
+
+If you want to load and view your testnet account on ICONex Chrome extension, please refer [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#how-to-change-network-in-iconex-chrome-extension).
 
 * get balance
 
@@ -320,11 +240,11 @@ It will create new keystore file like this:
 usage: tbears balance [-h] [-u URI] [-c CONFIG] address
 
 // Example
-(venv) $ tbears balance hx63499c4efc26c9370f6d68132c116d180d441266
+$ tbears balance hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
-balance in hex: 0xde0b6b3a7640000
-balance in decimal: 1000000000000000000
+balance in hex: {your balance in hex}
+balance in decimal: {your balance in decimal}
 ```
 
 * Send transaction
@@ -352,7 +272,7 @@ optional arguments:
                         value for the "uri" (default: ./tbears_cli_config.json)
 ```
 
-We provide the minimal settings for the simple coin transfer in the `sendtx_testnet.json` file.
+We provided the minimal settings for the simple coin transfer in the `sendtx_testnet.json` file.
 The address to which icx is sent(`to`) is the address the ICON developers usually use when testing. You can change the address and the value if you want.
 ```json
 // sendtx_testnet.json
@@ -374,33 +294,38 @@ The address to which icx is sent(`to`) is the address the ICON developers usuall
 Example
 
 ```bash
-(venv) $ tbears sendtx -k my_keystore.json send.json
+$ tbears sendtx -k my_keystore.json sendtx_testnet.json
 
 input your keystore password:
 
 Send transaction request successfully.
-transaction hash: 0xc8a3e3f77f21f8f1177d829cbc4c0ded6fd064cc8e42ef309dacff5c0a952289
+transaction hash: {your tx hash}
 ```
 
   For the details, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
 
 ### Run Citizen Node on ICON Mainnet network
 
-#### Generate Key
+* Setup
+    
+    ```bash
+    $ make setup
+    $ export PW_icon_dex={ENTER_MY_PASSWORD}
+    $ export REDIRECT_PROTOCOL=https
+    ```
 
-```bash
-(venv) $ mkdir -p resources/my_pki
-(venv) $ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out ./resources/my_pki/my_private.pem    # generate private key
-(venv) $ openssl ec -in ./resources/my_pki/my_private.pem  -pubout -out ./resources/my_pki/my_public.pem             # generate public key
-(venv) $ export PW_icon_dex={ENTER_MY_PASSWORD}
-(venv) $ export REDIRECT_PROTOCOL=https
-```
+    This command is for setting up:
+    * start rabbitmq
+    * generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
+    * generates key for citizen node.
 
-This script will enable ICON citizen node on Mainnet network, running on port **9100**.
+* Run
+
+This command below will enable ICON citizen node on Mainnet network, running on port **9100**.
 Once it's connected to the network, it will start to sync all the blocks on the ICON mainnet network.
 
 ```bash
-(venv) $ ./loop citizen -r mainnet
+$ loop citizen -r mainnet
 ```
 
 If you want to browse and search the blocks and transactions in ICON Mainnet, please go to [ICON tracker](https://tracker.icon.foundation).
@@ -420,7 +345,7 @@ This method returns the last block the Citizen node has currently synced.
 usage: tbears lastblock [-h] [-u URI] [-c CONFIG]
 
 // Example
-(venv) $ tbears lastblock -u http://127.0.0.1:9100/api/v3 // Example (default uri: http://localhost:9000/api/v3)
+$ tbears lastblock -u http://127.0.0.1:9100/api/v3
 
 // result
 block info : {
@@ -459,7 +384,7 @@ block info : {
 usage: tbears blockbyheight [-h] [-u URI] [-c CONFIG] height
 
 // Example
-(venv) $ tbears blockbyheight -u http://127.0.0.1:9100/api/v3 0x1
+$ tbears blockbyheight -u http://127.0.0.1:9100/api/v3 0x1
 
 // result
 block info : {
@@ -495,8 +420,7 @@ block info : {
 usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
 
 // Example
-
-(venv) $ tbears blockbyhash -u http://127.0.0.1:9100/api/v3 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+$ tbears blockbyhash -u http://127.0.0.1:9100/api/v3 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
 
 // Result is same as above.
 ```
@@ -507,20 +431,21 @@ usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
 usage: tbears totalsupply [-h] [-u URI] [-c CONFIG]
 
 // Example
-(venv) $ tbears totalsupply -u http://127.0.0.1:9100/api/v3
+$ tbears totalsupply -u http://127.0.0.1:9100/api/v3
 
 // Result
 Total supply of ICX in hex: 0x2961fff8ca4a62327800000
 Total supply of ICX in decimal: 800460000000000000000000000
 ```
 
-* Create your account on Mainnet if you don't have one.
-For Mainnet, we recommend you to create your account on Official ICONex application.
+* To send transaction on Mainnet, you need an ICON account and a balance. If you don't have on, please create your account on official ICONex application as guide below.
 
 1. Go to our website at https://icon.foundation
 2. Click ‘Wallet’ button on the top
 3. Move to Chrome extension page (https://chrome.google.com/webstore/detail/iconex-beta/flpiciilemghbmfalicajoolhkkenfel?hl=en)
 4. Click “Add on +CHROME” button on the upper right corner
+
+**For detailed ICON mainnet network information, please refer to [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#mainnet).**
 
 * get balance
 
@@ -528,16 +453,16 @@ For Mainnet, we recommend you to create your account on Official ICONex applicat
 usage: tbears balance [-h] [-u URI] [-c CONFIG] address
 
 // Example
-(venv) $ tbears balance -u http://127.0.0.1:9100/api/v3 hx63499c4efc26c9370f6d68132c116d180d441266
+$ tbears balance -u http://127.0.0.1:9100/api/v3 hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
-balance in hex: 0xde0b6b3a7640000
-balance in decimal: 1000000000000000000
+balance in hex: {your balance in hex}
+balance in decimal: {your balance in decimal}
 ```
 
 * Send transaction
 
-Now that you have received a sufficient amount of icx, you can use it to send transactions.
+If you have sufficient amount of icx, you can use it to send transactions.
 
 ```
 usage: tbears sendtx [-h] [-u URI] [-k KEYSTORE] [-c CONFIG] json_file
@@ -562,11 +487,18 @@ optional arguments:
 
 For the details, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
 
-#### Clean Up (delete log / delete DB)
+#### Clean Up
 
+* clear rabbitMQ processes & pycache
+
+```bash
+$ make clean
 ```
-$ rm -rf log/
-$ rm -rf .storage_test/ .storage_main/
+
+* delete log / delete DB
+
+```bash
+$ make clean-db
 ```
 
 ## License
