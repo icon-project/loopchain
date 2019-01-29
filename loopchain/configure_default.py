@@ -164,7 +164,7 @@ CONSENSUS_ALGORITHM = ConsensusAlgorithm.siever
 MAX_BLOCK_KBYTES = 3000  # default: 3000
 # The total size of the transactions in a block.
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
-MAX_TX_COUNT_IN_ADDTX_LIST = 10  # AddTxList can send multiple tx in one message.
+MAX_TX_COUNT_IN_ADDTX_LIST = 32  # AddTxList can send multiple tx in one message.
 SEND_TX_LIST_DURATION = 0.3  # seconds
 USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is different from the running node.
 # Consensus Vote Ratio 1 = 100%, 0.5 = 50%
