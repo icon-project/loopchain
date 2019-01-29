@@ -26,9 +26,9 @@ Loopchain development and execution requires following environments.
 
 * Check all requirements are installed and started properly
 
-```bash
-$ make requirements
-```
+    ```bash
+    $ make requirements
+    ```
 
 If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
