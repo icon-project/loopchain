@@ -79,20 +79,32 @@ If you want to browse and search the blocks and transactions in ICON Testnet, pl
 T-Bears is a suite of development tools for SCORE and provides the command line interface to interact with the ICON network including all the JSON-RPC v3 APIs.
 For a detailed usage guideline, please refer to [T-Bears tutorial](https://github.com/icon-project/t-bears).
 
-##### Test jsonRPC APIs
-In v3, parameters in all api request params require the string '0x' at the front.
+##### tbears console
+
+T-Bears interactive mode using IPython. For default, you can attach to local ip and 9000 port, which is your testnet citizen setting.
+
+```bash
+$ tbears console
+
+Python 3.6.5
+Type 'copyright', 'credits' or 'license' for more information
+IPython 6.4.0 -- An enhanced Interactive Python. Type '?' for help.
+
+IPython profile: tbears
+
+tbears)
+```
+
+Now you have attached an interactive shell to a running ICON citizen node on testnet. 
 
 * get lastblock
 
 This method returns the last block the Citizen node has currently synced.
 
-```bash
-usage: tbears lastblock [-h] [-u URI] [-c CONFIG]
+```javascript
+tbears) lastblock
 
-// Example
-$ tbears lastblock  // Example (default uri: http://localhost:9000/api/v3)
-
-// result
+// result example
 block info : {
     "jsonrpc": "2.0",
     "result": {
@@ -125,13 +137,12 @@ block info : {
 
 * get blockbyheight
 
-```bash
-usage: tbears blockbyheight [-h] [-u URI] [-c CONFIG] height
+In v3 api, please note that all parameters in request are required to include '0x' at the front.
 
-// Example
-$ tbears blockbyheight 0x1
+```javascript
+tbears) blockbyheight 0x1
 
-// result
+// result example
 block info : {
   "jsonrpc": "2.0",
   "result": {
@@ -162,11 +173,7 @@ block info : {
 * get blockbyhash
 
 ```bash
-usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
-
-// Example
-
-$ tbears blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+tbears) blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
 
 // Result is same as above.
 ```
@@ -174,12 +181,9 @@ $ tbears blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9
 * get totalsupply
 
 ```bash
-usage: tbears totalsupply [-h] [-u URI] [-c CONFIG]
+tbears) totalsupply
 
-// Example
-$ tbears totalsupply
-
-// Result
+// result
 Total supply of ICX in hex: 0x2961fff8ca4a62327800000
 Total supply of ICX in decimal: 800460000000000000000000000
 ```
@@ -189,19 +193,15 @@ Total supply of ICX in decimal: 800460000000000000000000000
 Create a keystore file in the given path. Generate a private and public key pair using secp256k1 library.
 
 ```bash
-usage: tbears keystore [-h] [-p PASSWORD] path
-
-// Example
-$ tbears keystore ./my_keystore.json
+tbears) keystore ./my_keystore.json
 
 input your keystore password: (You have to initialize your keystore password)
-
 Made keystore file successfully
 ```
 
 It will create new keystore file like this:
 
-```json
+```javascript
 // my_keystore.json
 {
   "address": "hx63499c4efc26c9370f6d68132c116d180d441266",  // address for your account
@@ -235,10 +235,7 @@ If you want to load and view your testnet account on ICONex Chrome extension, pl
 * get balance
 
 ```bash
-usage: tbears balance [-h] [-u URI] [-c CONFIG] address
-
-// Example
-$ tbears balance hx63499c4efc26c9370f6d68132c116d180d441266
+tbears) balance hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
 balance in hex: {your balance in hex}
@@ -248,31 +245,10 @@ balance in decimal: {your balance in decimal}
 * Send transaction
 
 Now that you have received a sufficient amount of icx, you can use it to send transactions.
-
-```
-usage: tbears sendtx [-h] [-u URI] [-k KEYSTORE] [-c CONFIG] json_file
-
-Request icx_sendTransaction with the specified json file and keystore file. If
-keystore file is not given, tbears sends request as it is in the json file.
-
-positional arguments:
-  json_file             File path containing icx_sendTransaction content
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -u URI, --node-uri URI
-                        URI of node (default: http://127.0.0.1:9000/api/v3)
-  -k KEYSTORE, --key-store KEYSTORE
-                        Keystore file path. Used to generate "from" address and
-                        transaction signature
-  -c CONFIG, --config CONFIG
-                        Configuration file path. This file defines the default
-                        value for the "uri" (default: ./tbears_cli_config.json)
-```
-
 We provided the minimal settings for the simple coin transfer in the `sendtx_testnet.json` file.
 The address to which icx is sent(`to`) is the address the ICON developers usually use when testing. You can change the address and the value if you want.
-```json
+
+```javascript
 // sendtx_testnet.json
 
 {
@@ -292,7 +268,7 @@ The address to which icx is sent(`to`) is the address the ICON developers usuall
 Example
 
 ```bash
-$ tbears sendtx -k my_keystore.json sendtx_testnet.json
+tbears) sendtx -k my_keystore.json sendtx_testnet.json
 
 input your keystore password:
 
@@ -300,7 +276,7 @@ Send transaction request successfully.
 transaction hash: {your tx hash}
 ```
 
-  For the details, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
+For more JSON-RPC APIs provided by tbears, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
 
 ### Run Citizen Node on ICON Mainnet network
 
@@ -315,7 +291,54 @@ If you want to browse and search the blocks and transactions in ICON Mainnet, pl
 
 #### Test through command line interface for ICON
 
-Since the mainnet citizen runs on port 9100, you need `-u http://127.0.0.1:9100/api/v3` for all command options in tbears that requires uri option.
+##### tbears genconf
+
+Since default setting for tbears is 9000 port, you need to change the port setting by configuration. 
+
+```bash
+$ tbears genconf
+Made tbears_cli_config.json, tbears_server_config.json, keystore_test1 successfully
+```
+
+Move on to `tbears_cli_config.json` and change the `uri` as below. 
+
+```javascript
+// tbears_cli_config.json
+{
+    "uri": "http://127.0.0.1:9100/api/v3", // ==> change 9000 to 9100
+    "nid": "0x3",
+    "keyStore": null,
+    "from": "hxe7af5fcfd8dfc67530a01a0e403882687528dfcb",
+    "to": "cx0000000000000000000000000000000000000000",
+    "deploy": {
+        "stepLimit": "0x10000000",
+        "mode": "install",
+        "scoreParams": {}
+    },
+    "txresult": {},
+    "transfer": {
+        "stepLimit": "0xf4240"
+    }
+}
+```
+
+##### tbears console
+
+T-Bears interactive mode using IPython.
+
+```bash
+$ tbears console
+
+Python 3.6.5
+Type 'copyright', 'credits' or 'license' for more information
+IPython 6.4.0 -- An enhanced Interactive Python. Type '?' for help.
+
+IPython profile: tbears
+
+tbears)
+```
+
+Now you have attached an interactive shell to a running ICON citizen node on mainnet. 
 
 ##### Test jsonRPC APIs
 In v3, parameters in all api request params require the string '0x' at the front.
@@ -324,11 +347,8 @@ In v3, parameters in all api request params require the string '0x' at the front
 
 This method returns the last block the Citizen node has currently synced.
 
-```bash
-usage: tbears lastblock [-h] [-u URI] [-c CONFIG]
-
-// Example
-$ tbears lastblock -u http://127.0.0.1:9100/api/v3
+```javascript
+tbears) lastblock
 
 // result
 block info : {
@@ -363,11 +383,8 @@ block info : {
 
 * get blockbyheight
 
-```bash
-usage: tbears blockbyheight [-h] [-u URI] [-c CONFIG] height
-
-// Example
-$ tbears blockbyheight -u http://127.0.0.1:9100/api/v3 0x1
+```javascript
+tbears) blockbyheight 0x1
 
 // result
 block info : {
@@ -400,10 +417,7 @@ block info : {
 * get blockbyhash
 
 ```bash
-usage: tbears blockbyhash [-h] [-u URI] [-c CONFIG] hash
-
-// Example
-$ tbears blockbyhash -u http://127.0.0.1:9100/api/v3 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+tbears) blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
 
 // Result is same as above.
 ```
@@ -411,10 +425,7 @@ $ tbears blockbyhash -u http://127.0.0.1:9100/api/v3 0xce00facd0ac3832e1e6e623d8
 * get totalsupply
 
 ```bash
-usage: tbears totalsupply [-h] [-u URI] [-c CONFIG]
-
-// Example
-$ tbears totalsupply -u http://127.0.0.1:9100/api/v3
+tbears) totalsupply
 
 // Result
 Total supply of ICX in hex: 0x2961fff8ca4a62327800000
@@ -433,10 +444,7 @@ Total supply of ICX in decimal: 800460000000000000000000000
 * get balance
 
 ```bash
-usage: tbears balance [-h] [-u URI] [-c CONFIG] address
-
-// Example
-$ tbears balance -u http://127.0.0.1:9100/api/v3 hx63499c4efc26c9370f6d68132c116d180d441266
+tbears) balance -u http://127.0.0.1:9100/api/v3 hx63499c4efc26c9370f6d68132c116d180d441266
 
 // Result
 balance in hex: {your balance in hex}
@@ -468,7 +476,7 @@ optional arguments:
                         value for the "uri" (default: ./tbears_cli_config.json)
 ```
 
-For the details, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
+For more JSON-RPC APIs provided by tbears, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
 
 #### Clean Up
 
