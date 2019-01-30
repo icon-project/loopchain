@@ -38,8 +38,21 @@ If you don't see any error logs and you have started rabbitmq server, you may mo
 $ make install
 ```
 
-#### Run Unittest
-After installation, run the unittest by following command line in order to check whether it operates well or not.
+### Setup
+
+```bash
+$ make setup
+$ export PW_icon_dex={ENTER_MY_PASSWORD}
+$ export REDIRECT_PROTOCOL=https
+```
+
+This command is for setting up:
+* start rabbitmq
+* generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
+* generates key for citizen node.
+
+### Run Unittest
+After installation and setup, run the unittest by following command line in order to check whether it operates well or not.
 
 ```bash
 $ make test
@@ -51,21 +64,6 @@ $ make test
 * [Run Citizen Node on ICON Mainnet network](#run-citizen-node-on-icon-mainnet-network)
 
 ### Run Citizen Node on ICON Testnet network
-
-* Setup
-    
-    ```bash
-    $ make setup
-    $ export PW_icon_dex={ENTER_MY_PASSWORD}
-    $ export REDIRECT_PROTOCOL=https
-    ```
-
-    This command is for setting up:
-    * start rabbitmq
-    * generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
-    * generates key for citizen node.
-
-* Run
 
 This command will enable ICON citizen node on Testnet network, running on port **9000**.
 Once it's connected to the network, it will start to sync all the blocks on the ICON testnet network.
@@ -305,21 +303,6 @@ transaction hash: {your tx hash}
   For the details, please go to [Command-line Interfaces(CLIs)](https://github.com/icon-project/t-bears#command-line-interfacesclis) chapter in t-bears repository.
 
 ### Run Citizen Node on ICON Mainnet network
-
-* Setup
-    
-    ```bash
-    $ make setup
-    $ export PW_icon_dex={ENTER_MY_PASSWORD}
-    $ export REDIRECT_PROTOCOL=https
-    ```
-
-    This command is for setting up:
-    * start rabbitmq
-    * generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
-    * generates key for citizen node.
-
-* Run
 
 This command below will enable ICON citizen node on Mainnet network, running on port **9100**.
 Once it's connected to the network, it will start to sync all the blocks on the ICON mainnet network.
