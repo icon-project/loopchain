@@ -237,7 +237,7 @@ message BlockSyncReply {
     required int32 response_code = 1;
     required int32 block_height = 2;
     required int32 max_block_height = 3;
-    required bytes block = 4;
+    optional bytes block = 4;
 }
 
 message PrecommitBlockRequest {
