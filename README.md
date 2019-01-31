@@ -14,7 +14,15 @@ Loopchain development and execution requires following environments.
   * Windows are not supported yet.
 
 * Python
+
   * Python 3.6.5+ (recommended version, 3.7 is not supported)
+  
+    Optional) We recommend to create an isolated Python 3 virtual environment with [virtualenv](https://virtualenv.pypa.io/en/stable/).
+    
+    ```bash
+    $ virtualenv -p python3 venv
+    $ source venv/bin/activate
+    ```
 
 * Third party tools
     
@@ -30,7 +38,7 @@ Loopchain development and execution requires following environments.
     $ make requirements
     ```
 
-If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
+    If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
 ### Install necessary packages
 
@@ -41,8 +49,8 @@ $ make install
 ### Setup
 
 ```bash
-$ make setup
-$ export PW_icon_dex={ENTER_MY_PASSWORD}
+$ make setup # Enter password for your key
+$ export PW_icon_dex={ENTER_MY_PASSWORD}  # set the password as environment variable
 $ export REDIRECT_PROTOCOL=https
 ```
 
@@ -246,19 +254,15 @@ balance in decimal: {your balance in decimal}
 
 Now that you have received a sufficient amount of icx, you can use it to send transactions.
 We provided the minimal settings for the simple coin transfer in the `sendtx_testnet.json` file.
-The address to which icx is sent(`to`) is the address the ICON developers usually use when testing. You can change the address and the value if you want.
+The address to which icx is sent(`to`) is the address the ICON developers usually use when testing. Default value is 0 ICX and you can change the address or add some value if you want.
 
 ```javascript
 // sendtx_testnet.json
-
 {
   "jsonrpc": "2.0",
   "method": "icx_sendTransaction",
   "params": {
-    "version": "0x3",  // transaction version
     "to": "hx670e692ffd3d5587c36c3a9d8442f6d2a8fcc795",  // default address for testing
-    "value": "0xde0b6b3a7640000",  // 1 ICX
-    "stepLimit": "0x3000000",
     "nid": "0x2"  // network id for testnet
   },
   "id": 1
