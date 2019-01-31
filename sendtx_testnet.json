@@ -2,10 +2,7 @@
   "jsonrpc": "2.0",
   "method": "icx_sendTransaction",
   "params": {
-    "version": "0x3",
     "to": "hx670e692ffd3d5587c36c3a9d8442f6d2a8fcc795",
-    "value": "0xde0b6b3a7640000",
-    "stepLimit": "0x3000000",
     "nid": "0x2"
   },
   "id": 1
