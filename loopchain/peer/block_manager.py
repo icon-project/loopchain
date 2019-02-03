@@ -102,7 +102,7 @@ class BlockManager:
 
         :return:
         """
-        self.epoch = Epoch(self.__blockchain.last_block.header.height + 1 if self.__blockchain.last_block else 1)
+        self.epoch = Epoch(self)
 
     def update_service_status(self, status):
         self.__service_status = status
@@ -675,6 +675,9 @@ class BlockManager:
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
+
+    def new_epoch(self):
+        self.epoch = Epoch.new_epoch()
 
     def leader_complain(self):
         complained_leader_id = self.epoch.leader_id

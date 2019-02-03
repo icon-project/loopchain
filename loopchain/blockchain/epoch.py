@@ -14,20 +14,26 @@
 """It manages the information needed during consensus to store one block height.
 Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
-import loopchain.utils as util
+import logging
+import traceback
 
-from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Vote
+import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.baseservice import ObjectManager
+from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionStatusInQueue, TransactionVerifier
 
 
 class Epoch:
     COMPLAIN_VOTE_HASH = "complain_vote_hash_for_reuse_Vote_class"
 
-    def __init__(self, height: int, leader_id=None):
-        util.logger.notice(f"New Epoch Start height({height}) leader_id({leader_id})")
-        self.height = height
+    def __init__(self, blockmanager, leader_id=None):
+        if blockmanager.get_blockchain().last_block:
+            self.height = blockmanager.get_blockchain().last_block.header.height + 1
+        else:
+            self.height = 1
         self.leader_id = leader_id
+        self.__blockmanager = blockmanager
+        util.logger.notice(f"New Epoch Start height({self.height }) leader_id({leader_id})")
 
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
         # But now! only collect leader complain votes.
@@ -35,9 +41,10 @@ class Epoch:
         self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     @staticmethod
-    def new_epoch(height: int, leader_id=None):
+    def new_epoch(leader_id=None):
+        blockmanager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
-        return Epoch(height, leader_id)
+        return Epoch(blockmanager, leader_id)
 
     def set_epoch_leader(self, leader_id):
         util.logger.notice(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -59,3 +66,54 @@ class Epoch:
         util.logger.notice(f"complain_result vote_result({vote_result})")
 
         return vote_result
+
+    def _check_unconfirmed_block(self):
+        blockchain = self.__blockmanager.get_blockchain()
+        # util.logger.debug(f"-------------------_check_unconfirmed_block, "
+        #                    f"candidate_blocks({len(self._blockmanager.candidate_blocks.blocks)})")
+        if blockchain.last_unconfirmed_block:
+            vote = self.__blockmanager.candidate_blocks.get_vote(blockchain.last_unconfirmed_block.header.hash)
+            # util.logger.debug(f"-------------------_check_unconfirmed_block, "
+            #                    f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block.header.hash}), "
+            #                    f"vote({vote.votes})")
+            vote_result = vote.get_result(blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
+            if not vote_result:
+                util.logger.debug(f"last_unconfirmed_block({blockchain.last_unconfirmed_block.header.hash}), "
+                                  f"vote result({vote_result})")
+
+    def makeup_block(self):
+        # self._check_unconfirmed_block(
+        blockchain = self.__blockmanager.get_blockchain()
+        block_height = self.__blockmanager.get_blockchain().last_block.header.height + 1
+        block_version = blockchain.block_versioner.get_version(block_height)
+        block_builder = BlockBuilder.new(block_version, blockchain.tx_versioner)
+        tx_queue = self.__blockmanager.get_tx_queue()
+
+        tx_versioner = blockchain.tx_versioner
+        while tx_queue:
+            if block_builder.size() >= conf.MAX_TX_SIZE_IN_BLOCK:
+                logging.debug(f"consensus_base total size({block_builder.size()}) "
+                              f"count({len(block_builder.transactions)}) "
+                              f"_txQueue size ({len(tx_queue)})")
+                break
+
+            tx: 'Transaction' = tx_queue.get_item_in_status(
+                TransactionStatusInQueue.normal,
+                TransactionStatusInQueue.added_to_block
+            )
+            if tx is None:
+                break
+
+            tv = TransactionVerifier.new(tx.version, tx_versioner)
+
+            try:
+                tv.verify(tx, blockchain)
+            except Exception as e:
+                logging.warning(f"tx hash invalid.\n"
+                                f"tx: {tx}\n"
+                                f"exception: {e}")
+                traceback.print_exc()
+            else:
+                block_builder.transactions[tx.hash] = tx
+
+        return block_builder

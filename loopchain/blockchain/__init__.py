@@ -19,5 +19,5 @@ from .score_base import *
 from .transactions import *
 from .blocks import *
 from .candidate_blocks import *
-from .epoch import *
 from .blockchain import *
+from .epoch import *

@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, Vote, Epoch)
+                                  Hash32, ExternalAddress, TransactionVersioner, Vote)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -265,7 +265,7 @@ class BlockChain:
             ObjectManager().channel_service.stop_leader_complain_timer()
 
             # start new epoch
-            ObjectManager().channel_service.block_manager.epoch = Epoch.new_epoch(block.header.height + 1)
+            ObjectManager().channel_service.block_manager.new_epoch()
 
             # notify new block
             ObjectManager().channel_service.inner_service.notify_new_block()
@@ -710,11 +710,3 @@ class BlockChain:
         invoke_results = \
             self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
         self.__add_tx_to_block_db(precommit_block, invoke_results)
-
-
-class TransactionStatusInQueue(Enum):
-    normal = 1
-    fail_validation = 2
-    fail_invoke = 3
-    added_to_block = 4
-    precommited_to_block = 5

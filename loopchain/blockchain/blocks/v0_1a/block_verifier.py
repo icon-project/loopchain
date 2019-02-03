@@ -96,9 +96,7 @@ class BlockVerifier(BaseBlockVerifier):
                                f"Expected({prev_block.header.height + 1}).")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        pass
-        # TODO Enable the following code after implementation of leader complain.
-        # if block.header.peer_id != generator:
-        #     raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-        #                        f"Generator({block.header.peer_id.hex_xx()}), "
-        #                        f"Expected({generator.hex_xx()}).")
+        if block.header.peer_id != generator:
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                               f"Generator({block.header.peer_id.hex_xx()}), "
+                               f"Expected({generator.hex_xx()}).")

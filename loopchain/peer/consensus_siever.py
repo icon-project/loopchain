@@ -47,7 +47,7 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._blockmanager.candidate_blocks.blocks)})")
         with self.__lock:
-            block_builder = self._makeup_block()
+            block_builder = self._blockmanager.epoch.makeup_block()
             vote_result = None
 
             if len(block_builder.transactions) > 0:
