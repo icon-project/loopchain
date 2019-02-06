@@ -281,14 +281,14 @@ class BlockManager:
 
     # TODO The current block height sync message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block_: Block, vote_: Vote = None) -> bool:
+    def add_block(self, block_: Block, block_info=None) -> bool:
         """
 
         :param block_: block to add
         :param vote_: additional info for this block, but It came from next block
         :return:
         """
-        result = self.__blockchain.add_block(block_, vote_)
+        result = self.__blockchain.add_block(block_, block_info)
 
         last_block = self.__blockchain.last_block
 

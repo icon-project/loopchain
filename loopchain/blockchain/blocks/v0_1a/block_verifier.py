@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+
 from . import BlockHeader
 from .. import BlockBuilder, BlockVerifier as BaseBlockVerifier
 from ... import TransactionVerifier

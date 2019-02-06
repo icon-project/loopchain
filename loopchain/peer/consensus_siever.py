@@ -19,7 +19,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32
+from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32, Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -49,41 +49,45 @@ class ConsensusSiever(ConsensusBase):
         with self.__lock:
             block_builder = self._blockmanager.epoch.makeup_block()
             vote_result = None
+            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+            next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
-            if len(block_builder.transactions) > 0:
-                # util.logger.debug(f"-------------------consensus logic-1")
-                next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
-
-                if self._blockchain.last_unconfirmed_block:
-                    if (len(self._blockchain.last_unconfirmed_block.body.transactions) > 0) or (
-                            len(self._blockchain.last_unconfirmed_block.body.transactions) == 0 and
-                            self._blockchain.last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id):
-                        # util.logger.debug(f"-------------------consensus logic-2")
-                        vote = self._blockmanager.candidate_blocks.get_vote(self._blockchain.last_unconfirmed_block.header.hash)
-                        vote_result = vote.get_result(self._blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
+            if block_builder.is_complain:
+                block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
+                if not block_info:
+                    # Can't make a block as a leader, this peer will be complained too.
+                    return
+                vote_result = True
+                self._blockmanager.epoch.set_epoch_leader(ChannelProperty().peer_id)
+                self._made_block_count += 1
+            elif len(block_builder.transactions) > 0:
+                if last_unconfirmed_block:
+                    if (len(last_unconfirmed_block.body.transactions) > 0) or (
+                            len(last_unconfirmed_block.body.transactions) == 0 and
+                            last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id):
+                        vote = self._blockmanager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
+                        vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
                         if not vote_result:
                             return self.__block_generation_timer.call()
 
-                        self._blockmanager.add_block(self._blockchain.last_unconfirmed_block, vote)
+                        self._blockmanager.add_block(last_unconfirmed_block, vote)
                         self._made_block_count += 1
 
-                        next_leader = self._blockchain.last_unconfirmed_block.header.next_leader
+                        next_leader = last_unconfirmed_block.header.next_leader
             else:
-                if self._blockchain.last_unconfirmed_block and len(self._blockchain.last_unconfirmed_block.body.transactions) > 0:
-                    # util.logger.debug(f"-------------------consensus logic-3")
-                    vote = self._blockmanager.candidate_blocks.get_vote(self._blockchain.last_unconfirmed_block.header.hash)
-                    vote_result = vote.get_result(self._blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
+                if last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) > 0:
+                    vote = self._blockmanager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
+                    vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
                     if not vote_result:
                         return self.__block_generation_timer.call()
 
-                    self._blockmanager.add_block(self._blockchain.last_unconfirmed_block, vote)
+                    self._blockmanager.add_block(last_unconfirmed_block, vote)
                     self._made_block_count += 1
 
                     peer_manager = ObjectManager().channel_service.peer_manager
                     next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
                         current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                 else:
-                    # util.logger.spam(f"tx count in block({len(block_builder.transactions)})")
                     return self.__block_generation_timer.call()
 
             last_block = self._blockchain.last_block

@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, Vote)
+                                  Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -204,23 +204,33 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
+    def find_block_info_by_hash(self, block_hash):
+        block_hash_encoded = block_hash.hex().encode(encoding='UTF-8')
+
+        try:
+            block_info = self.__confirmed_block_db.Get(BlockChain.BLOCK_INFO_KEY + block_hash_encoded)
+        except KeyError:
+            return None
+
+        return block_info
+
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block: Block, vote: Vote = None) -> bool:
+    def add_block(self, block: Block, block_info=None) -> bool:
         """
 
         :param block:
-        :param vote: additional info for this block, but It came from next block.
+        :param block_info: additional info for this block, but It came from next block.
         :return:
         """
         with self.__add_block_lock:
             if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            return self.__add_block(block, vote)
+            return self.__add_block(block, block_info)
 
-    def __add_block(self, block: Block, vote: Vote = None):
+    def __add_block(self, block: Block, block_info=None):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
@@ -239,7 +249,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash, None)
 
-            next_total_tx = self.__write_block_data(block, vote)
+            next_total_tx = self.__write_block_data(block, block_info)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -272,7 +282,7 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, vote: Vote = None):
+    def __write_block_data(self, block: Block, block_info=None):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -296,10 +306,10 @@ class BlockChain:
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
 
-        if vote:
+        if block_info:
             batch.Put(
                 BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
-                Vote.save_to(vote)
+                b'0x1'
             )
 
         self.__confirmed_block_db.Write(batch)
@@ -649,7 +659,7 @@ class BlockChain:
 
             # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
-            self.add_block(unconfirmed_block)
+            self.add_block(unconfirmed_block, current_block.body.confirm_prev_block)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 

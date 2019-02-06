@@ -33,6 +33,7 @@ class Epoch:
             self.height = 1
         self.leader_id = leader_id
         self.__blockmanager = blockmanager
+        self.__blockchain = self.__blockmanager.get_blockchain()
         util.logger.notice(f"New Epoch Start height({self.height }) leader_id({leader_id})")
 
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
@@ -49,6 +50,7 @@ class Epoch:
     def set_epoch_leader(self, leader_id):
         util.logger.notice(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
+        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
         util.logger.notice(f"add_complain complain_leader_id({complained_leader_id}), "
@@ -81,15 +83,10 @@ class Epoch:
                 util.logger.debug(f"last_unconfirmed_block({blockchain.last_unconfirmed_block.header.hash}), "
                                   f"vote result({vote_result})")
 
-    def makeup_block(self):
-        # self._check_unconfirmed_block(
-        blockchain = self.__blockmanager.get_blockchain()
-        block_height = self.__blockmanager.get_blockchain().last_block.header.height + 1
-        block_version = blockchain.block_versioner.get_version(block_height)
-        block_builder = BlockBuilder.new(block_version, blockchain.tx_versioner)
+    def __add_tx_to_block(self, block_builder):
         tx_queue = self.__blockmanager.get_tx_queue()
 
-        tx_versioner = blockchain.tx_versioner
+        tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:
             if block_builder.size() >= conf.MAX_TX_SIZE_IN_BLOCK:
                 logging.debug(f"consensus_base total size({block_builder.size()}) "
@@ -107,7 +104,7 @@ class Epoch:
             tv = TransactionVerifier.new(tx.version, tx_versioner)
 
             try:
-                tv.verify(tx, blockchain)
+                tv.verify(tx, self.__blockchain)
             except Exception as e:
                 logging.warning(f"tx hash invalid.\n"
                                 f"tx: {tx}\n"
@@ -115,5 +112,15 @@ class Epoch:
                 traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
+
+    def makeup_block(self):
+        # self._check_unconfirmed_block(
+        block_height = self.__blockchain.last_block.header.height + 1
+        block_version = self.__blockchain.block_versioner.get_version(block_height)
+        block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
+        if self.complain_result():
+            block_builder.is_complain = self.complain_result()
+        else:
+            self.__add_tx_to_block(block_builder)
 
         return block_builder
