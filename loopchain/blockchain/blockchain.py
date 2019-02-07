@@ -646,6 +646,9 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
+                    if current_block.header.is_complain:
+                        util.logger.notice(f"reset last_unconfirmed_block by complain block")
+                        self.last_unconfirmed_block = current_block
                     return
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "

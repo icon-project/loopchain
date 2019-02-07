@@ -53,6 +53,7 @@ class ConsensusSiever(ConsensusBase):
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
             if block_builder.is_complain:
+                util.logger.notice(f"consensus block_builder.is_complain")
                 block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
                 if not block_info:
                     # Can't make a block as a leader, this peer will be complained too.
@@ -61,10 +62,15 @@ class ConsensusSiever(ConsensusBase):
                 self._blockmanager.epoch.set_epoch_leader(ChannelProperty().peer_id)
                 self._made_block_count += 1
             elif len(block_builder.transactions) > 0:
+                util.logger.notice(f"consensus len(block_builder.transactions) > 0")
                 if last_unconfirmed_block:
-                    if (len(last_unconfirmed_block.body.transactions) > 0) or (
+                    if (
+                            len(last_unconfirmed_block.body.transactions) > 0 or
+                            last_unconfirmed_block.header.is_complain
+                    ) or (
                             len(last_unconfirmed_block.body.transactions) == 0 and
-                            last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id):
+                            last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id
+                    ):
                         vote = self._blockmanager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                         vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
                         if not vote_result:
@@ -75,7 +81,12 @@ class ConsensusSiever(ConsensusBase):
 
                         next_leader = last_unconfirmed_block.header.next_leader
             else:
-                if last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) > 0:
+                if (
+                        last_unconfirmed_block
+                ) and (
+                        len(last_unconfirmed_block.body.transactions) > 0 or
+                        last_unconfirmed_block.header.is_complain
+                ):
                     vote = self._blockmanager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                     vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
                     if not vote_result:
@@ -101,10 +112,9 @@ class ConsensusSiever(ConsensusBase):
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._blockmanager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
+            util.logger.notice(f"candidate block : {candidate_block.header}")
             block_verifier = BlockVerifier.new(candidate_block.header.version, self._blockchain.tx_versioner)
             block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
-
-            logging.debug(f"candidate block : {candidate_block.header}")
 
             self._blockmanager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._blockmanager.candidate_blocks.add_block(candidate_block)
@@ -116,8 +126,10 @@ class ConsensusSiever(ConsensusBase):
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
 
             if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
-                    next_leader.hex() != ChannelProperty().peer_id:
-                # util.logger.debug(f"-------------------turn_to_peer")
+                    next_leader.hex_hx() != ChannelProperty().peer_id:
+                util.logger.notice(f"-------------------turn_to_peer "
+                                   f"next_leader({next_leader.hex_hx()}) "
+                                   f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.state_machine.turn_to_peer()
                 self._blockmanager.epoch.set_epoch_leader(next_leader.hex_hx())
             else:

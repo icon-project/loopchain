@@ -313,11 +313,13 @@ class ChannelInnerTask:
 
         is_vote_block = not conf.ALLOW_MAKE_EMPTY_BLOCK and len(unconfirmed_block.body.transactions) == 0
         if is_vote_block:
-            util.logger.spam(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
-                             f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
-                             f"channel({ChannelProperty().name}))")
+            util.logger.notice(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
+                               f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
+                               f"channel({ChannelProperty().name}))")
 
-            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != unconfirmed_block.header.next_leader.hex_hx():
+            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
+                    unconfirmed_block.header.next_leader.hex_hx():
+                util.logger.notice(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
                 await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task
