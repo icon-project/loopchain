@@ -13,15 +13,13 @@
       "consensus_cert_use": false,
       "tx_cert_use": false,
       "key_load_type": 0,
-      "public_path": "./resources/my_pki/my_public.pem",
-      "private_path": "./resources/my_pki/my_private.pem"
+      "private_path": "./my_keystore.json"
     }
   },
   "USE_EXTERNAL_SCORE": true,
   "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
   "PORT_PEER": 7200,
   "AMQP_KEY": "7200",
-  "AMQP_TARGET": "127.0.0.1",
   "DEFAULT_STORAGE_PATH": ".storage_mainnet/",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,

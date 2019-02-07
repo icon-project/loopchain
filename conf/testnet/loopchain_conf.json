@@ -20,7 +20,6 @@
   "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
   "PORT_PEER": 7100,
   "AMQP_KEY": "7100",
-  "AMQP_TARGET": "127.0.0.1",
   "DEFAULT_STORAGE_PATH": ".storage_testnet/",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,

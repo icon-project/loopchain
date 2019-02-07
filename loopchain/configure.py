@@ -14,6 +14,7 @@
 """ A module for configuration"""
 
 import copy
+import getpass
 import importlib
 import json
 import logging
@@ -109,35 +110,43 @@ class Configure(metaclass=ConfigureMetaClass):
         :param configure_file_path: json configure file path
         :return: None
         """
-        print(f"try load configure from json file ({configure_file_path})")
+        logging.debug(f"try load configure from json file ({configure_file_path})")
 
         try:
-            with open(f"{configure_file_path}") as json_file:
+            with open(configure_file_path) as json_file:
                 json_data = json.load(json_file)
 
             for configure_key, configure_value in json_data.items():
                 try:
                     if configure_key == "CHANNEL_OPTION":
-                        self.__switch_password_from_env(configure_value)
-
+                        # self.__switch_password_from_env(configure_value)
+                        # configure_value = self.__switch_password_from_input(configure_value)
+                        pass
                     configure_type, configure_value = self.__check_value_type(type(configure_value), configure_value)
                     self.__set_configure(configure_key, configure_type, configure_value)
                 except Exception as e:
                     # no configure value
-                    print(f"this is not configure key({configure_key}): {e}")
+                    logging.debug(f"this is not configure key({configure_key}): {e}")
 
         except Exception as e:
             exit(f"cannot open json file in ({configure_file_path}): {e}")
 
         importlib.reload(loopchain.utils)
 
-    def __switch_password_from_env(self, channel_option_dict: dict):
-        # load private_password from environ
-        pw_dict = {k: v for k, v in os.environ.items() if 'PW_' in k}
-        for channel_name in channel_option_dict.keys():
-            password_key = 'PW_' + channel_name
-            if password_key in pw_dict.keys():
-                channel_option_dict[channel_name]["private_password"] = pw_dict[password_key]
+    # def __switch_password_from_env(self, channel_option_dict: dict):
+    #     # load private_password from environ
+    #     pw_dict = {k: v for k, v in os.environ.items() if 'PW_' in k}
+    #     for channel_name in channel_option_dict.keys():
+    #         password_key = 'PW_' + channel_name
+    #         if password_key in pw_dict.keys():
+    #             channel_option_dict[channel_name]["private_password"] = pw_dict[password_key]
+    #     return channel_option_dict
+
+    def __switch_password_from_input(self, channel_option_dict):
+        for channel in channel_option_dict.keys():
+            if 'private_password' not in channel_option_dict[channel]:
+                password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
+                channel_option_dict[channel]['private_password'] = password
         return channel_option_dict
 
     def __load_configure(self, module, use_env):
@@ -154,7 +163,7 @@ class Configure(metaclass=ConfigureMetaClass):
                 self.__set_configure(configure_name, configure_type, configure_value)
             except Exception as e:
                 # no configure value
-                print(f"this is not configure key({configure_name}): {e}")
+                logging.debug(f"this is not configure key({configure_name}): {e}")
 
     def __set_configure(self, configure_attr, configure_type, configure_value):
         if configure_attr.find('__') == -1 and configure_type is not None:

@@ -196,7 +196,7 @@ class ChannelService:
         ChannelProperty().score_package = score_package
 
         self.__peer_manager = PeerManager(ChannelProperty().name)
-        self.__init_peer_auth()
+        await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
         self.__init_radio_station_stub()
@@ -260,8 +260,11 @@ class ChannelService:
 
         self.__state_machine.complete_sync()
 
-    def __init_peer_auth(self):
+    async def __init_peer_auth(self):
         try:
+            node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
+            self.__peer_auth = Signer.from_prikey(node_key)
+        except KeyError:
             self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
