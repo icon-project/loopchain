@@ -14,7 +14,6 @@
 """A management class for blockchain."""
 import json
 import logging
-import pickle
 import queue
 import shutil
 import threading
@@ -30,7 +29,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, Vote, NID, BlockSerializer, \
+    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
     exception, BlockVerifier
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
@@ -203,12 +202,12 @@ class BlockManager:
                           f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
 
             # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
-            block_dump = util.block_dumps(block_)
+            block_dumped = self.__blockchain.block_dumps(block_)
 
             ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
                 "AnnounceUnconfirmedBlock",
                 loopchain_pb2.BlockSend(
-                    block=block_dump,
+                    block=block_dumped,
                     channel=self.__channel_name))
 
     def add_tx_obj(self, tx):
@@ -337,7 +336,12 @@ class BlockManager:
                 block_height=block_height,
                 channel=self.__channel_name
             ), conf.GRPC_TIMEOUT)
-            return util.block_loads(response.block), response.max_block_height, response.response_code
+            try:
+                block = self.__blockchain.block_loads(response.block)
+            except Exception as e:
+                traceback.print_exc()
+                raise exception.BlockError(f"Received block is invalid: original exception={e}")
+            return block, response.max_block_height, response.response_code
         else:
             # request REST(json-rpc) way to radiostation (mother peer)
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
@@ -380,7 +384,11 @@ class BlockManager:
         if response.block == b"":
             return None, response.response_code, response.response_message
         else:
-            precommit_block = pickle.loads(response.block)
+            try:
+                precommit_block = self.__blockchain.block_loads(response.block)
+            except Exception as e:
+                traceback.print_exc()
+                raise exception.BlockError(f"Received block is invalid: original exception={e}")
             # util.logger.spam(
             #     f"GetPrecommitBlock:response::{response.response_code}/{response.response_message}/"
             #     f"{precommit_block}/{precommit_block.confirmed_transaction_list}")
@@ -585,11 +593,14 @@ class BlockManager:
             precommit_block = None
             for peer_stub in peer_stubs:
                 if peer_stub is not None:
-                    precommit_block, response_code, response_message = \
-                        self.__precommit_block_request(peer_stub, last_block.header.height)
-                    util.logger.spam(f"block_manager:block_height_sync::precommit_block("
-                                     f"{precommit_block if precommit_block else None})")
-                    break
+                    try:
+                        precommit_block, response_code, response_message = \
+                            self.__precommit_block_request(peer_stub, last_block.header.height)
+                        util.logger.spam(f"block_manager:block_height_sync::precommit_block("
+                                         f"{precommit_block if precommit_block else None})")
+                        break
+                    except exception.BlockError as e:
+                        logging.error(f"precommit block is invalid. {e}")
 
             if precommit_block:
                 if last_block.header.height + 1 == precommit_block.height:

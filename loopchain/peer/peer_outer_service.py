@@ -160,9 +160,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[request.channel]
         tx_list, next_index = channel_stub.sync_task().get_tx_by_address(address, index)
 
+        tx_list_dumped = json.dumps(tx_list).encode(encoding=conf.PEER_DATA_ENCODING)
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
-                                     object=pickle.dumps(tx_list))
+                                     object=tx_list_dumped)
 
     def __handler_reconnect_to_rs(self, request, context):
         logging.warning(f"RS lost peer info (candidate reason: RS restart)")
