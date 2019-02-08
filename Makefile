@@ -21,13 +21,9 @@ generate-proto:
 	python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
 
 generate-key:
-	@mkdir -p resources/my_pki
-	@echo "Generating private key...."
-	openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out ./resources/my_pki/my_private.pem
-	@echo ""
-	@echo "Generating public key from private key...."
-	openssl ec -in ./resources/my_pki/my_private.pem -pubout -out ./resources/my_pki/my_public.pem
-
+	@file="my_keystore.json"; rm -f $${file} > /dev/null; \
+	tbears keystore $${file}; \
+	cat $${file}
 check:
 	@echo "Check Python & Gunicorn & RabbitMQ Process..."
 	ps -ef | grep loop
@@ -37,13 +33,18 @@ check:
 test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
-clean: clean-mq clean-pyc
+clean: clean-mq clean-build clean-pyc
 
 clean-mq:
 	@echo "Cleaning up RabbitMQ..."
 	@rabbitmqctl stop_app
 	@rabbitmqctl reset
 	@rabbitmqctl start_app
+
+clean-build:
+	@rm -rf dist/
+	@rm -rf *.egg-info
+	@rm -rf .eggs/
 
 clean-pyc:
 	@echo "Clear __pycache__"
