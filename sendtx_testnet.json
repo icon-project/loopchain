@@ -1,9 +1,0 @@
-{
-  "jsonrpc": "2.0",
-  "method": "icx_sendTransaction",
-  "params": {
-    "to": "hx670e692ffd3d5587c36c3a9d8442f6d2a8fcc795",
-    "nid": "0x2"
-  },
-  "id": 1
-}

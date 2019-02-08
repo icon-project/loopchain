@@ -14,7 +14,6 @@
 """ A module for configuration"""
 
 import copy
-import getpass
 import importlib
 import json
 import logging
@@ -118,10 +117,6 @@ class Configure(metaclass=ConfigureMetaClass):
 
             for configure_key, configure_value in json_data.items():
                 try:
-                    if configure_key == "CHANNEL_OPTION":
-                        # self.__switch_password_from_env(configure_value)
-                        # configure_value = self.__switch_password_from_input(configure_value)
-                        pass
                     configure_type, configure_value = self.__check_value_type(type(configure_value), configure_value)
                     self.__set_configure(configure_key, configure_type, configure_value)
                 except Exception as e:
@@ -132,22 +127,6 @@ class Configure(metaclass=ConfigureMetaClass):
             exit(f"cannot open json file in ({configure_file_path}): {e}")
 
         importlib.reload(loopchain.utils)
-
-    # def __switch_password_from_env(self, channel_option_dict: dict):
-    #     # load private_password from environ
-    #     pw_dict = {k: v for k, v in os.environ.items() if 'PW_' in k}
-    #     for channel_name in channel_option_dict.keys():
-    #         password_key = 'PW_' + channel_name
-    #         if password_key in pw_dict.keys():
-    #             channel_option_dict[channel_name]["private_password"] = pw_dict[password_key]
-    #     return channel_option_dict
-
-    def __switch_password_from_input(self, channel_option_dict):
-        for channel in channel_option_dict.keys():
-            if 'private_password' not in channel_option_dict[channel]:
-                password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
-                channel_option_dict[channel]['private_password'] = password
-        return channel_option_dict
 
     def __load_configure(self, module, use_env):
         configure_names = dir(module)

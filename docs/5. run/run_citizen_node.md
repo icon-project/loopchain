@@ -11,6 +11,7 @@ For detailed information about ICON Network, Pleases refer to [ICON Network](htt
 This command will enable ICON citizen node on Testnet network, running on port **9000**.
 
 ```bash
+$ export REDIRECT_PROTOCOL=https
 $ loop citizen -r testnet
 ```
 
@@ -145,7 +146,7 @@ block info : {
 * blockbyhash
 
 ```bash
-tbears) blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+tbears) blockbyhash 0xd5629fe006104df557570ce2613c8df1901d8f6f322b9f251645c201fa1d1e9e
 
 // Result is same as above.
 ```
@@ -175,29 +176,22 @@ Please note that the `Testnet node url` of your citizen node is `https://test-ct
 
 If you want to load and view your testnet account on ICONex Chrome extension, please refer [here](https://github.com/icon-project/icon-project.github.io/blob/master/docs/icon_network.md#how-to-change-network-in-iconex-chrome-extension).
 
-* Send transaction
+* transfer
 
-Now that you have received a sufficient amount of icx, you can use it to send transactions.
-We provided the minimal settings for the simple coin transfer in the `sendtx_testnet.json` file.
-The address to which icx is sent(`to`) is the address the ICON developers usually use when testing. Default value is 0 ICX and you can change the address or add some value if you want.
+Now that you have received a sufficient amount of icx, you can use it to ICX transfer.
+The address to which icx is sent(`to`) is the address the ICON developers usually use when testing.
+(Please refer [here](https://github.com/icon-project/t-bears#tbears-transfer) for detailed information.)
 
-```javascript
-// sendtx_testnet.json
-{
-  "jsonrpc": "2.0",
-  "method": "icx_sendTransaction",
-  "params": {
-    "to": "hx670e692ffd3d5587c36c3a9d8442f6d2a8fcc795",  // default address for testing
-    "nid": "0x2"  // network id for testnet
-  },
-  "id": 1
-}
+```bash
+usage: tbears transfer [-h] [-f FROM] [-k KEYSTORE] [-n NID] [-u URI]
+                       [-p PASSWORD] [-s STEPLIMIT] [-c CONFIG]
+                       to value
 ```
 
 Example
 
 ```bash
-tbears) sendtx -k my_keystore.json sendtx_testnet.json
+tbears) transfer -k my_keystore.json -n 0x2 hx670e692ffd3d5587c36c3a9d8442f6d2a8fcc795 0
 
 input your keystore password:
 
@@ -212,6 +206,7 @@ For more JSON-RPC APIs provided by tbears, please go to [Command-line Interfaces
 This command below will enable ICON citizen node on Mainnet network, running on port **9100**.
 
 ```bash
+$ export REDIRECT_PROTOCOL=https
 $ loop citizen -r mainnet
 ```
 
@@ -376,7 +371,7 @@ block info : {
 * blockbyhash
 
 ```bash
-tbears) blockbyhash 0xce00facd0ac3832e1e6e623d8f4b9344782da881e55abb48d1494fde9e465f78
+tbears) blockbyhash 0x3add53134014e940f6f6010173781c4d8bd677d9931a697f962483e04a685e5c
 
 // Result is same as above.
 ```

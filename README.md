@@ -16,21 +16,22 @@ Loopchain development and execution requires following environments.
 * Python
 
   * Python 3.6.5+ (recommended version, 3.7 is not supported)
-  
+
     Optional) We recommend to create an isolated Python 3 virtual environment with [virtualenv](https://virtualenv.pypa.io/en/stable/).
-    
+
     ```bash
     $ virtualenv -p python3 venv
     $ source venv/bin/activate
     ```
 
 * Third party tools
-        
+
     ```
     automake pkg-config libtool leveldb rabbitmq openssl
     ```
 
     If you're using package manager, you can install all of them through your package manager.
+
     MacOS, for example)
     
     ```bash
@@ -46,21 +47,27 @@ Loopchain development and execution requires following environments.
 
     If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
-### Install necessary packages
-
-```bash
-$ make install
-```
-
-### Setup
-
-```bash
-$ make setup  # type your password
-```
+### Install necessary packages & Setup
 
 This command is for setting up:
+* pip install all necessary packages.
 * generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
-* generates keystore through tbears for citizen node. **Please be careful not to forget the password since you will need it to run Citizen Node later.**
+* generates a keystore file. **Please be careful not to forget the password since you will need it to run Citizen Node later.**
+
+```bash
+$ make all
+
+...
+Generating python grpc code from proto into >  /Users/jiyun/Desktop/happycoding/workspace/theloop/LoopChain
+python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
+Input your keystore password:  # Password must be at least 8 characters long including alphabet, number, and special character.
+```
+
+> For more command options, you can check here:
+
+```bash
+$ make help
+```
 
 ## Run Citizen Node on ICON network
 
