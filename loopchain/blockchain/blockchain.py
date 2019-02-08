@@ -230,7 +230,7 @@ class BlockChain:
 
             return self.__add_block(block, block_info)
 
-    def __add_block(self, block: Block, block_info=None):
+    def __add_block(self, block: Block, block_info):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
@@ -282,7 +282,7 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, block_info=None):
+    def __write_block_data(self, block: Block, block_info):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -668,7 +668,7 @@ class BlockChain:
 
             return unconfirmed_block
 
-    def init_block_chain(self, is_leader=False):
+    def init_blockchain(self, is_leader=False):
         # level DB에서 블럭을 읽어 들이며, 만약 levelDB에 블럭이 없을 경우 제네시스 블럭을 만든다
         try:
             last_block_key = self.__confirmed_block_db.Get(BlockChain.LAST_BLOCK_KEY, True)
@@ -691,7 +691,7 @@ class BlockChain:
             self.__block_height = -1
         else:
             self.__block_height = self.__last_block.header.height
-        logging.debug(f"ENGINE-303 init_block_chain: {self.__block_height}")
+        logging.debug(f"ENGINE-303 init_blockchain: {self.__block_height}")
 
     def generate_genesis_block(self):
         tx_info = None

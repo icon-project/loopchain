@@ -26,14 +26,14 @@ from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionSta
 class Epoch:
     COMPLAIN_VOTE_HASH = "complain_vote_hash_for_reuse_Vote_class"
 
-    def __init__(self, blockmanager, leader_id=None):
-        if blockmanager.get_blockchain().last_block:
-            self.height = blockmanager.get_blockchain().last_block.header.height + 1
+    def __init__(self, block_manager, leader_id=None):
+        if block_manager.get_blockchain().last_block:
+            self.height = block_manager.get_blockchain().last_block.header.height + 1
         else:
             self.height = 1
         self.leader_id = leader_id
-        self.__blockmanager = blockmanager
-        self.__blockchain = self.__blockmanager.get_blockchain()
+        self.__block_manager = block_manager
+        self.__blockchain = self.__block_manager.get_blockchain()
         util.logger.notice(f"New Epoch Start height({self.height }) leader_id({leader_id})")
 
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
@@ -43,9 +43,9 @@ class Epoch:
 
     @staticmethod
     def new_epoch(leader_id=None):
-        blockmanager = ObjectManager().channel_service.block_manager
+        block_manager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
-        return Epoch(blockmanager, leader_id)
+        return Epoch(block_manager, leader_id)
 
     def set_epoch_leader(self, leader_id):
         util.logger.notice(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -70,11 +70,11 @@ class Epoch:
         return vote_result
 
     def _check_unconfirmed_block(self):
-        blockchain = self.__blockmanager.get_blockchain()
+        blockchain = self.__block_manager.get_blockchain()
         # util.logger.debug(f"-------------------_check_unconfirmed_block, "
-        #                    f"candidate_blocks({len(self._blockmanager.candidate_blocks.blocks)})")
+        #                    f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
         if blockchain.last_unconfirmed_block:
-            vote = self.__blockmanager.candidate_blocks.get_vote(blockchain.last_unconfirmed_block.header.hash)
+            vote = self.__block_manager.candidate_blocks.get_vote(blockchain.last_unconfirmed_block.header.hash)
             # util.logger.debug(f"-------------------_check_unconfirmed_block, "
             #                    f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block.header.hash}), "
             #                    f"vote({vote.votes})")
@@ -84,7 +84,7 @@ class Epoch:
                                   f"vote result({vote_result})")
 
     def __add_tx_to_block(self, block_builder):
-        tx_queue = self.__blockmanager.get_tx_queue()
+        tx_queue = self.__block_manager.get_tx_queue()
 
         tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:

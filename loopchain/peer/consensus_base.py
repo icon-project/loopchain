@@ -19,11 +19,11 @@ class ConsensusBase(metaclass=ABCMeta):
     """LoopChain 의 Consensus Algorithm 을 표현하는 클래스
     """
 
-    def __init__(self, blockmanager):
-        self._blockmanager = blockmanager
-        self._channel_name = blockmanager.channel_name
+    def __init__(self, block_manager):
+        self._block_manager = block_manager
+        self._channel_name = block_manager.channel_name
         self._made_block_count = 0
-        self._blockchain = self._blockmanager.get_blockchain()
+        self._blockchain = self._block_manager.get_blockchain()
 
     @property
     def made_block_count(self):

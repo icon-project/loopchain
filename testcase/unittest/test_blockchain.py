@@ -100,18 +100,18 @@ class TestBlockChain(unittest.TestCase):
         """
         # GIVEN
         new_nonce = self.chain.get_new_nonce_by_address("ABC")
-        util.logger.spam(f"test_block_chain:test_nonce new_nonce({new_nonce})")
+        util.logger.spam(f"test_blockchain:test_nonce new_nonce({new_nonce})")
 
         # WHEN
         verify_result = self.chain.verify_nonce_by_address("ABC", new_nonce)
-        util.logger.spam(f"test_block_chain:test_nonce verify_result({verify_result})")
+        util.logger.spam(f"test_blockchain:test_nonce verify_result({verify_result})")
         self.assertTrue(verify_result)
         set_result = self.chain._BlockChain__set_nonce_by_address("ABC", new_nonce)
         self.assertTrue(set_result)
 
         # THEN
         next_new_nonce = self.chain.get_new_nonce_by_address("ABC")
-        util.logger.spam(f"test_block_chain:test_nonce new_nonce({next_new_nonce})")
+        util.logger.spam(f"test_blockchain:test_nonce new_nonce({next_new_nonce})")
         self.assertEqual(hex(int(new_nonce, 16) + 1), next_new_nonce)
 
     def test_tx_list_by_address(self):

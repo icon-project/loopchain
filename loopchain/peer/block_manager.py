@@ -285,7 +285,7 @@ class BlockManager:
         """
 
         :param block_: block to add
-        :param vote_: additional info for this block, but It came from next block
+        :param block_info: additional info for this block, but It came from next block
         :return:
         """
         result = self.__blockchain.add_block(block_, block_info)
