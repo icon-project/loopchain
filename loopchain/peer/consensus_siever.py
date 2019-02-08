@@ -76,7 +76,7 @@ class ConsensusSiever(ConsensusBase):
                         if not vote_result:
                             return self.__block_generation_timer.call()
 
-                        self._block_manager.add_block(last_unconfirmed_block, vote)
+                        self._block_manager.get_blockchain().add_block(last_unconfirmed_block, vote)
                         self._made_block_count += 1
 
                         next_leader = last_unconfirmed_block.header.next_leader
@@ -92,7 +92,7 @@ class ConsensusSiever(ConsensusBase):
                     if not vote_result:
                         return self.__block_generation_timer.call()
 
-                    self._block_manager.add_block(last_unconfirmed_block, vote)
+                    self._block_manager.get_blockchain().add_block(last_unconfirmed_block, vote)
                     self._made_block_count += 1
 
                     peer_manager = ObjectManager().channel_service.peer_manager

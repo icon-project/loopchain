@@ -279,31 +279,6 @@ class BlockManager:
         if not result:
             self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
 
-    # TODO The current block height sync message does not include voting.
-    #  You need to change it and remove the default None parameter here.
-    def add_block(self, block_: Block, block_info=None) -> bool:
-        """
-
-        :param block_: block to add
-        :param block_info: additional info for this block, but It came from next block
-        :return:
-        """
-        result = self.__blockchain.add_block(block_, block_info)
-
-        last_block = self.__blockchain.last_block
-
-        peer_id = ChannelProperty().peer_id
-        util.apm_event(peer_id, {
-            'event_type': 'TotalTx',
-            'peer_id': peer_id,
-            'peer_name': conf.PEER_NAME,
-            'channel_name': self.__channel_name,
-            'data': {
-                'block_hash': block_.header.hash.hex(),
-                'total_tx': self.__blockchain.total_tx}})
-
-        return result
-
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
 
@@ -465,7 +440,7 @@ class BlockManager:
                                                        self.__blockchain.last_block,
                                                        self.__blockchain)
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
-        return self.add_block(block_)
+        return self.__blockchain.add_block(block_)
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""

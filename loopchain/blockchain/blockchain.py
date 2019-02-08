@@ -228,6 +228,16 @@ class BlockChain:
             if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
+            peer_id = ChannelProperty().peer_id
+            util.apm_event(peer_id, {
+                'event_type': 'TotalTx',
+                'peer_id': peer_id,
+                'peer_name': conf.PEER_NAME,
+                'channel_name': self.__channel_name,
+                'data': {
+                    'block_hash': block.header.hash.hex(),
+                    'total_tx': self.total_tx}})
+
             return self.__add_block(block, block_info)
 
     def __add_block(self, block: Block, block_info):
