@@ -425,30 +425,30 @@ class BlockManager:
         else:
             return self.__blockchain.block_height
 
-    def __add_block_by_sync(self, block_):
-        commit_state = block_.header.commit_state
-        logging.debug(f"block_manager.py >> block_height_sync :: "
-                      f"height({block_.header.height}) commit_state({commit_state})")
+    def __confirm_prev_block_by_sync(self, block_):
+        prev_block = self.__blockchain.last_unconfirmed_block
+        block_info = block_.body.confirm_prev_block
 
-        block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
+        commit_state = prev_block.header.commit_state
+        logging.debug(f"block_manager.py >> block_height_sync :: "
+                      f"height({prev_block.header.height}) commit_state({commit_state})")
+
+        block_version = self.get_blockchain().block_versioner.get_version(prev_block.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
-        if block_.header.height == 0:
+        if prev_block.header.height == 0:
             block_verifier.invoke_func = self.__channel_service.genesis_invoke
         else:
             block_verifier.invoke_func = self.__channel_service.score_invoke
-        invoke_results = block_verifier.verify_loosely(block_,
+        invoke_results = block_verifier.verify_loosely(prev_block,
                                                        self.__blockchain.last_block,
                                                        self.__blockchain)
-        self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(block_)
+        self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
+        return self.__blockchain.add_block(prev_block, block_info)
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
-        channel_service = ObjectManager().channel_service
-        peer_manager = channel_service.peer_manager
-
         if target_peer_stub is None:
-            target_peer_stub = peer_manager.get_leader_stub_manager()
+            target_peer_stub = self.__channel_service.peer_manager.get_leader_stub_manager()
         self.__subscribe_target_peer_stub = target_peer_stub
 
         # The adjustment of block height and the process for data synchronization of peer
@@ -488,13 +488,16 @@ class BlockManager:
                         logging.debug(f"try add block height: {block.header.height}")
 
                         try:
-                            result = False
+                            result = True
+
                             if max_height > 0 and max_height == block.header.height:
                                 self.candidate_blocks.add_block(block)
-                                self.__blockchain.last_unconfirmed_block = block
                                 result = True
-                            else:
-                                result = self.__add_block_by_sync(block)
+
+                            if self.__blockchain.last_unconfirmed_block:
+                                result = self.__confirm_prev_block_by_sync(block)
+
+                            self.__blockchain.last_unconfirmed_block = block
 
                             if result:
                                 if block.header.height == 0:
@@ -552,19 +555,19 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft \
-                and channel_service.is_support_node_function(conf.NodeFunction.Vote):
+                and self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             last_block = self.__blockchain.last_block
             precommit_block = None
             for peer_stub in peer_stubs:
                 if peer_stub is not None:
                     precommit_block, response_code, response_message = \
-                        self.__precommit_block_request(peer_stub, last_block.height)
+                        self.__precommit_block_request(peer_stub, last_block.header.height)
                     util.logger.spam(f"block_manager:block_height_sync::precommit_block("
                                      f"{precommit_block if precommit_block else None})")
                     break
 
             if precommit_block:
-                if last_block.height + 1 == precommit_block.height:
+                if last_block.header.height + 1 == precommit_block.height:
                     self.__blockchain.invoke_for_precommit(precommit_block)
                     self.__channel_service.score_write_precommit_state(precommit_block)
                     self.__blockchain.put_precommit_block(precommit_block)
@@ -575,8 +578,9 @@ class BlockManager:
                                      f"{self.__precommit_block.height} after block height synchronization.")
                     self.__consensus.change_epoch(prev_epoch=None, precommit_block=self.__precommit_block)
                 else:
-                    util.logger.warning(f"precommit block is weird, an expected block height is {last_block.height+1}, "
-                                        f"but it's {precommit_block.height}")
+                    util.logger.warning(
+                        f"precommit block is weird, an expected block height is {last_block.header.height+1}, "
+                        f"but it's {precommit_block.height}")
 
             else:
                 util.logger.spam(f"precommit bock is None after block height synchronization.")
