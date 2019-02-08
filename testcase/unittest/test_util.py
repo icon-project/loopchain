@@ -249,7 +249,7 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
 
 def create_default_peer_auth() -> Signer:
     channel = list(conf.CHANNEL_OPTION)[0]
-    peer_auth = Signer(channel)
+    peer_auth = Signer.from_channel(channel)
     return peer_auth
 
 

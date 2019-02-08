@@ -27,4 +27,5 @@ transitions==0.6.8
 verboselogs==1.7
 websockets==5.0.1
 yappi==0.98
+merkletools==1.0.3
 dataclasses; python_version < '3.7'

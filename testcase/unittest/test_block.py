@@ -30,14 +30,17 @@ from loopchain.baseservice import ObjectManager
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
-from loopchain.blockchain import Block, BlockInValidError, Transaction
+from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer
+from loopchain.blockchain import TransactionBuilder, TransactionVersioner
+from loopchain.blockchain import Hash32, ExternalAddress
+
+
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
-@unittest.skip("BVS")
 class TestBlock(unittest.TestCase):
     __peer_id = 'aaa'
 
@@ -50,6 +53,7 @@ class TestBlock(unittest.TestCase):
 
     def tearDown(self):
         ObjectManager().peer_service = None
+        ObjectManager().channel_service = None
 
     def __generate_block_data(self) -> Block:
         """ block data generate
@@ -83,6 +87,7 @@ class TestBlock(unittest.TestCase):
         block._Block__signature = b'invalid signature '
         return block
 
+    @unittest.skip("BVS")
     def test_put_transaction(self):
         """
         Block 에 여러 개 transaction 들을 넣는 것을 test.
@@ -99,7 +104,7 @@ class TestBlock(unittest.TestCase):
         self.assertTrue(block.put_transaction(tx_list), "Block에 여러 트랜잭션 추가 실패")
         self.assertEqual(block.confirmed_tx_len, tx_size * 2, "트랜잭션 사이즈 확인 실패")
 
-    @unittest.skip
+    @unittest.skip("BVS")
     def test_validate_block(self):
         """ GIVEN correct block and invalid signature block
         WHEN validate two block
@@ -119,6 +124,7 @@ class TestBlock(unittest.TestCase):
         with self.assertRaises(BlockInValidError):
             Block.validate(invalid_signature_block)
 
+    @unittest.skip("BVS")
     def test_transaction_merkle_tree_validate_block(self):
         """
         머클트리 검증
@@ -135,6 +141,7 @@ class TestBlock(unittest.TestCase):
         # logging.debug("block mekletree : %s ", block.merkle_tree)
         self.assertTrue(mk_result, "머클트리검증 실패")
 
+    @unittest.skip("BVS")
     def test_serialize_and_deserialize(self):
         """
         블럭 serialize and deserialize 테스트
@@ -147,6 +154,7 @@ class TestBlock(unittest.TestCase):
                       block.merkle_tree_root_hash, block2.merkle_tree_root_hash)
         self.assertEqual(block.merkle_tree_root_hash, block2.merkle_tree_root_hash, "블럭이 같지 않습니다 ")
 
+    @unittest.skip("BVS")
     def test_block_rebuild(self):
         """ GIVEN 1Block with 3tx, and conf remove failed tx when in block
         WHEN Block call verify_through_score_invoke
@@ -170,6 +178,7 @@ class TestBlock(unittest.TestCase):
             self.assertNotEqual(i, 2, "index 2 must be deleted")
             self.assertNotEqual(tx.tx_hash, fail_tx_hash)
 
+    @unittest.skip("BVS")
     def test_block_hash_must_be_the_same_regardless_of_the_commit_state(self):
         # ENGINE-302
         # GIVEN
@@ -186,6 +195,7 @@ class TestBlock(unittest.TestCase):
         # THEN
         self.assertEqual(block1.block_hash, block2.block_hash)
 
+    @unittest.skip("BVS")
     def test_block_prevent_tx_duplication(self):
         origin_send_tx_type = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"]
         conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"] = conf.SendTxType.icx
@@ -210,6 +220,38 @@ class TestBlock(unittest.TestCase):
         finally:
             conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"] = origin_send_tx_type
             tx_validator.refresh_tx_validators()
+
+    def test_block_v0_3(self):
+        private_auth = test_util.create_default_peer_auth()
+        tx_versioner = TransactionVersioner()
+
+        tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+        tx_builder.private_key = private_auth.private_key
+        tx_builder.to_address = ExternalAddress(bytes(ExternalAddress.size))
+        tx_builder.step_limit = 10000
+        tx_builder.nid = 2
+        tx = tx_builder.build()
+
+        block_builder = BlockBuilder.new("0.3", tx_versioner)
+        block_builder.peer_private_key = private_auth.private_key
+        block_builder.height = 0
+        block_builder.transactions[tx.hash] = tx
+        block_builder.state_root_hash = Hash32(bytes(Hash32.size))
+        block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
+
+        block = block_builder.build()
+        logging.info(f"Block : {block}")
+
+        block_verifier = BlockVerifier.new("0.3", tx_versioner)
+        block_verifier.invoke_func = lambda b: (block, None)
+        block_verifier.verify(block, None, None, block.header.peer_id)
+
+        block_serializer = BlockSerializer.new("0.3", tx_versioner)
+        block_serialized = block_serializer.serialize(block)
+        block_deserialized = block_serializer.deserialize(block_serialized)
+
+        assert block.header == block_deserialized.header
+        assert block.body == block_deserialized.body
 
 
 if __name__ == '__main__':
