@@ -425,6 +425,23 @@ class BlockManager:
         else:
             return self.__blockchain.block_height
 
+    def __add_block_by_sync(self, block_):
+        commit_state = block_.header.commit_state
+        logging.debug(f"block_manager.py >> block_height_sync :: "
+                      f"height({block_.header.height}) commit_state({commit_state})")
+
+        block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
+        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        if block_.header.height == 0:
+            block_verifier.invoke_func = self.__channel_service.genesis_invoke
+        else:
+            block_verifier.invoke_func = self.__channel_service.score_invoke
+        invoke_results = block_verifier.verify_loosely(block_,
+                                                       self.__blockchain.last_block,
+                                                       self.__blockchain)
+        self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
+        return self.__blockchain.add_block(block_)
+
     def __confirm_prev_block_by_sync(self, block_):
         prev_block = self.__blockchain.last_unconfirmed_block
         block_info = block_.body.confirm_prev_block
@@ -494,10 +511,12 @@ class BlockManager:
                                 self.candidate_blocks.add_block(block)
                                 result = True
 
-                            if self.__blockchain.last_unconfirmed_block:
-                                result = self.__confirm_prev_block_by_sync(block)
-
-                            self.__blockchain.last_unconfirmed_block = block
+                            if block.header.height == 0:
+                                result = self.__add_block_by_sync(block)
+                            else:
+                                if self.__blockchain.last_unconfirmed_block:
+                                    result = self.__confirm_prev_block_by_sync(block)
+                                self.__blockchain.last_unconfirmed_block = block
 
                             if result:
                                 if block.header.height == 0:
@@ -659,9 +678,9 @@ class BlockManager:
         self.epoch = Epoch.new_epoch()
 
     def leader_complain(self):
-        complained_leader_id = self.epoch.leader_id
+        complained_leader_id = self.epoch.prev_leader_id or self.epoch.leader_id
         new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-            current_leader_peer_id=self.epoch.leader_id
+            current_leader_peer_id=complained_leader_id
         )
         new_leader_id = new_leader.peer_id if new_leader else None
 

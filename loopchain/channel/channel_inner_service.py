@@ -466,7 +466,11 @@ class ChannelInnerTask:
                 self._channel_service.state_machine.turn_to_leader()
             else:
                 util.logger.notice(f"I'm your Jedi.")
+                # TODO check new leader is alive.
+                # if not
+                #     self._channel_service.start_leader_complain_timer()
                 self._channel_service.state_machine.turn_to_peer()
+            block_manager.epoch.prev_leader_id = next_new_leader
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):
