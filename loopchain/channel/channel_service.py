@@ -852,13 +852,13 @@ class ChannelService:
         return object_has_queue
 
     def start_leader_complain_timer(self):
-        util.logger.notice(f"start_leader_complain_timer in channel service.")
+        util.logger.spam(f"start_leader_complain_timer in channel service.")
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                   duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                                                   is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):
-        util.logger.notice(f"stop_leader_complain_timer in channel service.")
+        util.logger.spam(f"stop_leader_complain_timer in channel service.")
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):

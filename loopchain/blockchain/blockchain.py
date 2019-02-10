@@ -208,11 +208,9 @@ class BlockChain:
         block_hash_encoded = block_hash.hex().encode(encoding='UTF-8')
 
         try:
-            block_info = self.__confirmed_block_db.Get(BlockChain.BLOCK_INFO_KEY + block_hash_encoded)
+            return self.__confirmed_block_db.Get(BlockChain.BLOCK_INFO_KEY + block_hash_encoded)
         except KeyError:
             return None
-
-        return block_info
 
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
@@ -221,7 +219,7 @@ class BlockChain:
         """
 
         :param block:
-        :param block_info: additional info for this block, but It came from next block.
+        :param block_info: additional info for this block, but It came from next block of this block.
         :return:
         """
         with self.__add_block_lock:
@@ -369,10 +367,10 @@ class BlockChain:
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
                 if invoke_result_block_height == next_height:
-                    logging.debug(f"already saved invoke result...")
+                    logging.debug("already saved invoke result...")
                     return False
             except KeyError:
-                logging.debug(f"There is no invoke result height in db.")
+                logging.debug("There is no invoke result height in db.")
         else:
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
@@ -657,7 +655,7 @@ class BlockChain:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     if current_block.header.is_complain:
-                        util.logger.notice(f"reset last_unconfirmed_block by complain block")
+                        util.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
                     return
                 else:

@@ -19,6 +19,7 @@ from .... import utils as util
 
 if TYPE_CHECKING:
     from .. import Block
+    from ... import ExternalAddress
 
 
 class BlockVerifier(v0_1a.BlockVerifier):
@@ -37,7 +38,7 @@ class BlockVerifier(v0_1a.BlockVerifier):
                                    f"Expected({prev_block_header.next_leader.hex_xx()}).")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        util.logger.notice(f"block v0.2 verify_generator")
+        util.logger.spam("block v0.2 verify_generator")
         if not block.header.is_complain and block.header.peer_id != generator:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Generator({block.header.peer_id.hex_xx()}), "
