@@ -279,12 +279,6 @@ class BlockChain:
                     'block_height': self.__block_height
                 }})
 
-            # stop leader complain timer
-            ObjectManager().channel_service.stop_leader_complain_timer()
-
-            # start new epoch
-            ObjectManager().channel_service.block_manager.new_epoch()
-
             # notify new block
             ObjectManager().channel_service.inner_service.notify_new_block()
 

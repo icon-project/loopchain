@@ -258,6 +258,12 @@ class BlockManager:
     def confirm_prev_block(self, current_block: Block):
         try:
             self.__blockchain.confirm_prev_block(current_block)
+
+            # stop leader complain timer
+            self.__channel_service.stop_leader_complain_timer()
+
+            # start new epoch
+            self.epoch = Epoch.new_epoch()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.block_height_sync()
@@ -673,9 +679,6 @@ class BlockManager:
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
-
-    def new_epoch(self):
-        self.epoch = Epoch.new_epoch()
 
     def leader_complain(self):
         complained_leader_id = self.epoch.prev_leader_id or self.epoch.leader_id
