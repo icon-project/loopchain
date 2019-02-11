@@ -92,6 +92,7 @@ def exit_and_msg(msg):
     exit_msg = "Service Stop by: " + msg
     logging.exception(exit_msg)
 
+    # To make sure of terminating process exactly
     os.killpg(0, signal.SIGKILL)
     time.sleep(5)
 
