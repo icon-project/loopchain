@@ -11,10 +11,10 @@ class BlockSerializer(v0_1a.BlockSerializer):
         header: BlockHeader = block.header
         block_serialized = super()._serialize(block)
         block_serialized["next_leader"] = header.next_leader.hex_xx()
-        block_serialized["is_complain"] = "0x1" if header.is_complain else "0x0"
+        block_serialized["complained"] = "0x1" if header.complained else "0x0"
         return block_serialized
 
     def _deserialize_header_data(self, json_data: dict):
         header = super()._deserialize_header_data(json_data)
-        header["is_complain"] = True if json_data["is_complain"] == "0x1" else False
+        header["complained"] = True if json_data["complained"] == "0x1" else False
         return header

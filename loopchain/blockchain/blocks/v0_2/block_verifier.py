@@ -31,7 +31,7 @@ class BlockVerifier(v0_1a.BlockVerifier):
         prev_block_header: BlockHeader = prev_block.header
         block_header: BlockHeader = block.header
 
-        if not block_header.is_complain and prev_block_header.next_leader and \
+        if not block_header.complained and prev_block_header.next_leader and \
            prev_block_header.next_leader != block_header.peer_id:
                 raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                    f"Leader({block_header.peer_id.hex_xx()}), "
@@ -39,7 +39,7 @@ class BlockVerifier(v0_1a.BlockVerifier):
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         util.logger.spam("block v0.2 verify_generator")
-        if not block.header.is_complain and block.header.peer_id != generator:
+        if not block.header.complained and block.header.peer_id != generator:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Generator({block.header.peer_id.hex_xx()}), "
                                f"Expected({generator.hex_xx()}).")

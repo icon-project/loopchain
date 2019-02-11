@@ -52,8 +52,8 @@ class ConsensusSiever(ConsensusBase):
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
-            if block_builder.is_complain:
-                util.logger.spam(f"consensus block_builder.is_complain")
+            if block_builder.complained:
+                util.logger.spam("consensus block_builder.complained")
                 block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
                 if not block_info:
                     # Can't make a block as a leader, this peer will be complained too.
@@ -66,7 +66,7 @@ class ConsensusSiever(ConsensusBase):
                 if last_unconfirmed_block:
                     if (
                             len(last_unconfirmed_block.body.transactions) > 0 or
-                            last_unconfirmed_block.header.is_complain
+                            last_unconfirmed_block.header.complained
                     ) or (
                             len(last_unconfirmed_block.body.transactions) == 0 and
                             last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id
@@ -85,7 +85,7 @@ class ConsensusSiever(ConsensusBase):
                         last_unconfirmed_block
                 ) and (
                         len(last_unconfirmed_block.body.transactions) > 0 or
-                        last_unconfirmed_block.header.is_complain
+                        last_unconfirmed_block.header.complained
                 ):
                     vote = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                     vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)

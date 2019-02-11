@@ -120,7 +120,7 @@ class Epoch:
         block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
         if self.complain_result():
-            block_builder.is_complain = self.complain_result()
+            block_builder.complained = self.complain_result()
         else:
             self.__add_tx_to_block(block_builder)
 

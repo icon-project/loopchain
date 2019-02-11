@@ -14,15 +14,15 @@ class BlockBuilder(v0_1a.BlockBuilder):
 
     def __init__(self, tx_versioner: 'TransactionVersioner'):
         super().__init__(tx_versioner)
-        self.is_complain = False
+        self.complained = False
 
     def reset_cache(self):
         super().reset_cache()
-        self.is_complain = False
+        self.complained = False
 
     def build_block_header_data(self):
         header_data = super().build_block_header_data()
-        header_data["is_complain"] = self.is_complain
+        header_data["complained"] = self.complained
         return header_data
 
     def from_(self, block: 'Block'):
@@ -35,7 +35,7 @@ class BlockBuilder(v0_1a.BlockBuilder):
         self.fixed_timestamp = header.timestamp
 
         self._timestamp = header.timestamp
-        self.is_complain = header.is_complain
+        self.complained = header.complained
 
         body: BlockBody = block.body
         self.confirm_prev_block = body.confirm_prev_block
