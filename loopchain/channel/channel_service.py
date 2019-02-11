@@ -420,12 +420,12 @@ class ChannelService:
         if self.block_manager.peer_type != loopchain_pb2.BLOCK_GENERATOR:
             return
 
-        block_chain = self.block_manager.get_blockchain()
-        if block_chain.block_height > -1:
+        blockchain = self.block_manager.get_blockchain()
+        if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
-        block_chain.generate_genesis_block()
+        blockchain.generate_genesis_block()
 
     def connect_to_radio_station(self, is_reconnect=False):
         response = self.__radio_station_stub.call_in_times(
@@ -602,18 +602,17 @@ class ChannelService:
             self.__ready_to_height_sync(False)
 
     def __ready_to_height_sync(self, is_leader: bool = False):
-        block_chain = self.block_manager.get_blockchain()
+        blockchain = self.block_manager.get_blockchain()
 
-        block_chain.init_block_chain(is_leader)
-        if block_chain.block_height > -1:
+        blockchain.init_blockchain(is_leader)
+        if blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
     async def block_height_sync_channel(self):
         # leader 로 시작하지 않았는데 자신의 정보가 leader Peer 정보이면 block height sync 하여
         # 최종 블럭의 leader 를 찾는다.
-        peer_manager = self.peer_manager
-        peer_leader = peer_manager.get_leader_peer()
-        self_peer_object = peer_manager.get_peer(ChannelProperty().peer_id)
+        peer_leader = self.peer_manager.get_leader_peer()
+        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         is_delay_announce_new_leader = False
         peer_old_leader = None
 
@@ -853,13 +852,13 @@ class ChannelService:
         return object_has_queue
 
     def start_leader_complain_timer(self):
-        # util.logger.debug(f"start_leader_complain_timer in channel service.")
+        util.logger.spam(f"start_leader_complain_timer in channel service.")
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                   duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                                                   is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):
-        # util.logger.debug(f"stop_leader_complain_timer in channel service.")
+        util.logger.spam(f"stop_leader_complain_timer in channel service.")
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):

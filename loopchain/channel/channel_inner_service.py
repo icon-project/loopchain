@@ -313,11 +313,13 @@ class ChannelInnerTask:
 
         is_vote_block = not conf.ALLOW_MAKE_EMPTY_BLOCK and len(unconfirmed_block.body.transactions) == 0
         if is_vote_block:
-            util.logger.spam(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
-                             f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
-                             f"channel({ChannelProperty().name}))")
+            util.logger.debug(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
+                              f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
+                              f"channel({ChannelProperty().name}))")
 
-            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != unconfirmed_block.header.next_leader.hex_hx():
+            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
+                    unconfirmed_block.header.next_leader.hex_hx():
+                util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
                 await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task
@@ -460,11 +462,15 @@ class ChannelInnerTask:
             self._channel_service.stop_leader_complain_timer()
             if next_new_leader == ChannelProperty().peer_id:
                 # Turn to Leader and Send Leader Complain Block
-                util.logger.notice(f"No I'm your father....")
+                util.logger.spam(f"No I'm your father....")
                 self._channel_service.state_machine.turn_to_leader()
             else:
-                util.logger.notice(f"I'm your Jedi.")
+                util.logger.spam(f"I'm your Jedi.")
+                # TODO check new leader is alive.
+                # if not
+                #     self._channel_service.start_leader_complain_timer()
                 self._channel_service.state_machine.turn_to_peer()
+            block_manager.epoch.prev_leader_id = next_new_leader
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

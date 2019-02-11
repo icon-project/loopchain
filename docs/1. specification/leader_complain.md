@@ -41,10 +41,10 @@
    - start when "AddTx(List)"
    - stop when "Add Block"
  * Complain Block
-   - Set is_complain flag True in block header
+   - Set complained flag True in block header
    - It made by peer (the order of priority: from prev_leader to next 1 by 1 except complain peer)
    - No tx in block
-   - Confirm by next block (Normal Voting Block, is_complain=False)
+   - Confirm by next block (Normal Voting Block, complained=False)
    - Include prev block votes
 
 #### Complain message

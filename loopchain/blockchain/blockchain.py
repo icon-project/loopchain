@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, Vote, Epoch)
+                                  Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -204,23 +204,41 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
+    def find_block_info_by_hash(self, block_hash):
+        block_hash_encoded = block_hash.hex().encode(encoding='UTF-8')
+
+        try:
+            return self.__confirmed_block_db.Get(BlockChain.BLOCK_INFO_KEY + block_hash_encoded)
+        except KeyError:
+            return None
+
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block: Block, vote: Vote = None) -> bool:
+    def add_block(self, block: Block, block_info=None) -> bool:
         """
 
         :param block:
-        :param vote: additional info for this block, but It came from next block.
+        :param block_info: additional info for this block, but It came from next block of this block.
         :return:
         """
         with self.__add_block_lock:
             if not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            return self.__add_block(block, vote)
+            peer_id = ChannelProperty().peer_id
+            util.apm_event(peer_id, {
+                'event_type': 'TotalTx',
+                'peer_id': peer_id,
+                'peer_name': conf.PEER_NAME,
+                'channel_name': self.__channel_name,
+                'data': {
+                    'block_hash': block.header.hash.hex(),
+                    'total_tx': self.total_tx}})
 
-    def __add_block(self, block: Block, vote: Vote = None):
+            return self.__add_block(block, block_info)
+
+    def __add_block(self, block: Block, block_info):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
@@ -239,7 +257,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash, None)
 
-            next_total_tx = self.__write_block_data(block, vote)
+            next_total_tx = self.__write_block_data(block, block_info)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -261,18 +279,12 @@ class BlockChain:
                     'block_height': self.__block_height
                 }})
 
-            # stop leader complain timer
-            ObjectManager().channel_service.stop_leader_complain_timer()
-
-            # start new epoch
-            ObjectManager().channel_service.block_manager.epoch = Epoch.new_epoch(block.header.height + 1)
-
             # notify new block
             ObjectManager().channel_service.inner_service.notify_new_block()
 
             return True
 
-    def __write_block_data(self, block: Block, vote: Vote = None):
+    def __write_block_data(self, block: Block, block_info):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -296,10 +308,10 @@ class BlockChain:
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
 
-        if vote:
+        if block_info:
             batch.Put(
                 BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
-                Vote.save_to(vote)
+                b'0x1'
             )
 
         self.__confirmed_block_db.Write(batch)
@@ -349,10 +361,10 @@ class BlockChain:
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
                 if invoke_result_block_height == next_height:
-                    logging.debug(f"already saved invoke result...")
+                    logging.debug("already saved invoke result...")
                     return False
             except KeyError:
-                logging.debug(f"There is no invoke result height in db.")
+                logging.debug("There is no invoke result height in db.")
         else:
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
@@ -636,6 +648,9 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
+                    if current_block.header.complained:
+                        util.logger.debug("reset last_unconfirmed_block by complain block")
+                        self.last_unconfirmed_block = current_block
                     return
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
@@ -649,13 +664,13 @@ class BlockChain:
 
             # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
-            self.add_block(unconfirmed_block)
+            self.add_block(unconfirmed_block, current_block.body.confirm_prev_block)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
             return unconfirmed_block
 
-    def init_block_chain(self, is_leader=False):
+    def init_blockchain(self, is_leader=False):
         # level DB에서 블럭을 읽어 들이며, 만약 levelDB에 블럭이 없을 경우 제네시스 블럭을 만든다
         try:
             last_block_key = self.__confirmed_block_db.Get(BlockChain.LAST_BLOCK_KEY, True)
@@ -678,7 +693,7 @@ class BlockChain:
             self.__block_height = -1
         else:
             self.__block_height = self.__last_block.header.height
-        logging.debug(f"ENGINE-303 init_block_chain: {self.__block_height}")
+        logging.debug(f"ENGINE-303 init_blockchain: {self.__block_height}")
 
     def generate_genesis_block(self):
         tx_info = None
@@ -710,11 +725,3 @@ class BlockChain:
         invoke_results = \
             self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
         self.__add_tx_to_block_db(precommit_block, invoke_results)
-
-
-class TransactionStatusInQueue(Enum):
-    normal = 1
-    fail_validation = 2
-    fail_invoke = 3
-    added_to_block = 4
-    precommited_to_block = 5
