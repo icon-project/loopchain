@@ -87,9 +87,10 @@ class Epoch:
     def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()
 
+        block_tx_size = 0
         tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:
-            if block_builder.size() >= conf.MAX_TX_SIZE_IN_BLOCK:
+            if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
                 logging.debug(f"consensus_base total size({block_builder.size()}) "
                               f"count({len(block_builder.transactions)}) "
                               f"_txQueue size ({len(tx_queue)})")
@@ -113,6 +114,7 @@ class Epoch:
                 traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
+                block_tx_size += tx.size(tx_versioner)
 
     def makeup_block(self):
         # self._check_unconfirmed_block(
