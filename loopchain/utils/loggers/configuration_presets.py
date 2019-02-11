@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import verboselogs
 
 from enum import Enum
 from loopchain import configure as conf
@@ -72,7 +71,7 @@ def update_preset(update_logger=True):
     preset.log_monitor_port = conf.MONITOR_LOG_PORT
 
     if preset is develop:
-        preset.log_level = verboselogs.SPAM
+        preset.log_level = conf.LOOPCHAIN_DEVELOP_LOG_LEVEL
     else:
         preset.log_level = conf.LOOPCHAIN_LOG_LEVEL
 
