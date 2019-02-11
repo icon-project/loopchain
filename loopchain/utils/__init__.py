@@ -29,6 +29,7 @@ import socket
 import sys
 import time
 import timeit
+import traceback
 import verboselogs
 import zlib
 from binascii import unhexlify
@@ -86,9 +87,21 @@ def long_to_bytes (val, endianness='big'):
 
 
 def exit_and_msg(msg):
+    traceback.print_stack()
+
     exit_msg = "Service Stop by: " + msg
     logging.exception(exit_msg)
+
     os.killpg(0, signal.SIGKILL)
+    time.sleep(5)
+
+    os.kill(os.getpid(), signal.SIGKILL)
+    time.sleep(5)
+
+    os._exit(-1)
+    time.sleep(5)
+
+    sys.exit(-1)
 
 
 def _load_user_score_module(path, call_class_name):
