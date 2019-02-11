@@ -36,7 +36,7 @@ class StubManager:
         self.__stub = None
         self.__channel = None
         self.__stub_update_time = datetime.datetime.now()
-        self.__last_succeed_time = time.clock_gettime(time.CLOCK_MONOTONIC)
+        self.__last_succeed_time = time.monotonic()
 
         self.__make_stub(False)
 
@@ -68,10 +68,10 @@ class StubManager:
         return self.__target
 
     def elapsed_last_succeed_time(self):
-        return time.clock_gettime(time.CLOCK_MONOTONIC) - self.__last_succeed_time
+        return time.monotonic() - self.__last_succeed_time
 
     def __update_last_succeed_time(self):
-        self.__last_succeed_time = time.clock_gettime(time.CLOCK_MONOTONIC)
+        self.__last_succeed_time = time.monotonic()
 
     def call(self, method_name, message, timeout=None, is_stub_reuse=True, is_raise=False):
         if timeout is None:
