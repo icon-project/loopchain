@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import verboselogs
 
 from enum import Enum
 from loopchain import configure as conf
@@ -52,6 +51,21 @@ def get_preset():
     return _presets[_preset_type]
 
 
+def get_presets():
+    return _presets
+
+
+def set_presets(presets: dict):
+    global develop
+    global production
+    for key, value in presets.items():
+        if key == PresetType.develop:
+            develop = value
+        elif key == PresetType.production:
+            production = value
+        _presets[key] = value
+
+
 def update_preset(update_logger=True):
     preset = get_preset()
 
@@ -72,7 +86,7 @@ def update_preset(update_logger=True):
     preset.log_monitor_port = conf.MONITOR_LOG_PORT
 
     if preset is develop:
-        preset.log_level = verboselogs.SPAM
+        preset.log_level = conf.LOOPCHAIN_DEVELOP_LOG_LEVEL
     else:
         preset.log_level = conf.LOOPCHAIN_LOG_LEVEL
 

@@ -118,28 +118,22 @@ def start_as_rest_server(args):
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
     from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
     from iconcommons.icon_config import IconConfig
-    from iconcommons.logger import Logger
-
-    with open(conf_path) as file:
-        load_conf = json.load(file)
 
     additional_conf = {
-        "log": load_conf.get("log"),
+        "config": conf_path,
         "channel": channel,
         "port": api_port,
         "amqpKey": amqp_key,
-        "gunicornWorkerCount": 1,
         "tbearsMode": False
     }
 
     rpcserver_conf = IconConfig("", default_rpcserver_config)
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
-    Logger.load_config(rpcserver_conf)
 
     if not find_procs_by_params(api_port):
         start_process(conf=rpcserver_conf)
-        Logger.info("start_command done!, IconRpcServerCli")
+        logging.info("start_command done!, IconRpcServerCli")
 
 
 def start_as_rest_server_rs(args):

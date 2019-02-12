@@ -24,7 +24,8 @@ from earlgrey import MessageQueueService
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, ObjectManager, CommonSubprocess
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
+from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
@@ -150,6 +151,10 @@ class ChannelService:
             self.cleanup()
 
     def close(self):
+        if self.__inner_service:
+            self.__inner_service.cleanup()
+            logging.info("Cleanup ChannelInnerService.")
+
         MessageQueueService.loop.stop()
 
     def cleanup(self):
@@ -196,13 +201,14 @@ class ChannelService:
         ChannelProperty().score_package = score_package
 
         self.__peer_manager = PeerManager(ChannelProperty().name)
-        self.__init_peer_auth()
+        await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
         self.__init_radio_station_stub()
 
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
+        self.__inner_service.init_sub_services()
 
         # if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
         #     util.logger.spam(f"init consensus !")
@@ -260,8 +266,11 @@ class ChannelService:
 
         self.__state_machine.complete_sync()
 
-    def __init_peer_auth(self):
+    async def __init_peer_auth(self):
         try:
+            node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
+            self.__peer_auth = Signer.from_prikey(node_key)
+        except KeyError:
             self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
@@ -308,13 +317,14 @@ class ChannelService:
     #     self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
-        scheduler = BroadcastScheduler(channel=ChannelProperty().name, self_target=ChannelProperty().peer_target)
+        scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
+                                                  self_target=ChannelProperty().peer_target)
         scheduler.start()
 
         self.__broadcast_scheduler = scheduler
 
-        future = scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target)
-        future.result(conf.TIMEOUT_FOR_FUTURE)
+        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
+                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def __init_radio_station_stub(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
@@ -420,12 +430,12 @@ class ChannelService:
         if self.block_manager.peer_type != loopchain_pb2.BLOCK_GENERATOR:
             return
 
-        block_chain = self.block_manager.get_blockchain()
-        if block_chain.block_height > -1:
+        blockchain = self.block_manager.get_blockchain()
+        if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
-        block_chain.generate_genesis_block()
+        blockchain.generate_genesis_block()
 
     def connect_to_radio_station(self, is_reconnect=False):
         response = self.__radio_station_stub.call_in_times(
@@ -602,18 +612,17 @@ class ChannelService:
             self.__ready_to_height_sync(False)
 
     def __ready_to_height_sync(self, is_leader: bool = False):
-        block_chain = self.block_manager.get_blockchain()
+        blockchain = self.block_manager.get_blockchain()
 
-        block_chain.init_block_chain(is_leader)
-        if block_chain.block_height > -1:
+        blockchain.init_blockchain(is_leader)
+        if blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
     async def block_height_sync_channel(self):
         # leader 로 시작하지 않았는데 자신의 정보가 leader Peer 정보이면 block height sync 하여
         # 최종 블럭의 leader 를 찾는다.
-        peer_manager = self.peer_manager
-        peer_leader = peer_manager.get_leader_peer()
-        self_peer_object = peer_manager.get_peer(ChannelProperty().peer_id)
+        peer_leader = self.peer_manager.get_leader_peer()
+        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         is_delay_announce_new_leader = False
         peer_old_leader = None
 
@@ -853,13 +862,13 @@ class ChannelService:
         return object_has_queue
 
     def start_leader_complain_timer(self):
-        # util.logger.debug(f"start_leader_complain_timer in channel service.")
+        util.logger.spam(f"start_leader_complain_timer in channel service.")
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                   duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                                                   is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):
-        # util.logger.debug(f"stop_leader_complain_timer in channel service.")
+        util.logger.spam(f"stop_leader_complain_timer in channel service.")
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):

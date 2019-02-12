@@ -48,6 +48,7 @@ class LogOutputType(IntFlag):
 
 
 LOOPCHAIN_LOG_LEVEL = os.getenv('LOOPCHAIN_LOG_LEVEL', 'DEBUG')
+LOOPCHAIN_DEVELOP_LOG_LEVEL = "SPAM"
 LOOPCHAIN_OTHER_LOG_LEVEL = "WARNING"
 LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_NAME}{SCORE_PACKAGE} " \
              "%(levelname)s %(filename)s(%(lineno)d) %(message)s"
@@ -76,6 +77,8 @@ MONITOR_LOG_MODULE = 'fluent'
 # MULTI PROCESS ###
 ###################
 ENABLE_PROFILING = False
+SUB_PROCESS_JOIN_TIMEOUT = 30
+IS_BROADCAST_MULTIPROCESSING = False
 
 
 ##########
@@ -164,7 +167,7 @@ CONSENSUS_ALGORITHM = ConsensusAlgorithm.siever
 MAX_BLOCK_KBYTES = 3000  # default: 3000
 # The total size of the transactions in a block.
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
-MAX_TX_COUNT_IN_ADDTX_LIST = 32  # AddTxList can send multiple tx in one message.
+MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
 SEND_TX_LIST_DURATION = 0.3  # seconds
 USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is different from the running node.
 # Consensus Vote Ratio 1 = 100%, 0.5 = 50%
@@ -346,6 +349,8 @@ AMQP_CONNECTION_ATTEMPS = 32
 AMQP_RETRY_DELAY = 5
 PEER_QUEUE_NAME_FORMAT = "Peer.{amqp_key}"
 CHANNEL_QUEUE_NAME_FORMAT = "Channel.{channel_name}.{amqp_key}"
+CHANNEL_TX_CREATOR_QUEUE_NAME_FORMAT = "ChannelTxCreator.{channel_name}.{amqp_key}"
+CHANNEL_TX_RECEIVER_QUEUE_NAME_FORMAT = "ChannelTxReceiver.{channel_name}.{amqp_key}"
 SCORE_QUEUE_NAME_FORMAT = "Score.{score_package_name}.{channel_name}.{amqp_key}"
 ICON_SCORE_QUEUE_NAME_FORMAT = "IconScore.{channel_name}.{amqp_key}"
 AMQP_KEY_DEFAULT = "amqp_key"
@@ -444,5 +449,5 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-# TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 3  # 3 is test value for developing leader complain
+# TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 5  # 3 is test value for developing leader complain
 TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 30  # 30 is default for product

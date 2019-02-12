@@ -14,6 +14,7 @@
 """ A class for icx authorization of Peer"""
 
 import binascii
+import getpass
 import hashlib
 import logging
 from typing import Union
@@ -90,33 +91,36 @@ class SignVerifier:
 
     @classmethod
     def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
-        with open(prikey_file, "rb") as der:
-            private_bytes = der.read()
-
         if isinstance(password, str):
             password = password.encode()
-        try:
-            try:
-                temp_private = serialization \
-                    .load_der_private_key(private_bytes,
-                                          password,
-                                          default_backend())
-            except Exception as e:
-                # try pem type private load
-                temp_private = serialization \
-                    .load_pem_private_key(private_bytes,
-                                          password,
-                                          default_backend())
-        except Exception as e:
-            raise ValueError("Invalid Password(Peer Certificate load test)")
 
-        no_pass_private = temp_private.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        key_info = keys.PrivateKeyInfo.load(no_pass_private)
-        prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+        if prikey_file.endswith('.der') or prikey_file.endswith('.pem'):
+            with open(prikey_file, "rb") as file:
+                private_bytes = file.read()
+            try:
+                if prikey_file.endswith('.der'):
+                    temp_private = serialization \
+                        .load_der_private_key(private_bytes,
+                                              password,
+                                              default_backend())
+                if prikey_file.endswith('.pem'):
+                    temp_private = serialization \
+                        .load_pem_private_key(private_bytes,
+                                              password,
+                                              default_backend())
+            except Exception as e:
+                raise ValueError("Invalid Password(Peer Certificate load test)")
+
+            no_pass_private = temp_private.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            )
+            key_info = keys.PrivateKeyInfo.load(no_pass_private)
+            prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+        else:
+            from tbears.libs.icx_signer import key_from_key_store
+            prikey = key_from_key_store(prikey_file, password)
         return cls.from_prikey(prikey)
 
     @classmethod
@@ -165,7 +169,10 @@ class Signer(SignVerifier):
         from loopchain import configure as conf
 
         prikey_file = conf.CHANNEL_OPTION[channel]["private_path"]
-        password = conf.CHANNEL_OPTION[channel]["private_password"]
+        if 'private_password' in conf.CHANNEL_OPTION[channel]:
+            password = conf.CHANNEL_OPTION[channel]["private_password"]
+        else:
+            password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
         return cls.from_prikey_file(prikey_file, password)
 
     @classmethod

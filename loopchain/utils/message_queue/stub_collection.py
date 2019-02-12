@@ -19,7 +19,7 @@ from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
     from loopchain.peer import PeerInnerStub
-    from loopchain.channel.channel_inner_service import ChannelInnerStub
+    from loopchain.channel.channel_inner_service import ChannelInnerStub, ChannelTxReceiverInnerStub
     from loopchain.scoreservice import ScoreInnerStub, IconScoreInnerStub
 
 
@@ -30,6 +30,7 @@ class StubCollection(metaclass=SingletonMetaClass):
 
         self.peer_stub: PeerInnerStub = None
         self.channel_stubs: Dict[str, ChannelInnerStub] = {}
+        self.channel_tx_receiver_stubs: Dict[str, ChannelTxReceiverInnerStub] = {}
         self.score_stubs: Dict[str, ScoreInnerStub] = {}
         self.icon_score_stubs: Dict[str, IconScoreInnerStub] = {}
 
@@ -53,6 +54,19 @@ class StubCollection(metaclass=SingletonMetaClass):
         self.channel_stubs[channel_name] = stub
 
         logging.debug(f"ChannelTasks : {channel_name}, Queue : {queue_name}")
+        return stub
+
+    async def create_channel_tx_receiver_stub(self, channel_name):
+        from loopchain import configure as conf
+        from loopchain.channel.channel_inner_service import ChannelTxReceiverInnerStub
+
+        queue_name = conf.CHANNEL_TX_RECEIVER_QUEUE_NAME_FORMAT.format(
+            channel_name=channel_name, amqp_key=self.amqp_key)
+        stub = ChannelTxReceiverInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
+        await stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        self.channel_tx_receiver_stubs[channel_name] = stub
+
+        logging.debug(f"ChannelTxReceiverTasks : {channel_name}, Queue : {queue_name}")
         return stub
 
     async def create_score_stub(self, channel_name, score_package_name):

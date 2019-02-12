@@ -1,5 +1,6 @@
 import base64
 from abc import ABCMeta
+from enum import Enum
 from typing import Union
 
 
@@ -207,3 +208,11 @@ def int_tostr(value: Union[int, MalformedStr]):
         return str(value)
 
     return value.str()
+
+
+class TransactionStatusInQueue(Enum):
+    normal = 1
+    fail_validation = 2
+    fail_invoke = 3
+    added_to_block = 4
+    precommited_to_block = 5
