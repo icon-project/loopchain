@@ -43,6 +43,10 @@ class PeerInnerTask:
             self._peer_service.node_type.value, channels_info[channel_name]['score_package']
 
     @message_queue_task
+    async def get_node_key(self, channel_name) -> bytes:
+        return self._peer_service.node_keys[channel_name]
+
+    @message_queue_task
     async def stop_outer(self):
         self._peer_service.service_stop()
         return "stop outer"

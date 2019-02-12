@@ -99,6 +99,8 @@ class PeerService:
         self.__reset_voter_in_progress = False
         self.__json_conf_path = None
 
+        self.__node_keys: dict = {}
+
         ObjectManager().peer_service = self
 
     @property
@@ -172,6 +174,10 @@ class PeerService:
     def radio_station_target(self):
         return self.__radio_station_target
 
+    @property
+    def node_keys(self):
+        return self.__node_keys
+
     def service_stop(self):
         self.__common_service.stop()
 
@@ -242,10 +248,15 @@ class PeerService:
                               f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
                 self.__rest_service = RestService(int(port))
 
-    def __make_peer_id(self):
-        """네트워크에서 Peer 를 식별하기 위한 UUID를 level db 에 생성한다.
-        """
-        self.__peer_id = Signer.from_channel(conf.LOOPCHAIN_DEFAULT_CHANNEL).address
+    def __init_key_by_channel(self):
+        for channel in conf.CHANNEL_OPTION:
+            signer = Signer.from_channel(channel)
+            if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
+                self.__make_peer_id(signer.address)
+            self.__node_keys[channel] = signer.private_key.private_key
+
+    def __make_peer_id(self, address):
+        self.__peer_id = address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
@@ -308,8 +319,6 @@ class PeerService:
         self.__init_port(port)
         self.__init_level_db()
 
-        self.__make_peer_id()
-
         StubCollection().amqp_target = amqp_target
         StubCollection().amqp_key = amqp_key
 
@@ -321,6 +330,8 @@ class PeerService:
         self.__channel_infos = self.__get_channel_infos()
         if not self.__channel_infos:
             util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
+
+        self.__init_key_by_channel()
 
         self.__run_rest_services(port)
         self.run_common_service()
