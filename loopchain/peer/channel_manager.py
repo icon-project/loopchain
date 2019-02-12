@@ -15,7 +15,7 @@
 import logging
 
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastScheduler, BroadcastCommand, PeerManager, ObjectManager
+from loopchain.baseservice import BroadcastSchedulerFactory, BroadcastCommand, PeerManager, ObjectManager
 from loopchain.container import CommonService
 
 
@@ -48,7 +48,7 @@ class ChannelManager:
         self.__peer_managers[channel] = peer_manager
 
     def __start_broadcast_scheduler(self, channel):
-        scheduler = BroadcastScheduler(channel=channel)
+        scheduler = BroadcastSchedulerFactory.new(channel=channel)
         scheduler.start()
 
         self.__broadcast_schedulers[channel] = scheduler

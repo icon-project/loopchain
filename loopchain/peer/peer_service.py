@@ -414,5 +414,6 @@ class PeerService:
 
         for channel_name, channel_info in self.__channel_infos.items():
             await StubCollection().create_channel_stub(channel_name)
+            await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
