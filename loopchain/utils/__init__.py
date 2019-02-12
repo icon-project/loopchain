@@ -278,8 +278,10 @@ def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_htt
         ip = dns
         port = '443'
 
-    url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
-
+    if version == conf.ApiVersion.v2:
+        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
+    else:  # ApiVersion.v3 or ApiVersion.node
+        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}/{channel}"
     return url
 
 
