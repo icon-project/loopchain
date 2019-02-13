@@ -209,6 +209,12 @@ class PeerService:
                         json_string = json.dumps(json_data).replace('[local_ip]', util.get_private_ip())
                         channels = json.loads(json_string)
 
+                        if conf.ENABLE_CHANNEL_AUTH:
+                            filtered_channels = {channel: channels[channel] for channel in channels
+                                                 for peer in channels[channel]['peers']
+                                                 if self.__peer_id == peer['id']}
+                            channels = filtered_channels
+
                         logging.info(f"loading channel info : {json_data}")
                 except FileNotFoundError as e:
                     util.exit_and_msg(f"cannot open json file in ({conf.CHANNEL_MANAGE_DATA_PATH}): {e}")
@@ -318,6 +324,7 @@ class PeerService:
         self.__init_kms_helper(agent_pin)
         self.__init_port(port)
         self.__init_level_db()
+        self.__init_key_by_channel()
 
         StubCollection().amqp_target = amqp_target
         StubCollection().amqp_key = amqp_key
@@ -330,8 +337,6 @@ class PeerService:
         self.__channel_infos = self.__get_channel_infos()
         if not self.__channel_infos:
             util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
-
-        self.__init_key_by_channel()
 
         self.__run_rest_services(port)
         self.run_common_service()
