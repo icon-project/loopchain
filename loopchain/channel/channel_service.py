@@ -27,7 +27,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.baseservice import StubManager, PeerListData, PeerManager, PeerStatus, TimerService
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -460,7 +460,13 @@ class ChannelService:
             return
 
         if response and response.status == message_code.Response.success:
-            peer_list_data = pickle.loads(response.peer_list)
+            try:
+                peer_list_data = PeerListData.load(response.peer_list)
+            except Exception as e:
+                traceback.print_exc()
+                logging.error(f"Invalid peer list. Check your Radio Station. exception={e}")
+                return
+
             self.__peer_manager.load(peer_list_data, False)
             peers, peer_list = self.__peer_manager.get_peers_for_debug()
             logging.debug("peer list update: " + peers)

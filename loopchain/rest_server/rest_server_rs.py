@@ -17,7 +17,6 @@ import _ssl
 import base64
 import json
 import logging
-import pickle
 import ssl
 from concurrent import futures
 from typing import List
@@ -27,12 +26,11 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerManager, PeerStatus
+from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, PeerInfo
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.utils import loggers
 
 
 def get_channel_name_from_args(args) -> str:
@@ -159,7 +157,7 @@ class Peer(HTTPMethodView):
             grpc_response = ServerComponents().get_peer_list(channel)
 
             peer_manager = PeerManager(channel)
-            peer_list_data = pickle.loads(grpc_response.peer_list)
+            peer_list_data = PeerListData.load(grpc_response.peer_list)
             peer_manager.load(peer_list_data, False)
 
             all_peer_list = []
@@ -171,8 +169,8 @@ class Peer(HTTPMethodView):
                 leader_peer_id = leader_peer.peer_id
             
             for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
-                peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
-                peer_data = self.__change_format_to_json(peer_each)
+                peer_each: PeerInfo = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
+                peer_data = peer_each.serialize()
 
                 if peer_each.peer_id == leader_peer_id:
                     peer_data['peer_type'] = loopchain_pb2.BLOCK_GENERATOR
@@ -199,7 +197,7 @@ class Peer(HTTPMethodView):
             grpc_response = ServerComponents().get_peer_list(channel)
 
             peer_manager = PeerManager(channel)
-            peer_list_data = pickle.loads(grpc_response.peer_list)
+            peer_list_data = PeerListData.load(grpc_response.peer_list)
             peer_manager.load(peer_list_data, False)
 
             async_futures: List[grpc.Future] = []
@@ -238,7 +236,8 @@ class Peer(HTTPMethodView):
             result['response_code'] = grpc_response.code
 
             if grpc_response.code == message_code.Response.success:
-                result['data'] = self.__change_format_to_json(pickle.loads(grpc_response.object))
+                peer_info = PeerInfo.load(grpc_response.object)
+                result['data'] = peer_info.serialize()
             else:
                 result['message'] = message_code.get_response_msg(grpc_response.code)
 
@@ -257,18 +256,6 @@ class Peer(HTTPMethodView):
             return ServerComponents().abort_if_url_doesnt_exist(request_type, self.__REQUEST_TYPE)
 
         return response.json(result)
-
-    def __change_format_to_json(self, peer):
-        json_data = {
-            'order': peer.order,
-            'peer_id': peer.peer_id,
-            'group_id': peer.group_id,
-            'target': peer.target,
-            'cert': base64.b64encode(peer.cert).decode("utf-8"),
-            'status_update_time': str(peer.status_update_time),
-            'status': peer.status
-        }
-        return json_data
 
     def __abort_if_arg_isnt_enough(self, param_name):
         result = dict()

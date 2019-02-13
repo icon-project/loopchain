@@ -13,10 +13,10 @@
 # limitations under the License.
 import ast
 import json
-import pickle
 import re
 import signal
 import multiprocessing as mp
+import traceback
 from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
@@ -26,6 +26,7 @@ from earlgrey import *
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
+from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
                                   Block, BlockBuilder, BlockSerializer, blocks, Hash32, )
@@ -291,7 +292,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
                       crash_callback_in_join_thread=crash_callback_in_join_thread)
 
         self.__broadcast_scheduler = broadcast_scheduler
-        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE, BroadcastCommand.UPDATE_AUDIENCE)
+        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE)
         broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
 
     def start(self, target, args=(), crash_callback_in_join_thread=None):
@@ -714,12 +715,18 @@ class ChannelInnerTask:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def announce_new_peer(self, peer_object_pickled, peer_target) -> None:
-        peer_object = pickle.loads(peer_object_pickled)
-        logging.debug("Add New Peer: " + str(peer_object.peer_id))
+    def announce_new_peer(self, peer_info_dumped, peer_target) -> None:
+        try:
+            peer_info = PeerInfo.load(peer_info_dumped)
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Invalid peer info. peer_target={peer_target}, exception={e}")
+            return
+
+        logging.debug("Add New Peer: " + str(peer_info.peer_id))
 
         peer_manager = self._channel_service.peer_manager
-        peer_manager.add_peer(peer_object)
+        peer_manager.add_peer(peer_info)
         # broadcast the new peer to the others for adding an audience
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
 

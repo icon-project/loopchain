@@ -80,13 +80,6 @@ class ChannelManager:
         else:
             logging.debug(f"channel_manager:remove_audience no channel({channel}) in broadcast_threads")
 
-    def update_audience(self, channel, peer_manager_dump):
-        if channel in self.__broadcast_schedulers.keys():
-            self.__broadcast_schedulers[channel].schedule_job(
-                BroadcastCommand.UPDATE_AUDIENCE, peer_manager_dump)
-        else:
-            logging.debug(f"channel_manager:update_audience no channel({channel}) in broadcast_threads")
-
     def broadcast(self, channel, method_name, method_param, response_handler=None, *, retry_times=None, timeout=None):
         """등록된 모든 Peer 의 동일한 gRPC method 를 같은 파라미터로 호출한다.
         """
