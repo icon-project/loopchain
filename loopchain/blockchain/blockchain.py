@@ -257,20 +257,25 @@ class BlockChain:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                self.__add_tx_to_block_db(block, invoke_results)
-                ObjectManager().channel_service.score_write_precommit_state(block)
-            except Exception as e:
-                logging.warning(f"blockchain:add_block FAIL "
-                                f"channel_service.score_write_precommit_state")
-                raise e
+                new_batch, old_batch = self.__batch_block(block, confirm_info, invoke_results)
+                self.__update_batch(new_batch)
+            except Exception:
+                logging.warning(f"blockchain:add_block FAIL blockchain.__write_block")
+                raise
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
 
-            next_total_tx = self.__write_block_data(block, confirm_info)
+            try:
+                ObjectManager().channel_service.score_write_precommit_state(block)
+            except Exception:
+                logging.warning(f"blockchain:add_block FAIL channel_service.score_write_precommit_state")
+
+                self.__revert_batch(new_batch, old_batch)
+                raise
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
-            self.__total_tx = next_total_tx
+            self.__total_tx = int.from_bytes(new_batch[BlockChain.TRANSACTION_COUNT_KEY], 'big')
             logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
                           f"last_block({self.__last_block.header.hash.hex()})")
             logging.info(
@@ -293,39 +298,112 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, confirm_info):
-        # a condition for the exception case of genesis block.
-        next_total_tx = self.__total_tx
-        if block.header.height > 0:
-            next_total_tx += len(block.body.transactions)
+    def __update_batch(self, new_batch: dict):
+        db_batch = leveldb.WriteBatch()
+        for key, value in new_batch.items():
+            db_batch.Put(key, value)
 
-        bit_length = next_total_tx.bit_length()
-        byte_length = (bit_length + 7) // 8
-        next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
+        self.__confirmed_block_db.Write(db_batch)
+
+    def __revert_batch(self, new_batch: dict, old_batch: dict):
+        db_batch = leveldb.WriteBatch()
+        for key in set(new_batch) - set(old_batch):
+            db_batch.Delete(key)
+        for key, value in old_batch.items():
+            if value is None:
+                db_batch.Delete(key)
+            else:
+                db_batch.Put(key, value)  # Put old value
+
+        self.__confirmed_block_db.Write(db_batch)
+
+    def __batch_block(self, block: Block, confirm_info, tx_results):
+        new_batch = {}
+        old_batch = {}
+
+        new_block_data_batch, old_block_data_batch = self.__batch_block_data(block, confirm_info)
+        new_batch.update(new_block_data_batch)
+        old_batch.update(old_block_data_batch)
+
+        for tx_index, tx in enumerate(block.body.transactions.values()):
+            new_tx_data_batch, old_tx_data_batch = self.__batch_tx_data(block, tx, tx_index, tx_results[tx.hash.hex()])
+            new_batch.update(new_tx_data_batch)
+            old_batch.update(old_tx_data_batch)
+
+            if block.header.height > 0:
+                new_tx_by_address_batch, old_tx_by_address_batch = self.__batch_tx_by_address(tx)
+                new_batch.update(new_tx_by_address_batch)
+                old_batch.update(old_tx_by_address_batch)
+
+        return new_batch, old_batch
+
+    def __batch_block_data(self, block: Block, confirm_info):
+        new_total_tx = self.__total_tx
+        if block.header.height > 0:
+            new_total_tx += len(block.body.transactions)
+
+        old_total_tx_bytes = util.int_to_bytes(self.__total_tx)
+        new_total_tx_bytes = util.int_to_bytes(new_total_tx)
 
         block_version = self.__block_versioner.get_version(block.header.height)
         block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
-        block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+        new_block_hash_encoded = block.header.hash.hex().encode()
+        old_block_hash_encoded = self.__last_block and self.__last_block.header.hash.hex().encode('UTF-8')
 
-        batch = leveldb.WriteBatch()
-        batch.Put(block_hash_encoded, block_serialized.encode("utf-8"))
-        batch.Put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
-        batch.Put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-        batch.Put(
+        old_batch = {
+            BlockChain.LAST_BLOCK_KEY: old_block_hash_encoded,
+            BlockChain.TRANSACTION_COUNT_KEY: old_total_tx_bytes
+        }
+        new_batch = {
+            BlockChain.LAST_BLOCK_KEY: new_block_hash_encoded,
+            BlockChain.TRANSACTION_COUNT_KEY: new_total_tx_bytes,
+            new_block_hash_encoded: block_serialized.encode("utf-8"),
             BlockChain.BLOCK_HEIGHT_KEY +
-            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-            block_hash_encoded)
-
+            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'): new_block_hash_encoded
+        }
         if confirm_info:
-            batch.Put(
-                BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                b'0x1'
-            )
+            new_batch[BlockChain.CONFIRM_INFO_KEY + new_block_hash_encoded] = b'0x1'
 
-        self.__confirmed_block_db.Write(batch)
+        return new_batch, old_batch
 
-        return next_total_tx
+    def __batch_tx_data(self, block: Block, tx: Transaction, tx_index: int, tx_result):
+        block_manager = ObjectManager().channel_service.block_manager
+        tx_queue = block_manager.get_tx_queue()
+
+        tx_hash = tx.hash.hex()
+        tx_queue.pop(tx_hash, None)
+
+        tx_serializer = TransactionSerializer.new(tx.version, self.__tx_versioner)
+        tx_info = {
+            'block_hash': block.header.hash.hex(),
+            'block_height': block.header.height,
+            'tx_index': hex(tx_index),
+            'transaction': tx_serializer.to_db_data(tx),
+            'result': tx_result
+        }
+
+        new_batch = {
+            tx_hash.encode(encoding=conf.HASH_KEY_ENCODING):
+                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING)
+        }
+        return new_batch, {}
+
+    def __batch_tx_by_address(self, tx: 'Transaction'):
+        new_batch = {}
+        address = tx.from_address.hex_hx()
+        current_list, current_index = self.get_tx_list_by_address(address, 0)
+
+        if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
+            new_index = current_index + 1
+            new_list_key = self.__get_tx_list_key(address, new_index)
+            new_batch[new_list_key] = pickle.dumps(current_list)
+            current_list = [new_index]
+
+        current_list.insert(0, tx.hash.hex())
+        list_key = self.__get_tx_list_key(address, 0)
+        new_batch[list_key] = pickle.dumps(current_list)
+        return new_batch, {}
 
     def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
@@ -357,81 +435,15 @@ class BlockChain:
                     invoke_block, invoke_block_result = ObjectManager().channel_service.genesis_invoke(invoke_block)
                 else:
                     invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
-
-                self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
 
-        if score_last_block_height == next_height + 1:
-            try:
-                invoke_result_block_height_bytes = \
-                    self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
-                invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
-
-                if invoke_result_block_height == next_height:
-                    logging.debug("already saved invoke result...")
-                    return False
-            except KeyError:
-                logging.debug("There is no invoke result height in db.")
-        else:
+        if score_last_block_height != next_height + 1:
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
                               f"loopchain({next_height})/score({score_last_block_height})")
-            return True
-
-    def __add_tx_to_block_db(self, block, invoke_results):
-        """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
-        get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
-        :param block:
-        """
-        # loop all tx in block
-        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        block_manager = ObjectManager().channel_service.block_manager
-        tx_queue = block_manager.get_tx_queue()
-        # util.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
-        # util.logger.spam(
-        #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
-
-        for index, tx in enumerate(block.body.transactions.values()):
-            tx_hash = tx.hash.hex()
-            invoke_result = invoke_results[tx_hash]
-
-            tx_serializer = TransactionSerializer.new(tx.version, self.__tx_versioner)
-            tx_info = {
-                'block_hash': block.header.hash.hex(),
-                'block_height': block.header.height,
-                'tx_index': hex(index),
-                'transaction': tx_serializer.to_db_data(tx),
-                'result': invoke_result
-            }
-
-            self.__confirmed_block_db.Put(
-                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
-
-            # try:
-            #     util.logger.spam(
-            #         f"blockchain:__add_tx_to_block_db::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
-            # except KeyError as e:
-            #     util.logger.spam(f"__add_tx_to_block_db :: {e}")
-
-            tx_queue.pop(tx_hash, None)
-            # util.logger.spam(f"pop tx from queue:{tx_hash}")
-
-            if block.header.height > 0:
-                self.__save_tx_by_address(tx)
-
-        self.__save_invoke_result_block_height(block.header.height)
-
-    def __save_invoke_result_block_height(self, height):
-        bit_length = height.bit_length()
-        byte_length = (bit_length + 7) // 8
-        block_height_bytes = height.to_bytes(byte_length, byteorder='big')
-        self.__confirmed_block_db.Put(
-            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
-            block_height_bytes
-        )
+        return True
 
     def __precommit_tx(self, precommit_block):
         """ change status of transactions in a precommit block
@@ -451,10 +463,6 @@ class BlockChain:
                     #     f"blockchain:__precommit_tx::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
-
-    def __save_tx_by_address(self, tx: 'Transaction'):
-        address = tx.from_address.hex_hx()
-        return self.add_tx_to_list_by_address(address, tx.hash.hex())
 
     @staticmethod
     def __get_tx_list_key(address, index):
@@ -486,21 +494,6 @@ class BlockChain:
         except KeyError as e:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
-
-    def add_tx_to_list_by_address(self, address, tx_hash):
-        current_list, current_index = self.get_tx_list_by_address(address, 0)
-
-        if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
-            new_index = current_index + 1
-            new_list_key = self.__get_tx_list_key(address, new_index)
-            self.__confirmed_block_db.Put(new_list_key, pickle.dumps(current_list))
-            current_list = [new_index]
-
-        current_list.insert(0, tx_hash)
-        list_key = self.__get_tx_list_key(address, 0)
-        self.__confirmed_block_db.Put(list_key, pickle.dumps(current_list))
-
-        return True
 
     def find_tx_by_key(self, tx_hash_key):
         """find tx by hash

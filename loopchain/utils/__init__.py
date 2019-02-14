@@ -510,6 +510,11 @@ def is_hex(s):
     return re.fullmatch(r"^(0x)?[0-9a-f]{64}$", s or "") is not None
 
 
+def int_to_bytes(value: int):
+    bit_length = value.bit_length()
+    byte_length = (bit_length + 7) // 8
+    return value.to_bytes(byte_length, byteorder='big')
+
 # ------------------- data utils ----------------------------
 
 
