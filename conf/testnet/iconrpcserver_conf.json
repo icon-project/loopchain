@@ -17,5 +17,6 @@
   "port": 9000,
   "amqpTarget": "127.0.0.1",
   "amqpKey": "7100",
-  "gunicornWorkerCount": 1
+  "gunicornWorkerCount": 1,
+  "redirectProtocol": "https"
 }

@@ -108,12 +108,15 @@ def start_as_rest_server(args):
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(peer_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
     conf_path = conf.CONF_PATH_ICONRPCSERVER_DEV
+    dev_mode = True
 
     if args.radio_station_target:
         if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
             conf_path = conf.CONF_PATH_ICONRPCSERVER_TESTNET
+            dev_mode = False
         elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
             conf_path = conf.CONF_PATH_ICONRPCSERVER_MAINNET
+            dev_mode = False
 
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
     from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
@@ -121,15 +124,19 @@ def start_as_rest_server(args):
 
     additional_conf = {
         "config": conf_path,
-        "channel": channel,
-        "port": api_port,
-        "amqpKey": amqp_key,
         "tbearsMode": False
     }
 
-    rpcserver_conf = IconConfig("", default_rpcserver_config)
+    rpcserver_conf: IconConfig = IconConfig("", default_rpcserver_config)
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
+    if dev_mode:
+        additional_conf.update({
+            "channel": channel,
+            "port": api_port,
+            "amqpKey": amqp_key
+        })
+        rpcserver_conf.update_conf(additional_conf)
 
     if not find_procs_by_params(api_port):
         start_process(conf=rpcserver_conf)
@@ -154,12 +161,15 @@ def start_as_score(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
     conf_path = conf.CONF_PATH_ICONSERVICE_DEV
+    dev_mode = True
 
     if args.radio_station_target:
         if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
             conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
+            dev_mode = False
         elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
             conf_path = conf.CONF_PATH_ICONSERVICE_MAINNET
+            dev_mode = False
 
     if conf.USE_EXTERNAL_SCORE:
         if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
@@ -172,18 +182,20 @@ def start_as_score(args):
                 load_conf = json.load(file)
 
             additional_conf = {
-                "log": load_conf.get("log"),
-                "scoreRootPath": load_conf.get("scoreRootPath") + f"{amqp_key}_{channel}",
-                "stateDbRootPath": load_conf.get("stateDbRootPath") + f"{amqp_key}_{channel}",
+                "log": {
+                    "filePath": f"./log/develop/{channel}/iconservice_{amqp_key}.log"
+                },
+                "scoreRootPath": load_conf.get("scoreRootPath") + f"_{amqp_key}_{channel}",
+                "stateDbRootPath": load_conf.get("stateDbRootPath") + f"_{amqp_key}_{channel}",
                 "channel": channel,
                 "amqpKey": amqp_key,
-                "builtinScoreOwner": load_conf.get("builtinScoreOwner"),
-                "service": load_conf.get("service")
             }
 
-            icon_conf = IconConfig("", default_icon_config)
+            icon_conf: IconConfig = IconConfig("", default_icon_config)
             icon_conf.load()
-            icon_conf.update(additional_conf)
+            icon_conf.update_conf(load_conf)
+            if dev_mode:
+                icon_conf.update_conf(additional_conf)
             Logger.load_config(icon_conf)
 
             icon_service = IconService()
