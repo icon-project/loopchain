@@ -1,10 +1,10 @@
 import hashlib
 import time
 from typing import Union
-from merkletools import MerkleTools
 from . import BlockHeader, BlockBody
-from .. import BlockBuilder as BaseBlockBuilder
+from .. import Block, BlockBuilder as BaseBlockBuilder
 from ... import Address, Hash32, TransactionVersioner
+from ...merkle import MerkleTree
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -76,12 +76,10 @@ class BlockBuilder(BaseBlockBuilder):
         return self.transaction_root_hash
 
     def _build_transaction_root_hash(self):
-        merkle = MerkleTools(hash_type="sha3_256")
-        merkle.add_leaf(
-            list(map(lambda tx_hash: tx_hash.hex(), self.transactions))
-        )
+        merkle = MerkleTree()
+        merkle.add_leaf(self.transactions.keys())
         merkle.make_tree()
-        return Hash32(bytes.fromhex(merkle.get_merkle_root()))
+        return Hash32(merkle.get_merkle_root())
 
     def build_hash(self):
         if self.hash is not None:
@@ -109,26 +107,35 @@ class BlockBuilder(BaseBlockBuilder):
             self.next_leader,
             self.complained
         )
-        leaves = [self._to_bytes32_str(leaf) for leaf in leaves if leaf is not None]
+        leaves = [self._to_hash32(leaf) for leaf in leaves if leaf is not None]
 
-        merkle = MerkleTools(hash_type="sha3_256")
+        merkle = MerkleTree()
         merkle.add_leaf(leaves)
         merkle.make_tree()
-        return Hash32(bytes.fromhex(merkle.get_merkle_root()))
+        return Hash32(merkle.get_merkle_root())
 
     @classmethod
-    def _to_bytes32_str(cls, value: Union[int, bool, Hash32, Address]):
+    def _to_hash32(cls, value: Union[Hash32, bytes, bytearray, int, bool]):
         if isinstance(value, Hash32):
-            return value.hex()
+            return value
+        if isinstance(value, (bytes, bytearray)) and len(value) == 32:
+            return Hash32(value)
+
         if isinstance(value, bool):
             value = b'\x01' if value else b'\x00'
-            return hashlib.sha3_256(value).hexdigest()
-        if isinstance(value, int):
+        elif isinstance(value, int):
             if value < 0:
                 raise RuntimeError(f"value : {value} is negative.")
             value = value.to_bytes((value.bit_length() + 7) // 8, "big")
-            return hashlib.sha3_256(value).hexdigest()
-        if isinstance(value, Address):
-            return hashlib.sha3_256(value).hexdigest()
+        return Hash32(hashlib.sha3_256(value).digest())
 
-        raise RuntimeError(f"Cannot encode to byte32 str {type(value)}:{value}")
+    def from_(self, block: 'Block'):
+        super().from_(block)
+
+        header: BlockHeader = block.header
+        self.next_leader = header.next_leader
+        self.state_root_hash = header.state_root_hash
+        self.transaction_root_hash = header.transaction_root_hash
+        self.fixed_timestamp = header.timestamp
+        self.complained = header.complained
+        self._timestamp = header.timestamp
