@@ -694,13 +694,19 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
+        tx_receipts = response["txResults"]
         block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = block.header.peer_id
+        block_builder.signature = block.header.signature
+
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
         block_builder.state_root_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
         new_block = block_builder.build()
-        return new_block, response["txResults"]
+        return new_block, tx_receipts
 
     def score_invoke(self, _block: Block) -> dict or None:
         method = "icx_sendTransaction"
@@ -728,14 +734,19 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
+        tx_receipts = response["txResults"]
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = _block.header.peer_id
+        block_builder.signature = _block.header.signature
+
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
         block_builder.state_root_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
         new_block = block_builder.build()
-
-        return new_block, response["txResults"]
+        return new_block, tx_receipts
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
         change_hash_info = json.dumps({"block_height": block_height, "old_block_hash": old_block_hash,

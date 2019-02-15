@@ -446,7 +446,7 @@ class BlockManager:
     def __add_block_by_sync(self, block_, confirm_info=None):
         commit_state = block_.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
-                      f"height({block_.header.height}) commit_state({commit_state})")
+                      f"height({block_.header.height})")
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)

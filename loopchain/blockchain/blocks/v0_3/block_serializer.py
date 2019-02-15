@@ -23,6 +23,7 @@ class BlockSerializer(BaseBlockSerializer):
             "version": header.version,
             "prev_block_hash": header.prev_hash.hex() if header.prev_hash else '',
             "merkle_tree_root_hash": header.transaction_root_hash.hex(),
+            "receipt_root_hash": header.receipt_root_hash.hex(),
             "time_stamp": header.timestamp,
             "confirmed_transaction_list": transactions,
             "block_hash": header.hash.hex(),
@@ -31,7 +32,7 @@ class BlockSerializer(BaseBlockSerializer):
             "signature": header.signature.to_base64str() if header.signature else '',
             "commit_state": header.state_root_hash.hex(),
             "next_leader": header.next_leader.hex_xx(),
-            "complained": "0x1" if header.complained else "0x0"
+            "complained": 1 if header.complained else 0,
         }
 
     def _deserialize_header_data(self, json_data: dict):
@@ -47,6 +48,13 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("next_leader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
+        if json_data["complained"] == 1:
+            complained = True
+        elif json_data["complained"] == 0:
+            complained = False
+        else:
+            raise RuntimeError
+
         return {
             "hash": Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
             "prev_hash": prev_hash,
@@ -56,11 +64,14 @@ class BlockSerializer(BaseBlockSerializer):
             "signature": signature,
             "next_leader": next_leader,
             "transaction_root_hash": Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
+            "receipt_root_hash": Hash32.fromhex(json_data["receipt_root_hash"], ignore_prefix=True),
             "state_root_hash": Hash32.fromhex(json_data["commit_state"], ignore_prefix=True),
-            "complained": True if json_data["complained"] == "0x1" else False
+            "complained": complained
         }
 
     def _deserialize_body_data(self, json_data: dict):
+        confirm_prev_block = json_data.get("confirm_prev_block")
+
         transactions = OrderedDict()
         for tx_data in json_data['confirmed_transaction_list']:
             tx_version = self._tx_versioner.get_version(tx_data)
@@ -69,5 +80,6 @@ class BlockSerializer(BaseBlockSerializer):
             transactions[tx.hash] = tx
 
         return {
-            "transactions": transactions
+            "transactions": transactions,
+            "confirm_prev_block": confirm_prev_block
         }

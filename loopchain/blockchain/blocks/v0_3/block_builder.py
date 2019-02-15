@@ -1,10 +1,10 @@
 import hashlib
 import time
-from typing import Union
-from . import BlockHeader, BlockBody
+from typing import Union, Iterable
+from . import BlockHeader, BlockBody, receipt_hash_generator
 from .. import Block, BlockBuilder as BaseBlockBuilder
 from ... import Address, Hash32, TransactionVersioner
-from ...merkle import MerkleTree
+from loopchain.blockchain.merkle import MerkleTree
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -17,6 +17,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes that must be assigned
         self.complained = False
+        self.confirm_prev_block = True
         self.next_leader: 'Address' = None
 
         # Attributes to be assigned(optional)
@@ -25,25 +26,47 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes to be generated
         self.transaction_root_hash: 'Hash32' = None
-
+        self.receipt_root_hash: 'Hash32' = None
         self._timestamp: int = None
+        self._receipts: list = None
+
+    @property
+    def receipts(self):
+        return self._receipts
+
+    @receipts.setter
+    def receipts(self, receipts):
+        if not receipts:
+            receipts = {}
+
+        if len(self.transactions) != len(receipts):
+            raise RuntimeError("Transactions and Receipts are not matched.")
+
+        cloned_receipts = []
+        for tx_hash in self.transactions:
+            receipt = receipts[tx_hash.hex()]
+            receipt = dict(receipt)
+            receipt.pop("failure", None)
+            cloned_receipts.append(receipt)
+        self._receipts = cloned_receipts
 
     def reset_cache(self):
         super().reset_cache()
-        self.complained = False
-        self.next_leader: 'Address' = None
 
         self.transaction_root_hash: 'Hash32' = None
-        self.state_root_hash: 'Hash32' = None
+        self.receipt_root_hash: 'Hash32' = None
+        self._timestamp: int = None
 
     def build(self):
         if self.height > 0:
             self.build_peer_id()
             self.build_transaction_root_hash()
+            self.build_receipt_root_hash()
             self.build_hash()
             self.sign()
         else:
             self.build_transaction_root_hash()
+            self.build_receipt_root_hash()
             self.build_hash()
 
         self.block = self.build_block()
@@ -60,12 +83,14 @@ class BlockBuilder(BaseBlockBuilder):
             "next_leader": self.next_leader,
             "transaction_root_hash": self.transaction_root_hash,
             "state_root_hash": self.state_root_hash,
+            "receipt_root_hash": self.receipt_root_hash,
             "complained": self.complained
         }
 
     def build_block_body_data(self) -> dict:
         return {
             "transactions": self.transactions,
+            "confirm_prev_block": self.confirm_prev_block
         }
 
     def build_transaction_root_hash(self):
@@ -76,8 +101,27 @@ class BlockBuilder(BaseBlockBuilder):
         return self.transaction_root_hash
 
     def _build_transaction_root_hash(self):
+        if not self.transactions:
+            return None
+
         merkle = MerkleTree()
         merkle.add_leaf(self.transactions.keys())
+        merkle.make_tree()
+        return Hash32(merkle.get_merkle_root())
+
+    def build_receipt_root_hash(self):
+        if self.receipt_root_hash is not None:
+            return self.receipt_root_hash
+
+        self.receipt_root_hash = self._build_receipt_root_hash()
+        return self.receipt_root_hash
+
+    def _build_receipt_root_hash(self):
+        if not self.receipts:
+            return None
+
+        merkle = MerkleTree()
+        merkle.add_leaf(map(receipt_hash_generator.generate_hash, self.receipts))
         merkle.make_tree()
         return Hash32(merkle.get_merkle_root())
 
@@ -114,6 +158,18 @@ class BlockBuilder(BaseBlockBuilder):
         merkle.make_tree()
         return Hash32(merkle.get_merkle_root())
 
+    def from_(self, block: 'Block'):
+        super().from_(block)
+
+        header: BlockHeader = block.header
+        self.next_leader = header.next_leader
+        self.state_root_hash = header.state_root_hash
+        self.receipt_root_hash = header.receipt_root_hash
+        self.transaction_root_hash = header.transaction_root_hash
+        self.fixed_timestamp = header.timestamp
+        self.complained = header.complained
+        self._timestamp = header.timestamp
+
     @classmethod
     def _to_hash32(cls, value: Union[Hash32, bytes, bytearray, int, bool]):
         if isinstance(value, Hash32):
@@ -128,14 +184,3 @@ class BlockBuilder(BaseBlockBuilder):
                 raise RuntimeError(f"value : {value} is negative.")
             value = value.to_bytes((value.bit_length() + 7) // 8, "big")
         return Hash32(hashlib.sha3_256(value).digest())
-
-    def from_(self, block: 'Block'):
-        super().from_(block)
-
-        header: BlockHeader = block.header
-        self.next_leader = header.next_leader
-        self.state_root_hash = header.state_root_hash
-        self.transaction_root_hash = header.transaction_root_hash
-        self.fixed_timestamp = header.timestamp
-        self.complained = header.complained
-        self._timestamp = header.timestamp

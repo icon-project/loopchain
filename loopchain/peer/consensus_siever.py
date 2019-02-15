@@ -112,8 +112,6 @@ class ConsensusSiever(ConsensusBase):
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
-            block_verifier = BlockVerifier.new(candidate_block.header.version, self._blockchain.tx_versioner)
-            block_verifier.verify(candidate_block, self._blockchain.last_block, self._blockchain)
 
             self._block_manager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
