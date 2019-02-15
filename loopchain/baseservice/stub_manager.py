@@ -109,6 +109,9 @@ class StubManager:
             call_back(result)
 
         try:
+            logging.debug(f"call_async : method_name = {method_name}, channel = {message.channel}")
+            if method_name == 'AddTxList':
+                logging.debug(f"tx_list size = {len(message.tx_list)}")
             stub_method = getattr(self.__stub, method_name)
             feature_future = stub_method.future(message, timeout)
             feature_future.add_done_callback(done_callback)

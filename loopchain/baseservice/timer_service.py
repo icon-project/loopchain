@@ -33,7 +33,7 @@ class Timer:
         """initial function
 
         :param target:      target of timer
-        :param duration:    duration for checking timeout
+        :param duration:    duration for checking timeout (sec)
         :param start_time:  start time of timer
         :param is_repeat:   if true, the timer runs repeatedly
         :param callback:    callback function after timeout or normal case

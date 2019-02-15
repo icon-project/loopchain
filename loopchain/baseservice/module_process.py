@@ -68,6 +68,7 @@ class ModuleProcess:
         self.__process: mp.Process = self.__context.Process(target=target, args=args, kwargs={'properties': properties})
         self.__process.start()
         self.__process_pid = self.__process.pid
+        # print(f"process_pid : {self.__process_pid}")
 
         def _join_process():
             self.__process.join()

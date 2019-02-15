@@ -62,6 +62,9 @@ class ChannelService:
 
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
 
+        import setproctitle
+        setproctitle.setproctitle(f"python ChannelService {channel_name}")
+
         ChannelProperty().name = channel_name
         ChannelProperty().amqp_target = amqp_target
 

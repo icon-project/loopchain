@@ -229,6 +229,7 @@ class PeerService:
 
     def __run_rest_services(self, port):
         if conf.ENABLE_REST_SERVICE and conf.RUN_ICON_IN_LAUNCHER:
+            logging.critical(f"log level : {logging.getLogger().getEffectiveLevel()}")
             logging.debug(f'Launch Sanic RESTful server. '
                           f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
             self.__rest_service = RestService(int(port))
