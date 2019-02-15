@@ -861,11 +861,22 @@ class ChannelService:
 
         return object_has_queue
 
-    def start_leader_complain_timer(self):
+    def reset_leader_complain_timer(self):
+        duration = None
+        timer = self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
+        if timer:
+            self.stop_leader_complain_timer()
+            duration = max(timer.duration * 2, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
+        self.start_leader_complain_timer(duration=duration)
+
+    def start_leader_complain_timer(self, duration=None):
+        if not duration:
+            duration = conf.TIMEOUT_FOR_LEADER_COMPLAIN
+
         util.logger.spam(f"start_leader_complain_timer in channel service.")
         if self.state_machine.state != "BlockGenerate":
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
-                                                      duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                      duration=duration,
                                                       is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):

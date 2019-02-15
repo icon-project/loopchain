@@ -763,8 +763,6 @@ class ChannelInnerTask:
 
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
-            # self._channel_service.peer_manager.remove_peer(complained_leader_id)
-            self._channel_service.stop_leader_complain_timer()
             if next_new_leader == ChannelProperty().peer_id:
                 # Turn to Leader and Send Leader Complain Block
                 util.logger.spam(f"No I'm your father....")
@@ -776,6 +774,7 @@ class ChannelInnerTask:
                 #     self._channel_service.start_leader_complain_timer()
                 self._channel_service.state_machine.turn_to_peer()
             block_manager.epoch.prev_leader_id = next_new_leader
+            self._channel_service.reset_leader_complain_timer()
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

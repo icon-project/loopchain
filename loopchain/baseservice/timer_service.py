@@ -39,24 +39,17 @@ class Timer:
         :param callback:    callback function after timeout or normal case
         :param kwargs:      parameters for callback function
         """
-        self.__target = kwargs.get("target")
-        self.__duration = kwargs.get("duration")
-        self.__start_time = time.time()
-        self.__is_repeat = kwargs.get("is_repeat", False)
+        self.target = kwargs.get("target")
+        self.duration = kwargs.get("duration")
         self.is_run_at_start = kwargs.get("is_run_at_start", False)
+        self.is_repeat = kwargs.get("is_repeat", False)
+
+        self.__start_time = time.time()
         self.__callback = kwargs.get("callback", None)
         self.__kwargs = kwargs.get("callback_kwargs") or {}
 
-    @property
-    def target(self):
-        return self.__target
-
-    @property
-    def is_repeat(self):
-        return self.__is_repeat
-
     def is_timeout(self):
-        if time.time() - self.__start_time < self.__duration:
+        if time.time() - self.__start_time < self.duration:
             return False
 
         util.logger.spam(f'gap: {time.time() - self.__start_time}')
@@ -64,15 +57,15 @@ class Timer:
 
     def reset(self):
         self.__start_time = time.time()
-        util.logger.spam(f"reset_timer: {self.__target}")
+        util.logger.spam(f"reset_timer: {self.target}")
 
     def remain_time(self):
-        end_time = self.__start_time + self.__duration
+        end_time = self.__start_time + self.duration
         remain = end_time - time.time()
         return remain if remain > 0 else 0
 
     def on(self):
-        logging.debug(f'TIMER IS ON ({self.__target})')
+        logging.debug(f'TIMER IS ON ({self.target})')
 
     def off(self, off_type):
         """turn off timer by type
@@ -80,7 +73,7 @@ class Timer:
         :param off_type: type of reason to turn off timer
         """
         if off_type is OffType.time_out:
-            logging.debug(f'timer({self.__target}) is turned off by timeout')
+            logging.debug(f'timer({self.target}) is turned off by timeout')
             if asyncio.iscoroutinefunction(self.__callback):
                 asyncio.get_event_loop().create_task(self.__callback(**self.__kwargs))
             else:

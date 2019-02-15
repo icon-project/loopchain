@@ -34,6 +34,7 @@
     - If receive 'AnnounceUnconfirmedBlock' in state 'LeaderComplain' then Peer should not vote.
   * Increase block generate time interval
     - After each leader complain phase, next leader get more *2 time interval than prev leader.
+      (MAX=MAX_TIMEOUT_FOR_LEADER_COMPLAIN (default is 5 min.))
 
 
 #### Complain Process (new)
