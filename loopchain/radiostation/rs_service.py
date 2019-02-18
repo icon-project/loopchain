@@ -22,7 +22,7 @@ import time
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, TimerService
+from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.container import RestServiceRS, CommonService
 from loopchain.peer import ChannelManager
 from loopchain.protos import loopchain_pb2_grpc
@@ -112,10 +112,6 @@ class RadioStationService:
     def timer_service(self):
         return self.__timer_service
 
-    @property
-    def random_table(self):
-        return self.__random_table
-
     def __broadcast_new_peer(self, peer_request):
         """새로 들어온 peer 를 기존의 peer 들에게 announce 한다."""
 
@@ -132,15 +128,8 @@ class RadioStationService:
                          f"for reset Leader and delete no response Peer")
 
         peer_manager = self.__channel_manager.get_peer_manager(channel)
-        delete_peer_list = peer_manager.check_peer_status()
-
-        for delete_peer in delete_peer_list:
-            logging.debug(f"delete peer {delete_peer.peer_id}")
-            message = loopchain_pb2.PeerID(
-                peer_id=delete_peer.peer_id,
-                channel=channel,
-                group_id=delete_peer.group_id)
-            self.__channel_manager.broadcast(channel, "AnnounceDeletePeer", message)
+        nonresponse_peer_list = peer_manager.check_peer_status()
+        logging.info(f"nonresponse_peer_list : {nonresponse_peer_list}")
 
         # save current peer_manager after heartbeat to peers.
         ObjectManager().rs_service.admin_manager.save_peer_manager(
@@ -161,16 +150,64 @@ class RadioStationService:
 
         return random_table
 
+    def register_peers(self):
+        util.logger.spam(f"register_peers() : start register to peer_manager")
+
+        logging.debug(f"register_peers() : channel_list = {self.admin_manager.get_channel_list()}")
+        for channel_name, channel_data in self.admin_manager.json_data.items():
+            peer_manager = self.channel_manager.get_peer_manager(channel_name)
+
+            for peer_data in channel_data['peers']:
+                peer_info = {
+                    "id": peer_data['id'],
+                    "peer_target": peer_data['peer_target'],
+                    "order": peer_data['order']
+                }
+                logging.debug(f"register Peer : channel = {channel_name}, peer_info = {peer_info}")
+
+                util.logger.spam(f"before load peer_manager "
+                                 f"peer_count({peer_manager.get_peer_count()})")
+
+                if peer_manager.get_peer_count() == 0:
+                    util.logger.spam(f"try load peer_manager from db")
+                    peer_manager = self.admin_manager.load_peer_manager(channel_name)
+                    self.channel_manager.set_peer_manager(channel_name, peer_manager)
+
+                util.logger.spam(f"after load peer_manager "
+                                 f"peer_count({peer_manager.get_peer_count()})")
+
+                peer_manager.add_peer(peer_info)
+
+            # save current peer_manager after ConnectPeer from new peer.
+            self.admin_manager.save_peer_manager(channel_name, peer_manager)
+
+            if conf.ENABLE_RADIOSTATION_HEARTBEAT:
+                timer_key = f"{TimerService.TIMER_KEY_RS_HEARTBEAT}_{channel_name}"
+                if timer_key not in self.timer_service.timer_list:
+                    self.timer_service.add_timer(
+                        timer_key,
+                        Timer(
+                            target=timer_key,
+                            duration=conf.SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT,
+                            is_repeat=True,
+                            callback=self.check_peer_status,
+                            callback_kwargs={"channel": channel_name}
+                        )
+                    )
+
     def serve(self, port=None, event_for_init: multiprocessing.Event=None):
         """Peer(BlockGenerator Peer) to RadioStation
 
         :param port: RadioStation Peer
+        :param event_for_init:
         """
         if port is None:
             port = conf.PORT_RADIOSTATION
         stopwatch_start = timeit.default_timer()
 
         self.__channel_manager = ChannelManager(self.__common_service)
+
+        self.register_peers()
     
         # TODO: Currently, some environments are failing to execute RestServiceRS without this sleep.
         # This sleep fixes current node's issue but we need to fix it right way by investigating.

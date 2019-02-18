@@ -43,6 +43,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def __init__(self):
         self.__app = Sanic(__name__)
         self.__app.config.KEEP_ALIVE = False
+        self.__stub_to_rs_service = None
 
         # SSL 적용 여부에 따라 context 생성 여부를 결정한다.
         if conf.REST_SSL_TYPE is conf.SSLAuthType.none:
@@ -264,7 +265,6 @@ class Peer(HTTPMethodView):
             'peer_id': peer.peer_id,
             'group_id': peer.group_id,
             'target': peer.target,
-            'cert': base64.b64encode(peer.cert).decode("utf-8"),
             'status_update_time': str(peer.status_update_time),
             'status': peer.status
         }

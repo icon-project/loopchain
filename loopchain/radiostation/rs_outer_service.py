@@ -256,7 +256,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                     set_peer_manager(channel_name, peer_manager)
 
             util.logger.spam(f"after load peer_manager "
-                            f"peer_count({peer_manager.get_peer_count()})")
+                             f"peer_count({peer_manager.get_peer_count()})")
 
             peer_order = peer_manager.add_peer(peer)
 
