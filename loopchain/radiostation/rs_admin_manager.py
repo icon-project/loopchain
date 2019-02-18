@@ -20,14 +20,7 @@ from loopchain.blockchain import *
 class AdminManager:
     """Radiostation 내에서 Channel 정보와 Peer 정보를 관리한다."""
 
-    def __init__(self, level_db_identity):
-        self.__level_db = None
-        self.__level_db_path = ""
-        self.__level_db, self.__level_db_path = utils.init_level_db(
-            level_db_identity=f"{level_db_identity}_admin",
-            allow_rename_path=False
-        )
-
+    def __init__(self, store_identity):
         self.__json_data = None
         self.__load_channel_manage_data(conf.CHANNEL_MANAGE_DATA_PATH)
 

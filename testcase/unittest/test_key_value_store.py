@@ -1,0 +1,245 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# Copyright 2019 ICON Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""Test KeyValueStore class"""
+
+import unittest
+
+import testcase.unittest.test_util as test_util
+from loopchain import utils
+from loopchain.store.key_value_store import KeyValueStoreError
+from loopchain.store.key_value_store_factory import KeyValueStoreFactory
+
+utils.loggers.set_preset_type(utils.loggers.PresetType.develop)
+utils.loggers.update_preset()
+
+
+class TestKeyValueStore(unittest.TestCase):
+
+    def setUp(self):
+        test_util.print_testname(self._testMethodName)
+
+    def tearDown(self):
+        pass
+
+    def _get_test_items(self, count: int=5):
+        test_items = dict()
+        for i in range(1, count + 1):
+            key = bytes(f"test_key_{i}", encoding='utf-8')
+            value = bytes(f"test_value_{i}", encoding='utf-8')
+            test_items[key] = value
+        return test_items
+
+    def _new_store(self, uri, store_type=None, create_if_missing=True):
+        try:
+            store = KeyValueStoreFactory.new(uri, store_type=store_type, create_if_missing=False)
+        except KeyValueStoreError as e:
+            utils.logger.spam(f"Doesn't need to clean the store. uri={uri}, e={e}")
+        else:
+            store.destroy_store()
+
+        return KeyValueStoreFactory.new(uri, store_type=store_type, create_if_missing=create_if_missing)
+
+    def test_key_value_store_basic(self):
+        test_items = self._get_test_items(5)
+        utils.logger.debug(f"test_items={test_items}")
+
+        store = self._new_store("file://./key_value_store_test_basic")
+
+        #
+        # put/get
+        #
+
+        for key, value in test_items.items():
+            store.put(key, value)
+            self.assertEqual(store.get(key), value)
+
+        with self.assertRaises(KeyError):
+            store.get(b'unknown_key')
+
+        self.assertEqual(store.get(b'unknown_key', b'test_default_value'), b'test_default_value')
+
+        count = 0
+        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4'):
+            self.assertIn(key, (b'test_key_2', b'test_key_3', b'test_key_4'))
+            count += 1
+        self.assertEqual(count, 3)
+
+        count = 0
+        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4', include_stop=True):
+            self.assertIn(key, (b'test_key_2', b'test_key_3', b'test_key_4'))
+            count += 1
+        self.assertEqual(count, 3)
+
+        count = 0
+        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4', include_stop=False):
+            self.assertIn(key, (b'test_key_2', b'test_key_3'))
+            count += 1
+        self.assertEqual(count, 2)
+
+        #
+        #
+        # delete
+        #
+
+        del_key = b'test_key_2'
+        del test_items[del_key]
+        store.delete(del_key)
+        with self.assertRaises(KeyError):
+            store.get(del_key)
+
+        count = 0
+        for key, value in store.Iterator():
+            utils.logger.spam(f"DB iterator: key={key}, value={value}")
+            self.assertEqual(value, test_items[key])
+            count += 1
+        utils.logger.debug(f"Count after {del_key} has been deleted={count}")
+        self.assertEqual(count, len(test_items))
+
+        store.destroy_store()
+
+    def test_key_value_store_write_batch(self):
+        store = self._new_store("file://./key_value_store_test_write_batch")
+
+        batch = store.WriteBatch()
+        batch.put(b'test_key_1', b'test_value_1')
+        batch.put(b'test_key_2', b'test_value_2')
+
+        with self.assertRaises(KeyError):
+            store.get(b'test_key_1')
+        with self.assertRaises(KeyError):
+            store.get(b'test_key_2')
+
+        batch.write()
+        self.assertEqual(store.get(b'test_key_1'), b'test_value_1')
+        self.assertEqual(store.get(b'test_key_2'), b'test_value_2')
+        batch = None
+
+        store.destroy_store()
+
+    def test_key_value_store_cancelable_write_batch(self):
+        test_items = self._get_test_items(5)
+
+        store = self._new_store("file://./key_value_store_test_cancelable_write_batch")
+
+        for key, value in test_items.items():
+            store.put(key, value)
+
+        cancelable_batch = store.CancelableWriteBatch()
+        cancelable_batch.put(b'cancelable_key_1', b'cancelable_value_1')
+        cancelable_batch.put(b'test_key_2', b'edited_test_value_2')
+        cancelable_batch.put(b'cancelable_key_2', b'cancelable_value_2')
+        cancelable_batch.put(b'test_key_4', b'edited_test_value_4')
+        cancelable_batch.write()
+
+        edited_test_items = test_items.copy()
+        edited_test_items[b'cancelable_key_1'] = b'cancelable_value_1'
+        edited_test_items[b'test_key_2'] = b'edited_test_value_2'
+        edited_test_items[b'cancelable_key_2'] = b'cancelable_value_2'
+        edited_test_items[b'test_key_4'] = b'edited_test_value_4'
+
+        count = 0
+        for key, value in store.Iterator():
+            utils.logger.spam(f"Edited DB iterator: key={key}, value={value}")
+            self.assertEqual(value, edited_test_items[key])
+            count += 1
+        utils.logger.debug(f"Count after cancelable_batch has been written={count}")
+        self.assertEqual(count, len(edited_test_items))
+
+        cancelable_batch.cancel()
+        count = 0
+        for key, value in store.Iterator():
+            utils.logger.spam(f"Original DB iterator: key={key}, value={value}")
+            self.assertEqual(value, test_items[key])
+            count += 1
+        utils.logger.debug(f"Original count={count}")
+        self.assertEqual(count, len(test_items))
+
+        cancelable_batch = None
+
+        store.destroy_store()
+
+    def test_key_value_store_verify_compatibility(self):
+        test_items = self._get_test_items(5)
+
+        leveldb_store = self._new_store(
+            "file://./key_value_store_test_verify_leveldb_and_plyvel",
+            store_type=KeyValueStoreFactory.STORE_TYPE_LEVELDB,
+            create_if_missing=True
+        )
+
+        for key, value in test_items.items():
+            leveldb_store.put(key, value)
+
+        plyvel_store = KeyValueStoreFactory.new(
+            "file://./key_value_store_test_verify_leveldb_and_plyvel",
+            store_type=KeyValueStoreFactory.STORE_TYPE_PLYVEL,
+            create_if_missing=False
+        )
+
+        leveldb_bin = bytes()
+        for key, value in leveldb_store.Iterator():
+            utils.logger.spam(f"leveldb iterator: key={key}, value={value}")
+            self.assertEqual(value, plyvel_store.get(bytes(key)))
+            leveldb_bin += key + value
+
+        plyvel_bin = bytes()
+        for key, value in plyvel_store.Iterator():
+            plyvel_bin += key + value
+
+        utils.logger.debug(f"leveldb binary: {leveldb_bin}")
+        utils.logger.debug(f"plyvel binary: {plyvel_bin}")
+        self.assertEqual(leveldb_bin, plyvel_bin)
+
+        plyvel_store.close()
+        leveldb_store.destroy_store()
+
+    @unittest.skip
+    def test_key_value_store_verify_compatibility_with_existent_store(self):
+        leveldb_store = KeyValueStoreFactory.new(
+            "file://./existent_db",
+            store_type=KeyValueStoreFactory.STORE_TYPE_LEVELDB,
+            create_if_missing=False
+        )
+
+        plyvel_store = KeyValueStoreFactory.new(
+            "file://./existent_db_copy",
+            store_type=KeyValueStoreFactory.STORE_TYPE_PLYVEL,
+            create_if_missing=False
+        )
+
+        leveldb_count = 0
+        for key, value in leveldb_store.Iterator():
+            plyvel_value = plyvel_store.get(bytes(key))
+            self.assertEqual(value, plyvel_value)
+            leveldb_count += 1
+            if (leveldb_count % 1000000) == 0:
+                utils.logger.spam(f"leveldb count={leveldb_count}")
+
+        plyvel_count = 0
+        for key, value in plyvel_store.Iterator():
+            leveldb_value = leveldb_store.get(key)
+            self.assertEqual(value, leveldb_value)
+            plyvel_count += 1
+            if (plyvel_count % 1000000) == 0:
+                utils.logger.spam(f"plyvel count={plyvel_count}")
+
+        self.assertEqual(leveldb_count, plyvel_count)
+        utils.logger.debug(f"count leveldb={leveldb_count}, plyvel={plyvel_count}")
+
+
+if __name__ == '__main__':
+    unittest.main()

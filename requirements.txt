@@ -22,3 +22,4 @@ verboselogs==1.7
 websockets==6.0
 yappi==0.98
 dataclasses; python_version < '3.7'
+plyvel==1.0.5

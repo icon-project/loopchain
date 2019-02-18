@@ -346,7 +346,7 @@ class ChannelService:
                 channel_manager=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
-                level_db_identity=ChannelProperty().peer_target
+                store_identity=ChannelProperty().peer_target
             )
         except leveldb.LevelDBError as e:
             utils.exit_and_msg("LevelDBError(" + str(e) + ")")
@@ -561,8 +561,8 @@ class ChannelService:
 
         try:
             dump = peer_manager.dump()
-            level_db = self.__block_manager.get_level_db()
-            level_db.Put(level_db_key_name, dump)
+            key_value_store = self.__block_manager.get_key_value_store()
+            key_value_store.put(level_db_key_name, dump)
         except AttributeError as e:
             logging.warning("Fail Save Peer_list: " + str(e))
 

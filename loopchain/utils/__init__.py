@@ -16,10 +16,8 @@
 import datetime
 import importlib.machinery
 import json
-import leveldb
 import logging
 import os
-import os.path as osp
 import re
 import signal
 import socket
@@ -38,6 +36,8 @@ from subprocess import PIPE, Popen, TimeoutExpired
 from loopchain import configure as conf
 from loopchain.protos import loopchain_pb2, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
+from loopchain.store.key_value_store_factory import KeyValueStoreFactory
 
 apm_event = None
 
@@ -465,37 +465,36 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def init_level_db(level_db_identity, allow_rename_path=True):
-    """init Level Db
+def init_default_key_value_store(store_identity) -> KeyValueStore:
+    """init default key value store
 
-    :param level_db_identity: identity for leveldb
-    :return: level_db, level_db_path
+    :param store_identity: identity for store
+    :return: KeyValueStore, store_path
     """
-    level_db = None
-
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    db_default_path = osp.join(conf.DEFAULT_STORAGE_PATH, 'db_' + level_db_identity)
-    db_path = db_default_path
-    logger.spam(f"utils:init_level_db ({level_db_identity})")
+    store_default_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
+    store_path = store_default_path
+    logger.spam(f"utils:init_default_key_value_store ({store_identity})")
 
     retry_count = 0
-    while level_db is None and retry_count < conf.MAX_RETRY_CREATE_DB:
+    store = None
+    while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            level_db = leveldb.LevelDB(db_path, create_if_missing=True)
-        except leveldb.LevelDBError as e:
-            logging.error(f"LevelDBError: {e}")
-            logger.debug(f"retry_count: {retry_count}, path: {db_path}")
-            if allow_rename_path:
-                db_path = db_default_path + str(retry_count)
+            uri = f"file://{store_path}"
+            store = KeyValueStoreFactory.new(uri, create_if_missing=True)
+        except KeyValueStoreError as e:
+            logging.error(f"KeyValueStoreError: {e}")
+            logger.debug(f"retry_count: {retry_count}, uri: {uri}")
+            traceback.print_exc()
         retry_count += 1
 
-    if level_db is None:
-        logging.error("Fail! Initialize LevelDB")
-        raise leveldb.LevelDBError("Fail To Initialize Level DB(path): " + db_path)
+    if store is None:
+        logging.error("Fail! Create key value store")
+        raise KeyValueStoreError(f"Fail to create key value store. path={store_path}")
 
-    return level_db, db_path
+    return store, store_path
 
 
 def no_send_apm_event(peer_id, event_param):

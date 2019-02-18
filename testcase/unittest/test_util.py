@@ -18,7 +18,6 @@
 
 import asyncio
 import json
-import leveldb
 import logging
 import multiprocessing
 import os
@@ -37,6 +36,8 @@ from loopchain.components import SingletonMetaClass
 from loopchain.peer import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
+from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
+from loopchain.store.key_value_store_factory import KeyValueStoreFactory
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
@@ -155,21 +156,22 @@ def print_testname(testname):
     print("======================================================================")
 
 
-def make_level_db(db_name=""):
-    db_default_path = './' + (db_name, "db_test")[db_name == ""]
-    db_path = db_default_path
-    blockchain_db = None
+def make_key_value_store(store_identity="") -> KeyValueStore:
+    store_default_path = './' + (store_identity, "db_test")[store_identity == ""]
+    store_path = store_default_path
+    store = None
     retry_count = 0
 
-    while blockchain_db is None and retry_count < conf.MAX_RETRY_CREATE_DB:
+    while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            blockchain_db = leveldb.LevelDB(db_path, create_if_missing=True)
-            logging.debug("make level db path: " + db_path)
-        except leveldb.LevelDBError:
-            db_path = db_default_path + str(retry_count)
+            uri = f"file://{store_path}"
+            store = KeyValueStoreFactory.new(uri, create_if_missing=True)
+            logging.debug(f"make key value store uri: {uri}")
+        except KeyValueStoreError:
+            store_path = store_default_path + str(retry_count)
         retry_count += 1
 
-    return blockchain_db
+    return store
 
 
 def close_open_python_process():

@@ -41,6 +41,7 @@ from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
+from loopchain.store.key_value_store import KeyValueStore
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
@@ -53,20 +54,19 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, name: str, channel_manager, peer_id, channel_name, level_db_identity):
+    def __init__(self, name: str, channel_manager, peer_id, channel_name, store_identity):
         self.__channel_service: ChannelService = channel_manager
         self.__channel_name = channel_name
         self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
-        self.__level_db = None
-        self.__level_db_path = ""
-        self.__level_db, self.__level_db_path = util.init_level_db(
-            level_db_identity=f"{level_db_identity}_{channel_name}",
-            allow_rename_path=False
-        )
+
+        key_value_store, key_value_store_path = util.init_default_key_value_store(f"{store_identity}_{channel_name}")
+        self.__key_value_store = key_value_store
+        self.__key_value_store_path = key_value_store_path
+
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__blockchain = BlockChain(self.__level_db, channel_name)
+        self.__blockchain = BlockChain(self.__key_value_store, channel_name)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
@@ -132,12 +132,12 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    def get_level_db(self):
-        return self.__level_db
+    def get_key_value_store(self) -> KeyValueStore:
+        return self.__key_value_store
 
     def clear_all_blocks(self):
-        logging.debug(f"clear level db({self.__level_db_path})")
-        shutil.rmtree(self.__level_db_path)
+        logging.debug(f"clear key value store({self.__key_value_store_path})")
+        shutil.rmtree(self.__key_value_store_path)
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
@@ -737,14 +737,14 @@ class BlockManager:
 
         return max_height, unconfirmed_block_height, peer_stubs
 
-    def __close_level_db(self):
-        del self.__level_db
-        self.__level_db = None
-        self.__blockchain.close_blockchain_db()
+    def __close_key_value_store(self):
+        self.__key_value_store.close()
+        self.__key_value_store: KeyValueStore = None
+        self.__blockchain.close_blockchain_store()
 
     def stop(self):
-        # for reuse level db when restart channel.
-        self.__close_level_db()
+        # for reuse key value store when restart channel.
+        self.__close_key_value_store()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
