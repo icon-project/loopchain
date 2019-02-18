@@ -3,10 +3,9 @@ import time
 from typing import Union
 from functools import reduce
 from operator import or_
-from . import BlockHeader, BlockBody, receipt_hash_generator
+from . import BlockHeader, BlockBody, BlockProver, receipt_hash_generator
 from .. import Block, BlockBuilder as BaseBlockBuilder
 from ... import Address, Hash32, BloomFilter, TransactionVersioner
-from loopchain.blockchain.merkle import MerkleTree
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -105,10 +104,8 @@ class BlockBuilder(BaseBlockBuilder):
         if not self.transactions:
             return None
 
-        merkle = MerkleTree()
-        merkle.add_leaf(self.transactions.keys())
-        merkle.make_tree()
-        return Hash32(merkle.get_merkle_root())
+        block_prover = BlockProver(self.transactions.keys())
+        return block_prover.get_proof_root()
 
     def build_receipt_root_hash(self):
         if self.receipt_root_hash is not None:
@@ -121,10 +118,8 @@ class BlockBuilder(BaseBlockBuilder):
         if not self.receipts:
             return None
 
-        merkle = MerkleTree()
-        merkle.add_leaf(map(receipt_hash_generator.generate_hash, self.receipts))
-        merkle.make_tree()
-        return Hash32(merkle.get_merkle_root())
+        block_prover = BlockProver(map(receipt_hash_generator.generate_hash, self.receipts))
+        return block_prover.get_proof_root()
 
     def build_bloom_filter(self):
         if self.bloom_filter is not None:
@@ -171,10 +166,8 @@ class BlockBuilder(BaseBlockBuilder):
         )
         leaves = [self._to_hash32(leaf) for leaf in leaves if leaf is not None]
 
-        merkle = MerkleTree()
-        merkle.add_leaf(leaves)
-        merkle.make_tree()
-        return Hash32(merkle.get_merkle_root())
+        block_prover = BlockProver(leaves)
+        return block_prover.get_proof_root()
 
     def from_(self, block: 'Block'):
         super().from_(block)
