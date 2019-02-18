@@ -1,10 +1,8 @@
-import hashlib
 import time
-from typing import Union
 from functools import reduce
 from operator import or_
-from . import BlockHeader, BlockBody, BlockProver, receipt_hash_generator
-from .. import Block, BlockBuilder as BaseBlockBuilder
+from . import BlockHeader, BlockBody, BlockProver
+from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
 from ... import Address, Hash32, BloomFilter, TransactionVersioner
 
 
@@ -44,13 +42,7 @@ class BlockBuilder(BaseBlockBuilder):
         if len(self.transactions) != len(receipts):
             raise RuntimeError("Transactions and Receipts are not matched.")
 
-        cloned_receipts = []
-        for tx_hash in self.transactions:
-            receipt = receipts[tx_hash.hex()]
-            receipt = dict(receipt)
-            receipt.pop("failure", None)
-            cloned_receipts.append(receipt)
-        self._receipts = cloned_receipts
+        self._receipts = [dict(receipts[tx_hash.hex()]) for tx_hash in self.transactions]
 
     def reset_cache(self):
         super().reset_cache()
@@ -104,7 +96,7 @@ class BlockBuilder(BaseBlockBuilder):
         if not self.transactions:
             return None
 
-        block_prover = BlockProver(self.transactions.keys())
+        block_prover = BlockProver(self.transactions.keys(), BlockProverType.Transaction )
         return block_prover.get_proof_root()
 
     def build_receipt_root_hash(self):
@@ -118,7 +110,7 @@ class BlockBuilder(BaseBlockBuilder):
         if not self.receipts:
             return None
 
-        block_prover = BlockProver(map(receipt_hash_generator.generate_hash, self.receipts))
+        block_prover = BlockProver(self.receipts, BlockProverType.Receipt)
         return block_prover.get_proof_root()
 
     def build_bloom_filter(self):
@@ -164,9 +156,8 @@ class BlockBuilder(BaseBlockBuilder):
             self.next_leader,
             self.complained
         )
-        leaves = [self._to_hash32(leaf) for leaf in leaves if leaf is not None]
-
-        block_prover = BlockProver(leaves)
+        leaves = (leaf for leaf in leaves if leaf is not None)
+        block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
 
     def from_(self, block: 'Block'):
@@ -181,18 +172,3 @@ class BlockBuilder(BaseBlockBuilder):
         self.fixed_timestamp = header.timestamp
         self.complained = header.complained
         self._timestamp = header.timestamp
-
-    @classmethod
-    def _to_hash32(cls, value: Union[Hash32, bytes, bytearray, int, bool]):
-        if isinstance(value, Hash32):
-            return value
-        if isinstance(value, (bytes, bytearray)) and len(value) == 32:
-            return Hash32(value)
-
-        if isinstance(value, bool):
-            value = b'\x01' if value else b'\x00'
-        elif isinstance(value, int):
-            if value < 0:
-                raise RuntimeError(f"value : {value} is negative.")
-            value = value.to_bytes((value.bit_length() + 7) // 8, "big")
-        return Hash32(hashlib.sha3_256(value).digest())

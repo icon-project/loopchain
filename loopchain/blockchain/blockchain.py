@@ -18,11 +18,12 @@ import pickle
 import threading
 import zlib
 from enum import Enum
+from typing import Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockProver, BlockProverType, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
                                   Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
@@ -176,13 +177,15 @@ class BlockChain:
 
         return None
 
-    def find_block_by_hash(self, block_hash):
+    def find_block_by_hash(self, block_hash: Union[str, Hash32]):
         """find block by block hash.
 
         :param block_hash: plain string,
         key 로 사용되기전에 함수내에서 encoding 되므로 미리 encoding 된 key를 parameter 로 사용해선 안된다.
         :return: None or Block
         """
+        if isinstance(block_hash, Hash32):
+            block_hash = block_hash.hex()
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
@@ -524,12 +527,14 @@ class BlockChain:
         tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
         return tx_serializer.from_(tx_data)
 
-    def find_invoke_result_by_tx_hash(self, tx_hash):
+    def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
 
         :param tx_hash: tx_hash
         :return: {"code" : "code", "error_message" : "error_message if not fail this is not exist"}
         """
+        if isinstance(tx_hash, Hash32):
+            tx_hash = tx_hash.hex()
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
@@ -545,7 +550,7 @@ class BlockChain:
 
         return tx_info['result']
 
-    def find_tx_info(self, tx_hash_key):
+    def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
         if isinstance(tx_hash_key, Hash32):
             tx_hash_key = tx_hash_key.hex()
 
@@ -762,3 +767,39 @@ class BlockChain:
         block_version = self.__block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
         return block_serializer.deserialize(block_serialized)
+
+    def get_transaction_proof(self, tx_hash: Hash32):
+        tx_info = self.find_tx_info(tx_hash.hex())
+        block_hash = tx_info["blockHash"]
+        block = self.find_block_by_hash(block_hash)
+
+        block_prover = BlockProver.new(block.header.version, block.body.transactions, BlockProverType.Transaction)
+        return block_prover.get_proof(tx_hash)
+
+    def prove_transaction(self, tx_hash: Hash32, proof: list):
+        tx_info = self.find_tx_info(tx_hash.hex())
+        block_hash = tx_info["blockHash"]
+        block = self.find_block_by_hash(block_hash)
+
+        block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
+        return block_prover.prove(tx_hash, block.header.transaction_root_hash, proof)
+
+    def get_receipt_proof(self, tx_hash: Hash32):
+        tx_info = self.find_tx_info(tx_hash.hex())
+
+        block_hash = tx_info["blockHash"]
+        block = self.find_block_by_hash(block_hash)
+
+        tx_results = (self.find_tx_info(tx_hash)["result"] for tx_hash in block.body.transactions)
+        block_prover = BlockProver.new(block.header.version, tx_results, BlockProverType.Receipt)
+        return block_prover.get_proof(tx_hash)
+
+    def prove_receipt(self, tx_hash: Hash32, proof: list):
+        tx_info = self.find_tx_info(tx_hash.hex())
+        tx_result = tx_info["result"]
+        block_hash = tx_info["blockHash"]
+
+        block = self.find_block_by_hash(block_hash)
+        block_prover = BlockProver.new(block.header.version, None, BlockProverType.Receipt)
+        receipt_hash = block_prover.to_hash32(tx_result)
+        return block_prover.prove(receipt_hash, block.header.receipt_root_hash, proof)

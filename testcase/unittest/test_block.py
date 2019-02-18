@@ -18,6 +18,7 @@
 
 import logging
 import json
+import random
 import sys
 import unittest
 
@@ -30,8 +31,8 @@ from loopchain.baseservice import ObjectManager
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
-from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer
-from loopchain.blockchain import TransactionBuilder, TransactionVersioner
+from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
+from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
 from loopchain.blockchain import Hash32, ExternalAddress
 
 
@@ -225,30 +226,31 @@ class TestBlock(unittest.TestCase):
         private_auth = test_util.create_default_peer_auth()
         tx_versioner = TransactionVersioner()
 
-        tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-        tx_builder.private_key = private_auth.private_key
-        tx_builder.to_address = ExternalAddress(bytes(ExternalAddress.size))
-        tx_builder.step_limit = 10000
-        tx_builder.nid = 2
-        tx = tx_builder.build()
-
-        dummy_receipts = {
-            tx.hash.hex(): {
-                "dummy_receipt": "dummy"
-            }
-        }
-
+        dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
+        for i in range(1000):
+            tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+            tx_builder.private_key = private_auth.private_key
+            tx_builder.to_address = ExternalAddress.new()
+            tx_builder.step_limit = random.randint(0, 10000)
+            tx_builder.value = random.randint(0, 10000)
+            tx_builder.nid = 2
+            tx = tx_builder.build()
+
+            tx_serializer = TransactionSerializer.new(tx.version, tx_versioner)
+            block_builder.transactions[tx.hash] = tx
+            dummy_receipts[tx.hash.hex()] = {
+                "dummy_receipt": "dummy",
+                "tx_dumped": tx_serializer.to_full_data(tx)
+            }
+
         block_builder.peer_private_key = private_auth.private_key
         block_builder.height = 0
-        block_builder.transactions[tx.hash] = tx
         block_builder.state_root_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
         block = block_builder.build()
-        logging.info(f"Block : {block}")
-
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
         block_verifier.invoke_func = lambda b: (block, dummy_receipts)
         block_verifier.verify(block, None, None, block.header.peer_id)
@@ -260,6 +262,18 @@ class TestBlock(unittest.TestCase):
         assert block.header == block_deserialized.header
         # FIXME : confirm_prev_block not serialized
         # assert block.body == block_deserialized.body
+
+        tx_hashes = list(block.body.transactions)
+        tx_index = random.randrange(0, len(tx_hashes))
+
+        block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
+        tx_proof = block_prover.get_proof(tx_index)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_root_hash, tx_proof)
+
+        block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
+        receipt_proof = block_prover.get_proof(tx_index)
+        receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
+        assert block_prover.prove(receipt_hash, block.header.receipt_root_hash, receipt_proof)
 
 
 if __name__ == '__main__':
