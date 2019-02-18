@@ -255,7 +255,7 @@ class BlockChain:
                                 f"channel_service.score_write_precommit_state")
                 raise e
             finally:
-                self.__invoke_results.pop(block.header.hash, None)
+                self.__invoke_results.pop(block.header.hash.hex(), None)
 
             next_total_tx = self.__write_block_data(block, block_info)
 
