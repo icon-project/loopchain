@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from loopchain.crypto.hashing import build_hash_generator
 from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
-from ... import Hash32, Address
+from ... import Hash32, Address, BloomFilter
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,8 @@ class BlockHeader(BaseBlockHeader):
     transaction_root_hash: Hash32
     state_root_hash: Hash32
     receipt_root_hash: Hash32
+
+    bloom_filter: BloomFilter
 
     version = "0.3"
 

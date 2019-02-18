@@ -1,9 +1,11 @@
 import hashlib
 import time
-from typing import Union, Iterable
+from typing import Union
+from functools import reduce
+from operator import or_
 from . import BlockHeader, BlockBody, receipt_hash_generator
 from .. import Block, BlockBuilder as BaseBlockBuilder
-from ... import Address, Hash32, TransactionVersioner
+from ... import Address, Hash32, BloomFilter, TransactionVersioner
 from loopchain.blockchain.merkle import MerkleTree
 
 
@@ -27,6 +29,7 @@ class BlockBuilder(BaseBlockBuilder):
         # Attributes to be generated
         self.transaction_root_hash: 'Hash32' = None
         self.receipt_root_hash: 'Hash32' = None
+        self.bloom_filter: 'BloomFilter' = None
         self._timestamp: int = None
         self._receipts: list = None
 
@@ -53,20 +56,17 @@ class BlockBuilder(BaseBlockBuilder):
     def reset_cache(self):
         super().reset_cache()
 
-        self.transaction_root_hash: 'Hash32' = None
-        self.receipt_root_hash: 'Hash32' = None
-        self._timestamp: int = None
+        self.transaction_root_hash = None
+        self.receipt_root_hash = None
+        self.bloom_filter = None
+        self._timestamp = None
 
     def build(self):
         if self.height > 0:
             self.build_peer_id()
-            self.build_transaction_root_hash()
-            self.build_receipt_root_hash()
             self.build_hash()
             self.sign()
         else:
-            self.build_transaction_root_hash()
-            self.build_receipt_root_hash()
             self.build_hash()
 
         self.block = self.build_block()
@@ -84,6 +84,7 @@ class BlockBuilder(BaseBlockBuilder):
             "transaction_root_hash": self.transaction_root_hash,
             "state_root_hash": self.state_root_hash,
             "receipt_root_hash": self.receipt_root_hash,
+            "bloom_filter": self.bloom_filter,
             "complained": self.complained
         }
 
@@ -125,6 +126,21 @@ class BlockBuilder(BaseBlockBuilder):
         merkle.make_tree()
         return Hash32(merkle.get_merkle_root())
 
+    def build_bloom_filter(self):
+        if self.bloom_filter is not None:
+            return self.bloom_filter
+
+        self.bloom_filter = self._build_bloom_filter()
+        return self.bloom_filter
+
+    def _build_bloom_filter(self):
+        if not self.receipts:
+            return BloomFilter.new()
+
+        bloom_filters = (BloomFilter.fromhex(receipt["logsBloom"])
+                         for receipt in self.receipts if "logsBloom" in receipt)
+        return BloomFilter(reduce(or_, bloom_filters, BloomFilter.new()))
+
     def build_hash(self):
         if self.hash is not None:
             return self.hash
@@ -133,6 +149,8 @@ class BlockBuilder(BaseBlockBuilder):
             raise RuntimeError
 
         self.build_transaction_root_hash()
+        self.build_receipt_root_hash()
+        self.build_bloom_filter()
         self.hash = self._build_hash()
         return self.hash
 
@@ -165,6 +183,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.next_leader = header.next_leader
         self.state_root_hash = header.state_root_hash
         self.receipt_root_hash = header.receipt_root_hash
+        self.bloom_filter = header.bloom_filter
         self.transaction_root_hash = header.transaction_root_hash
         self.fixed_timestamp = header.timestamp
         self.complained = header.complained
