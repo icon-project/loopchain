@@ -14,7 +14,6 @@
 """A module for restful API server of Radio station"""
 
 import _ssl
-import base64
 import json
 import logging
 import ssl
@@ -41,6 +40,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def __init__(self):
         self.__app = Sanic(__name__)
         self.__app.config.KEEP_ALIVE = False
+        self.__stub_to_rs_service = None
 
         # SSL 적용 여부에 따라 context 생성 여부를 결정한다.
         if conf.REST_SSL_TYPE is conf.SSLAuthType.none:

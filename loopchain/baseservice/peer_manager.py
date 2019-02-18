@@ -161,6 +161,7 @@ class PeerManager:
         """
         return self.peer_list_data.peer_order_list
 
+    # FIXME : not need
     def dump(self):
         """DB에 저장가능한 data dump를 제공한다.
 
@@ -168,6 +169,7 @@ class PeerManager:
         """
         return pickle.dumps(self.peer_list_data)
 
+    # FIXME : not need
     def load(self, peer_list_data, do_reset=True):
         """DB 로 부터 로드한 dump data 로 PeerList 를 복원한다.
 
@@ -546,7 +548,7 @@ class PeerManager:
                          f"complained_leader_id({complained_leader_id}), "
                          f"new_leader_id({new_leader_id}), "
                          f"is_broadcast({is_broadcast})")
-        is_rs = ObjectManager().rs_service is not None
+        is_rs: bool = ObjectManager().rs_service is not None
 
         announce_message = loopchain_pb2.ComplainLeaderRequest(
             complained_leader_id=complained_leader_id,
@@ -667,13 +669,11 @@ class PeerManager:
 
         return most_height_peer
 
-    def check_peer_status(self, group_id=None):
+    def check_peer_status(self, group_id=None) -> list:
         if group_id is None:
             group_id = conf.ALL_GROUP_ID
-        delete_peer_list = []
-        delete_doubt_peers = []
+        nonresponse_peer_list = []
         check_leader_peer_count = 0
-        highest_peer = None
 
         for peer_id in list(self.__peer_object_list[group_id]):
             peer_each = self.peer_list[group_id][peer_id]
@@ -700,7 +700,6 @@ class PeerManager:
 
                 if peer_status["block_height"] >= self.__highest_block_height:
                     self.__highest_block_height = peer_status["block_height"]
-                    highest_peer = peer_each
             except Exception as e:
                 util.apm_event(conf.RADIO_STATION_NAME, {
                     'event_type': 'DisconnectedPeer',
@@ -719,53 +718,13 @@ class PeerManager:
                     f"peer_id({peer_object_each.peer_info.peer_id}) "
                     f"no response count up({peer_object_each.no_response_count})")
 
-                delete_doubt_peers.append(peer_each)
-
                 if peer_object_each.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
                     peer_each.status = PeerStatus.disconnected
                     logging.debug(f"peer status update time: {peer_each.status_update_time}")
-                    logging.debug(f"this peer will remove {peer_each.peer_id}")
-                    self.remove_peer(peer_each.peer_id, peer_each.group_id)
-                    delete_peer_list.append(peer_each)
+                    logging.debug(f"this peer not respond {peer_each.peer_id}")
+                    nonresponse_peer_list.append(peer_each)
 
-                # logging.debug(f"diff mins {util.datetime_diff_in_mins(peer_each.status_update_time)}")
-                # if util.datetime_diff_in_mins(peer_each.status_update_time) >= conf.TIMEOUT_PEER_REMOVE_IN_LIST:
-                #     logging.debug(f"peer status update time: {peer_each.status_update_time}")
-                #     logging.debug(f"this peer will remove {peer_each.peer_id}")
-                #     self.remove_peer(peer_each.peer_id, peer_each.group_id)
-                #     delete_peer_list.append(peer_each)
-
-        # if len(delete_peer_list) > 0 and check_leader_peer_count != 1:
-        if check_leader_peer_count != 1:
-            logging.warning(f"({self.__channel_name}) Leader Peer Count: ({check_leader_peer_count}) "
-                            f"remain heartbeat count("
-                            f"{conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT - self.__leader_complain_count}"
-                            f") before leader complain by rs")
-            self.__leader_complain_count += 1
-
-            if self.__leader_complain_count > conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER:
-                if highest_peer is not None:
-                    logging.warning(f"reset network({self.__channel_name}) "
-                                    f"leader by RS new leader({highest_peer.peer_id}) "
-                                    f"target({highest_peer.target})")
-
-                    self.set_leader_peer(highest_peer, None)
-                    self.announce_new_leader(
-                        complained_leader_id=highest_peer.peer_id, new_leader_id=highest_peer.peer_id,
-                        is_broadcast=True
-                    )
-
-                    # return all delete doubt peers when leader is down! (for network recover immediately)
-                    self.__leader_complain_count = 0
-                    return delete_doubt_peers
-                else:
-                    logging.error("There is no leader in this network.")
-        else:
-            self.__leader_complain_count = 0
-            logging.debug(f"({self.__channel_name}) Leader Peer Count: ({check_leader_peer_count})")
-
-        # return delete confirmed peers only when leader is alive (while network is working).
-        return delete_peer_list
+        return nonresponse_peer_list
 
     def reset_peers(self, group_id, reset_action):
         if group_id is None:
