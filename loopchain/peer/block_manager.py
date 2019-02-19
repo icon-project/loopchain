@@ -493,6 +493,7 @@ class BlockManager:
         if target_height is not None:
             max_height = target_height
 
+        self.__blockchain.last_unconfirmed_block = None
         my_height = self.__current_block_height()
         retry_number = 0
         util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
