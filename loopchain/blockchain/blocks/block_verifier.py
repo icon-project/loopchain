@@ -32,15 +32,16 @@ class BlockVerifier(ABC):
         self._tx_versioner = tx_versioner
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
         self.verify_transactions(block, blockchain)
-        return self.verify_common(block, prev_block, generator)
+        return self.verify_common(block, prev_block, generator, **kwargs)
 
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
+    def verify_loosely(self, block: 'Block', prev_block: 'Block',
+                       blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
         self.verify_transactions_loosely(block, blockchain)
-        return self.verify_common(block, prev_block, generator)
+        return self.verify_common(block, prev_block, generator, **kwargs)
 
-    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         header: BlockHeader = block.header
 
         if header.timestamp is None:
@@ -57,10 +58,10 @@ class BlockVerifier(ABC):
         if prev_block:
             self.verify_prev_block(block, prev_block)
 
-        self._verify_common(block, prev_block, generator)
+        self._verify_common(block, prev_block, generator, **kwargs)
 
     @abstractmethod
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         raise NotImplementedError
 
     def verify_transactions(self, block: 'Block', blockchain=None):

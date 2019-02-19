@@ -1,9 +1,10 @@
 import time
 from functools import reduce
 from operator import or_
+from typing import List
 from . import BlockHeader, BlockBody, BlockProver
 from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
-from ... import Address, Hash32, BloomFilter, TransactionVersioner
+from ... import ExternalAddress, Hash32, BloomFilter, TransactionVersioner
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -17,7 +18,7 @@ class BlockBuilder(BaseBlockBuilder):
         # Attributes that must be assigned
         self.complained = False
         self.confirm_prev_block = True
-        self.next_leader: 'Address' = None
+        self.next_leader: 'ExternalAddress' = None
 
         # Attributes to be assigned(optional)
         self.fixed_timestamp: int = None
@@ -26,7 +27,9 @@ class BlockBuilder(BaseBlockBuilder):
         # Attributes to be generated
         self.transaction_root_hash: 'Hash32' = None
         self.receipt_root_hash: 'Hash32' = None
+        self.rep_root_hash: 'Hash32' = None
         self.bloom_filter: 'BloomFilter' = None
+        self.reps: List[ExternalAddress] = None
         self._timestamp: int = None
         self._receipts: list = None
 
@@ -49,6 +52,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         self.transaction_root_hash = None
         self.receipt_root_hash = None
+        self.rep_root_hash = None
         self.bloom_filter = None
         self._timestamp = None
 
@@ -75,6 +79,7 @@ class BlockBuilder(BaseBlockBuilder):
             "transaction_root_hash": self.transaction_root_hash,
             "state_root_hash": self.state_root_hash,
             "receipt_root_hash": self.receipt_root_hash,
+            "rep_root_hash": self.rep_root_hash,
             "bloom_filter": self.bloom_filter,
             "complained": self.complained
         }
@@ -113,6 +118,17 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver(self.receipts, BlockProverType.Receipt)
         return block_prover.get_proof_root()
 
+    def build_rep_root_hash(self):
+        if self.rep_root_hash is not None:
+            return self.rep_root_hash
+
+        self.rep_root_hash = self._build_rep_root_hash()
+        return self.rep_root_hash
+
+    def _build_rep_root_hash(self):
+        block_prover = BlockProver(self.reps, BlockProverType.Rep)
+        return block_prover.get_proof_root()
+
     def build_bloom_filter(self):
         if self.bloom_filter is not None:
             return self.bloom_filter
@@ -137,6 +153,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         self.build_transaction_root_hash()
         self.build_receipt_root_hash()
+        self.build_rep_root_hash()
         self.build_bloom_filter()
         self.hash = self._build_hash()
         return self.hash
@@ -164,6 +181,7 @@ class BlockBuilder(BaseBlockBuilder):
         super().from_(block)
 
         header: BlockHeader = block.header
+
         self.next_leader = header.next_leader
         self.state_root_hash = header.state_root_hash
         self.receipt_root_hash = header.receipt_root_hash
@@ -171,4 +189,5 @@ class BlockBuilder(BaseBlockBuilder):
         self.transaction_root_hash = header.transaction_root_hash
         self.fixed_timestamp = header.timestamp
         self.complained = header.complained
+        self.rep_root_hash = header.rep_root_hash
         self._timestamp = header.timestamp

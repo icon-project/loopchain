@@ -28,7 +28,8 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, TransactionStatusInQueue
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32
+from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -52,6 +53,7 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__channel_infos: dict = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -126,7 +128,10 @@ class ChannelService:
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
-            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(ChannelProperty().name)
+
+            channel_name = ChannelProperty().name
+            self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
+            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
 
             await self.init(*results)
 
@@ -373,13 +378,21 @@ class ChannelService:
         channel_option = conf.CHANNEL_OPTION
         return channel_option[ChannelProperty().name]
 
+    def get_channel_infos(self) -> dict:
+        return self.__channel_infos
+
+    def get_rep_ids(self) -> list:
+        return [ExternalAddress.fromhex_address(peer.get('id'), allow_malformed=True)
+                for peer in self.get_channel_infos()['peers']]
+
     def generate_genesis_block(self):
         blockchain = self.block_manager.get_blockchain()
         if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
-        blockchain.generate_genesis_block()
+        reps = self.get_rep_ids()
+        blockchain.generate_genesis_block(reps)
 
     def connect_to_radio_station(self, is_reconnect=False):
         response = self.__radio_station_stub.call_in_times(
@@ -705,6 +718,7 @@ class ChannelService:
         }
         block_builder.state_root_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
+        block_builder.reps = self.get_rep_ids()
         new_block = block_builder.build()
         return new_block, tx_receipts
 
@@ -745,6 +759,7 @@ class ChannelService:
         }
         block_builder.state_root_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
+        block_builder.reps = self.get_rep_ids()
         new_block = block_builder.build()
         return new_block, tx_receipts
 

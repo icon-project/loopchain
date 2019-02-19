@@ -77,7 +77,7 @@ class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
     @classmethod
-    def fromhex_address(cls, value: int, allow_malformed=False):
+    def fromhex_address(cls, value: str, allow_malformed=False):
         try:
             prefix, contents = value[:2], value[2:]
 

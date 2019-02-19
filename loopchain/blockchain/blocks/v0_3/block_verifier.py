@@ -1,23 +1,31 @@
 from typing import TYPE_CHECKING
-from . import BlockHeader
+from . import BlockHeader, BlockBody
 from .. import BlockVerifier as BaseBlockVerifier, BlockBuilder
 
 if TYPE_CHECKING:
-    from .. import Block, BlockBody
+    from .. import Block
     from ... import ExternalAddress
 
 
 class BlockVerifier(BaseBlockVerifier):
     version = BlockHeader.version
 
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
+        # TODO It should check rep's order.
+        reps = kwargs.get("reps")
+        if header.height > 0 and header.peer_id not in reps:
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                               f"Leader({header.peer_id}) is not in "
+                               f"Reps({reps})")
+            
         builder = BlockBuilder.from_new(block, self._tx_versioner)
         builder.reset_cache()
-        builder.peer_id = generator
+        builder.peer_id = block.header.peer_id
         builder.signature = block.header.signature
+        builder.reps = reps
 
         for tx in body.transactions.values():
             builder.transactions[tx.hash] = tx
@@ -49,6 +57,13 @@ class BlockVerifier(BaseBlockVerifier):
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                f"TransactionRootHash({header.transaction_root_hash.hex()}), "
                                f"Expected({builder.transaction_root_hash.hex()}).")
+
+        builder.build_rep_root_hash()
+        if header.rep_root_hash != builder.rep_root_hash:
+            if header.rep_root_hash != builder.rep_root_hash:
+                raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                   f"TransactionRootHash({header.rep_root_hash.hex()}), "
+                                   f"Expected({builder.rep_root_hash.hex()}).")
 
         builder.build_hash()
         if header.hash != builder.hash:

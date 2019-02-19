@@ -26,6 +26,7 @@ class BlockSerializer(BaseBlockSerializer):
             "merkle_tree_root_hash": header.transaction_root_hash.hex() if header.transaction_root_hash else '',
             "state_root_hash": header.state_root_hash.hex() if header.state_root_hash else '',
             "receipt_root_hash": header.receipt_root_hash.hex() if header.receipt_root_hash else '',
+            "rep_root_hash": header.rep_root_hash.hex(),
             "bloom_filter": header.bloom_filter.hex(),
             "time_stamp": header.timestamp,
             "confirmed_transaction_list": transactions,
@@ -59,6 +60,9 @@ class BlockSerializer(BaseBlockSerializer):
         state_root_hash = json_data["state_root_hash"]
         state_root_hash = Hash32.fromhex(state_root_hash, ignore_prefix=True) if state_root_hash else None
 
+        rep_root_hash = json_data["rep_root_hash"]
+        rep_root_hash = Hash32.fromhex(rep_root_hash, ignore_prefix=True) if state_root_hash else None
+
         if json_data["complained"] == 1:
             complained = True
         elif json_data["complained"] == 0:
@@ -77,6 +81,7 @@ class BlockSerializer(BaseBlockSerializer):
             "transaction_root_hash": tx_root_hash,
             "receipt_root_hash": receipt_root_hash,
             "state_root_hash": state_root_hash,
+            "rep_root_hash": rep_root_hash,
             "bloom_filter": BloomFilter.fromhex(json_data["bloom_filter"], ignore_prefix=True),
             "complained": complained
         }
