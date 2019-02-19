@@ -671,7 +671,7 @@ class BlockChain:
 
             return unconfirmed_block
 
-    def init_blockchain(self, is_leader=False):
+    def init_blockchain(self):
         # level DB에서 블럭을 읽어 들이며, 만약 levelDB에 블럭이 없을 경우 제네시스 블럭을 만든다
         try:
             last_block_key = self.__confirmed_block_db.Get(BlockChain.LAST_BLOCK_KEY, True)

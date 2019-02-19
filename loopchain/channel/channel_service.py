@@ -595,12 +595,21 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        peer_leader = self.peer_manager.get_leader_peer(
-            is_complain_to_rs=self.is_support_node_function(conf.NodeFunction.Vote))
-        logging.debug(f"channel({ChannelProperty().name}) peer_leader: " + str(peer_leader))
+        self.__ready_to_height_sync()
+        blockchain = self.block_manager.get_blockchain()
+
+        if blockchain.last_unconfirmed_block:
+            leader_id = blockchain.last_unconfirmed_block.header.next_leader.hex_hx()
+            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
+        elif blockchain.last_block:
+            leader_id = blockchain.last_block.header.next_leader.hex_hx()
+            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
+        else:
+            leader_id = self.peer_manager.get_leader_peer().peer_id
+        logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
-        if self.is_support_node_function(conf.NodeFunction.Vote) and ChannelProperty().peer_id == peer_leader.peer_id:
+        if self.is_support_node_function(conf.NodeFunction.Vote) and ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
             logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
@@ -609,18 +618,15 @@ class ChannelService:
         logger_preset.update_logger()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.consensus.leader_id = peer_leader.peer_id
+            self.consensus.leader_id = leader_id
 
         if peer_type == loopchain_pb2.BLOCK_GENERATOR:
             self.block_manager.set_peer_type(peer_type)
-            self.__ready_to_height_sync(True)
-        elif peer_type == loopchain_pb2.PEER:
-            self.__ready_to_height_sync(False)
 
-    def __ready_to_height_sync(self, is_leader: bool = False):
+    def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
 
-        blockchain.init_blockchain(is_leader)
+        blockchain.init_blockchain()
         if blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
