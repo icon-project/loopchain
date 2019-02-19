@@ -55,8 +55,8 @@ class ConsensusSiever(ConsensusBase):
             if block_builder.complained:
                 util.logger.spam("consensus block_builder.complained")
                 block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
-                if not block_info:
-                    # Can't make a block as a leader, this peer will be complained too.
+                if not block_info and self._blockchain.last_block.header.height > 0:
+                    util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
                 vote_result = True
                 self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
@@ -164,7 +164,6 @@ class ConsensusSiever(ConsensusBase):
 
     def __add_block(self, block: Block, vote: Vote):
         self._block_manager.get_blockchain().add_block(block, vote)
-        self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._made_block_count += 1
 
     @staticmethod

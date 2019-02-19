@@ -764,11 +764,12 @@ class ChannelInnerTask:
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
             if next_new_leader == ChannelProperty().peer_id:
-                # Turn to Leader and Send Leader Complain Block
-                util.logger.spam(f"No I'm your father....")
-                self._channel_service.state_machine.turn_to_leader()
+                if self._channel_service.state_machine.state != "BlockGenerate":
+                    # Turn to Leader and Send Leader Complain Block
+                    util.logger.spam("No I'm your father....")
+                    self._channel_service.state_machine.turn_to_leader()
             else:
-                util.logger.spam(f"I'm your Jedi.")
+                util.logger.spam("I'm your Jedi.")
                 # TODO check new leader is alive.
                 # if not
                 #     self._channel_service.start_leader_complain_timer()
