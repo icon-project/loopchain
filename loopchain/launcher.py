@@ -104,7 +104,6 @@ def start_as_channel(args):
 
 def start_as_rest_server(args):
     peer_port = args.port
-    channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(peer_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
     conf_path = conf.CONF_PATH_ICONRPCSERVER_DEV
@@ -126,17 +125,15 @@ def start_as_rest_server(args):
         "config": conf_path,
         "tbearsMode": False
     }
+    if dev_mode:
+        additional_conf.update({
+            "port": api_port,
+            "amqpKey": amqp_key
+        })
 
     rpcserver_conf: IconConfig = IconConfig("", default_rpcserver_config)
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
-    if dev_mode:
-        additional_conf.update({
-            "channel": channel,
-            "port": api_port,
-            "amqpKey": amqp_key
-        })
-        rpcserver_conf.update_conf(additional_conf)
 
     if not find_procs_by_params(api_port):
         start_process(conf=rpcserver_conf)
