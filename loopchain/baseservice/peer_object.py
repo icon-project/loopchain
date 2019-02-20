@@ -15,6 +15,7 @@
 
 import datetime
 import logging
+import json
 from enum import IntEnum
 
 from loopchain import configure as conf
@@ -30,6 +31,8 @@ class PeerStatus(IntEnum):
 
 class PeerInfo:
     """Peer Object"""
+
+    STATUS_UPDATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 
     def __init__(self, peer_id: str, group_id: str,
                  target: str = "", status: PeerStatus = PeerStatus.unknown, order: int = 0):
@@ -88,6 +91,36 @@ class PeerInfo:
     @property
     def status_update_time(self):
         return self.__status_update_time
+
+    def serialize(self) -> dict:
+        return {
+            'peer_id': self.__peer_id,
+            'group_id': self.__group_id,
+            'order': self.__order,
+            'target': self.__target,
+            'status_update_time': self.__status_update_time.strftime(PeerInfo.STATUS_UPDATE_TIME_FORMAT),
+            'status': self.__status
+        }
+
+    @staticmethod
+    def deserialize(peer_info_serialized: dict) -> 'PeerInfo':
+        peer_info = PeerInfo(peer_id=peer_info_serialized['peer_id'],
+                             group_id=peer_info_serialized['group_id'],
+                             target=peer_info_serialized['target'],
+                             status=peer_info_serialized['status'],
+                             order=peer_info_serialized['order'])
+        peer_info.__status_update_time = datetime.datetime.strptime(peer_info_serialized['status_update_time'],
+                                                                    PeerInfo.STATUS_UPDATE_TIME_FORMAT)
+        return peer_info
+
+    def dump(self) -> bytes:
+        serialized = self.serialize()
+        return json.dumps(serialized).encode(encoding=conf.PEER_DATA_ENCODING)
+
+    @staticmethod
+    def load(peer_info_dumped: bytes):
+        serialized = json.loads(peer_info_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
+        return PeerInfo.deserialize(serialized)
 
 
 class PeerObject:

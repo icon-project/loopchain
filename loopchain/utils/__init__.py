@@ -13,16 +13,13 @@
 # limitations under the License.
 """ A module for utility"""
 
-import copy
 import datetime
-import hashlib
 import importlib.machinery
 import json
 import leveldb
 import logging
 import os
 import os.path as osp
-import pickle
 import re
 import signal
 import socket
@@ -31,13 +28,10 @@ import time
 import timeit
 import traceback
 import verboselogs
-import zlib
 from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from fluent import event
-from jsonrpcclient import HTTPClient
-from jsonrpcclient.exceptions import ReceivedErrorResponse
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 
@@ -46,8 +40,6 @@ from loopchain.protos import loopchain_pb2, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 
 apm_event = None
-block_dumps = None
-block_loads = None
 
 logger = verboselogs.VerboseLogger("dev")
 
@@ -525,37 +517,7 @@ def create_invoke_result_specific_case(confirmed_transaction_list, invoke_result
     return invoke_results
 
 
-def __zipped_pickle_dumps(obj):
-    pickled_obj = pickle.dumps(obj)
-    # util.logger.spam(f'__zipped_pickle_dumps pickled_obj is %i bytes' % len(pickled_obj))
-    zipped_obj = zlib.compress(pickled_obj)
-    # util.logger.spam(f'__zipped_pickle_dumps zip_obj is %i bytes' % len(zip_obj))
-    return zipped_obj
-
-
-def __normal_pickle_dumps(obj):
-    pickled_obj = pickle.dumps(obj)
-    # util.logger.spam(f'__zipped_pickle_dumps pickled_obj is %i bytes' % len(pickled_obj))
-    return pickled_obj
-
-
-def __zipped_pickle_loads(obj):
-    pickled_obj = zlib.decompress(obj)
-    return pickle.loads(pickled_obj)
-
-
-def __normal_pickle_loads(obj):
-    return pickle.loads(obj)
-
-
 if not conf.MONITOR_LOG:
     apm_event = no_send_apm_event
 else:
     apm_event = send_apm_event
-
-if not conf.USE_ZIPPED_DUMPS:
-    block_dumps = __normal_pickle_dumps
-    block_loads = __normal_pickle_loads
-else:
-    block_dumps = __zipped_pickle_dumps
-    block_loads = __zipped_pickle_loads

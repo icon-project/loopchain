@@ -16,6 +16,7 @@ import json
 import leveldb
 import pickle
 import threading
+import zlib
 from enum import Enum
 
 import loopchain.utils as util
@@ -725,3 +726,29 @@ class BlockChain:
         invoke_results = \
             self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
         self.__add_tx_to_block_db(precommit_block, invoke_results)
+
+    def block_dumps(self, block: Block) -> bytes:
+        block_version = self.__block_versioner.get_version(block.header.height)
+        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serialized = block_serializer.serialize(block)
+
+        """
+        FIXME: this is a workaround. confirm_prev_block is used temporarily. We will remove the attribute.
+        If confirm_prev_block is serialized in serialize() function, it will be put in DB but we don't want it.
+        """
+        if hasattr(block.body, 'confirm_prev_block'):
+            block_serialized['confirm_prev_block'] = block.body.confirm_prev_block
+
+        block_json = json.dumps(block_serialized)
+        block_dumped = block_json.encode(encoding=conf.PEER_DATA_ENCODING)
+        block_dumped = zlib.compress(block_dumped)
+        return block_dumped
+
+    def block_loads(self, block_dumped: bytes) -> Block:
+        block_dumped = zlib.decompress(block_dumped)
+        block_json = block_dumped.decode(encoding=conf.PEER_DATA_ENCODING)
+        block_serialized = json.loads(block_json)
+        block_height = self.__block_versioner.get_height(block_serialized)
+        block_version = self.__block_versioner.get_version(block_height)
+        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        return block_serializer.deserialize(block_serialized)

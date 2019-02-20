@@ -17,6 +17,7 @@ import logging
 import math
 import pickle
 import threading
+import traceback
 from typing import Union
 
 import loopchain.utils as util
@@ -64,6 +65,51 @@ class PeerListData:
     @peer_info_list.setter
     def peer_info_list(self, peer_info_list):
         self.__peer_info_list = peer_info_list
+
+    def serialize(self) -> dict:
+        peer_info_list_serialized = dict()
+        for group_id, peer_info_group in self.__peer_info_list.items():
+            group_serialized = dict()
+            for peer_id, peer_info in peer_info_group.items():
+                group_serialized[peer_id] = peer_info.serialize()
+            peer_info_list_serialized[group_id] = group_serialized
+
+        return {
+            'peer_info_list': peer_info_list_serialized,
+            'peer_leader': self.__peer_leader,
+            'peer_order_list': self.__peer_order_list
+        }
+
+    @staticmethod
+    def deserialize(peer_list_data_serialized: dict) -> 'PeerListData':
+        peer_info_list = dict()
+        for group_id, peer_info_group_serialized in peer_list_data_serialized['peer_info_list'].items():
+            group = dict()
+            for peer_id, peer_info_serialized in peer_info_group_serialized.items():
+                group[peer_id] = PeerInfo.deserialize(peer_info_serialized)
+            peer_info_list[group_id] = group
+
+        peer_order_list = dict()
+        for group_id, order_list in peer_list_data_serialized['peer_order_list'].items():
+            converted_order_list = dict()
+            for order, peer_id in order_list.items():
+                converted_order_list[int(order)] = peer_id
+            peer_order_list[group_id] = converted_order_list
+
+        peer_list_data = PeerListData()
+        peer_list_data.__peer_info_list = peer_info_list
+        peer_list_data.__peer_leader = peer_list_data_serialized['peer_leader']
+        peer_list_data.__peer_order_list = peer_order_list
+        return peer_list_data
+
+    def dump(self) -> bytes:
+        serialized = self.serialize()
+        return json.dumps(serialized).encode(encoding=conf.PEER_DATA_ENCODING)
+
+    @staticmethod
+    def load(peer_list_data_dumped: bytes):
+        serialized = json.loads(peer_list_data_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
+        return PeerListData.deserialize(serialized)
 
 
 class PeerManager:
@@ -235,7 +281,7 @@ class PeerManager:
 
         return peer_info.order
 
-    def update_peer_status(self, peer_id, group_id=None, peer_status=PeerStatus.connected):
+    def update_peer_status(self, peer_id, group_id=None, peer_status=PeerStatus.connected) -> PeerInfo:
         if group_id is None:
             group_id = conf.ALL_GROUP_ID
         try:
@@ -336,19 +382,23 @@ class PeerManager:
             return None
 
         peer_self = self.get_peer(ObjectManager().peer_service.peer_id, ObjectManager().peer_service.group_id)
-        peer_self_dump = pickle.dumps(peer_self)
+        peer_self_dumped = peer_self.dump()
         response = ObjectManager().peer_service.stub_to_radiostation.call(
             "Request",
             loopchain_pb2.Message(
                 code=message_code.Request.peer_complain_leader,
                 message=group_id,
-                object=peer_self_dump
+                object=peer_self_dumped
             )
         )
 
-        # leader_peer = pickle.loads(response.object)
         if response is not None and response.code == message_code.Response.success:
-            leader_peer = pickle.loads(response.object)
+            try:
+                leader_peer = PeerInfo.load(response.object)
+            except Exception as e:
+                traceback.print_exc()
+                logging.error(f"Invalid peer info. Check your Radio Station. exception={e}")
+                return None
             self.set_leader_peer(leader_peer)
         else:
             leader_peer = None

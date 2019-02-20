@@ -169,7 +169,6 @@ MAX_BLOCK_KBYTES = 3000  # default: 3000
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
 MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
 SEND_TX_LIST_DURATION = 0.3  # seconds
-USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is different from the running node.
 # Consensus Vote Ratio 1 = 100%, 0.5 = 50%
 VOTING_RATIO = 0.67  # for Add Block
 LEADER_COMPLAIN_RATIO = 0.51  # for Leader Complain

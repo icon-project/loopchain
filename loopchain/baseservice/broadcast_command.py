@@ -16,7 +16,6 @@
 class BroadcastCommand:
     SUBSCRIBE = "subscribe"
     UNSUBSCRIBE = "unsubscribe"
-    UPDATE_AUDIENCE = "update_audience"
     AUDIENCE_SUBSCRIBE = "audience_subscribe"
     AUDIENCE_UNSUBSCRIBE = "audience_unsubscribe"
     BROADCAST = "broadcast"
