@@ -493,6 +493,7 @@ class BlockManager:
         if target_height is not None:
             max_height = target_height
 
+        self.__blockchain.last_unconfirmed_block = None
         my_height = self.__current_block_height()
         retry_number = 0
         util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
@@ -580,6 +581,7 @@ class BlockManager:
 
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
+            self.__unconfirmedBlockQueue = queue.Queue()
             self.epoch.set_epoch_leader(self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID))
             self.__channel_service.state_machine.subscribe_network()
         else:
