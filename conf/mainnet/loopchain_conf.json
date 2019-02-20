@@ -20,9 +20,9 @@
   "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
   "PORT_PEER": 7200,
   "AMQP_KEY": "7200",
-  "DEFAULT_STORAGE_PATH": ".storage_mainnet/",
+  "DEFAULT_STORAGE_PATH": ".storage_mainnet",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,
   "LOOPCHAIN_LOG_LEVEL": "INFO",
-  "LOG_FILE_LOCATION": "./log/mainnet"
+  "LOG_FILE_LOCATION": "./log/mainnet/icon_dex"
 }
