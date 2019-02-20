@@ -597,12 +597,10 @@ class ChannelService:
         peer_type = loopchain_pb2.PEER
         self.__ready_to_height_sync()
         blockchain = self.block_manager.get_blockchain()
-
-        if blockchain.last_unconfirmed_block:
-            leader_id = blockchain.last_unconfirmed_block.header.next_leader.hex_hx()
-            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
-        elif blockchain.last_block:
-            leader_id = blockchain.last_block.header.next_leader.hex_hx()
+        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
+        
+        if last_block:
+            leader_id = last_block.header.next_leader.hex_hx()
             self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
         else:
             leader_id = self.peer_manager.get_leader_peer().peer_id
