@@ -76,7 +76,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         meta = json.loads(request.meta) if request.meta else {}
         if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
             util.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
-            channel_stub.sync_task().block_height_sync()
 
         status_json = json.dumps(status)
 
