@@ -700,10 +700,6 @@ class ChannelInnerTask:
         return message_code.Response.success, block.header.height, blockchain.block_height, block_dumped
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def block_height_sync(self):
-        self._channel_service.state_machine.block_sync()
-
-    @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
         peer = self._channel_service.peer_manager.get_peer_by_target(peer_target)
         if not peer:
