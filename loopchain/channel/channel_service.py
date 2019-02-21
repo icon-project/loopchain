@@ -594,32 +594,34 @@ class ChannelService:
             logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
-        peer_type = loopchain_pb2.PEER
         self.__ready_to_height_sync()
-        blockchain = self.block_manager.get_blockchain()
-        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
-        
-        if last_block:
-            leader_id = last_block.header.next_leader.hex_hx()
-            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
-        else:
-            leader_id = self.peer_manager.get_leader_peer().peer_id
-        logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
-        logger_preset = loggers.get_preset()
-        if self.is_support_node_function(conf.NodeFunction.Vote) and ChannelProperty().peer_id == leader_id:
-            logger_preset.is_leader = True
-            logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
-        else:
-            logger_preset.is_leader = False
-        logger_preset.update_logger()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            peer_type = loopchain_pb2.PEER
+            blockchain = self.block_manager.get_blockchain()
+            last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.consensus.leader_id = leader_id
+            if last_block:
+                leader_id = last_block.header.next_leader.hex_hx()
+                self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
+            else:
+                leader_id = self.peer_manager.get_leader_peer().peer_id
+            logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
-        if peer_type == loopchain_pb2.BLOCK_GENERATOR:
-            self.block_manager.set_peer_type(peer_type)
+            logger_preset = loggers.get_preset()
+            if ChannelProperty().peer_id == leader_id:
+                logger_preset.is_leader = True
+                logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+                peer_type = loopchain_pb2.BLOCK_GENERATOR
+            else:
+                logger_preset.is_leader = False
+            logger_preset.update_logger()
+
+            if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+                self.consensus.leader_id = leader_id
+
+            if peer_type == loopchain_pb2.BLOCK_GENERATOR:
+                self.block_manager.set_peer_type(peer_type)
 
     def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
