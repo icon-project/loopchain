@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ A class for gRPC service of Radio station """
+
 import json
 import logging
+
+import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.protos import loopchain_pb2_grpc, message_code
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class AdminService(loopchain_pb2_grpc.RadioStationServicer):

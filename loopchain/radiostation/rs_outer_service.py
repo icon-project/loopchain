@@ -12,20 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ A class for gRPC service of Radio station """
+
 import json
 import logging
 import pickle
 import threading
 
+import loopchain_pb2
+
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import PeerStatus, PeerInfo, ObjectManager, \
-    TimerService, Timer
+from loopchain.baseservice import (PeerStatus, PeerInfo, PeerListData, PeerManager,
+                                   ObjectManager, TimerService, Timer)
 from loopchain.configure_default import KeyLoadType
 from loopchain.protos import loopchain_pb2_grpc, message_code
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class OuterService(loopchain_pb2_grpc.RadioStationServicer):
@@ -53,13 +53,13 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         :return: proto.Message {object=leader_peer_object}
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
-        leader_peer = ObjectManager().rs_service.channel_manager.get_peer_manager(
+        leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
             channel_name).get_leader_peer(group_id=request.message, is_peer=False)
         if leader_peer is not None:
             logging.debug(f"leader_peer ({leader_peer.peer_id})")
-            peer_dump = pickle.dumps(leader_peer)
+            peer_dumped = leader_peer.dump()
 
-            return loopchain_pb2.Message(code=message_code.Response.success, object=peer_dump)
+            return loopchain_pb2.Message(code=message_code.Response.success, object=peer_dumped)
 
         return loopchain_pb2.Message(code=message_code.Response.fail_no_leader_peer)
 
@@ -78,12 +78,12 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         # get_leader_peer 한 내용과 다르면 AnnounceNewLeader 를 broadcast 하여야 한다.
 
         logging.debug("in complain leader (radiostation)")
-        leader_peer = ObjectManager().rs_service.channel_manager.get_peer_manager(
+        leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
             conf.LOOPCHAIN_DEFAULT_CHANNEL).complain_leader(group_id=request.message)
         if leader_peer is not None:
             logging.warning(f"leader_peer after complain({leader_peer.peer_id})")
-            peer_dump = pickle.dumps(leader_peer)
-            return loopchain_pb2.Message(code=message_code.Response.success, object=peer_dump)
+            peer_dumped = leader_peer.dump()
+            return loopchain_pb2.Message(code=message_code.Response.success, object=peer_dumped)
 
         return loopchain_pb2.Message(code=message_code.Response.fail_no_leader_peer)
 
@@ -243,41 +243,36 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         # RS need rebuild peer list from db.
         # For prevent leader split by RS.
         with self.__load_peer_manager_lock:
-            peer_manager = ObjectManager().rs_service.channel_manager.\
+            peer_manager = ObjectManager().rs_service.channel_manager. \
                 get_peer_manager(channel_name)
             util.logger.spam(f"before load peer_manager "
                              f"peer_count({peer_manager.get_peer_count()})")
 
             if peer_manager.get_peer_count() == 0:
                 util.logger.spam(f"try load peer_manager from db")
-                peer_manager = ObjectManager().rs_service.admin_manager.\
-                    load_peer_manager(channel_name)
-                ObjectManager().rs_service.channel_manager.\
+                # peer_manager = ObjectManager().rs_service.admin_manager.\
+                #    load_peer_manager(channel_name)
+                ObjectManager().rs_service.channel_manager. \
                     set_peer_manager(channel_name, peer_manager)
 
             util.logger.spam(f"after load peer_manager "
-                            f"peer_count({peer_manager.get_peer_count()})")
+                             f"peer_count({peer_manager.get_peer_count()})")
 
             peer_order = peer_manager.add_peer(peer)
 
-            peer_list_dump = b''
+            peer_list_dumped = b''
             status, reason = message_code.get_response(message_code.Response.fail)
 
         if peer_order > 0:
-            try:
-                peer_list_dump = peer_manager.dump()
-                status, reason = message_code.get_response(message_code.Response.success)
-
-            except pickle.PicklingError as e:
-                logging.warning("fail peer_list dump")
-                reason += " " + str(e)
+            peer_list_dumped = peer_manager.peer_list_data.dump()
+            status, reason = message_code.get_response(message_code.Response.success)
 
         # save current peer_manager after ConnectPeer from new peer.
-        ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
+        # ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
 
         return loopchain_pb2.ConnectPeerReply(
             status=status,
-            peer_list=peer_list_dump,
+            peer_list=peer_list_dumped,
             channels=None,
             more_info=reason
         )
@@ -289,15 +284,17 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         :param context:
         :return: PeerList
         """
+        channel_manager = ObjectManager().rs_service.channel_manager
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
-        try:
-            peer_list_dump = ObjectManager().rs_service.channel_manager.get_peer_manager(channel_name).dump()
-        except pickle.PicklingError as e:
-            logging.warning("fail peer_list dump")
-            peer_list_dump = b''
+
+        if channel_name in channel_manager.get_channel_list():
+            peer_manager: PeerManager = channel_manager.get_peer_manager(channel_name)
+            peer_list_dumped = peer_manager.peer_list_data.dump()
+        else:
+            peer_list_dumped = PeerListData().dump()
 
         return loopchain_pb2.PeerList(
-            peer_list=peer_list_dump
+            peer_list=peer_list_dumped
         )
 
     def GetPeerStatus(self, request, context):
@@ -370,13 +367,13 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         logging.debug("Radio Station Subscription peer_id: " + str(request))
         ObjectManager().rs_service.channel_manager.add_audience(channel, request.peer_target)
 
-        peer = ObjectManager().rs_service.channel_manager.get_peer_manager(channel).update_peer_status(
+        peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(channel).update_peer_status(
             peer_id=request.peer_id, peer_status=PeerStatus.connected)
 
         try:
-            peer_dump = pickle.dumps(peer)
+            peer_dumped = peer.dump()
             request.peer_order = peer.order
-            request.peer_object = peer_dump
+            request.peer_object = peer_dumped
             ObjectManager().rs_service.channel_manager.get_peer_manager(channel).announce_new_peer(request)
 
             return loopchain_pb2.CommonReply(
@@ -400,4 +397,3 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         channel_manager = ObjectManager().rs_service.channel_manager
 
         return loopchain_pb2.CommonReply(response_code=0, message="success")
-

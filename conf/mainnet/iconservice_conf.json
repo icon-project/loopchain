@@ -3,7 +3,6 @@
     "logger": "iconservice",
     "colorLog": true,
     "level": "warning",
-    "filePath": "./log/mainnet/iconservice.log",
     "outputType": "console|file",
     "rotate": {
       "type": "period|bytes",
@@ -13,11 +12,6 @@
       "maxBytes": 50000000
     }
   },
-  "scoreRootPath": ".storage_mainnet/.score",
-  "stateDbRootPath": ".storage_mainnet/.statedb",
-  "channel": "icon_dex",
-  "amqpKey": "7200",
-  "amqpTarget": "127.0.0.1",
   "builtinScoreOwner": "hx677133298ed5319607a321a38169031a8867085c",
   "service": {
     "fee": true,

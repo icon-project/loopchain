@@ -13,16 +13,13 @@
 # limitations under the License.
 """ A module for utility"""
 
-import copy
 import datetime
-import hashlib
 import importlib.machinery
 import json
 import leveldb
 import logging
 import os
 import os.path as osp
-import pickle
 import re
 import signal
 import socket
@@ -31,13 +28,10 @@ import time
 import timeit
 import traceback
 import verboselogs
-import zlib
 from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from fluent import event
-from jsonrpcclient import HTTPClient
-from jsonrpcclient.exceptions import ReceivedErrorResponse
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 
@@ -46,8 +40,6 @@ from loopchain.protos import loopchain_pb2, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 
 apm_event = None
-block_dumps = None
-block_loads = None
 
 logger = verboselogs.VerboseLogger("dev")
 
@@ -359,6 +351,22 @@ def get_private_ip():
         return get_private_ip3()
 
 
+def load_json_data(channel_manage_data_path: str):
+    try:
+        logging.debug(f"load_json_data() : try to load channel management"
+                      f" data from json file ({channel_manage_data_path})")
+        with open(channel_manage_data_path) as file:
+            json_data = json.load(file)
+
+        json_string = json.dumps(json_data).replace('[local_ip]', get_private_ip())
+        json_data = json.loads(json_string)
+        logging.info(f"loading channel info : {json_data}")
+        return json_data
+    except FileNotFoundError as e:
+        exit_and_msg(f"cannot open json file in ({channel_manage_data_path}): {e}")
+        raise
+
+
 def dict_to_binary(the_dict):
     return str.encode(json.dumps(the_dict))
 
@@ -466,7 +474,7 @@ def init_level_db(level_db_identity, allow_rename_path=True):
     level_db = None
 
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
-        os.makedirs(conf.DEFAULT_STORAGE_PATH)
+        os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
     db_default_path = osp.join(conf.DEFAULT_STORAGE_PATH, 'db_' + level_db_identity)
     db_path = db_default_path
@@ -525,37 +533,7 @@ def create_invoke_result_specific_case(confirmed_transaction_list, invoke_result
     return invoke_results
 
 
-def __zipped_pickle_dumps(obj):
-    pickled_obj = pickle.dumps(obj)
-    # util.logger.spam(f'__zipped_pickle_dumps pickled_obj is %i bytes' % len(pickled_obj))
-    zipped_obj = zlib.compress(pickled_obj)
-    # util.logger.spam(f'__zipped_pickle_dumps zip_obj is %i bytes' % len(zip_obj))
-    return zipped_obj
-
-
-def __normal_pickle_dumps(obj):
-    pickled_obj = pickle.dumps(obj)
-    # util.logger.spam(f'__zipped_pickle_dumps pickled_obj is %i bytes' % len(pickled_obj))
-    return pickled_obj
-
-
-def __zipped_pickle_loads(obj):
-    pickled_obj = zlib.decompress(obj)
-    return pickle.loads(pickled_obj)
-
-
-def __normal_pickle_loads(obj):
-    return pickle.loads(obj)
-
-
 if not conf.MONITOR_LOG:
     apm_event = no_send_apm_event
 else:
     apm_event = send_apm_event
-
-if not conf.USE_ZIPPED_DUMPS:
-    block_dumps = __normal_pickle_dumps
-    block_loads = __normal_pickle_loads
-else:
-    block_dumps = __zipped_pickle_dumps
-    block_loads = __zipped_pickle_loads

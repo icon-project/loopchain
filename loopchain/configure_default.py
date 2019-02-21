@@ -169,7 +169,6 @@ MAX_BLOCK_KBYTES = 3000  # default: 3000
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
 MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
 SEND_TX_LIST_DURATION = 0.3  # seconds
-USE_ZIPPED_DUMPS = True  # Rolling update does not work if this option is different from the running node.
 # Consensus Vote Ratio 1 = 100%, 0.5 = 50%
 VOTING_RATIO = 0.67  # for Add Block
 LEADER_COMPLAIN_RATIO = 0.51  # for Leader Complain
@@ -228,9 +227,7 @@ SCORE_LOAD_RETRY_INTERVAL = 5.0  # seconds
 SCORE_GIT_LOAD_RETRY_TIMES = 5
 SCORE_GIT_LOAD_SLEEP = 2
 
-USE_EXTERNAL_SCORE = False
-USE_EXTERNAL_REST = False
-EXTERNAL_SCORE_RUN_IN_LAUNCHER = False
+RUN_ICON_IN_LAUNCHER = False
 
 
 ##################
@@ -246,7 +243,6 @@ DEFAULT_SSL_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
 REST_PROXY_DEFAULT_PORT = 5000
-USE_GUNICORN_HA_SERVER = False   # Use high aviability gunicorn web server.
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
 
@@ -451,3 +447,4 @@ CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testne
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
 # TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 5  # 3 is test value for developing leader complain
 TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 30  # 30 is default for product
+MAX_TIMEOUT_FOR_LEADER_COMPLAIN = TIMEOUT_FOR_LEADER_COMPLAIN * 5

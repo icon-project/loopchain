@@ -26,9 +26,6 @@ from loopchain.baseservice import CommonThread, ObjectManager
 from loopchain.tools.grpc_helper import GRPCHelper
 
 
-# Changing the import location will cause a pickle error.
-
-
 class CommonService(CommonThread):
     """Manage common part of 'Peer' and 'Radio station' especially broadcast service"""
 

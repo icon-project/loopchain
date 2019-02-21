@@ -27,7 +27,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.baseservice import StubManager, PeerListData, PeerManager, PeerStatus, TimerService
 from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -218,7 +218,7 @@ class ChannelService:
         #     self.__init_proposer(peer_id=peer_id)
         #     # load acceptor
         #     self.__init_acceptor(peer_id=peer_id)
-            
+
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
@@ -359,7 +359,7 @@ class ChannelService:
         )
 
     async def __run_score_container(self):
-        if not conf.USE_EXTERNAL_SCORE or conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
+        if conf.RUN_ICON_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
                             '--channel', ChannelProperty().name,
                             '--score_package', ChannelProperty().score_package]
@@ -460,8 +460,14 @@ class ChannelService:
             return
 
         if response and response.status == message_code.Response.success:
-            peer_list_data = pickle.loads(response.peer_list)
-            self.__peer_manager.load(peer_list_data, False)
+            try:
+                peer_list_data = PeerListData.load(response.peer_list)
+            except Exception as e:
+                traceback.print_exc()
+                logging.error(f"Invalid peer list. Check your Radio Station. exception={e}")
+                return
+
+            self.__peer_manager.set_peer_list(peer_list_data)
             peers, peer_list = self.__peer_manager.get_peers_for_debug()
             logging.debug("peer list update: " + peers)
 
@@ -588,33 +594,39 @@ class ChannelService:
             logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
-        peer_type = loopchain_pb2.PEER
-        peer_leader = self.peer_manager.get_leader_peer(
-            is_complain_to_rs=self.is_support_node_function(conf.NodeFunction.Vote))
-        logging.debug(f"channel({ChannelProperty().name}) peer_leader: " + str(peer_leader))
+        self.__ready_to_height_sync()
 
-        logger_preset = loggers.get_preset()
-        if self.is_support_node_function(conf.NodeFunction.Vote) and ChannelProperty().peer_id == peer_leader.peer_id:
-            logger_preset.is_leader = True
-            logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
-        else:
-            logger_preset.is_leader = False
-        logger_preset.update_logger()
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            peer_type = loopchain_pb2.PEER
+            blockchain = self.block_manager.get_blockchain()
+            last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.consensus.leader_id = peer_leader.peer_id
+            if last_block:
+                leader_id = last_block.header.next_leader.hex_hx()
+                self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
+            else:
+                leader_id = self.peer_manager.get_leader_peer().peer_id
+            logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
-        if peer_type == loopchain_pb2.BLOCK_GENERATOR:
-            self.block_manager.set_peer_type(peer_type)
-            self.__ready_to_height_sync(True)
-        elif peer_type == loopchain_pb2.PEER:
-            self.__ready_to_height_sync(False)
+            logger_preset = loggers.get_preset()
+            if ChannelProperty().peer_id == leader_id:
+                logger_preset.is_leader = True
+                logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+                peer_type = loopchain_pb2.BLOCK_GENERATOR
+            else:
+                logger_preset.is_leader = False
+            logger_preset.update_logger()
 
-    def __ready_to_height_sync(self, is_leader: bool = False):
+            if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+                self.consensus.leader_id = leader_id
+
+            if peer_type == loopchain_pb2.BLOCK_GENERATOR:
+                self.block_manager.set_peer_type(peer_type)
+
+    def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
 
-        blockchain.init_blockchain(is_leader)
+        blockchain.init_blockchain()
         if blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
@@ -861,11 +873,22 @@ class ChannelService:
 
         return object_has_queue
 
-    def start_leader_complain_timer(self):
+    def reset_leader_complain_timer(self):
+        duration = None
+        timer = self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
+        if timer:
+            self.stop_leader_complain_timer()
+            duration = min(timer.duration * 2, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
+        self.start_leader_complain_timer(duration=duration)
+
+    def start_leader_complain_timer(self, duration=None):
+        if not duration:
+            duration = conf.TIMEOUT_FOR_LEADER_COMPLAIN
+
         util.logger.spam(f"start_leader_complain_timer in channel service.")
         if self.state_machine.state != "BlockGenerate":
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
-                                                      duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                      duration=duration,
                                                       is_repeat=True, callback=self.state_machine.leader_complain)
 
     def stop_leader_complain_timer(self):

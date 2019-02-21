@@ -14,5 +14,3 @@
 """Package for objects which are related with Score service"""
 
 from .icon_inner_service import *
-from .score_inner_service import *
-from .score_service import *

@@ -123,7 +123,7 @@ message Message {
     optional string channel = 2;    // channel ID for multichain network
     optional string message = 3;    // expain about code (optional)
     optional string meta = 4;       // json data for object or itself (optional)
-    optional bytes object = 5;      // dumped python object by pickle for response (optional)
+    optional bytes object = 5;      // dumped python object in json for response (optional)
 }
 
 

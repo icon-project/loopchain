@@ -11,8 +11,8 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """A management class for peer and channel list."""
-from loopchain.baseservice import PeerManager
 from loopchain.blockchain import *
 
 
@@ -28,60 +28,14 @@ class AdminManager:
         )
 
         self.__json_data = None
-        self.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        self.__load_channel_manage_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
-    def save_peer_manager(self, channel, peer_manager: PeerManager):
-        """peer_list 를 leveldb 에 저장한다.
-
-        :param channel:
-        :param peer_manager:
-        """
-        # util.logger.spam(f"rs_admin_manager:save_peer_manager")
-
-        level_db_key_name = str.encode(
-            conf.LEVEL_DB_KEY_FOR_PEER_LIST + f"_{channel}")
-
-        try:
-            dump = peer_manager.dump()
-            level_db = self.__level_db
-            level_db.Put(level_db_key_name, dump)
-        except AttributeError as e:
-            logging.warning("Fail Save Peer_list: " + str(e))
-
-    def load_peer_manager(self, channel):
-        """leveldb 로 부터 peer_manager 를 가져온다.
-
-        :return: peer_manager
-        """
-        level_db_key_name = str.encode(
-            conf.LEVEL_DB_KEY_FOR_PEER_LIST + f"_{channel}")
-
-        peer_manager = PeerManager(channel)
-
-        try:
-            peer_list_data = pickle.loads(self.__level_db.Get(level_db_key_name))
-            peer_manager.load(peer_list_data)
-            logging.debug("load peer_list_data from db: " + peer_manager.get_peers_for_debug()[0])
-        except KeyError:
-            logging.warning("There is no peer_list_data in db")
-
-        return peer_manager
-
-    def load_json_data(self, channel_manage_data_path):
+    def __load_channel_manage_data(self, channel_manage_data_path: str):
         """open channel_manage_data json file and load the data
         :param channel_manage_data_path:
         :return:
         """
-        try:
-            logging.debug(f"try to load channel management data from json file ({channel_manage_data_path})")
-            with open(channel_manage_data_path) as file:
-                json_data = json.load(file)
-                json_string = json.dumps(json_data).replace('[local_ip]', util.get_private_ip())
-                self.__json_data = json.loads(json_string)
-
-                logging.info(f"loading channel info : {self.json_data}")
-        except FileNotFoundError as e:
-            util.exit_and_msg(f"cannot open json file in ({channel_manage_data_path}): {e}")
+        self.__json_data = util.load_json_data(channel_manage_data_path)
 
     @property
     def json_data(self) -> dict:
@@ -91,9 +45,10 @@ class AdminManager:
         return list(self.json_data)
 
     def save_channel_manage_data(self, updated_data):
-        with open(conf.CHANNEL_MANAGE_DATA_PATH, 'w') as f:
+        data_path = conf.CHANNEL_MANAGE_DATA_PATH
+        with open(data_path, 'w') as f:
             json.dump(updated_data, f, indent=2)
-        self.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        self.__load_channel_manage_data(data_path)
 
     def get_all_channel_info(self) -> str:
         return json.dumps(self.json_data)

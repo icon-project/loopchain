@@ -19,7 +19,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32, Vote
+from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32, Vote, Block
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -55,8 +55,8 @@ class ConsensusSiever(ConsensusBase):
             if block_builder.complained:
                 util.logger.spam("consensus block_builder.complained")
                 block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
-                if not block_info:
-                    # Can't make a block as a leader, this peer will be complained too.
+                if not block_info and self._blockchain.last_block.header.height > 0:
+                    util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
                 vote_result = True
                 self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
@@ -76,8 +76,7 @@ class ConsensusSiever(ConsensusBase):
                         if not vote_result:
                             return self.__block_generation_timer.call()
 
-                        self._block_manager.get_blockchain().add_block(last_unconfirmed_block, vote)
-                        self._made_block_count += 1
+                        self.__add_block(last_unconfirmed_block, vote)
 
                         next_leader = last_unconfirmed_block.header.next_leader
             else:
@@ -92,8 +91,7 @@ class ConsensusSiever(ConsensusBase):
                     if not vote_result:
                         return self.__block_generation_timer.call()
 
-                    self._block_manager.get_blockchain().add_block(last_unconfirmed_block, vote)
-                    self._made_block_count += 1
+                    self.__add_block(last_unconfirmed_block, vote)
 
                     peer_manager = ObjectManager().channel_service.peer_manager
                     next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
@@ -163,6 +161,12 @@ class ConsensusSiever(ConsensusBase):
     #             logging.warning("Timed Out Block not confirmed duration: " +
     #                             str(util.diff_in_seconds(candidate_block.header.timestamp)))
     #             return False
+
+    def __add_block(self, block: Block, vote: Vote):
+        self._block_manager.get_blockchain().add_block(block, vote)
+        self._block_manager.candidate_blocks.remove_block(block.header.hash)
+        self._blockchain.last_unconfirmed_block = None
+        self._made_block_count += 1
 
     @staticmethod
     def __start_broadcast_send_unconfirmed_block_timer(broadcast_func):

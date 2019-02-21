@@ -14,10 +14,8 @@
 """A module for restful API server of Radio station"""
 
 import _ssl
-import base64
 import json
 import logging
-import pickle
 import ssl
 from concurrent import futures
 from typing import List
@@ -27,12 +25,11 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerManager, PeerStatus
+from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, PeerInfo
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.utils import loggers
 
 
 def get_channel_name_from_args(args) -> str:
@@ -43,6 +40,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def __init__(self):
         self.__app = Sanic(__name__)
         self.__app.config.KEEP_ALIVE = False
+        self.__stub_to_rs_service = None
 
         # SSL 적용 여부에 따라 context 생성 여부를 결정한다.
         if conf.REST_SSL_TYPE is conf.SSLAuthType.none:
@@ -159,34 +157,37 @@ class Peer(HTTPMethodView):
             grpc_response = ServerComponents().get_peer_list(channel)
 
             peer_manager = PeerManager(channel)
-            peer_list_data = pickle.loads(grpc_response.peer_list)
-            peer_manager.load(peer_list_data, False)
+            peer_list_data = PeerListData.load(grpc_response.peer_list)
+            peer_manager.set_peer_list(peer_list_data)
 
             all_peer_list = []
             connected_peer_list = []
 
-            leader_peer_id = ""
-            leader_peer = peer_manager.get_leader_peer(conf.ALL_GROUP_ID, is_peer=False)  # for set peer_type info to peer
-            if leader_peer is not None:
-                leader_peer_id = leader_peer.peer_id
-            
-            for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
-                peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
-                peer_data = self.__change_format_to_json(peer_each)
+            if peer_manager.peer_list:
+                leader_peer_id = ""
 
-                if peer_each.peer_id == leader_peer_id:
-                    peer_data['peer_type'] = loopchain_pb2.BLOCK_GENERATOR
-                else:
-                    peer_data['peer_type'] = loopchain_pb2.PEER
+                # for set peer_type info to peer
+                leader_peer = peer_manager.get_leader_peer(conf.ALL_GROUP_ID, is_peer=False)
+                if leader_peer is not None:
+                    leader_peer_id = leader_peer.peer_id
 
-                all_peer_list.append(peer_data)
+                for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
+                    peer_each: PeerInfo = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
+                    peer_data = peer_each.serialize()
 
-                if peer_each.status == PeerStatus.connected:
-                    connected_peer_list.append(peer_data)
+                    if peer_each.peer_id == leader_peer_id:
+                        peer_data['peer_type'] = loopchain_pb2.BLOCK_GENERATOR
+                    else:
+                        peer_data['peer_type'] = loopchain_pb2.PEER
+
+                    all_peer_list.append(peer_data)
+
+                    if peer_each.status == PeerStatus.connected:
+                        connected_peer_list.append(peer_data)
 
             json_data = {
-                'registered_peer_count': peer_manager.get_peer_count(),
-                'connected_peer_count': peer_manager.get_connected_peer_count(),
+                'registered_peer_count': len(all_peer_list),
+                'connected_peer_count': len(connected_peer_list),
                 'registered_peer_list': all_peer_list,
                 'connected_peer_list': connected_peer_list
             }
@@ -199,31 +200,40 @@ class Peer(HTTPMethodView):
             grpc_response = ServerComponents().get_peer_list(channel)
 
             peer_manager = PeerManager(channel)
-            peer_list_data = pickle.loads(grpc_response.peer_list)
-            peer_manager.load(peer_list_data, False)
+            peer_list_data = PeerListData.load(grpc_response.peer_list)
+            peer_manager.set_peer_list(peer_list_data)
 
-            async_futures: List[grpc.Future] = []
-            for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
-                async_future = ServerComponents().get_peer_status_async(peer_id, conf.ALL_GROUP_ID, channel)
-                async_futures.append(async_future)
-            futures.as_completed(async_futures)
-
+            registered_peer_count = 0
+            connected_peer_count = 0
             all_peer_list = []
-            for async_future, peer_id in zip(async_futures, peer_manager.peer_list[conf.ALL_GROUP_ID]):
-                if async_future.exception():
-                    logging.warning(f'RequestType({request_type}), exception({async_future.exception()})')
-                    continue
 
-                grpc_response = async_future.result()
-                if grpc_response is not None and grpc_response.status != "":
-                    peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
-                    status_json = json.loads(grpc_response.status)
-                    status_json["order"] = peer_each.order
-                    all_peer_list.append(status_json)
+            if peer_manager.peer_list:
+                async_futures: List[grpc.Future] = []
+                for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
+                    async_future = ServerComponents().get_peer_status_async(peer_id, conf.ALL_GROUP_ID, channel)
+                    async_futures.append(async_future)
+
+                if async_futures:
+                    futures.as_completed(async_futures)
+
+                for async_future, peer_id in zip(async_futures, peer_manager.peer_list[conf.ALL_GROUP_ID]):
+                    if async_future.exception():
+                        logging.warning(f'RequestType({request_type}), exception({async_future.exception()})')
+                        continue
+
+                    grpc_response = async_future.result()
+                    if grpc_response is not None and grpc_response.status != "":
+                        peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
+                        status_json = json.loads(grpc_response.status)
+                        status_json["order"] = peer_each.order
+                        all_peer_list.append(status_json)
+
+                registered_peer_count = peer_manager.get_peer_count()
+                connected_peer_count = peer_manager.get_connected_peer_count()
 
             json_data = {
-                'registered_peer_count': peer_manager.get_peer_count(),
-                'connected_peer_count': peer_manager.get_connected_peer_count(),
+                'registered_peer_count': registered_peer_count,
+                'connected_peer_count': connected_peer_count,
                 'peer_status_list': all_peer_list
             }
             result = {
@@ -238,7 +248,8 @@ class Peer(HTTPMethodView):
             result['response_code'] = grpc_response.code
 
             if grpc_response.code == message_code.Response.success:
-                result['data'] = self.__change_format_to_json(pickle.loads(grpc_response.object))
+                peer_info = PeerInfo.load(grpc_response.object)
+                result['data'] = peer_info.serialize()
             else:
                 result['message'] = message_code.get_response_msg(grpc_response.code)
 
@@ -257,18 +268,6 @@ class Peer(HTTPMethodView):
             return ServerComponents().abort_if_url_doesnt_exist(request_type, self.__REQUEST_TYPE)
 
         return response.json(result)
-
-    def __change_format_to_json(self, peer):
-        json_data = {
-            'order': peer.order,
-            'peer_id': peer.peer_id,
-            'group_id': peer.group_id,
-            'target': peer.target,
-            'cert': base64.b64encode(peer.cert).decode("utf-8"),
-            'status_update_time': str(peer.status_update_time),
-            'status': peer.status
-        }
-        return json_data
 
     def __abort_if_arg_isnt_enough(self, param_name):
         result = dict()

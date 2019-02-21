@@ -17,7 +17,7 @@ from sanic import response
 
 from loopchain import utils as util
 from loopchain.protos import message_code
-from loopchain.utils.icon_service import ParamType, convert_params
+from loopchain.utils.icon_service.converter import ParamType, convert_params
 from loopchain.utils.json_rpc import get_block_by_params
 from loopchain.utils.message_queue import StubCollection
 

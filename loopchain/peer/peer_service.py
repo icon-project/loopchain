@@ -18,17 +18,15 @@ And also has insecure inner service for inner process modules."""
 import multiprocessing
 import signal
 import timeit
-import uuid
 from functools import partial
 
 from loopchain.baseservice import CommonSubprocess
 from loopchain.baseservice import StubManager, Monitor, ObjectManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService, CommonService
-from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.crypto.signature import Signer
+from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-from loopchain.rest_server import RestProxyServer
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
@@ -171,10 +169,6 @@ class PeerService:
         return self.__group_id
 
     @property
-    def radio_station_target(self):
-        return self.__radio_station_target
-
-    @property
     def node_keys(self):
         return self.__node_keys
 
@@ -202,23 +196,13 @@ class PeerService:
                 logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
                 channels = json.loads(response.channel_infos)
             else:
-                logging.debug(f"try to load channel management data from json file ({conf.CHANNEL_MANAGE_DATA_PATH})")
-                try:
-                    with open(conf.CHANNEL_MANAGE_DATA_PATH) as file:
-                        json_data = json.load(file)
-                        json_string = json.dumps(json_data).replace('[local_ip]', util.get_private_ip())
-                        channels = json.loads(json_string)
+                channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
-                        if conf.ENABLE_CHANNEL_AUTH:
-                            filtered_channels = {channel: channels[channel] for channel in channels
-                                                 for peer in channels[channel]['peers']
-                                                 if self.__peer_id == peer['id']}
-                            channels = filtered_channels
-
-                        logging.info(f"loading channel info : {json_data}")
-                except FileNotFoundError as e:
-                    util.exit_and_msg(f"cannot open json file in ({conf.CHANNEL_MANAGE_DATA_PATH}): {e}")
-                    raise  # To make linter happy.
+                if conf.ENABLE_CHANNEL_AUTH:
+                    filtered_channels = {channel: channels[channel] for channel in channels
+                                         for peer in channels[channel]['peers']
+                                         if self.__peer_id == peer['id']}
+                    channels = filtered_channels
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()}
@@ -244,15 +228,10 @@ class PeerService:
         )
 
     def __run_rest_services(self, port):
-        if conf.ENABLE_REST_SERVICE and not conf.USE_EXTERNAL_REST:
-            if conf.USE_GUNICORN_HA_SERVER:
-                # Run web app on gunicorn in another process.
-                self.__rest_proxy_server = RestProxyServer(int(port))
-            else:
-                # Run web app as it is.
-                logging.debug(f'Launch Sanic RESTful server. '
-                              f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
-                self.__rest_service = RestService(int(port))
+        if conf.ENABLE_REST_SERVICE and conf.RUN_ICON_IN_LAUNCHER:
+            logging.debug(f'Launch Sanic RESTful server. '
+                          f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
+            self.__rest_service = RestService(int(port))
 
     def __init_key_by_channel(self):
         for channel in conf.CHANNEL_OPTION:

@@ -14,20 +14,15 @@
 """A Proposer module for block """
 
 import sys
-import logging
-import pickle
+from typing import TYPE_CHECKING
 
-from loopchain import configure as conf
-from loopchain.blockchain import *
-from loopchain.baseservice import ObjectManager
-from loopchain.consensus import Consensus, Epoch, Subscriber
-from loopchain.baseservice.aging_cache import AgingCache
-
-
-# Changing the import location will cause a pickle error.
 import loopchain_pb2
 
-from typing import TYPE_CHECKING
+from loopchain.baseservice import ObjectManager
+from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.blockchain import *
+from loopchain.consensus import Consensus, Epoch, Subscriber
+
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
 

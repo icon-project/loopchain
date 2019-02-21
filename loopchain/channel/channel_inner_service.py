@@ -13,10 +13,10 @@
 # limitations under the License.
 import ast
 import json
-import pickle
 import re
 import signal
 import multiprocessing as mp
+import traceback
 from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
@@ -26,6 +26,7 @@ from earlgrey import *
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
+from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
                                   Block, BlockBuilder, BlockSerializer, blocks, Hash32, )
@@ -291,7 +292,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
                       crash_callback_in_join_thread=crash_callback_in_join_thread)
 
         self.__broadcast_scheduler = broadcast_scheduler
-        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE, BroadcastCommand.UPDATE_AUDIENCE)
+        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE)
         broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
 
     def start(self, target, args=(), crash_callback_in_join_thread=None):
@@ -605,8 +606,13 @@ class ChannelInnerTask:
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_pickled) -> None:
-        unconfirmed_block = util.block_loads(block_pickled)
+    async def announce_unconfirmed_block(self, block_dumped) -> None:
+        try:
+            unconfirmed_block = self._channel_service.block_manager.get_blockchain().block_loads(block_dumped)
+        except BlockError as e:
+            traceback.print_exc()
+            logging.error(f"announce_unconfirmed_block: {e}")
+            return
 
         logging.debug(f"#block \n"
                       f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
@@ -690,12 +696,8 @@ class ChannelInnerTask:
 
         logging.info(f"block header : {block.header}")
 
-        block_dumped = util.block_dumps(block)
+        block_dumped = self._channel_service.block_manager.get_blockchain().block_dumps(block)
         return message_code.Response.success, block.header.height, blockchain.block_height, block_dumped
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def block_height_sync(self):
-        self._channel_service.state_machine.block_sync()
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
@@ -709,17 +711,23 @@ class ChannelInnerTask:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def announce_new_peer(self, peer_object_pickled, peer_target) -> None:
-        peer_object = pickle.loads(peer_object_pickled)
-        logging.debug("Add New Peer: " + str(peer_object.peer_id))
+    def announce_new_peer(self, peer_info_dumped, peer_target) -> None:
+        try:
+            peer_info = PeerInfo.load(peer_info_dumped)
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Invalid peer info. peer_target={peer_target}, exception={e}")
+            return
+
+        logging.debug("Add New Peer: " + str(peer_info.peer_id))
 
         peer_manager = self._channel_service.peer_manager
-        peer_manager.add_peer(peer_object)
+        peer_manager.add_peer(peer_info)
         # broadcast the new peer to the others for adding an audience
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
 
         logging.debug("Try save peer list...")
-        self._channel_service.save_peer_manager(peer_manager)
+        # self._channel_service.save_peer_manager(peer_manager)
         self._channel_service.show_peers()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
@@ -763,19 +771,19 @@ class ChannelInnerTask:
 
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
-            # self._channel_service.peer_manager.remove_peer(complained_leader_id)
-            self._channel_service.stop_leader_complain_timer()
             if next_new_leader == ChannelProperty().peer_id:
-                # Turn to Leader and Send Leader Complain Block
-                util.logger.spam(f"No I'm your father....")
-                self._channel_service.state_machine.turn_to_leader()
+                if self._channel_service.state_machine.state != "BlockGenerate":
+                    # Turn to Leader and Send Leader Complain Block
+                    util.logger.spam("No I'm your father....")
+                    self._channel_service.state_machine.turn_to_leader()
             else:
-                util.logger.spam(f"I'm your Jedi.")
+                util.logger.spam("I'm your Jedi.")
                 # TODO check new leader is alive.
                 # if not
                 #     self._channel_service.start_leader_complain_timer()
                 self._channel_service.state_machine.turn_to_peer()
             block_manager.epoch.prev_leader_id = next_new_leader
+            self._channel_service.reset_leader_complain_timer()
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):
@@ -907,7 +915,8 @@ class ChannelInnerTask:
         if precommit_block.height != last_block_height + 1:
             return message_code.Response.fail, "need block height sync.", b""
 
-        return message_code.Response.success, "success", pickle.dumps(precommit_block)
+        block_dumped = block_manager.get_blockchain().block_dumps(precommit_block)
+        return message_code.Response.success, "success", block_dumped
 
     @message_queue_task
     def get_tx_by_address(self, address, index):

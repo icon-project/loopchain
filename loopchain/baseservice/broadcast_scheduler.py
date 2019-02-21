@@ -70,7 +70,6 @@ class _Broadcaster:
             BroadcastCommand.CONNECT_TO_LEADER: self.__handler_connect_to_leader,
             BroadcastCommand.SUBSCRIBE: self.__handler_subscribe,
             BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
-            BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
         }
@@ -222,18 +221,6 @@ class _Broadcaster:
             del self.__audience[audience_target]
         except KeyError:
             logging.warning(f"Already deleted peer: {audience_target}")
-
-    def __handler_update_audience(self, audience_param):
-        util.logger.spam(f"broadcast_thread:__handler_update_audience audience_param({audience_param})")
-        peer_manager = PeerManager(self.__channel)
-        peer_list_data = pickle.loads(audience_param)
-        peer_manager.load(peer_list_data, False)
-
-        for peer_id in list(peer_manager.peer_list[conf.ALL_GROUP_ID]):
-            peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
-            if peer_each.target != self.__self_target:
-                logging.warning(f"broadcast thread peer_targets({peer_each.target})")
-                self.__handler_subscribe(peer_each.target)
 
     def __handler_broadcast(self, broadcast_param):
         # logging.debug("BroadcastThread received broadcast command")

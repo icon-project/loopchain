@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """gRPC service for Peer Outer Service"""
+
 import asyncio
 import copy
 import datetime
 from functools import partial
+
+import loopchain_pb2
 
 from loopchain.baseservice import ObjectManager, Monitor, TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest
 from loopchain.utils.message_queue import StubCollection
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
@@ -59,7 +59,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
 
-        if request.message == "check peer status by rs":
+        # FIXME : is need?
+        if conf.ENABLE_REP_RADIO_STATION and request.message == "check peer status by rs":
             channel_stub.sync_task().reset_timer(TimerService.TIMER_KEY_CONNECT_PEER)
 
         callback = partial(self.__status_update, request.channel)
@@ -76,7 +77,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         meta = json.loads(request.meta) if request.meta else {}
         if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
             util.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
-            channel_stub.sync_task().block_height_sync()
 
         status_json = json.dumps(status)
 
@@ -160,9 +160,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[request.channel]
         tx_list, next_index = channel_stub.sync_task().get_tx_by_address(address, index)
 
+        tx_list_dumped = json.dumps(tx_list).encode(encoding=conf.PEER_DATA_ENCODING)
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
-                                     object=pickle.dumps(tx_list))
+                                     object=tx_list_dumped)
 
     def __handler_reconnect_to_rs(self, request, context):
         logging.warning(f"RS lost peer info (candidate reason: RS restart)")
