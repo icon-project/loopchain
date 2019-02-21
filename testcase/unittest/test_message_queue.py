@@ -25,7 +25,6 @@ from earlgrey import MessageQueueStub, MessageQueueService, MessageQueueType, me
 from loopchain import configure as conf
 from loopchain.channel.channel_inner_service import ChannelInnerService, ChannelInnerStub
 from loopchain.peer import PeerInnerService, PeerInnerStub
-from loopchain.scoreservice.score_inner_service import ScoreInnerService, ScoreInnerStub
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 from testcase.unittest import test_util
@@ -185,7 +184,9 @@ class TestMessageQueue(unittest.TestCase):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(_run())
 
+    @unittest.skip
     def test_score_task(self):
+        # TODO This test needs to be updated as the ScoreService has been replaced by IconService
         route_key = conf.SCORE_QUEUE_NAME_FORMAT.format(
             score_package_name=conf.DEFAULT_SCORE_PACKAGE,
             channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL,
@@ -238,14 +239,6 @@ class TestMessageQueue(unittest.TestCase):
             channel_inner_service ._callback_connection_lost_callback = lambda conn: None
             await channel_inner_service.connect()
 
-            route_key = conf.SCORE_QUEUE_NAME_FORMAT.format(
-                score_package_name=conf.DEFAULT_SCORE_PACKAGE,
-                channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL,
-                amqp_key=conf.AMQP_KEY)
-            score_inner_service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
-            score_inner_service._callback_connection_lost_callback = lambda conn: None
-            await score_inner_service.connect()
-
             StubCollection().amqp_target = conf.AMQP_TARGET
             StubCollection().amqp_key = conf.AMQP_KEY
 
@@ -257,13 +250,8 @@ class TestMessageQueue(unittest.TestCase):
             result = await StubCollection().channel_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL].async_task().hello()
             self.assertEqual(result, 'channel_hello')
 
-            await StubCollection().create_score_stub(conf.LOOPCHAIN_DEFAULT_CHANNEL, conf.DEFAULT_SCORE_PACKAGE)
-            result = await StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL].async_task().hello()
-            self.assertEqual(result, 'score_hello')
-
             await peer_inner_service._connection.close()
             await channel_inner_service._connection.close()
-            await score_inner_service._connection.close()
 
         loop = asyncio.get_event_loop()
         loop.run_until_complete(_run())

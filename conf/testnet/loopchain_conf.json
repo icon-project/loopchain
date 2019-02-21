@@ -16,13 +16,12 @@
       "private_path": "./my_keystore.json"
     }
   },
-  "USE_EXTERNAL_SCORE": true,
-  "EXTERNAL_SCORE_RUN_IN_LAUNCHER": true,
+  "RUN_ICON_IN_LAUNCHER": true,
   "PORT_PEER": 7100,
   "AMQP_KEY": "7100",
-  "DEFAULT_STORAGE_PATH": ".storage_testnet/",
+  "DEFAULT_STORAGE_PATH": ".storage_testnet",
   "ALLOW_MAKE_EMPTY_BLOCK": false,
   "SUBSCRIBE_USE_HTTPS": true,
   "LOOPCHAIN_LOG_LEVEL": "INFO",
-  "LOG_FILE_LOCATION": "./log/testnet"
+  "LOG_FILE_LOCATION": "./log/testnet/icon_dex"
 }

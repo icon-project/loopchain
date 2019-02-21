@@ -133,11 +133,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
             channel_name = None
             for channel_name, channel_info in channels_info.items():
                 await StubCollection().create_channel_stub(channel_name)
-
-                if conf.USE_EXTERNAL_SCORE:
-                    await StubCollection().create_icon_score_stub(channel_name)
-                else:
-                    await StubCollection().create_score_stub(channel_name, channel_info['score_package'])
+                await StubCollection().create_icon_score_stub(channel_name)
 
             results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
 

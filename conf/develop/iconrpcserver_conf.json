@@ -13,9 +13,5 @@
       "maxBytes": 50000000
     }
   },
-  "channel": "icon_dex",
-  "port": 9000,
-  "amqpTarget": "127.0.0.1",
-  "amqpKey": "7100",
   "gunicornWorkerCount": 1
 }

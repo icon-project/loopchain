@@ -18,17 +18,15 @@ And also has insecure inner service for inner process modules."""
 import multiprocessing
 import signal
 import timeit
-import uuid
 from functools import partial
 
 from loopchain.baseservice import CommonSubprocess
 from loopchain.baseservice import StubManager, Monitor, ObjectManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService, CommonService
-from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.crypto.signature import Signer
+from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-from loopchain.rest_server import RestProxyServer
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
@@ -244,15 +242,10 @@ class PeerService:
         )
 
     def __run_rest_services(self, port):
-        if conf.ENABLE_REST_SERVICE and not conf.USE_EXTERNAL_REST:
-            if conf.USE_GUNICORN_HA_SERVER:
-                # Run web app on gunicorn in another process.
-                self.__rest_proxy_server = RestProxyServer(int(port))
-            else:
-                # Run web app as it is.
-                logging.debug(f'Launch Sanic RESTful server. '
-                              f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
-                self.__rest_service = RestService(int(port))
+        if conf.ENABLE_REST_SERVICE and conf.RUN_ICON_IN_LAUNCHER:
+            logging.debug(f'Launch Sanic RESTful server. '
+                          f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
+            self.__rest_service = RestService(int(port))
 
     def __init_key_by_channel(self):
         for channel in conf.CHANNEL_OPTION:

@@ -458,7 +458,7 @@ def init_level_db(level_db_identity, allow_rename_path=True):
     level_db = None
 
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
-        os.makedirs(conf.DEFAULT_STORAGE_PATH)
+        os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
     db_default_path = osp.join(conf.DEFAULT_STORAGE_PATH, 'db_' + level_db_identity)
     db_path = db_default_path

@@ -359,7 +359,7 @@ class ChannelService:
         )
 
     async def __run_score_container(self):
-        if not conf.USE_EXTERNAL_SCORE or conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
+        if conf.RUN_ICON_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
                             '--channel', ChannelProperty().name,
                             '--score_package', ChannelProperty().score_package]

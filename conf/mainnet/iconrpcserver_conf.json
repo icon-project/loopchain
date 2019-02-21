@@ -3,7 +3,7 @@
     "logger": "iconrpcserver",
     "colorLog": true,
     "level": "warning",
-    "filePath": "./log/mainnet/iconrpcserver.log",
+    "filePath": "./log/mainnet/icon_dex/iconrpcserver.log",
     "outputType": "console|file",
     "rotate": {
       "type": "period|bytes",
@@ -13,9 +13,6 @@
       "maxBytes": 50000000
     }
   },
-  "channel": "icon_dex",
-  "port": 9100,
-  "amqpTarget": "127.0.0.1",
-  "amqpKey": "7200",
-  "gunicornWorkerCount": 1
+  "gunicornWorkerCount": 1,
+  "redirectProtocol": "https"
 }

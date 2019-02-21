@@ -14,15 +14,12 @@
 """Wrapper for Stub to Peer Service"""
 
 import json
-import logging
-import pickle
 from json import JSONDecodeError
 
 from loopchain import configure as conf
 from loopchain.baseservice import StubManager
 from loopchain.components import SingletonMetaClass
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-import loopchain.utils as util
 
 
 class PeerServiceStub(metaclass=SingletonMetaClass):
