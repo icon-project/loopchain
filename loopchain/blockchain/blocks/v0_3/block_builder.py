@@ -99,9 +99,9 @@ class BlockBuilder(BaseBlockBuilder):
 
     def _build_transaction_root_hash(self):
         if not self.transactions:
-            return None
+            return Hash32.empty()
 
-        block_prover = BlockProver(self.transactions.keys(), BlockProverType.Transaction )
+        block_prover = BlockProver(self.transactions.keys(), BlockProverType.Transaction)
         return block_prover.get_proof_root()
 
     def build_receipt_root_hash(self):
@@ -113,7 +113,7 @@ class BlockBuilder(BaseBlockBuilder):
 
     def _build_receipt_root_hash(self):
         if not self.receipts:
-            return None
+            return Hash32.empty()
 
         block_prover = BlockProver(self.receipts, BlockProverType.Receipt)
         return block_prover.get_proof_root()
@@ -173,7 +173,6 @@ class BlockBuilder(BaseBlockBuilder):
             self.next_leader,
             self.complained
         )
-        leaves = (leaf for leaf in leaves if leaf is not None)
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
 

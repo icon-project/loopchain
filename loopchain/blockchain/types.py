@@ -31,6 +31,10 @@ class Bytes(bytes):
         """
         return cls(bytes(cls.size) if cls.size else 0)
 
+    @classmethod
+    def empty(cls):
+        return cls.new()
+
     def hex_xx(self):
         if self.prefix:
             return self.prefix + self.hex()
