@@ -164,6 +164,8 @@ class ConsensusSiever(ConsensusBase):
 
     def __add_block(self, block: Block, vote: Vote):
         self._block_manager.get_blockchain().add_block(block, vote)
+        self._block_manager.candidate_blocks.remove_block(block.header.hash)
+        self._blockchain.last_unconfirmed_block = None
         self._made_block_count += 1
 
     @staticmethod
