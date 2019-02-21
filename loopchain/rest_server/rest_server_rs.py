@@ -158,7 +158,7 @@ class Peer(HTTPMethodView):
 
             peer_manager = PeerManager(channel)
             peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.load(peer_list_data, False)
+            peer_manager.set_peer_list(peer_list_data)
 
             all_peer_list = []
             connected_peer_list = []
@@ -198,7 +198,7 @@ class Peer(HTTPMethodView):
 
             peer_manager = PeerManager(channel)
             peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.load(peer_list_data, False)
+            peer_manager.set_peer_list(peer_list_data)
 
             async_futures: List[grpc.Future] = []
             for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:

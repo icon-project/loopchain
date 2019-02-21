@@ -250,8 +250,8 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
 
             if peer_manager.get_peer_count() == 0:
                 util.logger.spam(f"try load peer_manager from db")
-                peer_manager = ObjectManager().rs_service.admin_manager.\
-                    load_peer_manager(channel_name)
+                # peer_manager = ObjectManager().rs_service.admin_manager.\
+                #    load_peer_manager(channel_name)
                 ObjectManager().rs_service.channel_manager.\
                     set_peer_manager(channel_name, peer_manager)
 
@@ -268,7 +268,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
             status, reason = message_code.get_response(message_code.Response.success)
 
         # save current peer_manager after ConnectPeer from new peer.
-        ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
+        # ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
 
         return loopchain_pb2.ConnectPeerReply(
             status=status,

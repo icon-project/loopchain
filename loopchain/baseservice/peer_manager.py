@@ -161,53 +161,12 @@ class PeerManager:
         """
         return self.peer_list_data.peer_order_list
 
-    # FIXME : not need
-    def dump(self):
-        """DB에 저장가능한 data dump를 제공한다.
+    def set_peer_list(self, peer_list_data: PeerListData):
+        """ update PeerList
 
-        :return: dump data of PeerList
-        """
-        return pickle.dumps(self.peer_list_data)
-
-    # FIXME : not need
-    def load(self, peer_list_data, do_reset=True):
-        """DB 로 부터 로드한 dump data 로 PeerList 를 복원한다.
-
-        :param peer_list_data: pickle 로 로드한 PeerList 의 dump 데이타
-        :param do_reset: RS 로부터 받았을 때에는 status 를 리셋하지 않는다.
+        :param peer_list_data: PeerListData
         """
         self.peer_list_data = peer_list_data
-        if do_reset:
-            self.__reset_peer_status()
-        self.__set_peer_object_list()
-
-        return self
-
-    def __set_peer_object_list(self):
-        """ peer_info_list convert peer_object_list"""
-
-        for group_id in list(self.peer_list_data.peer_info_list.keys()):
-            self.__peer_object_list[group_id] = self.__set_peer_object_list_in_group(group_id)
-
-    def __set_peer_object_list_in_group(self, group_id):
-        """peer_info_list[group_id] -> peer_object_list[group_id]
-
-        :param group_id: group_id
-        :return: {peer_id: PeerObject, ... }
-        """
-        def convert_peer_info_item_to_peer_item(item):
-            """(peer_id, PeerInfo) -> (peer_id, PeerObject)
-
-            :param item: (peer_id, PeerInfo)
-            :return: peer_id, PeerObject)
-            """
-            return item[0], PeerObject(self.__channel_name, item[1])
-        # PeerInfo List To PeerObjectList
-        # map(func, [a, b] ) -> [func(a), func(b)]
-        # dict([(a, b), (a1,b1)]) -> {a: b, a1, b1}
-        return dict(
-            map(convert_peer_info_item_to_peer_item, self.peer_list_data.peer_info_list[group_id].items())
-        )
 
     def get_peer_by_target(self, peer_target):
         for group_id in self.peer_list.keys():
@@ -253,7 +212,7 @@ class PeerManager:
         self.__init_peer_group(peer_info.group_id)
 
         util.logger.spam(f"peer_manager::add_peer try make PeerObject")
-        peer = PeerObject(self.__channel_name, peer_info)
+        peer_object = PeerObject(self.__channel_name, peer_info)
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
@@ -278,8 +237,8 @@ class PeerManager:
             self.peer_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer_info
             self.peer_order_list[peer_info.group_id][peer_info.order] = peer_info.peer_id
             self.peer_order_list[conf.ALL_GROUP_ID][peer_info.order] = peer_info.peer_id
-            self.__peer_object_list[peer_info.group_id][peer_info.peer_id] = peer
-            self.__peer_object_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer
+            self.__peer_object_list[peer_info.group_id][peer_info.peer_id] = peer_object
+            self.__peer_object_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer_object
 
         return peer_info.order
 
@@ -669,16 +628,16 @@ class PeerManager:
 
         return most_height_peer
 
-    def check_peer_status(self, group_id=None) -> list:
+    def check_peer_status(self, group_id=None):
         if group_id is None:
             group_id = conf.ALL_GROUP_ID
         nonresponse_peer_list = []
         check_leader_peer_count = 0
 
         for peer_id in list(self.__peer_object_list[group_id]):
-            peer_each = self.peer_list[group_id][peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_each, group_id)
-            peer_object_each = self.__peer_object_list[group_id][peer_id]
+            peer_info: PeerInfo = self.peer_list[group_id][peer_id]
+            stub_manager = self.get_peer_stub_manager(peer_info, group_id)
+            peer_object: PeerObject = self.__peer_object_list[group_id][peer_id]
 
             try:
                 response = stub_manager.call(
@@ -691,8 +650,8 @@ class PeerManager:
                 if response.code != message_code.Response.success:
                     raise Exception
 
-                peer_object_each.no_response_count_reset()
-                peer_each.status = PeerStatus.connected
+                peer_object.no_response_count_reset()
+                peer_info.status = PeerStatus.connected
                 peer_status = json.loads(response.meta)
 
                 if peer_status["state"] == "BlockGenerate":
@@ -707,24 +666,24 @@ class PeerManager:
                     'channel_name': self.__channel_name,
                     'data': {
                         'message': 'there is disconnected peer gRPC Exception: ' + str(e),
-                        'peer_id': peer_each.peer_id}})
+                        'peer_id': peer_info.peer_id}})
 
-                logging.warning("there is disconnected peer peer_id(" + peer_each.peer_id +
+                logging.warning("there is disconnected peer peer_id(" + peer_info.peer_id +
                                 ") gRPC Exception: " + str(e))
-                peer_object_each.no_response_count_up()
+                peer_object.no_response_count_up()
 
                 util.logger.spam(
                     f"peer_manager::check_peer_status "
-                    f"peer_id({peer_object_each.peer_info.peer_id}) "
-                    f"no response count up({peer_object_each.no_response_count})")
+                    f"peer_id({peer_object.peer_info.peer_id}) "
+                    f"no response count up({peer_object.no_response_count})")
 
-                if peer_object_each.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
-                    peer_each.status = PeerStatus.disconnected
-                    logging.debug(f"peer status update time: {peer_each.status_update_time}")
-                    logging.debug(f"this peer not respond {peer_each.peer_id}")
-                    nonresponse_peer_list.append(peer_each)
+                if peer_object.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
+                    peer_info.status = PeerStatus.disconnected
+                    logging.debug(f"peer status update time: {peer_info.status_update_time}")
+                    logging.debug(f"this peer not respond {peer_info.peer_id}")
+                    nonresponse_peer_list.append(peer_info)
 
-        return nonresponse_peer_list
+        logging.info(f"non response peer list : {nonresponse_peer_list}")
 
     def reset_peers(self, group_id, reset_action):
         if group_id is None:
@@ -892,12 +851,6 @@ class PeerManager:
         return sum(
             self.peer_list[group_id][peer_id].status == PeerStatus.connected for peer_id in self.peer_list[group_id]
         )
-
-    def __reset_peer_status(self):
-        for group_id in self.peer_list.keys():
-            for peer_id in self.peer_list[group_id]:
-                peer_each = self.peer_list[group_id][peer_id]
-                peer_each.status = PeerStatus.unknown
 
     def get_peers_for_debug(self, group_id=None):
         if group_id is None:

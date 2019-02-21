@@ -96,27 +96,20 @@ class RadioStationService:
         pass
 
     @property
-    def admin_manager(self):
+    def admin_manager(self) -> AdminManager:
         return self.__admin_manager
 
     @property
-    def channel_manager(self):
+    def channel_manager(self) -> ChannelManager:
         return self.__channel_manager
 
     @property
-    def common_service(self):
+    def common_service(self) -> CommonService:
         return self.__common_service
 
     @property
-    def timer_service(self):
+    def timer_service(self) -> TimerService:
         return self.__timer_service
-
-    def __broadcast_new_peer(self, peer_request):
-        """새로 들어온 peer 를 기존의 peer 들에게 announce 한다."""
-
-        logging.debug("Broadcast New Peer.... " + str(peer_request))
-        if self.__channel_manager is not None:
-            self.__channel_manager.broadcast(peer_request.channel, "AnnounceNewPeer", peer_request)
 
     def check_peer_status(self, channel):
         """service loop for status heartbeat check to peer list
@@ -127,15 +120,7 @@ class RadioStationService:
                          f"for reset Leader and delete no response Peer")
 
         peer_manager = self.__channel_manager.get_peer_manager(channel)
-        nonresponse_peer_list = peer_manager.check_peer_status()
-        logging.info(f"nonresponse_peer_list : {nonresponse_peer_list}")
-
-        # FIXME : not need?
-        # save current peer_manager after heartbeat to peers.
-        """
-        ObjectManager().rs_service.admin_manager.save_peer_manager(
-            channel, peer_manager)
-        """
+        peer_manager.check_peer_status()
 
     def __create_random_table(self, rand_seed: int) -> list:
         """create random_table using random_seed
@@ -166,26 +151,7 @@ class RadioStationService:
                     "order": peer_data['order']
                 }
                 logging.debug(f"register Peer : channel = {channel_name}, peer_info = {peer_info}")
-
-                # FIXME : not need?
-                """
-                util.logger.spam(f"before load peer_manager "
-                                 f"peer_count({peer_manager.get_peer_count()})")
-
-                if peer_manager.get_peer_count() == 0:
-                    util.logger.spam(f"try load peer_manager from db")
-                    peer_manager = self.admin_manager.load_peer_manager(channel_name)
-                    self.channel_manager.set_peer_manager(channel_name, peer_manager)
-
-                util.logger.spam(f"after load peer_manager "
-                                 f"peer_count({peer_manager.get_peer_count()})")
-                """
-
                 peer_manager.add_peer(peer_info)
-
-            # FIXME : not need?
-            # save current peer_manager after ConnectPeer from new peer.
-            # self.admin_manager.save_peer_manager(channel_name, peer_manager)
 
             if conf.ENABLE_RADIOSTATION_HEARTBEAT:
                 timer_key = f"{TimerService.TIMER_KEY_RS_HEARTBEAT}_{channel_name}"
