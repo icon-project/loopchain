@@ -227,9 +227,9 @@ SCORE_LOAD_RETRY_INTERVAL = 5.0  # seconds
 SCORE_GIT_LOAD_RETRY_TIMES = 5
 SCORE_GIT_LOAD_SLEEP = 2
 
-USE_EXTERNAL_SCORE = False
-USE_EXTERNAL_REST = False
-EXTERNAL_SCORE_RUN_IN_LAUNCHER = False
+USE_EXTERNAL_SCORE = True
+USE_EXTERNAL_REST = True
+RUN_ICON_IN_LAUNCHER = False
 
 
 ##################
@@ -245,7 +245,6 @@ DEFAULT_SSL_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
 REST_PROXY_DEFAULT_PORT = 5000
-USE_GUNICORN_HA_SERVER = False   # Use high aviability gunicorn web server.
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
 

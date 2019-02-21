@@ -27,7 +27,6 @@ from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
 from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
-from loopchain.scoreservice import ScoreService
 from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async
 
@@ -146,50 +145,44 @@ def start_as_rest_server_rs(args):
 
 
 def start_as_score(args):
-    # apply default configure values
+    from iconservice.icon_service import IconService
+    from iconservice.icon_config import default_icon_config
+    from iconcommons.icon_config import IconConfig
+    from iconcommons.logger import Logger
+
     channel = args.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
-    score_package = args.score_package or conf.DEFAULT_SCORE_PACKAGE
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
     conf_path = conf.CONF_PATH_ICONSERVICE_DEV
 
-    if conf.USE_EXTERNAL_SCORE:
-        if conf.EXTERNAL_SCORE_RUN_IN_LAUNCHER:
-            from iconservice.icon_service import IconService
-            from iconservice.icon_config import default_icon_config
-            from iconcommons.icon_config import IconConfig
-            from iconcommons.logger import Logger
+    if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
+        conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
+    elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
+        conf_path = conf.CONF_PATH_ICONSERVICE_MAINNET
 
-            if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
-                conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
-            elif args.radio_station_target == conf.URL_CITIZEN_MAINNET:
-                conf_path = conf.CONF_PATH_ICONSERVICE_MAINNET
+    network_type = conf_path.split('/')[-2]
+    with open(conf_path) as file:
+        load_conf = json.load(file)
 
-            network_type = conf_path.split('/')[-2]
-            with open(conf_path) as file:
-                load_conf = json.load(file)
+    additional_conf = {
+        "log": {
+            "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
+        },
+        "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
+        "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
+        "channel": channel,
+        "amqpKey": amqp_key,
+        "amqpTarget": amqp_target
+    }
 
-            additional_conf = {
-                "log": {
-                    "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
-                },
-                "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
-                "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
-                "channel": channel,
-                "amqpKey": amqp_key,
-                "amqpTarget": conf.AMQP_TARGET
-            }
+    icon_conf: IconConfig = IconConfig("", default_icon_config)
+    icon_conf.load()
+    icon_conf.update_conf(load_conf)
+    icon_conf.update_conf(additional_conf)
+    Logger.load_config(icon_conf)
 
-            icon_conf: IconConfig = IconConfig("", default_icon_config)
-            icon_conf.load()
-            icon_conf.update_conf(load_conf)
-            icon_conf.update_conf(additional_conf)
-            Logger.load_config(icon_conf)
-
-            icon_service = IconService()
-            icon_service.serve(config=icon_conf)
-    else:
-        ScoreService(channel, score_package, amqp_target, amqp_key).serve()
+    icon_service = IconService()
+    icon_service.serve(config=icon_conf)
 
 
 def start_as_rs(args):
