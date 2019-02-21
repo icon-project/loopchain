@@ -351,6 +351,22 @@ def get_private_ip():
         return get_private_ip3()
 
 
+def load_json_data(channel_manage_data_path: str):
+    try:
+        logging.debug(f"load_json_data() : try to load channel management"
+                      f" data from json file ({channel_manage_data_path})")
+        with open(channel_manage_data_path) as file:
+            json_data = json.load(file)
+
+        json_string = json.dumps(json_data).replace('[local_ip]', get_private_ip())
+        json_data = json.loads(json_string)
+        logging.info(f"loading channel info : {json_data}")
+        return json_data
+    except FileNotFoundError as e:
+        exit_and_msg(f"cannot open json file in ({channel_manage_data_path}): {e}")
+        raise
+
+
 def dict_to_binary(the_dict):
     return str.encode(json.dumps(the_dict))
 

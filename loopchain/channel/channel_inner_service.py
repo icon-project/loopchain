@@ -727,7 +727,7 @@ class ChannelInnerTask:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
 
         logging.debug("Try save peer list...")
-        self._channel_service.save_peer_manager(peer_manager)
+        # self._channel_service.save_peer_manager(peer_manager)
         self._channel_service.show_peers()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:

@@ -218,7 +218,7 @@ class ChannelService:
         #     self.__init_proposer(peer_id=peer_id)
         #     # load acceptor
         #     self.__init_acceptor(peer_id=peer_id)
-            
+
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
@@ -467,7 +467,7 @@ class ChannelService:
                 logging.error(f"Invalid peer list. Check your Radio Station. exception={e}")
                 return
 
-            self.__peer_manager.load(peer_list_data, False)
+            self.__peer_manager.set_peer_list(peer_list_data)
             peers, peer_list = self.__peer_manager.get_peers_for_debug()
             logging.debug("peer list update: " + peers)
 

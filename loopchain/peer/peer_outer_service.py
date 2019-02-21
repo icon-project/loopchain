@@ -59,7 +59,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
 
-        if request.message == "check peer status by rs":
+        # FIXME : is need?
+        if conf.ENABLE_REP_RADIO_STATION and request.message == "check peer status by rs":
             channel_stub.sync_task().reset_timer(TimerService.TIMER_KEY_CONNECT_PEER)
 
         callback = partial(self.__status_update, request.channel)

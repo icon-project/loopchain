@@ -22,8 +22,8 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import PeerStatus, PeerInfo, PeerManager, ObjectManager, \
-    TimerService, Timer
+from loopchain.baseservice import (PeerStatus, PeerInfo, PeerListData, PeerManager,
+                                   ObjectManager, TimerService, Timer)
 from loopchain.configure_default import KeyLoadType
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
@@ -243,20 +243,20 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         # RS need rebuild peer list from db.
         # For prevent leader split by RS.
         with self.__load_peer_manager_lock:
-            peer_manager = ObjectManager().rs_service.channel_manager.\
+            peer_manager = ObjectManager().rs_service.channel_manager. \
                 get_peer_manager(channel_name)
             util.logger.spam(f"before load peer_manager "
                              f"peer_count({peer_manager.get_peer_count()})")
 
             if peer_manager.get_peer_count() == 0:
                 util.logger.spam(f"try load peer_manager from db")
-                peer_manager = ObjectManager().rs_service.admin_manager.\
-                    load_peer_manager(channel_name)
-                ObjectManager().rs_service.channel_manager.\
+                # peer_manager = ObjectManager().rs_service.admin_manager.\
+                #    load_peer_manager(channel_name)
+                ObjectManager().rs_service.channel_manager. \
                     set_peer_manager(channel_name, peer_manager)
 
             util.logger.spam(f"after load peer_manager "
-                            f"peer_count({peer_manager.get_peer_count()})")
+                             f"peer_count({peer_manager.get_peer_count()})")
 
             peer_order = peer_manager.add_peer(peer)
 
@@ -268,7 +268,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
             status, reason = message_code.get_response(message_code.Response.success)
 
         # save current peer_manager after ConnectPeer from new peer.
-        ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
+        # ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
 
         return loopchain_pb2.ConnectPeerReply(
             status=status,
@@ -284,9 +284,14 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         :param context:
         :return: PeerList
         """
+        channel_manager = ObjectManager().rs_service.channel_manager
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
-        peer_manager: PeerManager = ObjectManager().rs_service.channel_manager.get_peer_manager(channel_name)
-        peer_list_dumped = peer_manager.peer_list_data.dump()
+
+        if channel_name in channel_manager.get_channel_list():
+            peer_manager: PeerManager = channel_manager.get_peer_manager(channel_name)
+            peer_list_dumped = peer_manager.peer_list_data.dump()
+        else:
+            peer_list_dumped = PeerListData().dump()
 
         return loopchain_pb2.PeerList(
             peer_list=peer_list_dumped
@@ -392,4 +397,3 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         channel_manager = ObjectManager().rs_service.channel_manager
 
         return loopchain_pb2.CommonReply(response_code=0, message="success")
-

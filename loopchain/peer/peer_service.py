@@ -169,10 +169,6 @@ class PeerService:
         return self.__group_id
 
     @property
-    def radio_station_target(self):
-        return self.__radio_station_target
-
-    @property
     def node_keys(self):
         return self.__node_keys
 
@@ -200,23 +196,13 @@ class PeerService:
                 logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
                 channels = json.loads(response.channel_infos)
             else:
-                logging.debug(f"try to load channel management data from json file ({conf.CHANNEL_MANAGE_DATA_PATH})")
-                try:
-                    with open(conf.CHANNEL_MANAGE_DATA_PATH) as file:
-                        json_data = json.load(file)
-                        json_string = json.dumps(json_data).replace('[local_ip]', util.get_private_ip())
-                        channels = json.loads(json_string)
+                channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
-                        if conf.ENABLE_CHANNEL_AUTH:
-                            filtered_channels = {channel: channels[channel] for channel in channels
-                                                 for peer in channels[channel]['peers']
-                                                 if self.__peer_id == peer['id']}
-                            channels = filtered_channels
-
-                        logging.info(f"loading channel info : {json_data}")
-                except FileNotFoundError as e:
-                    util.exit_and_msg(f"cannot open json file in ({conf.CHANNEL_MANAGE_DATA_PATH}): {e}")
-                    raise  # To make linter happy.
+                if conf.ENABLE_CHANNEL_AUTH:
+                    filtered_channels = {channel: channels[channel] for channel in channels
+                                         for peer in channels[channel]['peers']
+                                         if self.__peer_id == peer['id']}
+                    channels = filtered_channels
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()}
