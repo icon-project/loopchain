@@ -248,12 +248,13 @@ class TestBlock(unittest.TestCase):
         block_builder.height = 0
         block_builder.state_root_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
+        block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
         block_verifier.invoke_func = lambda b: (block, dummy_receipts)
-        block_verifier.verify(block, None, None, block.header.peer_id)
+        block_verifier.verify(block, None, None, block.header.peer_id, reps=block_builder.reps)
 
         block_serializer = BlockSerializer.new("0.3", tx_versioner)
         block_serialized = block_serializer.serialize(block)
