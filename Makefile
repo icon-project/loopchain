@@ -76,3 +76,16 @@ clean-db:
 	@echo "Cleaning up all DB and logs..."
 	rm -rf .storage*
 	rm -rf log/
+
+# build
+build:
+	@if [ "$$(python -c 'import sys; print(sys.version_info[0])')" != 3 ]; then\
+		@echo "The script should be run on python3.";\
+		exit -1;\
+	fi
+
+	pip3 install -r requirements.txt
+	pip3 install wheel
+	rm -rf build dist/*.whl *.egg-info
+	python3 setup.py bdist_wheel
+	rm -rf build *.egg-info
