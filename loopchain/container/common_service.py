@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """Class for managing Peer and Radio station """
 
 import logging
@@ -24,9 +25,6 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import CommonThread, ObjectManager
 from loopchain.tools.grpc_helper import GRPCHelper
-
-
-# Changing the import location will cause a pickle error.
 
 
 class CommonService(CommonThread):

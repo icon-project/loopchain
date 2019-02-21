@@ -11,11 +11,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """ A class for gRPC service of Radio station """
+
 import json
 import logging
 import pickle
 import threading
+
+import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -23,9 +27,6 @@ from loopchain.baseservice import PeerStatus, PeerInfo, PeerManager, ObjectManag
     TimerService, Timer
 from loopchain.configure_default import KeyLoadType
 from loopchain.protos import loopchain_pb2_grpc, message_code
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class OuterService(loopchain_pb2_grpc.RadioStationServicer):
