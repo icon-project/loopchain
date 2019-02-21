@@ -12,19 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """gRPC service for Peer Outer Service"""
+
 import asyncio
 import copy
 import datetime
 from functools import partial
+
+import loopchain_pb2
 
 from loopchain.baseservice import ObjectManager, Monitor, TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest
 from loopchain.utils.message_queue import StubCollection
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):

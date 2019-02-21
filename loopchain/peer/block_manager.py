@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A management class for blockchain."""
+
 import json
 import logging
 import queue
@@ -41,7 +42,6 @@ from loopchain.utils.message_queue import StubCollection
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
 
-# Changing the import location will cause a pickle error.
 import loopchain_pb2
 
 

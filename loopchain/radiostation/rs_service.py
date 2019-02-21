@@ -17,8 +17,10 @@ import logging
 import multiprocessing
 import random
 import signal
-import timeit
 import time
+import timeit
+
+import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -29,9 +31,6 @@ from loopchain.protos import loopchain_pb2_grpc
 from loopchain.radiostation import OuterService, AdminService, AdminManager
 from loopchain.utils import loggers
 from .certificate_authorization import CertificateAuthorization
-
-# Changing the import location will cause a pickle error.
-import loopchain_pb2
 
 
 class RadioStationService:
