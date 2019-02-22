@@ -340,16 +340,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        util.logger.notice(f"ComplainLeader "
-                           f"height({request.block_height}) complained_peer({request.complained_leader_id})")
+        util.logger.notice(f"ComplainLeader {request.complain_vote}")
 
         channel_stub = StubCollection().channel_stubs[channel]
         channel_stub.sync_task().complain_leader(
-            complained_leader_id=request.complained_leader_id,
-            new_leader_id=request.new_leader_id,
-            block_height=request.block_height,
-            peer_id=request.peer_id,
-            group_id=request.group_id
+            vote_dumped=request.complain_vote,
         )
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -652,14 +647,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash.hex()})")
+        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.vote})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        channel_stub.sync_task().vote_unconfirmed_block(
-            peer_id=request.peer_id,
-            group_id=request.group_id,
-            block_hash=request.block_hash,
-            vote_code=request.vote_code)
+        channel_stub.sync_task().vote_unconfirmed_block(request.vote)
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 

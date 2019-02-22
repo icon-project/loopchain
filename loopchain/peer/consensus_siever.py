@@ -67,9 +67,9 @@ class ConsensusSiever(ConsensusBase):
     def is_running(self):
         return self.__block_generation_timer.is_running
 
-    def vote(self, vote_block_hash, vote_code, peer_id, group_id):
+    def vote(self, vote):
         if self._loop:
-            self.__put_vote((vote_block_hash, vote_code, peer_id, group_id))
+            self.__put_vote(vote)
             return
 
         util.logger.debug("Cannot vote before starting consensus.")
@@ -89,7 +89,7 @@ class ConsensusSiever(ConsensusBase):
         return block_builder.build()
 
     async def __add_block(self, block: Block):
-        vote = self._block_manager.candidate_blocks.get_vote(block.header.hash)
+        vote = self._block_manager.candidate_blocks.get_votes(block.header.hash)
         vote_result = await self._wait_for_voting(block)
         if not vote_result:
             raise NotEnoughVotes
@@ -174,7 +174,7 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
-            self._block_manager.vote_unconfirmed_block(candidate_block.header.hash, True)
+            self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self._blockchain.last_unconfirmed_block = candidate_block
 
@@ -203,9 +203,10 @@ class ConsensusSiever(ConsensusBase):
         """
         # util.logger.notice(f"_wait_for_voting block({candidate_block.header.hash})")
         while True:
-            vote = self._block_manager.candidate_blocks.get_vote(candidate_block.header.hash)
-            vote_result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
-            if vote_result:
+            votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
+            util.logger.info(f"Votes : {votes}")
+            vote_result = votes.get_majority()
+            if vote_result is not None or votes.completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote_result
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
@@ -216,7 +217,7 @@ class ConsensusSiever(ConsensusBase):
                 if timeout < 0:
                     raise asyncio.TimeoutError
 
-                if await asyncio.wait_for(self._vote_queue.get(), timeout=timeout) is None:  # sentinel
+                if not await asyncio.wait_for(self._vote_queue.get(), timeout=timeout):  # sentinel
                     return None
 
             except asyncio.TimeoutError:

@@ -15,14 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Vote Object"""
+import os
 import logging
 import unittest
-
+import hashlib
 import testcase.unittest.test_util as test_util
-from loopchain import configure as conf
-from loopchain.baseservice import PeerManager, PeerInfo
-from loopchain.blockchain.vote import Vote
-from loopchain.protos import loopchain_pb2
+
+from loopchain.crypto.signature import Signer
+from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
+from loopchain.blockchain.votes import vote, votes
+from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes, LeaderVote, LeaderVotes
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
@@ -30,126 +32,224 @@ loggers.update_preset()
 
 
 class TestVote(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.signers = [Signer.from_prikey(os.urandom(32)) for _ in range(100)]
+        cls.reps = [ExternalAddress.fromhex_address(signer.address) for signer in cls.signers]
+
     def setUp(self):
         test_util.print_testname(self._testMethodName)
 
-    def tearDown(self):
-        pass
+    def test_block_vote(self):
+        signer = self.signers[0]
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+        block_vote.verify()
 
-    def __make_peer_info(self, peer_id, group_id):
-        peer_info = loopchain_pb2.PeerRequest()
-        peer_info.peer_target = peer_id + "_target"
-        peer_info.peer_type = loopchain_pb2.PEER
-        peer_info.peer_id = peer_id
-        peer_info.group_id = group_id
-        return peer_info
+        origin = f"icx_vote.blockHash.{block_vote.block_hash.hex_0x()}.blockHeight.{hex(block_vote.block_height)}."
+        origin += f"rep.{block_vote.rep.hex_hx()}.timestamp.{hex(block_vote.timestamp)}"
 
-    def test_vote_init_from_audience(self):
-        # GIVEN
-        peer_info1 = self.__make_peer_info("peerid-1", "groupid-1")
-        peer_info2 = self.__make_peer_info("peerid-2", "groupid-2")
-        audience = {peer_info1.peer_id: peer_info1, peer_info2.peer_id: peer_info2}
+        origin_data = block_vote.to_origin_data(**block_vote.origin_args())
+        self.assertEqual(origin, vote.hash_generator.generate_salted_origin(origin_data))
 
-        # WHEN
-        vote = Vote("block_hash", audience)
-        logging.debug("votes: " + str(vote.votes))
+        self.assertEqual(Hash32(hashlib.sha3_256(origin.encode('utf-8')).digest()),
+                         block_vote.to_hash(**block_vote.origin_args()))
 
-        # THEN
-        self.assertTrue(vote.check_vote_init(audience))
+    def test_block_votes_true(self):
+        ratio = 0.67
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
-    def test_vote_init_from_peer_list(self):
-        # GIVEN
-        peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        self.__add_peer_to_peer_manager(peer_manager, 2)
+        for i, signer in enumerate(self.signers):
+            if i % 4 <= 2:
+                block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            else:
+                block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_votes.add_vote(block_vote)
 
-        # WHEN
-        vote = Vote("block_hash", peer_manager)
-        logging.debug("votes: " + str(vote.votes))
+        logging.info(block_votes)
+        self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
+        self.assertEqual(block_votes.get_majority(), True)
 
-        # THEN
-        self.assertTrue(vote.check_vote_init(peer_manager))
+    def test_block_votes_false(self):
+        ratio = 0.67
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
-    def __add_peer_to_peer_manager(self, peer_manager: PeerManager, number_of_peer):
-        for i in range(1, number_of_peer + 1):
-            number = str(i)
-            peer_data = PeerInfo("peerid-" + number, "groupid-" + number, "peerid-" + number + "_target")
-            peer_manager.add_peer(peer_data)
+        for i, signer in enumerate(self.signers):
+            if i % 4 == 0:
+                block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            else:
+                block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_votes.add_vote(block_vote)
 
-    def test_vote_init_from_different_source(self):
-        # GIVEN
-        peer_info1 = self.__make_peer_info("peerid-1", "groupid-1")
-        peer_info2 = self.__make_peer_info("peerid-2", "groupid-2")
-        audience = {peer_info1.peer_id: peer_info1, peer_info2.peer_id: peer_info2}
-        peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        self.__add_peer_to_peer_manager(peer_manager, 2)
+        logging.info(block_votes)
+        self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
+        self.assertEqual(block_votes.get_majority(), False)
 
-        # WHEN
-        vote = Vote("block_hash", audience)
-        logging.debug("votes: " + str(vote.votes))
+    def test_block_votes_completed(self):
+        ratio = 0.67
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
-        # THEN
-        self.assertTrue(vote.check_vote_init(peer_manager))
+        signers = list(enumerate(self.signers))
+        for i, signer in signers[:25]:
+            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            block_votes.add_vote(block_vote)
 
-    @unittest.skip("BVS")
-    def test_add_vote(self):
-        # GIVEN
-        peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        self.__add_peer_to_peer_manager(peer_manager, 3)
-        peer_manager.add_peer(PeerInfo("peerid-4", "groupid-3", "peerid-4_target"))
-        peer_manager.add_peer(PeerInfo("peerid-5", "groupid-3", "peerid-5_target"))
+        logging.info(block_votes)
+        self.assertEqual(block_votes.completed(), False)
+        self.assertEqual(block_votes.get_majority(), None)
 
-        vote = Vote("block_hash", peer_manager)
-        logging.debug("votes: " + str(vote.votes))
+        for i, signer in signers[25:50]:
+            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            block_votes.add_vote(block_vote)
 
-        # WHEN
-        vote.add_vote("peerid-1", None)
-        self.assertFalse(vote.get_result("block_hash", 0.51))
+        logging.info(block_votes)
+        self.assertEqual(block_votes.completed(), False)
+        self.assertEqual(block_votes.get_majority(), None)
 
-        # THEN
-        vote.add_vote("peerid-2", None)
-        self.assertTrue(vote.get_result("block_hash", 0.51))
+        for i, signer in signers[50:75]:
+            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_votes.add_vote(block_vote)
 
-    def test_add_vote_fail_before_add_peer(self):
-        # GIVEN
-        peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        self.__add_peer_to_peer_manager(peer_manager, 3)
-        peer_manager.add_peer(PeerInfo("peerid-4", "groupid-3", "peerid-4_target"))
-        peer_manager.add_peer(PeerInfo("peerid-5", "groupid-3", "peerid-5_target"))
+        logging.info(block_votes)
+        self.assertEqual(block_votes.completed(), False)
+        self.assertEqual(block_votes.get_majority(), None)
 
-        vote = Vote("block_hash", peer_manager)
-        logging.debug("votes: " + str(vote.votes))
+        for i, signer in signers[75:90]:
+            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_votes.add_vote(block_vote)
 
-        # WHEN
-        vote.add_vote("peerid-1", None)
-        vote.add_vote("peerid-4", None)
-        ret1 = vote.add_vote("peerid-1", None)
-        ret2 = vote.add_vote("peerid-9", None)
-        self.assertFalse(ret1)
-        self.assertFalse(ret2)
+        logging.info(block_votes)
+        self.assertEqual(block_votes.completed(), True)
+        self.assertEqual(block_votes.get_majority(), None)
 
-        # THEN
-        ret = vote.get_result_detail("block_hash", 0.51)
-        self.assertEqual(ret.total_peer_count, 5)
+    def test_block_invalid_vote(self):
+        ratio = 0.67
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
-    @unittest.skip("BVS")
-    def test_fail_vote(self):
-        # GIVEN
-        peer_manager = PeerManager(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        self.__add_peer_to_peer_manager(peer_manager, 3)
-        peer_manager.add_peer(PeerInfo("peerid-4", "groupid-3", "peerid-4_target"))
-        peer_manager.add_peer(PeerInfo("peerid-5", "groupid-3", "peerid-5_target"))
+        invalid_block_vote = BlockVote.new(self.signers[0].private_key, 0, 1, block_hash)
+        self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        vote = Vote("block_hash", peer_manager)
-        logging.debug("votes: " + str(vote.votes))
+        invalid_block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, Hash32(os.urandom(32)))
+        self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        # WHEN
-        vote.add_vote("peerid-1", conf.TEST_FAIL_VOTE_SIGN)
-        vote.add_vote("peerid-4", conf.TEST_FAIL_VOTE_SIGN)
-        vote.add_vote("peerid-5", conf.TEST_FAIL_VOTE_SIGN)
-        vote.get_result("block_hash", 0.51)
+        invalid_block_vote = BlockVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
+                                       block_height=0, block_hash=block_hash)
+        self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        # THEN
-        self.assertTrue(vote.is_failed_vote("block_hash", 0.51))
+        block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, block_hash)
+        block_votes.add_vote(block_vote)
+        duplicate_block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, Hash32.empty())
+        self.assertRaises(votes.VoteDuplicateError, block_votes.add_vote, duplicate_block_vote)
+
+    def test_leader_vote(self):
+        signer = self.signers[0]
+        leader_vote = LeaderVote.new(signer.private_key, 0, 0, self.reps[0], self.reps[1])
+        leader_vote.verify()
+
+        origin = f"icx_vote.blockHeight.{hex(leader_vote.block_height)}."
+        origin += f"newLeader.{leader_vote.new_leader.hex_hx()}.oldLeader.{leader_vote.old_leader.hex_hx()}."
+        origin += f"rep.{leader_vote.rep.hex_hx()}.timestamp.{hex(leader_vote.timestamp)}"
+
+        origin_data = leader_vote.to_origin_data(**leader_vote.origin_args())
+        self.assertEqual(origin, vote.hash_generator.generate_salted_origin(origin_data))
+
+        self.assertEqual(Hash32(hashlib.sha3_256(origin.encode('utf-8')).digest()),
+                         leader_vote.to_hash(**leader_vote.origin_args()))
+
+    def test_leader_votes(self):
+        ratio = 0.67
+        old_leader = self.reps[0]
+        new_leaders = [
+            self.reps[1],
+            self.reps[2],
+            self.reps[3],
+            self.reps[4]
+        ]
+
+        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+        for i, (rep, signer) in enumerate(zip(self.reps, self.signers)):
+            mod = i % 10
+            if mod < 1:
+                new_leader = new_leaders[1]
+            elif mod < 2:
+                new_leader = new_leaders[2]
+            elif mod < 3:
+                new_leader = new_leaders[3]
+            else:
+                new_leader = new_leaders[0]
+            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_votes.add_vote(leader_vote)
+
+        logging.info(leader_votes)
+        self.assertEqual(leader_votes.completed(), True)
+        self.assertEqual(leader_votes.get_majority(), new_leaders[0])
+
+    def test_leader_votes_completed(self):
+        ratio = 0.67
+        old_leader = self.reps[0]
+        new_leaders = [
+            self.reps[1],
+            self.reps[2]
+        ]
+
+        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+        for i, (rep, signer) in enumerate(zip(self.reps[:25], self.signers[:25])):
+            new_leader = new_leaders[0]
+            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_votes.add_vote(leader_vote)
+
+        self.assertEqual(leader_votes.completed(), False)
+        self.assertEqual(leader_votes.get_majority(), None)
+
+        for i, (rep, signer) in enumerate(zip(self.reps[25:50], self.signers[25:50])):
+            new_leader = new_leaders[1]
+            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_votes.add_vote(leader_vote)
+
+        self.assertEqual(leader_votes.completed(), False)
+        self.assertEqual(leader_votes.get_majority(), None)
+
+        for i, (rep, signer) in enumerate(zip(self.reps[50:75], self.signers[50:75])):
+            new_leader = new_leaders[0]
+            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_votes.add_vote(leader_vote)
+
+        self.assertEqual(leader_votes.completed(), False)
+        self.assertEqual(leader_votes.get_majority(), None)
+
+        for i, (rep, signer) in enumerate(zip(self.reps[75:90], self.signers[75:90])):
+            new_leader = new_leaders[1]
+            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_votes.add_vote(leader_vote)
+
+        self.assertEqual(leader_votes.completed(), True)
+        self.assertEqual(leader_votes.get_majority(), None)
+
+    def test_leader_invalid_vote(self):
+        ratio = 0.67
+
+        old_leader = self.reps[0]
+        new_leader = self.reps[1]
+        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+
+        invalid_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 1, old_leader, new_leader)
+        self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
+
+        invalid_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, new_leader, new_leader)
+        self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
+
+        invalid_leader_vote = LeaderVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
+                                         block_height=0, new_leader=new_leader, old_leader=old_leader)
+        self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
+
+        leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, old_leader, new_leader)
+        leader_votes.add_vote(leader_vote)
+        duplicate_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, old_leader, self.reps[2])
+        self.assertRaises(votes.VoteDuplicateError, leader_votes.add_vote, duplicate_leader_vote)
 
 
 if __name__ == '__main__':
