@@ -1,11 +1,10 @@
 import time
 from typing import TYPE_CHECKING
-from . import Transaction, HASH_SALT
-from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
+from loopchain.blockchain.transactions import TransactionBuilder as BaseTransactionBuilder
+from loopchain.blockchain.transactions.v2 import Transaction, HASH_SALT
 
 if TYPE_CHECKING:
-    from ... import Address
+    from loopchain.blockchain.types import Address
 
 
 ICX_FEE = int(0.01 * 10**18)

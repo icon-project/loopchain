@@ -1,9 +1,8 @@
 from collections import OrderedDict
 
 from dataclasses import dataclass
-
-from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, _dict__str__
-from ... import Hash32, Address, Signature, ExternalAddress
+from loopchain.blockchain.types import Hash32, Address, Signature, ExternalAddress
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, _dict__str__
 
 
 @dataclass(frozen=True)

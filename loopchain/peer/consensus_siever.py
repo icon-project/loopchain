@@ -19,7 +19,10 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, Block, Epoch, NotEnoughVotes
+from loopchain.blockchain import Epoch
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.exception import NotEnoughVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 

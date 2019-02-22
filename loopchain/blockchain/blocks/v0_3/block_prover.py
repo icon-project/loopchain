@@ -1,9 +1,9 @@
 import hashlib
 from typing import Union, Iterable
+from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.merkle import MerkleTree
-from . import receipt_hash_generator
-from .. import BlockProver as BaseBlockProver, BlockProverType
-from ... import Hash32
+from loopchain.blockchain.blocks import BlockProver as BaseBlockProver, BlockProverType
+from loopchain.blockchain.blocks.v0_3 import receipt_hash_generator
 
 
 class BlockProver(BaseBlockProver):

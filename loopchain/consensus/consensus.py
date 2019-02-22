@@ -21,7 +21,8 @@ from collections import namedtuple
 from loopchain import configure as conf
 from loopchain import utils as util
 
-from loopchain.blockchain import Block, TransactionStatusInQueue
+from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.consensus import Publisher, Epoch, EpochStatus
 from loopchain.baseservice import ObjectManager, CommonThread, Timer, BlockGenerationScheduler

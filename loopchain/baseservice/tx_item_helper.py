@@ -16,7 +16,7 @@
 import json
 import sys
 
-from loopchain.blockchain import Transaction, TransactionVersioner, TransactionSerializer
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.protos import loopchain_pb2
 
 

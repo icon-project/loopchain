@@ -2,9 +2,10 @@ import time
 from functools import reduce
 from operator import or_
 from typing import List
-from . import BlockHeader, BlockBody, BlockProver
-from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
-from ... import ExternalAddress, Hash32, BloomFilter, TransactionVersioner
+from loopchain.blockchain.types import ExternalAddress, Hash32, BloomFilter
+from loopchain.blockchain.transactions import TransactionVersioner
+from loopchain.blockchain.blocks import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
+from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockProver
 
 
 class BlockBuilder(BaseBlockBuilder):
