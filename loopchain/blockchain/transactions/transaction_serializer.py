@@ -3,8 +3,7 @@ from typing import TYPE_CHECKING
 from loopchain.crypto.hashing import build_hash_generator
 
 if TYPE_CHECKING:
-    from . import TransactionVersioner
-    from .transaction import Transaction
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionSerializer(ABC):

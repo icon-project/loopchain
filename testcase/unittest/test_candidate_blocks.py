@@ -19,8 +19,9 @@ import unittest
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import BlockBuilder, CandidateBlocks, TransactionVersioner
-from loopchain.blockchain import CandidateBlock
+from loopchain.blockchain.blocks import BlockBuilder
+from loopchain.blockchain.transactions import TransactionVersioner
+from loopchain.blockchain import CandidateBlock, CandidateBlocks
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)

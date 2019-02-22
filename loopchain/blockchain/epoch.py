@@ -20,8 +20,11 @@ import traceback
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionStatusInQueue, TransactionVerifier
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.blockchain.vote import Vote
+from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.blocks import BlockBuilder
+from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 
 
 class Epoch:

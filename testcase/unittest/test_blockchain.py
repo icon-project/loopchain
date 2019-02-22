@@ -26,7 +26,7 @@ import loopchain.utils as util
 import testcase.unittest.test_util as test_util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, ScoreResponse
-from loopchain.blockchain import Block
+from loopchain.blockchain.blocks import Block
 from loopchain.utils import loggers
 from testcase.unittest.mock_peer import set_mock
 

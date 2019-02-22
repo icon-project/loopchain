@@ -1,10 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from .. import BlockVersionNotMatch
-from ..blocks import Block
+from loopchain.blockchain.blocks import Block
 
 if TYPE_CHECKING:
-    from .. import TransactionVersioner
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockSerializer(ABC):
@@ -17,8 +16,8 @@ class BlockSerializer(ABC):
 
     def serialize(self, block: 'Block') -> dict:
         if block.header.version != self.version:
-            raise BlockVersionNotMatch(block.header.version, self.version,
-                                       "The block of this version cannot be serialized by the serializer.")
+            raise RuntimeError(f"The block of this version cannot be serialized by the serializer. "
+                               f"{block.header.version} != {self.version}")
 
         return self._serialize(block)
 
@@ -28,8 +27,9 @@ class BlockSerializer(ABC):
 
     def deserialize(self, block_dumped: dict) -> 'Block':
         if block_dumped['version'] != self.version:
-            raise BlockVersionNotMatch(block_dumped['version'], self.version,
-                                       "The block of this version cannot be deserialized by the serializer.")
+            raise RuntimeError(f"The block of this version cannot be deserialized by the serializer. "
+                               f"{block_dumped['version']} != {self.version}")
+
         return self._deserialize(block_dumped)
 
     def _deserialize(self, json_data):

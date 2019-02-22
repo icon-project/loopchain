@@ -18,7 +18,12 @@ import threading
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Block, Vote, Hash32
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.vote import Vote
+from loopchain.blockchain.blocks import Block
+
+
+__all__ = ("CandidateBlockSetBlock", "CandidateBlock", "CandidateBlocks")
 
 
 class CandidateBlockSetBlock(Exception):

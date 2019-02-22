@@ -25,10 +25,13 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
-    ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
+from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
+    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
+from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
+from loopchain.blockchain.transactions import Transaction
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
+    ConfirmInfoInvalid, ConfirmInfoInvalidNeedBlockSync, ConfirmInfoInvalidAddedBlock
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever

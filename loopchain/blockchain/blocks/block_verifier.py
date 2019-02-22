@@ -17,11 +17,13 @@ from typing import TYPE_CHECKING, Callable
 
 from loopchain import utils
 from loopchain.crypto.signature import SignVerifier
-from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
+from loopchain.blockchain.exception import BlockVersionNotMatch
+from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.transactions import TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import Block, BlockHeader
-    from .. import TransactionVersioner
+    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockVerifier(ABC):

@@ -1,4 +1,4 @@
-from . import genesis, v2, v3
+from loopchain.blockchain.transactions import genesis, v2, v3
 
 
 class TransactionVersioner:
