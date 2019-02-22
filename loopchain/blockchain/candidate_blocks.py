@@ -14,12 +14,13 @@
 """Candidate Blocks"""
 import logging
 import threading
-
 import loopchain.utils as util
+
+from typing import Dict
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain.types import Hash32
-from loopchain.blockchain.vote import Vote
+from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
 from loopchain.blockchain.blocks import Block
 
 
@@ -31,29 +32,33 @@ class CandidateBlockSetBlock(Exception):
 
 
 class CandidateBlock:
-    def __init__(self, block_hash: Hash32):
+    def __init__(self, block_hash: Hash32, block_height: int):
         """Recommend use factory methods(from_*) instead direct this.
 
         """
         if ObjectManager().channel_service:
-            audience = ObjectManager().channel_service.peer_manager
+            audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
         else:
-            audience = None
+            audience = {}
 
         self.start_time = util.get_time_stamp()  # timestamp
         self.hash = block_hash
-        self.vote = Vote(block_hash.hex(), audience)
+        self.height = block_height
+
+        rep_info = sorted(audience.values(), key=lambda peer: peer.order)
+        reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
+        self.votes = BlockVotes(reps, conf.VOTING_RATIO, block_height, block_hash)
+
         self.__block = None
 
     @classmethod
-    def from_hash(cls, block_hash: Hash32):
-        candidate_block = CandidateBlock(block_hash)
-        candidate_block.hash = block_hash
+    def from_hash(cls, block_hash: Hash32, block_height: int):
+        candidate_block = CandidateBlock(block_hash, block_height)
         return candidate_block
 
     @classmethod
     def from_block(cls, block: Block):
-        candidate_block = CandidateBlock(block.header.hash)
+        candidate_block = CandidateBlock(block.header.hash, block.header.height)
         candidate_block.block = block
         return candidate_block
 
@@ -72,19 +77,18 @@ class CandidateBlock:
 
 class CandidateBlocks:
     def __init__(self):
-        self.blocks = {}  # {block_hash(Hash32) : CandidateBlock}
+        self.blocks: Dict[Hash32, CandidateBlock] = {}
         self.__blocks_lock = threading.Lock()
 
-    def add_vote(self, block_hash: Hash32, group_id, peer_id, vote):
+    def add_vote(self, vote: BlockVote):
         with self.__blocks_lock:
-            if block_hash not in self.blocks:
+            if vote.block_hash not in self.blocks:
                 # util.logger.debug(f"-------------block_hash({block_hash}) self.blocks({self.blocks})")
-                self.blocks[block_hash] = CandidateBlock.from_hash(block_hash)
-
-        self.blocks[block_hash].vote.add_vote(peer_id, vote)
+                self.blocks[vote.block_hash] = CandidateBlock.from_hash(vote.block_hash, vote.block_height)
+        self.blocks[vote.block_hash].votes.add_vote(vote)
 
     def get_vote(self, block_hash):
-        return self.blocks[block_hash].vote
+        return self.blocks[block_hash].votes
 
     def add_block(self, block: Block):
         with self.__blocks_lock:
@@ -93,6 +97,7 @@ class CandidateBlocks:
             else:
                 self.blocks[block.header.hash].block = block
 
+    # height 정보가 있어서 height를 통채로 날려야 할 것 같다
     def remove_block(self, block_hash):
         if self.blocks[block_hash].block:
             prev_block_hash = self.blocks[block_hash].block.header.prev_hash

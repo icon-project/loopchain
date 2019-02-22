@@ -16,20 +16,17 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
 import logging
 import traceback
-
-import loopchain.utils as util
-from loopchain import configure as conf
+from typing import Union
+from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager
-from loopchain.channel.channel_property import ChannelProperty
-from loopchain.blockchain.vote import Vote
-from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
+from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress, Hash32
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
+from loopchain.channel.channel_property import ChannelProperty
 
 
 class Epoch:
-    COMPLAIN_VOTE_HASH = "complain_vote_hash_for_reuse_Vote_class"
-
     def __init__(self, block_manager, leader_id=None):
         if block_manager.get_blockchain().last_block:
             self.height = block_manager.get_blockchain().last_block.header.height + 1
@@ -43,7 +40,7 @@ class Epoch:
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
         # But now! only collect leader complain votes.
         self.__candidate_blocks = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+        self.__complain_votes: LeaderVotes = None
         self.complained_result = None
 
     @staticmethod
@@ -52,6 +49,15 @@ class Epoch:
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
 
+    def new_votes(self):
+        audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
+        rep_info = sorted(audience.values(), key=lambda peer: peer.order)
+        reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
+        self.__complain_votes = LeaderVotes(reps,
+                                            conf.LEADER_COMPLAIN_RATIO,
+                                            self.height,
+                                            ExternalAddress.fromhex_address(self.leader_id))
+
     def set_epoch_leader(self, leader_id, complained=False):
         util.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
@@ -59,27 +65,30 @@ class Epoch:
             self.complained_result = self.complain_result()
         else:
             self.complained_result = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+        self.new_votes()
 
-    def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
-        util.logger.debug(f"add_complain complain_leader_id({complained_leader_id}), "
-                          f"new_leader_id({new_leader_id}), "
-                          f"block_height({block_height}), "
-                          f"peer_id({peer_id})")
-        self.__complain_vote.add_vote(peer_id, new_leader_id)
+    def add_complain(self, leader_vote: LeaderVote):
+        util.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
+                          f"new_leader_id({leader_vote.new_leader}), "
+                          f"block_height({leader_vote.block_height}), "
+                          f"peer_id({leader_vote.rep})")
+        self.__complain_votes.add_vote(leader_vote)
 
-    def complain_result(self) -> str:
+    def complain_result(self) -> Union[str, None]:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
-        util.logger.debug(f"complain_result vote_result({vote_result})")
-        return vote_result
+        util.logger.debug(f"complain_result vote_result({self.__complain_votes})")
+        if self.__complain_votes.completed():
+            vote_result = self.__complain_votes.get_majority()
+            return vote_result.hex_hx()
+        else:
+            return None
 
     def pop_complained_candidate_leader(self):
-        voters = self.__complain_vote.get_voters()
-        if ChannelProperty().peer_id not in voters:
+        voters = self.__complain_votes.reps
+        if ExternalAddress.fromhex_address(ChannelProperty().peer_id) not in voters:
             # Processing to complain leader
             return None
 

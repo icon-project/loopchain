@@ -209,10 +209,7 @@ class ChannelService:
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
         self.__init_radio_station_stub()
-
         await self.__init_score_container()
-        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
-        self.__inner_service.init_sub_services()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
@@ -221,9 +218,11 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
+            
+        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
+        self.__inner_service.init_sub_services()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()

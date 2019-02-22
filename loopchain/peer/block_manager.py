@@ -31,6 +31,7 @@ from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -90,13 +91,6 @@ class BlockManager:
                    str(1 if self.__channel_service.state_machine.state == "BlockGenerate" else 0)
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
-
-    def init_epoch(self):
-        """Call this after peer list update
-
-        :return:
-        """
-        self.epoch = Epoch(self)
 
     def update_service_status(self, status):
         self.__service_status = status
@@ -602,7 +596,7 @@ class BlockManager:
             leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
-                self.__channel_service.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
+                self.epoch = Epoch.new_epoch(leader_peer.peer_id)
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -698,18 +692,20 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
-        self.epoch.add_complain(
-            complained_leader_id, new_leader_id, self.epoch.height, self.__peer_id, ChannelProperty().group_id
-        )
-
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complained_leader_id=complained_leader_id,
-            channel=self.channel_name,
-            new_leader_id=new_leader_id,
+        leader_vote = LeaderVote.new(
+            rep_pri_key=self.__channel_service.peer_auth.private_key,
             block_height=self.epoch.height,
-            message="I'm your father.",
-            peer_id=self.__peer_id,
-            group_id=ChannelProperty().group_id
+            old_leader=ExternalAddress.fromhex_address(complained_leader_id),
+            new_leader=ExternalAddress.fromhex_address(new_leader_id),
+            timestamp=util.get_time_stamp()
+        )
+        self.epoch.add_complain(leader_vote)
+
+        leader_vote_serialized = leader_vote.serialize()
+        leader_vote_dumped = json.dumps(leader_vote_serialized)
+        request = loopchain_pb2.ComplainLeaderRequest(
+            complain_vote=leader_vote_dumped,
+            channel=self.channel_name
         )
 
         util.logger.debug(f"leader complain "
@@ -718,28 +714,21 @@ class BlockManager:
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 
-    def vote_unconfirmed_block(self, block_hash, is_validated):
+    def vote_unconfirmed_block(self, block: Block, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
-        if is_validated:
-            vote_code, message = message_code.get_response(message_code.Response.success_validate_block)
-        else:
-            vote_code, message = message_code.get_response(message_code.Response.fail_validate_block)
-
-        block_vote = loopchain_pb2.BlockVote(
-            vote_code=vote_code,
-            channel=self.channel_name,
-            message=message,
-            block_hash=block_hash,
-            peer_id=self.__peer_id,
-            group_id=ChannelProperty().group_id)
-
-        self.candidate_blocks.add_vote(
-            block_hash,
-            ChannelProperty().group_id,
-            ChannelProperty().peer_id,
-            is_validated
+        vote = BlockVote.new(
+            rep_pri_key=self.__channel_service.peer_auth.private_key,
+            block_height=block.header.height,
+            block_hash=block.header.hash if is_validated else None,
+            timestamp=util.get_time_stamp()
         )
+        self.candidate_blocks.add_vote(vote)
+
+        vote_serialized = vote.serialize()
+        vote_dumped = json.dumps(vote_serialized)
+        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
+
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
     async def _vote(self, unconfirmed_block: Block):
@@ -780,7 +769,7 @@ class BlockManager:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            self.vote_unconfirmed_block(unconfirmed_block.header.hash, exc is None)
+            self.vote_unconfirmed_block(unconfirmed_block, exc is None)
 
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock

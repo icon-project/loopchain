@@ -36,13 +36,11 @@ class SignVerifier:
     def verify_data(self, origin_data: bytes, signature: bytes):
         return self.verify_signature(origin_data, signature, False)
 
-    def verify_hash(self, origin_data, signature):
+    def verify_hash(self, origin_data: bytes, signature):
         return self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
         try:
-            if is_hash:
-                origin_data = binascii.unhexlify(origin_data)
             origin_signature, recover_code = signature[:-1], signature[-1]
             recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
             pub = self._pri.ecdsa_recover(origin_data,
@@ -61,8 +59,9 @@ class SignVerifier:
         return f"hx{hash_pub[-40:]}"
 
     @classmethod
-    def address_from_prikey(cls, prikey: bytes):
-        pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
+    def address_from_prikey(cls, prikey: Union[bytes, PrivateKey]):
+        prikey = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey)
+        pubkey = prikey.pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
@@ -188,9 +187,9 @@ class Signer(SignVerifier):
         return super().from_prikey_file(prikey_file, password)
 
     @classmethod
-    def from_prikey(cls, prikey: bytes):
+    def from_prikey(cls, prikey: Union[bytes, PrivateKey]):
         auth = Signer()
-        auth.private_key = PrivateKey(prikey)
+        auth.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey)
         auth.address = cls.address_from_prikey(prikey)
 
         # verify
@@ -200,7 +199,7 @@ class Signer(SignVerifier):
         return auth
 
 
-def long_to_bytes (val, endianness='big'):
+def long_to_bytes(val, endianness='big'):
     """
     Use :ref:`string formatting` and :func:`~binascii.unhexlify` to
     convert ``val``, a :func:`long`, to a byte :func:`str`.

@@ -32,7 +32,7 @@ from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
     TimerService, Timer
 from loopchain.baseservice.tx_item_helper import TxItem
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
