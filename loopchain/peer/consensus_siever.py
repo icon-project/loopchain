@@ -66,7 +66,7 @@ class ConsensusSiever(ConsensusBase):
                 if last_unconfirmed_block:
                     if (
                             len(last_unconfirmed_block.body.transactions) > 0 or
-                            last_unconfirmed_block.header.complained
+                            last_unconfirmed_block.header.is_complained
                     ) or (
                             len(last_unconfirmed_block.body.transactions) == 0 and
                             last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id
@@ -84,7 +84,7 @@ class ConsensusSiever(ConsensusBase):
                         last_unconfirmed_block
                 ) and (
                         len(last_unconfirmed_block.body.transactions) > 0 or
-                        last_unconfirmed_block.header.complained
+                        last_unconfirmed_block.header.is_complained
                 ):
                     vote = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                     vote_result = vote.get_result(last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)

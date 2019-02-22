@@ -1,7 +1,8 @@
 from typing import TYPE_CHECKING
+
 from . import BlockHeader, BlockBody
-from .. import v0_1a
 from .. import Block
+from .. import v0_1a
 
 if TYPE_CHECKING:
     from ... import TransactionVersioner
@@ -35,7 +36,7 @@ class BlockBuilder(v0_1a.BlockBuilder):
         self.fixed_timestamp = header.timestamp
 
         self._timestamp = header.timestamp
-        self.complained = header.complained
+        self.complained = header.is_complained
 
         body: BlockBody = block.body
         self.confirm_prev_block = body.confirm_prev_block

@@ -118,7 +118,8 @@ class Epoch:
 
     def makeup_block(self):
         # self._check_unconfirmed_block(
-        block_height = self.__blockchain.last_block.header.height + 1
+        last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
+        block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
         if self.complain_result():

@@ -11,7 +11,7 @@ class BlockSerializer(v0_1a.BlockSerializer):
         header: BlockHeader = block.header
         block_serialized = super()._serialize(block)
         block_serialized["next_leader"] = header.next_leader.hex_xx()
-        block_serialized["complained"] = 1 if header.complained else 0
+        block_serialized["complained"] = 1 if header.is_complained else 0
         return block_serialized
 
     def _deserialize_header_data(self, json_data: dict):

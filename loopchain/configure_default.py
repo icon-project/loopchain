@@ -369,7 +369,7 @@ CHANNEL_OPTION = {
             "0.1a": 0
         },
         "hash_versions": {
-            "genesis": 0,
+            "genesis": 1,
             "0x2": 1,
             "0x3": 1
         },
@@ -386,7 +386,7 @@ CHANNEL_OPTION = {
             "0.1a": 0
         },
         "hash_versions": {
-            "genesis": 0,
+            "genesis": 1,
             "0x2": 1,
             "0x3": 1
         },

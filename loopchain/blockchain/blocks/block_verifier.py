@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING, Callable
 
 from secp256k1 import PrivateKey, PublicKey
 
-from loopchain import utils
 from .. import ExternalAddress, BlockVersionNotMatch
 
 if TYPE_CHECKING:
@@ -64,11 +63,7 @@ class BlockVerifier(ABC):
                                f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        utils.logger.notice(f"verify_generator \nheight({block.header.height}) "
-                            f"\ngenerator({block.header.peer_id.hex_xx()}) "
-                            f"\nexpected({generator.hex_xx()}) "
-                            f"\nnext_leader({block.header.next_leader.hex_xx()})")
-        if not block.header.complained and block.header.peer_id != generator:
+        if not block.header.is_complained and block.header.peer_id != generator:
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Generator({block.header.peer_id.hex_xx()}), "
                                f"Expected({generator.hex_xx()}).")

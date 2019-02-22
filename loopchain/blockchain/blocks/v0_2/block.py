@@ -8,6 +8,10 @@ class BlockHeader(v0_1a.BlockHeader):
 
     version = "0.2"
 
+    @property
+    def is_complained(self):
+        return self.complained
+
 
 @dataclass(frozen=True)
 class BlockBody(v0_1a.BlockBody):

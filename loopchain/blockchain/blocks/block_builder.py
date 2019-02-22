@@ -1,8 +1,9 @@
 import hashlib
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from secp256k1 import PrivateKey
 from typing import Dict
+
+from secp256k1 import PrivateKey
 
 from . import Block
 from .. import Hash32, ExternalAddress, Signature

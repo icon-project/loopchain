@@ -30,7 +30,7 @@ class BlockVerifier(v0_1a.BlockVerifier):
         prev_block_header: BlockHeader = prev_block.header
         block_header: BlockHeader = block.header
 
-        if not block_header.complained and prev_block_header.next_leader and \
+        if not block_header.is_complained and prev_block_header.next_leader and \
            prev_block_header.next_leader != block_header.peer_id:
                 raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                    f"Leader({block_header.peer_id.hex_xx()}), "
