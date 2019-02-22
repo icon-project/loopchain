@@ -143,3 +143,6 @@ class BlockBuilder(BaseBlockBuilder):
 
         body: BlockBody = block.body
         self.confirm_prev_block = body.confirm_prev_block
+
+    def get_vote_result(self, block_info):
+        return b'0x1'
