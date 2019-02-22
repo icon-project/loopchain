@@ -11,15 +11,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import TYPE_CHECKING
 
 from . import BlockHeader
 from .. import v0_1a
-from .... import utils as util
 
 if TYPE_CHECKING:
     from .. import Block
-    from ... import ExternalAddress
 
 
 class BlockVerifier(v0_1a.BlockVerifier):
@@ -36,10 +35,3 @@ class BlockVerifier(v0_1a.BlockVerifier):
                 raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                    f"Leader({block_header.peer_id.hex_xx()}), "
                                    f"Expected({prev_block_header.next_leader.hex_xx()}).")
-
-    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        util.logger.spam("block v0.2 verify_generator")
-        if not block.header.complained and block.header.peer_id != generator:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Generator({block.header.peer_id.hex_xx()}), "
-                               f"Expected({generator.hex_xx()}).")

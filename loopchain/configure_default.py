@@ -366,10 +366,10 @@ TOKEN_TYPE_SIGN = "02"
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
         "block_versions": {
-            "0.2": 0
+            "0.1a": 0
         },
         "hash_versions": {
-            "genesis": 1,
+            "genesis": 0,
             "0x2": 1,
             "0x3": 1
         },
@@ -383,10 +383,10 @@ CHANNEL_OPTION = {
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
-            "0.2": 0
+            "0.1a": 0
         },
         "hash_versions": {
-            "genesis": 1,
+            "genesis": 0,
             "0x2": 1,
             "0x3": 1
         },
@@ -445,6 +445,6 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-# TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 5  # 3 is test value for developing leader complain
-TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 30  # 30 is default for product
+TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 5  # 3 is test value for developing leader complain
+# TIMEOUT_FOR_LEADER_COMPLAIN = INTERVAL_BLOCKGENERATION * 30  # 30 is default for product
 MAX_TIMEOUT_FOR_LEADER_COMPLAIN = TIMEOUT_FOR_LEADER_COMPLAIN * 5

@@ -124,6 +124,7 @@ class Epoch:
         if self.complain_result():
             block_builder.complained = self.complain_result()
         else:
+            block_builder.complained = False
             self.__add_tx_to_block(block_builder)
 
         return block_builder
