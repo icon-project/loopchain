@@ -29,15 +29,9 @@ class BlockHeader(BaseBlockHeader):
             object.__setattr__(self, "commit_state", commit_state)
 
     @property
-    def is_complained(self):
-        """Version compatible in (v0.1a, v0.2)
-
-        :return:
-        """
+    def complained(self) -> bool:
         # tx == 0 and peer_id == next_leader >> complained = True
-        complained = self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
-
-        return complained
+        return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
 
 
 @dataclass(frozen=True)
