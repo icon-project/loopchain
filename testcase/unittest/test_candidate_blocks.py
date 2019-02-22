@@ -60,7 +60,7 @@ class TestCandidateBlocks(unittest.TestCase):
         block = self.__get_test_block()
 
         # WHEN CandidateBlock.from_hash
-        candidate_block = CandidateBlock.from_hash(block.header.hash)
+        candidate_block = CandidateBlock.from_hash(block.header.hash, block.header.height)
         util.logger.spam(f"block hash({block.header.hash}) candidate hash({candidate_block.hash})")
 
         # THEN

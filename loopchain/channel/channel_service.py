@@ -146,6 +146,8 @@ class ChannelService:
 
         try:
             loop.run_forever()
+        except Exception as e:
+            traceback.print_exception(type(e), e, e.__traceback__)
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
@@ -210,8 +212,6 @@ class ChannelService:
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
-
-        self.block_manager.init_epoch()
 
     async def __init_network(self):
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
