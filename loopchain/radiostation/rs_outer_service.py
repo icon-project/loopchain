@@ -15,7 +15,6 @@
 
 import json
 import logging
-import pickle
 import threading
 
 import loopchain_pb2
@@ -380,7 +379,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                 response_code=message_code.get_response_code(message_code.Response.success),
                 message=message_code.get_response_msg(message_code.Response.success))
 
-        except pickle.PicklingError as e:
+        except Exception as e:
             logging.warning("Fail Peer Dump: " + str(e))
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
                                              message=message_code.get_response_msg(message_code.Response.fail))

@@ -13,7 +13,6 @@
 # limitations under the License.
 """data object for peer votes to one block"""
 import logging
-import pickle
 from enum import Enum
 
 from loopchain import configure as conf
@@ -77,14 +76,6 @@ class Vote:
 
         logging.debug("vote_init: " + str(vote_init))
         return vote_init
-
-    @staticmethod
-    def save_to(obj):
-        return pickle.dumps(obj)
-
-    @staticmethod
-    def load_from(obj):
-        return pickle.loads(obj)
 
     @staticmethod
     def __parse_vote_sign(vote_sign):

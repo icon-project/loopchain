@@ -50,8 +50,6 @@ class ChannelService:
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
         self.__consensus = None
-        # self.__proposer: Proposer = None
-        # self.__acceptor: Acceptor = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
 
@@ -210,15 +208,6 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
         self.__inner_service.init_sub_services()
 
-        # if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-        #     util.logger.spam(f"init consensus !")
-        #     # load consensus
-        #     self.__init_consensus()
-        #     # load proposer
-        #     self.__init_proposer(peer_id=peer_id)
-        #     # load acceptor
-        #     self.__init_acceptor(peer_id=peer_id)
-
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
@@ -288,33 +277,6 @@ class ChannelService:
             )
         except leveldb.LevelDBError as e:
             util.exit_and_msg("LevelDBError(" + str(e) + ")")
-
-    # def __init_consensus(self):
-    #     consensus = Consensus(self, ChannelProperty().name)
-    #     self.__consensus = consensus
-    #     self.__block_manager.consensus = consensus
-    #     consensus.register_subscriber(self.__block_manager)
-    #
-    # def __init_proposer(self, peer_id: str):
-    #     proposer = Proposer(
-    #         name="loopchain.consensus.Proposer",
-    #         peer_id=peer_id,
-    #         channel=ChannelProperty().name,
-    #         channel_service=self
-    #     )
-    #     self.__consensus.register_subscriber(proposer)
-    #     self.__proposer = proposer
-    #
-    # def __init_acceptor(self, peer_id: str):
-    #     acceptor = Acceptor(
-    #         name="loopchain.consensus.Acceptor",
-    #         consensus=self.__consensus,
-    #         peer_id=peer_id,
-    #         channel=ChannelProperty().name,
-    #         channel_service=self
-    #     )
-    #     self.__consensus.register_subscriber(acceptor)
-    #     self.__acceptor = acceptor
 
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
