@@ -1,10 +1,7 @@
 from dataclasses import dataclass
-from .. import Transaction as BaseTransition
-from ... import Address, MalformedStr
-from typing import TYPE_CHECKING, Mapping, Union
-
-if TYPE_CHECKING:
-    from ... import Hash32, Signature
+from typing import Mapping, Union
+from loopchain.blockchain.types import Address, MalformedStr, Hash32, Signature
+from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 
 @dataclass(frozen=True)

@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING
-from . import TransactionSerializer, HASH_SALT
-from .. import TransactionVerifier as BaseTransactionVerifier
+from loopchain.blockchain.transactions import TransactionVerifier as BaseTransactionVerifier
+from loopchain.blockchain.transactions.v3 import TransactionSerializer, HASH_SALT
 
 if TYPE_CHECKING:
-    from . import Transaction
+    from loopchain.blockchain.types import Transaction
 
 
 class TransactionVerifier(BaseTransactionVerifier):

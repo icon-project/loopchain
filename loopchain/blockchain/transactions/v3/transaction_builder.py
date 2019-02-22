@@ -1,11 +1,11 @@
 import time
 from typing import TYPE_CHECKING, Union
-from . import Transaction, HASH_SALT
-from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import VarBytes
+from loopchain.blockchain.types import VarBytes
+from loopchain.blockchain.transactions import TransactionBuilder as BaseTransactionBuilder
+from loopchain.blockchain.transactions.v3 import Transaction, HASH_SALT
 
 if TYPE_CHECKING:
-    from ... import Address
+    from loopchain.blockchain.types import Address
 
 
 class TransactionBuilder(BaseTransactionBuilder):

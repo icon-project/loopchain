@@ -18,12 +18,13 @@ And also has insecure inner service for inner process modules."""
 import multiprocessing
 import signal
 import timeit
+import json
 from functools import partial
 
 import grpc
 
 from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
+from loopchain.baseservice import StubManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer

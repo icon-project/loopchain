@@ -2,12 +2,10 @@ import hashlib
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict
-
 from secp256k1 import PrivateKey
-
-from . import Block
-from .. import Hash32, ExternalAddress, Signature
-from ..transactions import Transaction, TransactionVersioner
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
+from loopchain.blockchain.blocks import Block
 
 
 class BlockBuilder(ABC):

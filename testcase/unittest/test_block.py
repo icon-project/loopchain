@@ -31,9 +31,9 @@ from loopchain.baseservice import ObjectManager
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
-from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
-from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
-from loopchain.blockchain import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
+from loopchain.blockchain.transactions import TransactionBuilder, TransactionSerializer, TransactionVersioner
 
 
 from loopchain.utils import loggers

@@ -2,12 +2,12 @@ import hashlib
 
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from .. import Signature, ExternalAddress, Hash32
+from secp256k1 import PrivateKey
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.blockchain.types import Signature, ExternalAddress, Hash32
 
 if TYPE_CHECKING:
-    from secp256k1 import PrivateKey
-    from . import Transaction, TransactionVersioner
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionBuilder(ABC):

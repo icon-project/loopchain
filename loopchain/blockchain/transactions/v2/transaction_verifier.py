@@ -1,10 +1,6 @@
-from typing import TYPE_CHECKING
-from . import TransactionSerializer, HASH_SALT
-from .. import TransactionVerifier as BaseTransactionVerifier
-from ... import MalformedStr
-
-if TYPE_CHECKING:
-    from . import Transaction
+from loopchain.blockchain.types import MalformedStr
+from loopchain.blockchain.transactions import TransactionVerifier as BaseTransactionVerifier
+from loopchain.blockchain.transactions.v2 import Transaction, TransactionSerializer, HASH_SALT
 
 
 class TransactionVerifier(BaseTransactionVerifier):

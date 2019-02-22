@@ -4,10 +4,10 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from secp256k1 import PublicKey, PrivateKey
 from loopchain.crypto.hashing import build_hash_generator
-from .. import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress
+
 if TYPE_CHECKING:
-    from . import Transaction
-    from .. import TransactionVersioner
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionVerifier(ABC):

@@ -1,12 +1,13 @@
 from typing import TYPE_CHECKING
 
-from . import BlockHeader
-from .. import BlockBuilder, BlockVerifier as BaseBlockVerifier
+from loopchain.blockchain.blocks import BlockBuilder, BlockVerifier as BaseBlockVerifier
+from loopchain.blockchain.blocks.v0_1a import BlockHeader
+
 
 if TYPE_CHECKING:
-    from . import BlockBody
-    from .. import Block
-    from ... import ExternalAddress
+    from loopchain.blockchain.types import ExternalAddress
+    from loopchain.blockchain.blocks import Block
+    from loopchain.blockchain.blocks.v0_1a import BlockBody
 
 
 class BlockVerifier(BaseBlockVerifier):

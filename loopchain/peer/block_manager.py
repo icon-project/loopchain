@@ -26,9 +26,11 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, AddUnconfirmedBlock
+from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
+    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
+from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
+from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
+from loopchain.blockchain.transactions import Transaction
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -759,7 +761,7 @@ class BlockManager:
             if not self.add_unconfirmed_block(unconfirmed_block):
                 util.logger.debug(f"fail add_unconfirmed_block my_height({my_height}), "
                                   f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
-                raise AddUnconfirmedBlock
+                raise exception.AddUnconfirmedBlock
 
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)

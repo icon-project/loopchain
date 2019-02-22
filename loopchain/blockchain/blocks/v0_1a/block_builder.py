@@ -3,12 +3,13 @@ import struct
 import time
 from typing import TYPE_CHECKING
 
-from . import BlockHeader, BlockBody
-from .. import Block, BlockBuilder as BaseBlockBuilder
-from ... import Hash32, Address
+from loopchain.blockchain.types import Hash32, Address
+from loopchain.blockchain.blocks import Block, BlockBuilder as BaseBlockBuilder
+from loopchain.blockchain.blocks.v0_1a import BlockHeader, BlockBody
+
 
 if TYPE_CHECKING:
-    from ... import TransactionVersioner
+    from ...transactions import TransactionVersioner
 
 
 class BlockBuilder(BaseBlockBuilder):

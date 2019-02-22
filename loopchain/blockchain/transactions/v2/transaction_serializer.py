@@ -1,6 +1,6 @@
-from . import Transaction, HASH_SALT
-from .. import TransactionSerializer as BaseTransactionSerializer
-from ... import Hash32, Signature, ExternalAddress, int_fromhex, int_tohex, int_fromstr, int_tostr
+from loopchain.blockchain.types import Hash32, Signature, ExternalAddress, int_fromhex, int_fromstr
+from loopchain.blockchain.transactions import TransactionSerializer as BaseTransactionSerializer
+from loopchain.blockchain.transactions.v2 import Transaction, HASH_SALT
 
 
 class TransactionSerializer(BaseTransactionSerializer):

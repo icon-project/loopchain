@@ -1,6 +1,5 @@
-from . import Transaction, NID, NTxHash, HASH_SALT
-from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
+from loopchain.blockchain.transactions import TransactionBuilder as BaseTransactionBuilder
+from loopchain.blockchain.transactions.genesis import Transaction, NID, NTxHash, HASH_SALT
 
 
 class TransactionBuilder(BaseTransactionBuilder):

@@ -13,10 +13,12 @@
 # limitations under the License.
 """loopchain timer service."""
 import asyncio
+import logging
+import threading
 import time
-
+from enum import Enum
+from loopchain import utils as util
 from loopchain.baseservice import CommonThread
-from loopchain.blockchain import *
 
 
 class OffType(Enum):

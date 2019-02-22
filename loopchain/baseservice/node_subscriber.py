@@ -27,7 +27,7 @@ from websockets.exceptions import InvalidStatusCode
 
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import BlockSerializer
+from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.channel.channel_property import ChannelProperty
 
 config.log_requests = False

@@ -29,8 +29,10 @@ from loopchain.rest_server.json_rpc import JsonError
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32)
+from loopchain.blockchain import blocks
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
+from loopchain.blockchain.transactions import Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code

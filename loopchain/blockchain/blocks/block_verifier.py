@@ -17,11 +17,12 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils
-from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
+from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.transactions import TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import Block, BlockHeader
-    from .. import TransactionVersioner
+    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockVerifier(ABC):
@@ -81,8 +82,9 @@ class BlockVerifier(ABC):
 
     def verify_version(self, block: 'Block'):
         if block.header.version != self.version:
-            raise BlockVersionNotMatch(block.header.version, self.version,
-                                       f"The block version is incorrect. Block({block.header})")
+            raise RuntimeError(f"The block version is incorrect. Block({block.header}) "
+                               f"Version({block.header.version}), "
+                               f"Expected({self.version})")
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
