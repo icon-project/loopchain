@@ -60,7 +60,7 @@ class Epoch:
                           f"peer_id({peer_id})")
         self.__complain_vote.add_vote(group_id, peer_id, new_leader_id)
 
-    def complain_result(self) -> str or None:
+    def complain_result(self) -> str:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
@@ -116,16 +116,13 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
-    def makeup_block(self):
+    def makeup_block(self, complained: str):
         # self._check_unconfirmed_block(
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
-        if self.complain_result():
-            block_builder.complained = self.complain_result()
-        else:
-            block_builder.complained = False
+        if not complained:
             self.__add_tx_to_block(block_builder)
 
         return block_builder

@@ -108,13 +108,13 @@ class Vote:
 
         :param block_hash:
         :param voting_ratio:
-        :return: result(True|False),
+        :return: result(str),
         agree_vote_group_count, total_vote_group_count, total_group_count,
         agree_vote_peer_count, total_peer_count, voting_ratio
         """
 
         if self.__target_hash != block_hash:
-            return False, 0, 0, 0, 0, 0, 0
+            return None, 0, 0, 0, 0, 0, 0
 
         total_group_count = len(self.__votes)
         total_peer_count = sum([len(self.__votes[group_id]) for group_id in list(self.__votes.keys())])
@@ -135,7 +135,7 @@ class Vote:
                 total_peer_count_in_group += 1
                 if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0]:
                     if result and result != self.__votes[group_id][peer_id][0]:
-                        result = False
+                        result = None
                     else:
                         agree_peer_count_in_group += 1
                         agree_vote_peer_count += 1
@@ -151,7 +151,7 @@ class Vote:
                 total_vote_group_count += 1
 
         if agree_vote_group_count < total_group_count * voting_ratio:
-            result = False
+            result = None
 
         logging.debug("==result: " + str(result))
         logging.debug("=agree_vote_group_count: " + str(agree_vote_group_count))

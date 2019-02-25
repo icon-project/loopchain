@@ -47,12 +47,13 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
         with self.__lock:
-            block_builder = self._block_manager.epoch.makeup_block()
+            complained = self._block_manager.epoch.complain_result()
+            block_builder = self._block_manager.epoch.makeup_block(complained)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
-            if block_builder.complained:
+            if complained:
                 util.logger.spam("consensus block_builder.complained")
                 block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
                 if not block_info and self._blockchain.last_block.header.height > 0:
