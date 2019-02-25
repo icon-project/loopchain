@@ -797,7 +797,7 @@ class BlockChain:
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
 
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
-        return block_prover.prove(tx_hash, block.header.transaction_root_hash, proof)
+        return block_prover.prove(tx_hash, block.header.transaction_hash, proof)
 
     def get_receipt_proof(self, tx_hash: Hash32):
         try:
@@ -832,4 +832,4 @@ class BlockChain:
 
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Receipt)    # Do not need receipts
         receipt_hash = block_prover.to_hash32(tx_result)
-        return block_prover.prove(receipt_hash, block.header.receipt_root_hash, proof)
+        return block_prover.prove(receipt_hash, block.header.receipt_hash, proof)

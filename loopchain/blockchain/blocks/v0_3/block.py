@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import List
 from loopchain.crypto.hashing import build_hash_generator
 from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
 from ... import Hash32, ExternalAddress, BloomFilter
@@ -10,10 +9,10 @@ class BlockHeader(BaseBlockHeader):
     complained: bool
     next_leader: ExternalAddress
 
-    transaction_root_hash: Hash32
-    state_root_hash: Hash32
-    receipt_root_hash: Hash32
-    rep_root_hash: Hash32
+    transaction_hash: Hash32
+    state_hash: Hash32
+    receipt_hash: Hash32
+    rep_hash: Hash32
 
     bloom_filter: BloomFilter
 

@@ -22,46 +22,46 @@ class BlockSerializer(BaseBlockSerializer):
 
         return {
             "version": header.version,
-            "prev_block_hash": header.prev_hash.hex() if header.prev_hash else '',
-            "merkle_tree_root_hash": header.transaction_root_hash.hex() if header.transaction_root_hash else '',
-            "state_root_hash": header.state_root_hash.hex() if header.state_root_hash else '',
-            "receipt_root_hash": header.receipt_root_hash.hex() if header.receipt_root_hash else '',
-            "rep_root_hash": header.rep_root_hash.hex(),
-            "bloom_filter": header.bloom_filter.hex(),
-            "time_stamp": header.timestamp,
-            "confirmed_transaction_list": transactions,
-            "block_hash": header.hash.hex(),
+            "prevHash": header.prev_hash.hex() if header.prev_hash else '',
+            "transactionHash": header.transaction_hash.hex() if header.transaction_hash else '',
+            "stateHash": header.state_hash.hex() if header.state_hash else '',
+            "receiptHash": header.receipt_hash.hex() if header.receipt_hash else '',
+            "repHash": header.rep_hash.hex(),
+            "bloomFilter": header.bloom_filter.hex(),
+            "timestamp": header.timestamp,
+            "transactions": transactions,
+            "hash": header.hash.hex(),
             "height": header.height,
-            "peer_id": header.peer_id.hex_hx() if header.peer_id else '',
+            "leader": header.peer_id.hex_hx() if header.peer_id else '',
             "signature": header.signature.to_base64str() if header.signature else '',
-            "next_leader": header.next_leader.hex_xx(),
+            "nextLeader": header.next_leader.hex_xx(),
             "complained": 1 if header.complained else 0,
         }
 
     def _deserialize_header_data(self, json_data: dict):
-        prev_hash = json_data.get('prev_block_hash')
+        prev_hash = json_data.get('prevHash')
         prev_hash = Hash32.fromhex(prev_hash, ignore_prefix=True) if prev_hash else None
 
-        peer_id = json_data.get('peer_id')
+        peer_id = json_data.get('leader')
         peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
 
         signature = json_data.get('signature')
         signature = Signature.from_base64str(signature) if signature else None
 
-        next_leader = json_data.get("next_leader")
+        next_leader = json_data.get("nextLeader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
-        tx_root_hash = json_data["merkle_tree_root_hash"]
-        tx_root_hash = Hash32.fromhex(tx_root_hash, ignore_prefix=True) if tx_root_hash else None
+        transaction_hash = json_data["transactionHash"]
+        transaction_hash = Hash32.fromhex(transaction_hash, ignore_prefix=True) if transaction_hash else None
 
-        receipt_root_hash = json_data["receipt_root_hash"]
-        receipt_root_hash = Hash32.fromhex(receipt_root_hash, ignore_prefix=True) if receipt_root_hash else None
+        receipt_hash = json_data["receiptHash"]
+        receipt_hash = Hash32.fromhex(receipt_hash, ignore_prefix=True) if receipt_hash else None
 
-        state_root_hash = json_data["state_root_hash"]
-        state_root_hash = Hash32.fromhex(state_root_hash, ignore_prefix=True) if state_root_hash else None
+        state_hash = json_data["stateHash"]
+        state_hash = Hash32.fromhex(state_hash, ignore_prefix=True) if state_hash else None
 
-        rep_root_hash = json_data["rep_root_hash"]
-        rep_root_hash = Hash32.fromhex(rep_root_hash, ignore_prefix=True) if state_root_hash else None
+        rep_hash = json_data["repHash"]
+        rep_hash = Hash32.fromhex(rep_hash, ignore_prefix=True) if state_hash else None
 
         if json_data["complained"] == 1:
             complained = True
@@ -71,26 +71,26 @@ class BlockSerializer(BaseBlockSerializer):
             raise RuntimeError
 
         return {
-            "hash": Hash32.fromhex(json_data["block_hash"], ignore_prefix=True),
+            "hash": Hash32.fromhex(json_data["hash"], ignore_prefix=True),
             "prev_hash": prev_hash,
             "height": json_data["height"],
-            "timestamp": json_data["time_stamp"],
+            "timestamp": json_data["timestamp"],
             "peer_id": peer_id,
             "signature": signature,
             "next_leader": next_leader,
-            "transaction_root_hash": tx_root_hash,
-            "receipt_root_hash": receipt_root_hash,
-            "state_root_hash": state_root_hash,
-            "rep_root_hash": rep_root_hash,
-            "bloom_filter": BloomFilter.fromhex(json_data["bloom_filter"], ignore_prefix=True),
+            "transaction_hash": transaction_hash,
+            "receipt_hash": receipt_hash,
+            "state_hash": state_hash,
+            "rep_hash": rep_hash,
+            "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"], ignore_prefix=True),
             "complained": complained
         }
 
     def _deserialize_body_data(self, json_data: dict):
-        confirm_prev_block = json_data.get("confirm_prev_block")
+        confirm_prev_block = json_data.get("confirmPrevBlock")
 
         transactions = OrderedDict()
-        for tx_data in json_data['confirmed_transaction_list']:
+        for tx_data in json_data['transactions']:
             tx_version = self._tx_versioner.get_version(tx_data)
             ts = TransactionSerializer.new(tx_version, self._tx_versioner)
             tx = ts.from_(tx_data)

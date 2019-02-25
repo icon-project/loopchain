@@ -246,7 +246,7 @@ class TestBlock(unittest.TestCase):
 
         block_builder.peer_private_key = private_auth.private_key
         block_builder.height = 0
-        block_builder.state_root_hash = Hash32(bytes(Hash32.size))
+        block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
@@ -269,12 +269,12 @@ class TestBlock(unittest.TestCase):
 
         block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
         tx_proof = block_prover.get_proof(tx_index)
-        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_root_hash, tx_proof)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_hash, tx_proof)
 
         block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
         receipt_proof = block_prover.get_proof(tx_index)
         receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
-        assert block_prover.prove(receipt_hash, block.header.receipt_root_hash, receipt_proof)
+        assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
 
 
 if __name__ == '__main__':

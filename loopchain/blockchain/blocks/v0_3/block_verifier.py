@@ -33,18 +33,18 @@ class BlockVerifier(BaseBlockVerifier):
         invoke_result = None
         if self.invoke_func:
             new_block, invoke_result = self.invoke_func(block)
-            if header.state_root_hash != new_block.header.state_root_hash:
+            if header.state_hash != new_block.header.state_hash:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                   f"StateRootHash({header.state_root_hash}), "
-                                   f"Expected({new_block.header.state_root_hash}).")
-            builder.state_root_hash = new_block.header.state_root_hash
+                                   f"StateRootHash({header.state_hash}), "
+                                   f"Expected({new_block.header.state_hash}).")
+            builder.state_hash = new_block.header.state_hash
 
             builder.receipts = invoke_result
-            builder.build_receipt_root_hash()
-            if header.receipt_root_hash != builder.receipt_root_hash:
+            builder.build_receipt_hash()
+            if header.receipt_hash != builder.receipt_hash:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                   f"ReceiptRootHash({header.receipt_root_hash.hex()}), "
-                                   f"Expected({builder.receipt_root_hash.hex()}).")
+                                   f"ReceiptRootHash({header.receipt_hash.hex()}), "
+                                   f"Expected({builder.receipt_hash.hex()}).")
 
             builder.build_bloom_filter()
             if header.bloom_filter != builder.bloom_filter:
@@ -52,18 +52,18 @@ class BlockVerifier(BaseBlockVerifier):
                                    f"ReceiptRootHash({header.bloom_filter.hex()}), "
                                    f"Expected({builder.bloom_filter.hex()}).")
 
-        builder.build_transaction_root_hash()
-        if header.transaction_root_hash != builder.transaction_root_hash:
+        builder.build_transaction_hash()
+        if header.transaction_hash != builder.transaction_hash:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                               f"TransactionRootHash({header.transaction_root_hash.hex()}), "
-                               f"Expected({builder.transaction_root_hash.hex()}).")
+                               f"TransactionRootHash({header.transaction_hash.hex()}), "
+                               f"Expected({builder.transaction_hash.hex()}).")
 
-        builder.build_rep_root_hash()
-        if header.rep_root_hash != builder.rep_root_hash:
-            if header.rep_root_hash != builder.rep_root_hash:
+        builder.build_rep_hash()
+        if header.rep_hash != builder.rep_hash:
+            if header.rep_hash != builder.rep_hash:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                   f"TransactionRootHash({header.rep_root_hash.hex()}), "
-                                   f"Expected({builder.rep_root_hash.hex()}).")
+                                   f"TransactionRootHash({header.rep_hash.hex()}), "
+                                   f"Expected({builder.rep_hash.hex()}).")
 
         builder.build_hash()
         if header.hash != builder.hash:
