@@ -118,9 +118,8 @@ class ContractAddress(Address):
         return self.prefix + self.hex()
 
 
-class BloomFilter(Bytes):
+class BloomFilter(VarBytes):
     size = 256
-    prefix = "0x"
 
     def __or__(self, other):
         result = int.from_bytes(self, 'big') | int.from_bytes(other, 'big')
