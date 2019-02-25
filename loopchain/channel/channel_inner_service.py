@@ -19,12 +19,13 @@ import re
 import signal
 from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 
 from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
+from loopchain.rest_server.json_rpc import JsonError
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
@@ -981,6 +982,58 @@ class ChannelInnerTask:
         return score_status
 
     @message_queue_task
+    async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        try:
+            proof = blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
+        except Exception as e:
+            return make_error_response(JsonError.INVALID_PARAMS, str(e))
+
+        try:
+            return make_proof_serializable(proof)
+        except Exception as e:
+            return make_error_response(JsonError.INTERNAL_ERROR, str(e))
+
+    @message_queue_task
+    async def prove_tx(self, tx_hash: str, proof: list) -> Union[str, dict]:
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        try:
+            proof = make_proof_deserializable(proof)
+        except Exception as e:
+            return make_error_response(JsonError.INTERNAL_ERROR, str(e))
+
+        try:
+            return "0x1" if blockchain.prove_transaction(Hash32.fromhex(tx_hash), proof) else "0x0"
+        except Exception as e:
+            return make_error_response(JsonError.INVALID_PARAMS, str(e))
+
+    @message_queue_task
+    async def get_receipt_proof(self, tx_hash: str) -> Union[list, dict]:
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        try:
+            proof = blockchain.get_receipt_proof(Hash32.fromhex(tx_hash))
+        except Exception as e:
+            return make_error_response(JsonError.INVALID_PARAMS, str(e))
+
+        try:
+            return make_proof_serializable(proof)
+        except Exception as e:
+            return make_error_response(JsonError.INTERNAL_ERROR, str(e))
+
+    @message_queue_task
+    async def prove_receipt(self, tx_hash: str, proof: list) -> Union[str, dict]:
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        try:
+            proof = make_proof_deserializable(proof)
+        except Exception as e:
+            return make_error_response(JsonError.INTERNAL_ERROR, str(e))
+
+        try:
+            return "0x1" if blockchain.prove_receipt(Hash32.fromhex(tx_hash), proof) else "0x0"
+        except Exception as e:
+            return make_error_response(JsonError.INVALID_PARAMS, str(e))
+
+    @message_queue_task
     def reset_timer(self, key):
         self._channel_service.timer_service.reset_timer(key)
 
@@ -1025,3 +1078,36 @@ class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):
 
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
+
+
+def make_proof_serializable(proof: list):
+    proof_serializable = []
+    for item in proof:
+        try:
+            left = Hash32(item["left"])
+            proof_serializable.append({"left": left.hex_0x()})
+        except KeyError:
+            right = Hash32(item["right"])
+            proof_serializable.append({"right": right.hex_0x()})
+    return proof_serializable
+
+
+def make_proof_deserializable(proof: list):
+    proof_deserializable = []
+    for item in proof:
+        try:
+            left: str = item["left"]
+            proof_deserializable.append({"left": Hash32.fromhex(left)})
+        except KeyError:
+            right: str = item["right"]
+            proof_deserializable.append({"right": Hash32.fromhex(right)})
+    return proof_deserializable
+
+
+def make_error_response(code: int, message: str):
+    return {
+        "error": {
+            "code": code,
+            "message": message
+        }
+    }
