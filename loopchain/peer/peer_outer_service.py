@@ -18,12 +18,10 @@ import copy
 import datetime
 from functools import partial
 
-import loopchain_pb2
-
-from loopchain.baseservice import ObjectManager, Monitor, TimerService
+from loopchain.baseservice import Monitor, TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest
+from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -205,6 +203,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         status['state'] = status_cache['state']
         status['peer_type'] = status_cache['peer_type']
         status['block_height'] = status_cache['block_height']
+        status['peer_count'] = status_cache['peer_count']
+        status['leader'] = status_cache['leader']
         return status
 
     def __get_status_from_cache(self, channel: str):

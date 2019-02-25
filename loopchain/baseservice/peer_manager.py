@@ -143,6 +143,7 @@ class PeerManager:
 
         :return: { group_id: { peer_id:PeerInfo } }
         """
+        # util.logger.spam(f"peer_list({self.peer_list_data.peer_info_list})")
         return self.peer_list_data.peer_info_list
 
     @property

@@ -11,12 +11,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import ast
 import json
+import multiprocessing as mp
 import re
 import signal
-import multiprocessing as mp
-import traceback
 from asyncio import Condition
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
@@ -515,6 +515,9 @@ class ChannelInnerTask:
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
+        status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
+        status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
+        status_data["epoch_leader"] = self._channel_service.block_manager.epoch.leader_id
 
         return status_data
 
