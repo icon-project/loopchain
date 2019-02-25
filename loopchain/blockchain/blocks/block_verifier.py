@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
@@ -61,13 +62,16 @@ class BlockVerifier(ABC):
             raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
                                f"expected {ExternalAddress(expect_address).hex_xx()}")
 
+    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
+        if not block.header.complained and block.header.peer_id != generator:
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                               f"Generator({block.header.peer_id.hex_xx()}), "
+                               f"Expected({generator.hex_xx()}).")
+
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
-        from . import v0_1a, v0_2
+        from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockVerifier(tx_versioner)
-
-        if version == v0_2.version:
-            return v0_2.BlockVerifier(tx_versioner)
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")

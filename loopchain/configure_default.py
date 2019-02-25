@@ -366,7 +366,7 @@ TOKEN_TYPE_SIGN = "02"
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
         "block_versions": {
-            "0.2": 0
+            "0.1a": 0
         },
         "hash_versions": {
             "genesis": 1,
@@ -383,7 +383,7 @@ CHANNEL_OPTION = {
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
-            "0.2": 0
+            "0.1a": 0
         },
         "hash_versions": {
             "genesis": 1,

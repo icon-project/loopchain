@@ -1,8 +1,9 @@
 import hashlib
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from secp256k1 import PrivateKey
 from typing import Dict
+
+from secp256k1 import PrivateKey
 
 from . import Block
 from .. import Hash32, ExternalAddress, Signature
@@ -100,12 +101,9 @@ class BlockBuilder(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
-        from . import v0_1a, v0_2
+        from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockBuilder(tx_versioner)
-
-        if version == v0_2.version:
-            return v0_2.BlockBuilder(tx_versioner)
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")
 
