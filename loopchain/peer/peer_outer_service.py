@@ -440,7 +440,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         # Peer To Client
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, block_data_json, tx_data_json_list = \
+        response_code, block_hash, _, block_data_json, tx_data_json_list = \
             channel_stub.sync_task().get_block(
                 block_height=-1,
                 block_hash='',
@@ -469,7 +469,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, block_data_json, tx_data_json_list = \
+        response_code, block_hash, confirm_prev_block_info, block_data_json, tx_data_json_list = \
             channel_stub.sync_task().get_block(
                 block_height=request.block_height,
                 block_hash=request.block_hash,
@@ -479,6 +479,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.GetBlockReply(response_code=response_code,
                                            block_hash=block_hash,
                                            block_data_json=block_data_json,
+                                           confirm_prev_block_info=confirm_prev_block_info,
                                            tx_data_json=tx_data_json_list)
 
     def GetPrecommitBlock(self, request, context):
@@ -541,13 +542,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                      f"request height({request.block_height}) channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_height, max_block_height, block_dumped = \
+        response_code, block_height, max_block_height, confirm_prev_block_info, block_dumped = \
             channel_stub.sync_task().block_sync(request.block_hash, request.block_height)
 
         return loopchain_pb2.BlockSyncReply(
             response_code=response_code,
             block_height=block_height,
             max_block_height=max_block_height,
+            confirm_prev_block_info=bytes(confirm_prev_block_info) if confirm_prev_block_info else None,
             block=block_dumped)
 
     def Subscribe(self, request, context):
