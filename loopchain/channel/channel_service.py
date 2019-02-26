@@ -709,20 +709,12 @@ class ChannelService:
 
         peer_leader = self.peer_manager.get_leader_peer()
         peer_type = loopchain_pb2.PEER
+        self.block_manager.epoch.set_epoch_leader(peer_leader.peer_id)
 
         if self_peer_object.target == peer_leader.target:
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
-
-            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                if conf.ENABLE_REP_RADIO_STATION:
-                    self.peer_manager.announce_new_leader(
-                        self.peer_manager.get_leader_peer().peer_id,
-                        new_leader_id,
-                        is_broadcast=True,
-                        self_peer_id=ChannelProperty().peer_id
-                    )
         else:
             logging.debug("Set Peer Type Peer!")
             self.state_machine.turn_to_peer()
@@ -732,7 +724,6 @@ class ChannelService:
             await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
-        self.block_manager.epoch.set_epoch_leader(peer_leader.peer_id)
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
