@@ -517,7 +517,8 @@ class ChannelInnerTask:
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
         status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
-        status_data["epoch_leader"] = self._channel_service.block_manager.epoch.leader_id
+        status_data["epoch_leader"] = \
+            self._channel_service.block_manager.epoch.leader_id if self._channel_service.block_manager.epoch else ""
 
         return status_data
 
@@ -622,19 +623,17 @@ class ChannelInnerTask:
                       f"height({unconfirmed_block.header.height})\n"
                       f"hash({unconfirmed_block.header.hash.hex()})")
 
+        if self._channel_service.state_machine.state in ("BlockSync",):
+            util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
+            return
+
         self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
         self._channel_service.state_machine.vote()
 
-        is_vote_block = not conf.ALLOW_MAKE_EMPTY_BLOCK and len(unconfirmed_block.body.transactions) == 0
-        if is_vote_block:
-            util.logger.debug(f"channel_inner_service:AnnounceUnconfirmedBlock try self.peer_service.reset_leader"
-                              f"\nnext_leader_peer({unconfirmed_block.header.next_leader.hex()}, "
-                              f"channel({ChannelProperty().name}))")
-
-            if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
-                    unconfirmed_block.header.next_leader.hex_hx():
-                util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
-                await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+        if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
+                unconfirmed_block.header.next_leader.hex_hx():
+            util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
+            await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):

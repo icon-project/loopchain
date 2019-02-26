@@ -775,14 +775,14 @@ class PeerManager:
                         for group_id in self.peer_list.keys() if str(peer_id) in self.peer_list[group_id].keys()][0]
         except KeyError:
             if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-                logging.error("there is no peer by id: " + str(peer_id))
+                logging.warning("there is no peer by id: " + str(peer_id))
                 logging.debug(self.get_peers_for_debug(group_id))
                 return None
             else:
                 logging.info(f"This node({peer_id}) will run as {conf.NodeType.CitizenNode.name}")
                 return None
         except IndexError:
-            logging.error(f"there is no peer by id({str(peer_id)}) group_id({group_id})")
+            logging.warning(f"there is no peer by id({str(peer_id)}) group_id({group_id})")
             logging.debug(self.get_peers_for_debug(group_id))
             return None
 
