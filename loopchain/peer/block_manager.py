@@ -347,28 +347,23 @@ class BlockManager:
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
 
     def __block_request_by_citizen(self, block_height, rs_rest_stub):
-        try:
-            get_block_result = rs_rest_stub.call(
-                "GetBlockByHeight", {
-                    'channel': self.__channel_name,
-                    'height': str(block_height)
-                }
-            )
-            max_height_result = rs_rest_stub.call("Status")
+        get_block_result = rs_rest_stub.call(
+            "GetBlockByHeight", {
+                'channel': self.__channel_name,
+                'height': str(block_height)
+            }
+        )
+        max_height_result = rs_rest_stub.call("Status")
 
-            if max_height_result.status_code != 200:
-                raise ConnectionError
+        if max_height_result.status_code != 200:
+            raise ConnectionError
 
-            block_version = self.get_blockchain().block_versioner.get_version(block_height)
-            block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
-            block = block_serializer.deserialize(get_block_result['block'])
+        block_version = self.get_blockchain().block_versioner.get_version(block_height)
+        block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
+        block = block_serializer.deserialize(get_block_result['block'])
 
-            return block, json.loads(max_height_result.text)['block_height'], \
-                get_block_result['confirm_info'], message_code.Response.success
-
-        except ReceivedErrorResponse as e:
-            rs_rest_stub.update_methods_version()
-            return self.__block_request_by_citizen(block_height, rs_rest_stub)
+        return block, json.loads(max_height_result.text)['block_height'], \
+            get_block_result['confirm_info'], message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
