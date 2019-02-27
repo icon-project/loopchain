@@ -129,8 +129,7 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.state_machine.turn_to_peer()
-                self._block_manager.epoch.set_epoch_leader(next_leader.hex_hx())
+                await ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
                 self.__block_generation_timer.call()
 

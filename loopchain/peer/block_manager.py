@@ -439,6 +439,9 @@ class BlockManager:
         else:
             return self.__blockchain.block_height
 
+    def __current_last_block(self):
+        return self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
+
     def __add_block_by_sync(self, block_):
         commit_state = block_.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
@@ -582,7 +585,11 @@ class BlockManager:
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
             self.__unconfirmedBlockQueue = queue.Queue()
-            self.epoch.set_epoch_leader(self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID))
+            leader_peer = self.__channel_service.peer_manager.get_peer(
+                self.__current_last_block().header.next_leader.hex_hx())
+            if leader_peer:
+                self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
+                self.__channel_service.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
             self.__channel_service.state_machine.subscribe_network()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
