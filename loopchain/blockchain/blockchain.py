@@ -79,6 +79,7 @@ class BlockChain:
         self.__confirmed_block_lock = threading.RLock()
 
         self.__total_tx = 0
+        self.__nid: str = None
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -476,8 +477,12 @@ class BlockChain:
 
     def find_nid(self):
         try:
+            if self.__nid is not None:
+                return self.__nid
+
             nid = self.__confirmed_block_db.Get(BlockChain.NID_KEY)
-            return nid.decode(conf.HASH_KEY_ENCODING)
+            self.__nid = nid.decode(conf.HASH_KEY_ENCODING)
+            return self.__nid
         except KeyError as e:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None

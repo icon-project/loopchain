@@ -307,7 +307,7 @@ class BlockManager:
                 nid = NID.unknown.value
 
         if isinstance(nid, int):
-            nid = hex(16)
+            nid = hex(nid)
 
         self.get_blockchain().put_nid(nid)
         ChannelProperty().nid = nid
