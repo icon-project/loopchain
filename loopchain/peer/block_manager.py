@@ -576,8 +576,8 @@ class BlockManager:
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
             self.__unconfirmedBlockQueue = queue.Queue()
-            leader_peer = self.__channel_service.peer_manager.get_peer(
-                self.__current_last_block().header.next_leader.hex_hx())
+            next_leader = self.__current_last_block().header.next_leader
+            leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.__channel_service.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
