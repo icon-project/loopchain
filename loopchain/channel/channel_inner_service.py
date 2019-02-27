@@ -695,12 +695,12 @@ class ChannelInnerTask:
                 response_message = message_code.Response.fail_wrong_block_hash
             return response_message, -1, blockchain.block_height, None, None
 
-        confirm_prev_block_info = None
+        confirm_info = None
         if block.header.height <= blockchain.block_height:
-            confirm_prev_block_info = blockchain.find_block_info_by_hash(block.header.hash)
+            confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
 
         return message_code.Response.success, block.header.height, blockchain.block_height, \
-            confirm_prev_block_info, blockchain.block_dumps(block)
+            confirm_info, blockchain.block_dumps(block)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
@@ -875,7 +875,7 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def get_block(self, block_height, block_hash, block_data_filter, tx_data_filter):
-        block, block_filter, block_hash, confirm_prev_block_info, fail_response_code, tx_filter = \
+        block, block_filter, block_hash, confirm_info, fail_response_code, tx_filter = \
             await self.__get_block(block_data_filter, block_hash, block_height, tx_data_filter)
 
         if fail_response_code:
@@ -884,7 +884,7 @@ class ChannelInnerTask:
         tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
         bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_dict = bs.serialize(block)
-        return message_code.Response.success, block_hash, confirm_prev_block_info, json.dumps(block_dict), []
+        return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict), []
 
     async def __get_block(self, block_data_filter, block_hash, block_height, tx_data_filter):
         blockchain = self._channel_service.block_manager.get_blockchain()
@@ -894,22 +894,22 @@ class ChannelInnerTask:
         tx_filter = re.sub(r'\s', '', tx_data_filter).split(",")
 
         block = None
-        confirm_prev_block_info = b''
+        confirm_info = b''
         fail_response_code = None
         if block_hash:
             block = blockchain.find_block_by_hash(block_hash)
-            confirm_prev_block_info = blockchain.find_block_info_by_hash(Hash32.fromhex(block_hash, True))
+            confirm_info = blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
         elif block_height != -1:
             block = blockchain.find_block_by_height(block_height)
-            confirm_prev_block_info = blockchain.find_block_info_by_height(block_height)
+            confirm_info = blockchain.find_confirm_info_by_height(block_height)
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_height
         else:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
-        return block, block_filter, block_hash, bytes(confirm_prev_block_info), fail_response_code, tx_filter
+        return block, block_filter, block_hash, bytes(confirm_info), fail_response_code, tx_filter
 
     @message_queue_task
     def get_precommit_block(self, last_block_height: int):

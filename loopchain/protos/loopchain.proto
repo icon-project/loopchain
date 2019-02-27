@@ -184,7 +184,7 @@ message GetBlockReply {
     required string block_data_json = 3;
     // json key:value by tx_data_filter "{transaction_hash:'12345', data:'12345', time_stamp:'1990-10-10'}"
     repeated string tx_data_json = 4;
-    optional bytes confirm_prev_block_info = 5;
+    optional bytes confirm_info = 5;
 }
 
 
@@ -241,7 +241,7 @@ message BlockSyncReply {
     required int32 response_code = 1;
     required int32 block_height = 2;
     required int32 max_block_height = 3;
-    optional bytes confirm_prev_block_info = 4;
+    optional bytes confirm_info = 4;
     optional bytes block = 5;
 }
 

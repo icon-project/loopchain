@@ -341,7 +341,7 @@ class BlockManager:
             except Exception as e:
                 traceback.print_exc()
                 raise exception.BlockError(f"Received block is invalid: original exception={e}")
-            return block, response.max_block_height, response.confirm_prev_block_info, response.response_code
+            return block, response.max_block_height, response.confirm_info, response.response_code
         else:
             # request REST(json-rpc) way to radiostation (mother peer)
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
@@ -364,7 +364,7 @@ class BlockManager:
             block = block_serializer.deserialize(get_block_result['block'])
 
             return block, json.loads(max_height_result.text)['block_height'], \
-                get_block_result['confirm_prev_block_info'], message_code.Response.success
+                get_block_result['confirm_info'], message_code.Response.success
 
         except ReceivedErrorResponse as e:
             rs_rest_stub.update_methods_version()
@@ -443,7 +443,7 @@ class BlockManager:
     def __current_last_block(self):
         return self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
 
-    def __add_block_by_sync(self, block_, block_info=None):
+    def __add_block_by_sync(self, block_, confirm_info=None):
         commit_state = block_.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
                       f"height({block_.header.height}) commit_state({commit_state})")
@@ -458,11 +458,11 @@ class BlockManager:
                                                        self.__blockchain.last_block,
                                                        self.__blockchain)
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(block_, block_info)
+        return self.__blockchain.add_block(block_, confirm_info)
 
     def __confirm_prev_block_by_sync(self, block_):
         prev_block = self.__blockchain.last_unconfirmed_block
-        block_info = block_.body.confirm_prev_block
+        confirm_info = block_.body.confirm_prev_block
 
         commit_state = prev_block.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
@@ -478,7 +478,7 @@ class BlockManager:
                                                        self.__blockchain.last_block,
                                                        self.__blockchain)
         self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(prev_block, block_info)
+        return self.__blockchain.add_block(prev_block, confirm_info)
 
     def __block_height_sync(self, target_peer_stub=None, target_height=None):
         """synchronize block height with other peers"""
@@ -513,7 +513,7 @@ class BlockManager:
                 for peer_stub in peer_stubs:
                     response_code = message_code.Response.fail
                     try:
-                        block, max_block_height, confirm_prev_block_info, response_code = \
+                        block, max_block_height, confirm_info, response_code = \
                             self.__block_request(peer_stub, my_height + 1)
                     except Exception as e:
                         logging.warning("There is a bad peer, I hate you: " + str(e))
@@ -525,12 +525,12 @@ class BlockManager:
                         try:
                             result = True
                             if max_height == unconfirmed_block_height == block.header.height\
-                                    and max_height > 0 and not confirm_prev_block_info:
+                                    and max_height > 0 and not confirm_info:
                                 self.candidate_blocks.add_block(block)
                                 self.__blockchain.last_unconfirmed_block = block
                                 result = True
                             else:
-                                result = self.__add_block_by_sync(block, confirm_prev_block_info)
+                                result = self.__add_block_by_sync(block, confirm_info)
 
                             if result:
                                 if block.header.height == 0:
@@ -640,6 +640,7 @@ class BlockManager:
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         max_height = -1      # current max height
+        unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
