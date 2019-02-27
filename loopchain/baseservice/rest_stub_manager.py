@@ -32,8 +32,7 @@ class RestStubManager:
             channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
         self.__channel_name = channel
-        self.__should_update = True
-        self.__target = target
+        self.target = target
 
         self.__version_urls = {}
         for version in conf.ApiVersion:
@@ -66,34 +65,8 @@ class RestStubManager:
 
         self.__executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
 
-    @property
-    def target(self):
-        return self.__target
-
-    def update_methods_version(self):
-        method_name = "GetBlockByHeight"
-
-        try:
-            HTTPClient(self.__version_urls[conf.ApiVersion.node]).request(
-                method_name="node_GetBlockByHeight",
-                message={'channel': self.__channel_name, 'height': str(0)}
-            )
-            self.__method_versions[method_name] = conf.ApiVersion.node
-            self.__method_names[method_name] = "node_GetBlockByHeight"
-        except ReceivedErrorResponse as e:
-            self.__method_versions[method_name] = conf.ApiVersion.v3
-            self.__method_names[method_name] = "icx_getBlockByHeight"
-        except Exception as e:
-            raise e
-
-        logging.debug(f"update subscribe api version({method_name}) to: {self.__method_versions[method_name].name}")
-
     def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False):
         try:
-            if self.__should_update:
-                self.update_methods_version()
-                self.__should_update = False
-
             version = self.__method_versions[method_name]
             url = self.__version_urls[version]
             method_name = self.__method_names[method_name]
@@ -102,9 +75,6 @@ class RestStubManager:
                 url += method_name
                 response = requests.get(url, params={'channel': self.__channel_name})
             else:
-                if method_name == "icx_getBlockByHeight" and 'channel' in message:
-                    del message['channel']
-
                 client = HTTPClient(url)
                 client.session.verify = conf.REST_SSL_VERIFY
                 response = client.request(method_name, message) if message else client.request(method_name)

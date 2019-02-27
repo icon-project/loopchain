@@ -55,8 +55,8 @@ class ConsensusSiever(ConsensusBase):
 
             if complained:
                 util.logger.spam("consensus block_builder.complained")
-                block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
-                if not block_info and self._blockchain.last_block.header.height > 0:
+                confirm_info = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
+                if not confirm_info and self._blockchain.last_block.header.height > 0:
                     util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
                 vote_result = True
