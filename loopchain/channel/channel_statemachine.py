@@ -97,7 +97,7 @@ class ChannelStateMachine(object):
     def turn_to_leader(self):
         pass
 
-    @statemachine.transition(source='Vote', dest='LeaderComplain')
+    @statemachine.transition(source=('Vote', 'LeaderComplain'), dest='LeaderComplain')
     def leader_complain(self):
         pass
 
@@ -170,5 +170,6 @@ class ChannelStateMachine(object):
 
     def _leadercomplain_on_exit(self):
         util.logger.debug(f"_leadercomplain_on_exit")
+        self.__channel_service.stop_leader_complain_timer()
 
     # }
