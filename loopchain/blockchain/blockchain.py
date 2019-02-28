@@ -47,7 +47,7 @@ class BlockChain:
     BLOCK_HEIGHT_KEY = b'block_height_key'
 
     # Additional information of the block is generated when the add_block phase of the consensus is reached.
-    BLOCK_INFO_KEY = b'block_info_key'
+    CONFIRM_INFO_KEY = b'confirm_info_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
     def __init__(self, blockchain_db=None, channel_name=None):
@@ -79,6 +79,7 @@ class BlockChain:
         self.__confirmed_block_lock = threading.RLock()
 
         self.__total_tx = 0
+        self.__nid: str = None
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -205,22 +206,29 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
-    def find_block_info_by_hash(self, block_hash):
-        block_hash_encoded = block_hash.hex().encode(encoding='UTF-8')
+    def find_confirm_info_by_hash(self, hash) -> bytearray:
+        hash_encoded = hash.hex().encode(encoding='UTF-8')
 
         try:
-            return self.__confirmed_block_db.Get(BlockChain.BLOCK_INFO_KEY + block_hash_encoded)
+            return self.__confirmed_block_db.Get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
-            return None
+            return bytearray(b"")
+
+    def find_confirm_info_by_height(self, height) -> bytearray:
+        block = self.find_block_by_height(height)
+        if block:
+            return self.find_confirm_info_by_hash(block.header.hash)
+
+        return bytearray(b"")
 
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block: Block, block_info=None) -> bool:
+    def add_block(self, block: Block, confirm_info=None) -> bool:
         """
 
         :param block:
-        :param block_info: additional info for this block, but It came from next block of this block.
+        :param confirm_info: additional info for this block, but It came from next block of this block.
         :return:
         """
         with self.__add_block_lock:
@@ -237,9 +245,9 @@ class BlockChain:
                     'block_hash': block.header.hash.hex(),
                     'total_tx': self.total_tx}})
 
-            return self.__add_block(block, block_info)
+            return self.__add_block(block, confirm_info)
 
-    def __add_block(self, block: Block, block_info):
+    def __add_block(self, block: Block, confirm_info):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None:
@@ -258,7 +266,7 @@ class BlockChain:
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
 
-            next_total_tx = self.__write_block_data(block, block_info)
+            next_total_tx = self.__write_block_data(block, confirm_info)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -285,7 +293,7 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, block_info):
+    def __write_block_data(self, block: Block, confirm_info):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -309,9 +317,9 @@ class BlockChain:
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
 
-        if block_info:
+        if confirm_info:
             batch.Put(
-                BlockChain.BLOCK_INFO_KEY + block_hash_encoded,
+                BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
                 b'0x1'
             )
 
@@ -469,8 +477,12 @@ class BlockChain:
 
     def find_nid(self):
         try:
+            if self.__nid is not None:
+                return self.__nid
+
             nid = self.__confirmed_block_db.Get(BlockChain.NID_KEY)
-            return nid.decode(conf.HASH_KEY_ENCODING)
+            self.__nid = nid.decode(conf.HASH_KEY_ENCODING)
+            return self.__nid
         except KeyError as e:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None

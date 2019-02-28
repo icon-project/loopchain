@@ -11,11 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 import asyncio
 import json
 import leveldb
 import logging
-import pickle
 import signal
 import time
 import traceback
@@ -23,7 +23,7 @@ import traceback
 from earlgrey import MessageQueueService
 
 import loopchain.utils as util
-from loopchain import configure as conf
+from loopchain import configure as conf, utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
@@ -601,7 +601,7 @@ class ChannelService:
             blockchain = self.block_manager.get_blockchain()
             last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
-            if last_block:
+            if last_block and last_block.header.next_leader is not None:
                 leader_id = last_block.header.next_leader.hex_hx()
                 self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
             else:
@@ -689,7 +689,7 @@ class ChannelService:
             logging.debug("peer_target: " + peer)
 
     async def reset_leader(self, new_leader_id, block_height=0):
-        logging.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
+        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
@@ -706,33 +706,22 @@ class ChannelService:
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
-
-        peer_leader = self.peer_manager.get_leader_peer()
         peer_type = loopchain_pb2.PEER
+        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
 
-        if self_peer_object.target == peer_leader.target:
+        if self_peer_object.target == leader_peer.target:
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
-
-            if conf.CONSENSUS_ALGORITHM != conf.ConsensusAlgorithm.lft:
-                if conf.ENABLE_REP_RADIO_STATION:
-                    self.peer_manager.announce_new_leader(
-                        self.peer_manager.get_leader_peer().peer_id,
-                        new_leader_id,
-                        is_broadcast=True,
-                        self_peer_id=ChannelProperty().peer_id
-                    )
         else:
             logging.debug("Set Peer Type Peer!")
             self.state_machine.turn_to_peer()
 
             # 새 leader 에게 subscribe 하기
             # await self.subscribe_to_radio_station()
-            await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
+            await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
-        self.block_manager.epoch.set_epoch_leader(peer_leader.peer_id)
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")

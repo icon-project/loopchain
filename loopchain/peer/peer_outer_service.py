@@ -18,12 +18,10 @@ import copy
 import datetime
 from functools import partial
 
-import loopchain_pb2
-
-from loopchain.baseservice import ObjectManager, Monitor, TimerService
+from loopchain.baseservice import Monitor, TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest
+from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -205,6 +203,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         status['state'] = status_cache['state']
         status['peer_type'] = status_cache['peer_type']
         status['block_height'] = status_cache['block_height']
+        status['peer_count'] = status_cache['peer_count']
+        status['leader'] = status_cache['leader']
         return status
 
     def __get_status_from_cache(self, channel: str):
@@ -440,7 +440,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         # Peer To Client
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, block_data_json, tx_data_json_list = \
+        response_code, block_hash, _, block_data_json, tx_data_json_list = \
             channel_stub.sync_task().get_block(
                 block_height=-1,
                 block_hash='',
@@ -469,7 +469,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, block_data_json, tx_data_json_list = \
+        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = \
             channel_stub.sync_task().get_block(
                 block_height=request.block_height,
                 block_hash=request.block_hash,
@@ -479,6 +479,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.GetBlockReply(response_code=response_code,
                                            block_hash=block_hash,
                                            block_data_json=block_data_json,
+                                           confirm_info=confirm_info,
                                            tx_data_json=tx_data_json_list)
 
     def GetPrecommitBlock(self, request, context):
@@ -541,13 +542,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                      f"request height({request.block_height}) channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_height, max_block_height, block_dumped = \
+        response_code, block_height, max_block_height, confirm_info, block_dumped = \
             channel_stub.sync_task().block_sync(request.block_hash, request.block_height)
 
         return loopchain_pb2.BlockSyncReply(
             response_code=response_code,
             block_height=block_height,
             max_block_height=max_block_height,
+            confirm_info=bytes(confirm_info) if confirm_info else b"",
             block=block_dumped)
 
     def Subscribe(self, request, context):

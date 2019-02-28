@@ -1,5 +1,7 @@
 from collections import OrderedDict
+
 from dataclasses import dataclass
+
 from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, _dict__str__
 from ... import Hash32, Address, Signature, ExternalAddress
 
@@ -25,6 +27,11 @@ class BlockHeader(BaseBlockHeader):
             commit_state = OrderedDict(commit_state)
             commit_state.__str__ = _dict__str__
             object.__setattr__(self, "commit_state", commit_state)
+
+    @property
+    def complained(self) -> bool:
+        # tx == 0 and peer_id == next_leader >> complained = True
+        return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
 
 
 @dataclass(frozen=True)

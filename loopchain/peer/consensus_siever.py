@@ -47,15 +47,16 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
         with self.__lock:
-            block_builder = self._block_manager.epoch.makeup_block()
+            complained = self._block_manager.epoch.complain_result()
+            block_builder = self._block_manager.epoch.makeup_block(complained)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
-            if block_builder.complained:
+            if complained:
                 util.logger.spam("consensus block_builder.complained")
-                block_info = self._blockchain.find_block_info_by_hash(self._blockchain.last_block.header.hash)
-                if not block_info and self._blockchain.last_block.header.height > 0:
+                confirm_info = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
+                if not confirm_info and self._blockchain.last_block.header.height > 0:
                     util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
                 vote_result = True
@@ -128,8 +129,7 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.state_machine.turn_to_peer()
-                self._block_manager.epoch.set_epoch_leader(next_leader.hex_hx())
+                await ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
                 self.__block_generation_timer.call()
 

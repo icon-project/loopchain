@@ -20,4 +20,8 @@ class TransactionVerifier(BaseTransactionVerifier):
         self.verify_hash(tx)
         self.verify_signature(tx)
         if blockchain:
+            nid = blockchain.find_nid()
+            if hex(tx.nid) != nid:
+                raise RuntimeError(f"tx({tx})\n"
+                                   f"nid {hex(tx.nid)} != {nid} not match.")
             self.verify_tx_hash_unique(tx, blockchain)
