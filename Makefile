@@ -51,14 +51,26 @@ check:
 test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
-# clean-mq clean-build clean-pyc
-clean: clean-mq clean-build clean-pyc
+# Clean all: clean-process clean-mq clean-pyc clean-db clean-log
+clean: clean-process clean-mq clean-pyc clean-db clean-log
+
+linux-clean: clean-process clean-mq-linux clean-pyc clean-db clean-log
+
+clean-process:
+	pkill -f loop || true
+	pkill -f gunicorn || true
 
 clean-mq:
 	@echo "Cleaning up RabbitMQ..."
 	@rabbitmqctl stop_app
 	@rabbitmqctl reset
 	@rabbitmqctl start_app
+
+clean-mq-linux:
+	@echo "Cleaning up RabbitMQ..."
+	sudo rabbitmqctl stop_app
+	sudo rabbitmqctl reset
+	sudo rabbitmqctl start_app
 
 clean-build:
 	@rm -rf dist/
@@ -71,10 +83,12 @@ clean-pyc:
 	find . -name '*.pyo' -exec rm -f {} +
 	find . -name '*~' -exec rm -f {} +
 
-# Clean up all DB and logs
+# Clean up all DB
 clean-db:
 	@echo "Cleaning up all DB and logs..."
 	rm -rf .storage*
+
+clean-log:
 	rm -rf log/
 
 # build
