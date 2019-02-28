@@ -29,7 +29,7 @@ class BlockSerializer(BaseBlockSerializer):
             "height": header.height,
             "peer_id": header.peer_id.hex_hx() if header.peer_id else '',
             "signature": header.signature.to_base64str() if header.signature else '',
-            "next_leader": header.next_leader.hex_xx(),
+            "next_leader": header.next_leader.hex_xx() if header.next_leader else '',
             "commit_state": header.commit_state
         }
 

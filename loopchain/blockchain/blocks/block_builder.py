@@ -123,3 +123,7 @@ class BlockBuilder(ABC):
         self.hash = block.header.hash
         self.signature = block.header.signature
         self.peer_id = block.header.peer_id
+
+    @abstractmethod
+    def get_vote_result(self, block_info):
+        raise NotImplementedError
