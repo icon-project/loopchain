@@ -504,69 +504,73 @@ class BlockManager:
         self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height)
 
         try:
+            peer_stubs_len = len(peer_stubs)
+            peer_index = 0
             while max_height > my_height:
-                for peer_stub in peer_stubs:
+                peer_stub = peer_stubs[peer_index]
+                try:
+                    block, max_block_height, confirm_info, response_code = \
+                        self.__block_request(peer_stub, my_height + 1)
+                except Exception as e:
+                    logging.warning("There is a bad peer, I hate you: " + str(e))
+                    traceback.print_exc()
                     response_code = message_code.Response.fail
+
+                if response_code == message_code.Response.success:
+                    logging.debug(f"try add block height: {block.header.height}")
+
                     try:
-                        block, max_block_height, confirm_info, response_code = \
-                            self.__block_request(peer_stub, my_height + 1)
-                    except Exception as e:
-                        logging.warning("There is a bad peer, I hate you: " + str(e))
-                        traceback.print_exc()
-
-                    if response_code == message_code.Response.success:
-                        logging.debug(f"try add block height: {block.header.height}")
-
-                        try:
+                        result = True
+                        if max_height == unconfirmed_block_height == block.header.height\
+                                and max_height > 0 and not confirm_info:
+                            self.candidate_blocks.add_block(block)
+                            self.__blockchain.last_unconfirmed_block = block
                             result = True
-                            if max_height == unconfirmed_block_height == block.header.height\
-                                    and max_height > 0 and not confirm_info:
-                                self.candidate_blocks.add_block(block)
-                                self.__blockchain.last_unconfirmed_block = block
-                                result = True
-                            else:
-                                result = self.__add_block_by_sync(block, confirm_info)
+                        else:
+                            result = self.__add_block_by_sync(block, confirm_info)
 
-                            if result:
-                                if block.header.height == 0:
-                                    self.__rebuild_nid(block)
-                                elif self.__blockchain.find_nid() is None:
-                                    genesis_block = self.get_blockchain().find_block_by_height(0)
-                                    self.__rebuild_nid(genesis_block)
+                        if result:
+                            if block.header.height == 0:
+                                self.__rebuild_nid(block)
+                            elif self.__blockchain.find_nid() is None:
+                                genesis_block = self.get_blockchain().find_block_by_height(0)
+                                self.__rebuild_nid(genesis_block)
 
-                        except KeyError as e:
-                            result = False
-                            logging.error("fail block height sync: " + str(e))
-                            break
-                        except exception.BlockError:
-                            result = False
-                            logging.error("Block Error Clear all block and restart peer.")
-                            self.clear_all_blocks()
-                            util.exit_and_msg("Block Error Clear all block and restart peer.")
-                            break
-                        finally:
-                            if result:
-                                my_height += 1
-                                retry_number = 0
-                            else:
-                                retry_number += 1
-                                logging.warning(f"Block height({my_height}) synchronization is fail. "
-                                                f"{retry_number}/{conf.BLOCK_SYNC_RETRY_NUMBER}")
-                                if retry_number >= conf.BLOCK_SYNC_RETRY_NUMBER:
-                                    util.exit_and_msg(f"This peer already tried to synchronize {my_height} block "
-                                                      f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
-                                                      f"Peer will be down.")
+                    except KeyError as e:
+                        result = False
+                        logging.error("fail block height sync: " + str(e))
+                        break
+                    except exception.BlockError:
+                        result = False
+                        logging.error("Block Error Clear all block and restart peer.")
+                        self.clear_all_blocks()
+                        util.exit_and_msg("Block Error Clear all block and restart peer.")
+                        break
+                    finally:
+                        peer_index = (peer_index + 1) % peer_stubs_len
+                        if result:
+                            my_height += 1
+                            retry_number = 0
+                        else:
+                            retry_number += 1
+                            logging.warning(f"Block height({my_height}) synchronization is fail. "
+                                            f"{retry_number}/{conf.BLOCK_SYNC_RETRY_NUMBER}")
+                            if retry_number >= conf.BLOCK_SYNC_RETRY_NUMBER:
+                                util.exit_and_msg(f"This peer already tried to synchronize {my_height} block "
+                                                  f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
+                                                  f"Peer will be down.")
 
-                        if target_height is None:
-                            if max_block_height > max_height:
-                                util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
-                                max_height = max_block_height
-                    else:
-                        peer_stubs.remove(peer_stub)
-                        logging.warning(f"Not responding peer({peer_stub}) is removed from the peer stubs target.")
-
-                        if len(peer_stubs) < 1:
-                            raise ConnectionError
+                    if target_height is None:
+                        if max_block_height > max_height:
+                            util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
+                            max_height = max_block_height
+                else:
+                    logging.warning(f"Not responding peer({peer_stub}) is removed from the peer stubs target.")
+                    if peer_stubs_len == 1:
+                        raise ConnectionError
+                    del peer_stubs[peer_index]
+                    peer_stubs_len -= 1
+                    peer_index %= peer_stubs_len  # If peer_index is last index, go to first
         except Exception as e:
             logging.warning(f"block_manager.py >>> block_height_sync :: {e}")
             traceback.print_exc()
