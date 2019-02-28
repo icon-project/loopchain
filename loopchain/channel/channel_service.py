@@ -234,16 +234,10 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 await self.subscribe_to_radio_station()
-
-            if self.block_manager.peer_type == loopchain_pb2.PEER:
-                await self.__subscribe_call_to_stub(
-                    peer_stub=self.block_manager.subscribe_target_peer_stub,
-                    peer_type=loopchain_pb2.PEER
-                )
+            if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:
+                self.generate_genesis_block()
         else:
             await self.subscribe_to_radio_station()
-
-        self.generate_genesis_block()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             if not self.__consensus.is_run():
@@ -389,9 +383,6 @@ class ChannelService:
         return channel_option[ChannelProperty().name]
 
     def generate_genesis_block(self):
-        if self.block_manager.peer_type != loopchain_pb2.BLOCK_GENERATOR:
-            return
-
         blockchain = self.block_manager.get_blockchain()
         if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
@@ -593,57 +584,9 @@ class ChannelService:
             self.block_manager.rebuild_block()
 
     async def block_height_sync_channel(self):
-        # leader 로 시작하지 않았는데 자신의 정보가 leader Peer 정보이면 block height sync 하여
-        # 최종 블럭의 leader 를 찾는다.
-        peer_leader = self.peer_manager.get_leader_peer()
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        is_delay_announce_new_leader = False
-        peer_old_leader = None
-
-        if peer_leader:
-            block_sync_target = peer_leader.target
-            block_sync_target_stub = StubManager.get_stub_manager_to_server(
-                block_sync_target,
-                loopchain_pb2_grpc.PeerServiceStub,
-                time_out_seconds=conf.CONNECTION_RETRY_TIMEOUT,
-                ssl_auth_type=conf.GRPC_SSL_TYPE
-            )
-        else:
-            block_sync_target = ChannelProperty().radio_station_target
-            block_sync_target_stub = self.__radio_station_stub
-
-        if block_sync_target != ChannelProperty().peer_target:
-            if block_sync_target_stub is None:
-                logging.warning("You maybe Older from this network... or No leader in this network!")
-
-                is_delay_announce_new_leader = True
-                peer_old_leader = peer_leader
-                peer_leader = self.peer_manager.leader_complain_to_rs(
-                    conf.ALL_GROUP_ID, is_announce_new_peer=False)
-
-                if peer_leader is not None and ChannelProperty().node_type == conf.NodeType.CommunityNode:
-                    block_sync_target_stub = StubManager.get_stub_manager_to_server(
-                        peer_leader.target,
-                        loopchain_pb2_grpc.PeerServiceStub,
-                        time_out_seconds=conf.CONNECTION_RETRY_TIMEOUT,
-                        ssl_auth_type=conf.GRPC_SSL_TYPE
-                    )
-
-            if self.is_support_node_function(conf.NodeFunction.Vote) and \
-                    (not peer_leader or peer_leader.peer_id == ChannelProperty().peer_id):
-                peer_leader = self_peer_object
-                self.block_manager.set_peer_type(loopchain_pb2.BLOCK_GENERATOR)
-            else:
-                _, future = self.block_manager.block_height_sync(block_sync_target_stub)
-                await future
-
-                self.show_peers()
-
-            if is_delay_announce_new_leader and ChannelProperty().node_type == conf.NodeType.CommunityNode:
-                self.peer_manager.announce_new_leader(
-                    peer_old_leader.peer_id,
-                    peer_leader.peer_id,
-                    self_peer_id=ChannelProperty().peer_id)
+        _, future = self.block_manager.block_height_sync()
+        await future
+        self.show_peers()
 
     def show_peers(self):
         logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
