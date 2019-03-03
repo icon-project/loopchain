@@ -42,7 +42,7 @@ generate-key:
 
 # Check loopchain & gunicorn & rabbitmq processes
 check:
-	@echo "Check Python & Gunicorn & RabbitMQ Process..."
+	@echo "Check loopchain & Gunicorn & RabbitMQ Process..."
 	ps -ef | grep loop
 	ps -ef | grep gunicorn
 	rabbitmqctl list_queues
@@ -52,13 +52,13 @@ test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
 # Clean all: clean-process clean-mq clean-pyc clean-db clean-log
-clean: clean-process clean-mq clean-pyc clean-db clean-log
+clean: clean-process clean-mq clean-pyc clean-db clean-log check
 
-linux-clean: clean-process clean-mq-linux clean-pyc clean-db clean-log
+linux-clean: clean-process clean-mq-linux clean-pyc clean-db clean-log check
 
 clean-process:
-	pkill -f loop || true
-	pkill -f gunicorn || true
+	@pkill -f loop || true
+	@pkill -f gunicorn || true
 
 clean-mq:
 	@echo "Cleaning up RabbitMQ..."
@@ -68,9 +68,9 @@ clean-mq:
 
 clean-mq-linux:
 	@echo "Cleaning up RabbitMQ..."
-	sudo rabbitmqctl stop_app
-	sudo rabbitmqctl reset
-	sudo rabbitmqctl start_app
+	@sudo rabbitmqctl stop_app
+	@sudo rabbitmqctl reset
+	@sudo rabbitmqctl start_app
 
 clean-build:
 	@rm -rf dist/
@@ -79,17 +79,17 @@ clean-build:
 
 clean-pyc:
 	@echo "Clear __pycache__"
-	find . -name '*.pyc' -exec rm -f {} +
-	find . -name '*.pyo' -exec rm -f {} +
-	find . -name '*~' -exec rm -f {} +
+	@find . -name '*.pyc' -exec rm -f {} +
+	@find . -name '*.pyo' -exec rm -f {} +
+	@find . -name '*~' -exec rm -f {} +
 
 # Clean up all DB
 clean-db:
 	@echo "Cleaning up all DB and logs..."
-	rm -rf .storage*
+	@rm -rf .storage*
 
 clean-log:
-	rm -rf log/
+	@rm -rf log/
 
 # build
 build:
