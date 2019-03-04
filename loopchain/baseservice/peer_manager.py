@@ -16,7 +16,6 @@
 import json
 import logging
 import math
-import pickle
 import threading
 import traceback
 from typing import Union
@@ -31,9 +30,7 @@ from loopchain.protos import loopchain_pb2_grpc, message_code
 
 
 class PeerListData:
-    """PeerList 를 DB 에 저장하기 위해 dump 성 데이터를 따로 관리한다.
-    gRPC stub 은 pickle 로 덤프시 오류가 발생한다.
-    """
+    # Manage PeerList to save DB.
     def __init__(self):
         # { group_id: { peer_id:PeerInfo } } 로 구성된 dictionary
         self.__peer_info_list: dict = {}
