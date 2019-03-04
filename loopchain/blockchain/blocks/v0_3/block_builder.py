@@ -167,11 +167,11 @@ class BlockBuilder(BaseBlockBuilder):
         leaves = (
             self.prev_hash,
             self.transaction_hash,
+            self.rep_hash,
+            self.bloom_filter,
             self.height,
             self._timestamp,
             self.peer_id,
-            self.next_leader,
-            self.complained
         )
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
