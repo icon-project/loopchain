@@ -23,8 +23,6 @@ from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING
 
-from jsonrpcclient.exceptions import ReceivedErrorResponse
-
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
@@ -35,14 +33,12 @@ from loopchain.blockchain import TransactionStatusInQueue, BlockChain, Candidate
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
-
-import loopchain_pb2
 
 
 class BlockManager:
