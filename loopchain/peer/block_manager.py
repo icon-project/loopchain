@@ -319,7 +319,7 @@ class BlockManager:
 
         :param peer_stub:
         :param block_height:
-        :return block, max_block_height, response_code
+        :return block, max_block_height, confirm_info, response_code
         """
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -333,7 +333,7 @@ class BlockManager:
                 raise exception.BlockError(f"Received block is invalid: original exception={e}")
             return block, response.max_block_height, response.confirm_info, response.response_code
         else:
-            # request REST(json-rpc) way to radiostation (mother peer)
+            # request REST(json-rpc) way to RS peer
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
 
     def __block_request_by_citizen(self, block_height, rs_rest_stub):
@@ -351,9 +351,9 @@ class BlockManager:
         block_version = self.get_blockchain().block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
+        confirm_info = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
 
-        return block, json.loads(max_height_result.text)['block_height'], \
-            get_block_result['confirm_info'], message_code.Response.success
+        return block, json.loads(max_height_result.text)['block_height'], confirm_info, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
