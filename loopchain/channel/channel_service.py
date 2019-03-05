@@ -584,9 +584,7 @@ class ChannelService:
             self.block_manager.rebuild_block()
 
     async def block_height_sync_channel(self):
-        _, future = self.block_manager.block_height_sync()
-        await future
-        self.show_peers()
+        self.block_manager.block_height_sync()
 
     def show_peers(self):
         logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
