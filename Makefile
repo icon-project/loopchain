@@ -1,9 +1,9 @@
 UNAME := $(shell uname)
 
-ifeq ("$(UNAME)", "Darwin")
-	RABBITMQ_CMD = rabbitmqctl
-else
-	RABBITMQ_CMD = sudo rabbitmqctl
+ifeq ($(UNAME), Darwin)
+RABBITMQ_CMD := rabbitmqctl
+else ifeq ($(UNAME), Linux)
+RABBITMQ_CMD := sudo rabbitmqctl
 endif
 
 help:

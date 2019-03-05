@@ -107,12 +107,8 @@ class ChannelStateMachine(object):
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
-    def _enter_block_sync(self):
-        self.block_sync()
-
     def _do_block_sync(self):
-        loop = MessageQueueService.loop
-        asyncio.run_coroutine_threadsafe(self.__channel_service.block_height_sync_channel(), loop)
+        self.__channel_service.block_manager.block_height_sync()
 
     def _do_evaluate_network(self):
         loop = MessageQueueService.loop

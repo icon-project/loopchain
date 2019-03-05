@@ -583,9 +583,6 @@ class ChannelService:
         if blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
-    async def block_height_sync_channel(self):
-        self.block_manager.block_height_sync()
-
     def show_peers(self):
         logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
         for peer in self.peer_manager.get_IP_of_peers_in_group():
