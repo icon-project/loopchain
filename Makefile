@@ -1,3 +1,11 @@
+UNAME := $(shell uname)
+
+ifeq ("$(UNAME)", "Darwin")
+	RABBITMQ_CMD = rabbitmqctl
+else
+	RABBITMQ_CMD = sudo rabbitmqctl
+endif
+
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}' $(MAKEFILE_LIST) | column -s: -t
 
@@ -51,10 +59,8 @@ check:
 test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
-# Clean all: clean-process clean-mq clean-pyc clean-db clean-log
+# Clean all - clean-process clean-mq clean-pyc clean-db clean-log
 clean: clean-process clean-mq clean-pyc clean-db clean-log check
-
-linux-clean: clean-process clean-mq-linux clean-pyc clean-db clean-log check
 
 clean-process:
 	@pkill -f loop || true
@@ -62,15 +68,9 @@ clean-process:
 
 clean-mq:
 	@echo "Cleaning up RabbitMQ..."
-	@rabbitmqctl stop_app
-	@rabbitmqctl reset
-	@rabbitmqctl start_app
-
-clean-mq-linux:
-	@echo "Cleaning up RabbitMQ..."
-	@sudo rabbitmqctl stop_app
-	@sudo rabbitmqctl reset
-	@sudo rabbitmqctl start_app
+	@$(RABBITMQ_CMD) stop_app
+	@$(RABBITMQ_CMD) reset
+	@$(RABBITMQ_CMD) start_app
 
 clean-build:
 	@rm -rf dist/
@@ -83,7 +83,6 @@ clean-pyc:
 	@find . -name '*.pyo' -exec rm -f {} +
 	@find . -name '*~' -exec rm -f {} +
 
-# Clean up all DB
 clean-db:
 	@echo "Cleaning up all DB and logs..."
 	@rm -rf .storage*
