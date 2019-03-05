@@ -36,6 +36,9 @@ class MockBlockManager:
     def stop_block_generate_timer(self):
         self.timer_called -= 1
 
+    def block_height_sync(self):
+        pass
+
 
 class MockBlockManagerCitizen:
     peer_type = loopchain_pb2.PEER
@@ -43,13 +46,13 @@ class MockBlockManagerCitizen:
     def start_block_generate_timer(self):
         pass
 
+    def block_height_sync(self):
+        pass
+
 
 class MockChannelService:
     def __init__(self):
         self.block_manager = MockBlockManager()
-
-    async def block_height_sync_channel(self):
-        pass
 
     async def evaluate_network(self):
         pass
@@ -71,9 +74,6 @@ class MockChannelService:
 
 
 class MockChannelServiceCitizen:
-    async def block_height_sync_channel(self):
-        pass
-
     async def evaluate_network(self):
         pass
 

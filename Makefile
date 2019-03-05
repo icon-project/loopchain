@@ -1,3 +1,11 @@
+UNAME := $(shell uname)
+
+ifeq ($(UNAME), Darwin)
+RABBITMQ_CMD := rabbitmqctl
+else ifeq ($(UNAME), Linux)
+RABBITMQ_CMD := sudo rabbitmqctl
+endif
+
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}' $(MAKEFILE_LIST) | column -s: -t
 
@@ -42,7 +50,7 @@ generate-key:
 
 # Check loopchain & gunicorn & rabbitmq processes
 check:
-	@echo "Check Python & Gunicorn & RabbitMQ Process..."
+	@echo "Check loopchain & Gunicorn & RabbitMQ Process..."
 	ps -ef | grep loop
 	ps -ef | grep gunicorn
 	rabbitmqctl list_queues
@@ -51,14 +59,18 @@ check:
 test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
-# clean-mq clean-build clean-pyc
-clean: clean-mq clean-build clean-pyc
+# Clean all - clean-process clean-mq clean-pyc clean-db clean-log
+clean: clean-process clean-mq clean-pyc clean-db clean-log check
+
+clean-process:
+	@pkill -f loop || true
+	@pkill -f gunicorn || true
 
 clean-mq:
 	@echo "Cleaning up RabbitMQ..."
-	@rabbitmqctl stop_app
-	@rabbitmqctl reset
-	@rabbitmqctl start_app
+	@$(RABBITMQ_CMD) stop_app
+	@$(RABBITMQ_CMD) reset
+	@$(RABBITMQ_CMD) start_app
 
 clean-build:
 	@rm -rf dist/
@@ -67,15 +79,16 @@ clean-build:
 
 clean-pyc:
 	@echo "Clear __pycache__"
-	find . -name '*.pyc' -exec rm -f {} +
-	find . -name '*.pyo' -exec rm -f {} +
-	find . -name '*~' -exec rm -f {} +
+	@find . -name '*.pyc' -exec rm -f {} +
+	@find . -name '*.pyo' -exec rm -f {} +
+	@find . -name '*~' -exec rm -f {} +
 
-# Clean up all DB and logs
 clean-db:
 	@echo "Cleaning up all DB and logs..."
-	rm -rf .storage*
-	rm -rf log/
+	@rm -rf .storage*
+
+clean-log:
+	@rm -rf log/
 
 # build
 build:
