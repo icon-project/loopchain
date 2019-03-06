@@ -29,7 +29,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, )
+                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
@@ -638,7 +638,7 @@ class ChannelInnerTask:
 
         last_block = self._channel_service.block_manager.get_blockchain().last_block
         if last_block is None:
-            util.logger.debug("BlockChain has been initialized yet.")
+            util.logger.debug("BlockChain has not been initialized yet.")
             return
         elif unconfirmed_block.header.height <= last_block.header.height:
             util.logger.debug("Ignore unconfirmed block because the block height is under last block height.")
@@ -661,9 +661,10 @@ class ChannelInnerTask:
             util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
             await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
-        unconfirmed_tx_count = self._channel_service.block_manager.get_count_of_unconfirmed_tx()
-        if self._channel_service.state_machine.state != "BlockSync" and unconfirmed_tx_count != 0:
-            util.logger.debug(f"Start leader complain timer because unconfirmed tx({unconfirmed_tx_count}) exists.")
+        tx_queue = self._channel_service.block_manager.get_tx_queue()
+        if self._channel_service.state_machine.state != "BlockSync" \
+                and not tx_queue.is_empty_in_status(TransactionStatusInQueue.normal):
+            util.logger.debug("Start leader complain timer because unconfirmed tx exists.")
             self._channel_service.start_leader_complain_timer()
 
     @message_queue_task
@@ -721,19 +722,19 @@ class ChannelInnerTask:
         else:
             response_message = message_code.Response.fail_not_enough_data
 
-        if block is None:
-            if response_message is None:
-                response_message = message_code.Response.fail_wrong_block_hash
-            return response_message, -1, blockchain.block_height, None, None
-
-        confirm_info = None
-        if block.header.height <= blockchain.block_height:
-            confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
-
         if blockchain.last_unconfirmed_block is None:
             unconfirmed_block_height = -1
         else:
             unconfirmed_block_height = blockchain.last_unconfirmed_block.header.height
+
+        if block is None:
+            if response_message is None:
+                response_message = message_code.Response.fail_wrong_block_hash
+            return response_message, -1, blockchain.block_height, unconfirmed_block_height, None, None
+
+        confirm_info = None
+        if block.header.height <= blockchain.block_height:
+            confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
 
         return message_code.Response.success, block.header.height, blockchain.block_height, unconfirmed_block_height,\
             confirm_info, blockchain.block_dumps(block)

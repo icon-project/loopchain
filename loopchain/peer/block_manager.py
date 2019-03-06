@@ -506,14 +506,6 @@ class BlockManager:
                 try:
                     block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
                         self.__block_request(peer_stub, my_height + 1)
-
-                    max_block_height = max(max_block_height, current_unconfirmed_block_height)
-                    if max_block_height > max_height:
-                        util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
-                        max_height = max_block_height
-                        if current_unconfirmed_block_height == max_block_height:
-                            unconfirmed_block_height = current_unconfirmed_block_height
-
                 except Exception as e:
                     logging.warning("There is a bad peer, I hate you: " + str(e))
                     traceback.print_exc()
@@ -521,6 +513,13 @@ class BlockManager:
 
                 if response_code == message_code.Response.success:
                     logging.debug(f"try add block height: {block.header.height}")
+
+                    max_block_height = max(max_block_height, current_unconfirmed_block_height)
+                    if max_block_height > max_height:
+                        util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
+                        max_height = max_block_height
+                        if current_unconfirmed_block_height == max_block_height:
+                            unconfirmed_block_height = current_unconfirmed_block_height
 
                     try:
                         result = True
