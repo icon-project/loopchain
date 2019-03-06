@@ -822,7 +822,7 @@ class ChannelInnerTask:
                 # if not
                 #     self._channel_service.start_leader_complain_timer()
                 self._channel_service.state_machine.turn_to_peer()
-            block_manager.epoch.prev_leader_id = next_new_leader
+            block_manager.epoch.leader_id = next_new_leader
             self._channel_service.reset_leader_complain_timer()
             self._channel_service.reset_leader(next_new_leader)
 

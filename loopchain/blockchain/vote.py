@@ -12,11 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """data object for peer votes to one block"""
+
 import logging
 from enum import Enum
 
 from loopchain import configure as conf
 from loopchain.baseservice import PeerManager
+import collections
+
+
+VoteResult = collections.namedtuple("VoteResult", 'result, '
+                                                  'agree_vote_group_count, '
+                                                  'total_vote_group_count, '
+                                                  'total_group_count, '
+                                                  'agree_vote_peer_count, '
+                                                  'total_peer_count, '
+                                                  'voting_ratio')
 
 
 class VoteType(Enum):
@@ -92,9 +103,9 @@ class Vote:
         return True
 
     def get_result(self, block_hash, voting_ratio):
-        return self.get_result_detail(block_hash, voting_ratio)[0]
+        return self.get_result_detail(block_hash, voting_ratio).result
 
-    def get_result_detail(self, block_hash, voting_ratio):
+    def get_result_detail(self, block_hash, voting_ratio) -> VoteResult:
         """
 
         :param block_hash:
@@ -151,17 +162,25 @@ class Vote:
         logging.debug("=agree_vote_peer_count: " + str(agree_vote_peer_count))
         logging.debug("=total_peer_count: " + str(total_peer_count))
 
-        return result, agree_vote_group_count, total_vote_group_count, \
-            total_group_count, agree_vote_peer_count, total_peer_count, voting_ratio
+        vote_result = VoteResult(
+            result=result,
+            agree_vote_group_count=agree_vote_group_count,
+            total_vote_group_count=total_vote_group_count,
+            total_group_count=total_group_count,
+            agree_vote_peer_count=agree_vote_peer_count,
+            total_peer_count=total_peer_count,
+            voting_ratio=voting_ratio
+        )
+
+        return vote_result
 
     def is_failed_vote(self, block_hash, voting_ratio):
-        result, agree_vote_group_count, total_vote_group_count, total_group_count, \
-            agree_vote_peer_count, total_peer_count, voting_ratio = self.get_result_detail(block_hash, voting_ratio)
+        vote_result = self.get_result_detail(block_hash, voting_ratio)
 
-        fail_vote_group_count = total_vote_group_count - agree_vote_group_count
-        possible_agree_vote_group_count = total_group_count - fail_vote_group_count
+        fail_vote_group_count = vote_result.total_vote_group_count - vote_result.agree_vote_group_count
+        possible_agree_vote_group_count = vote_result.total_group_count - fail_vote_group_count
 
-        if possible_agree_vote_group_count > total_group_count * voting_ratio:
+        if possible_agree_vote_group_count > vote_result.total_group_count * voting_ratio:
             # this vote still possible get consensus
             return False
         else:

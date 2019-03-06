@@ -691,7 +691,7 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def leader_complain(self):
-        complained_leader_id = self.epoch.prev_leader_id or self.epoch.leader_id
+        complained_leader_id = self.epoch.leader_id
         new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
             current_leader_peer_id=complained_leader_id
         )

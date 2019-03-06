@@ -32,7 +32,6 @@ class Epoch:
         else:
             self.height = 1
         self.leader_id = leader_id
-        self.prev_leader_id = None
         self.__block_manager = block_manager
         self.__blockchain = self.__block_manager.get_blockchain()
         util.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
@@ -65,10 +64,14 @@ class Epoch:
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
-        util.logger.debug(f"complain_result vote_result({vote_result})")
+        vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
 
-        return vote_result
+        #  detect complain vote fail, change new leader by order (of peer list) for next complain vote.
+        if self.__complain_vote.is_failed_vote(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO):
+            pass
+
+        util.logger.debug(f"complain_result vote_result({vote_result})")
+        return vote_result.result
 
     def _check_unconfirmed_block(self):
         blockchain = self.__block_manager.get_blockchain()
