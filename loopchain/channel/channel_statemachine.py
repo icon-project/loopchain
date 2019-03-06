@@ -51,9 +51,9 @@ class ChannelStateMachine(object):
     def __init__(self, channel_service):
         self.__channel_service = channel_service
 
-        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
-        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
-        self.machine.add_transition('complete_sync', 'SubscribeNetwork', 'Vote')
+        self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
+        self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
+        self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Vote')
 
     @statemachine.transition(source='InitComponents', dest='Consensus')
     def complete_init_components(self):
@@ -81,12 +81,11 @@ class ChannelStateMachine(object):
     def subscribe_network(self):
         pass
 
-    @statemachine.transition(source='Vote', dest='Vote', after='_do_vote')
+    @statemachine.transition(source=('Vote', 'LeaderComplain'), dest='Vote', after='_do_vote')
     def vote(self):
         pass
 
-    # transition defined in __init__ for multiple conditions.
-    def complete_sync(self):
+    def complete_subscribe(self):
         pass
 
     @statemachine.transition(source=('BlockGenerate', 'Vote', 'LeaderComplain'), dest='Vote')
@@ -120,8 +119,6 @@ class ChannelStateMachine(object):
 
     def _do_vote(self):
         self.__channel_service.block_manager.vote_as_peer()
-
-    # State handlers {
 
     def _consensus_on_enter(self):
         self.block_height_sync()

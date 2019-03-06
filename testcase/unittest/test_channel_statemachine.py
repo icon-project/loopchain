@@ -128,7 +128,7 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # WHEN
-        channel_state_machine.complete_sync()
+        channel_state_machine.complete_subscribe()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
@@ -142,7 +142,7 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # WHEN
-        channel_state_machine.complete_sync()
+        channel_state_machine.complete_subscribe()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
@@ -154,7 +154,7 @@ class TestChannelStateMachine(unittest.TestCase):
         channel_state_machine = ChannelStateMachine(mock_channel_service)
         channel_state_machine.complete_init_components()
         channel_state_machine.subscribe_network()
-        channel_state_machine.complete_sync()
+        channel_state_machine.complete_subscribe()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # WHEN

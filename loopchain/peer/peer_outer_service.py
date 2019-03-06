@@ -542,7 +542,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                      f"request height({request.block_height}) channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_height, max_block_height, confirm_info, block_dumped = \
+        response_code, block_height, max_block_height, unconfirmed_block_height, confirm_info, block_dumped = \
             channel_stub.sync_task().block_sync(request.block_hash, request.block_height)
 
         return loopchain_pb2.BlockSyncReply(
@@ -550,7 +550,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             block_height=block_height,
             max_block_height=max_block_height,
             confirm_info=bytes(confirm_info) if confirm_info else b"",
-            block=block_dumped)
+            block=block_dumped,
+            unconfirmed_block_height=unconfirmed_block_height)
 
     def Subscribe(self, request, context):
         """BlockGenerator 가 broadcast(unconfirmed or confirmed block) 하는 채널에

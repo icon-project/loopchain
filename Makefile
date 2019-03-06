@@ -53,7 +53,7 @@ check:
 	@echo "Check loopchain & Gunicorn & RabbitMQ Process..."
 	ps -ef | grep loop
 	ps -ef | grep gunicorn
-	rabbitmqctl list_queues
+	@$(RABBITMQ_CMD) list_queues
 
 # Run unittest
 test:

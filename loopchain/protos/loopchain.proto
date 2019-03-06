@@ -243,6 +243,7 @@ message BlockSyncReply {
     required int32 max_block_height = 3;
     optional bytes confirm_info = 4;
     optional bytes block = 5;
+    required int32 unconfirmed_block_height = 6;
 }
 
 message PrecommitBlockRequest {
