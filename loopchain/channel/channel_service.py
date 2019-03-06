@@ -223,19 +223,12 @@ class ChannelService:
         self.block_manager.init_epoch()
 
     async def evaluate_network(self):
-        await self.set_peer_type_in_channel()
-        if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:
-            self.__state_machine.subscribe_network()
-        else:
-            self.__state_machine.block_sync()
+        self.__ready_to_height_sync()
+        self.__state_machine.block_sync()
 
     async def subscribe_network(self):
-        # Subscribe to radiostation and block_sync_target_stub
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.ENABLE_REP_RADIO_STATION:
-                await self.subscribe_to_radio_station()
-            if self.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR:
-                self.generate_genesis_block()
+            await self.set_peer_type_in_channel()
         else:
             await self.subscribe_to_radio_station()
 
@@ -246,8 +239,7 @@ class ChannelService:
         elif conf.ALLOW_MAKE_EMPTY_BLOCK:
             if not self.block_manager.block_generation_scheduler.is_run():
                 self.block_manager.block_generation_scheduler.start()
-
-        self.__state_machine.complete_sync()
+        self.__state_machine.complete_subscribe()
 
     async def __init_peer_auth(self):
         try:
@@ -547,40 +539,39 @@ class ChannelService:
             logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
-        self.__ready_to_height_sync()
+        peer_type = loopchain_pb2.PEER
+        blockchain = self.block_manager.get_blockchain()
+        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            peer_type = loopchain_pb2.PEER
-            blockchain = self.block_manager.get_blockchain()
-            last_block = blockchain.last_unconfirmed_block or blockchain.last_block
+        if last_block and last_block.header.next_leader is not None:
+            leader_id = last_block.header.next_leader.hex_hx()
+            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
+        else:
+            leader_id = self.peer_manager.get_leader_peer().peer_id
+        logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
-            if last_block and last_block.header.next_leader is not None:
-                leader_id = last_block.header.next_leader.hex_hx()
-                self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
-            else:
-                leader_id = self.peer_manager.get_leader_peer().peer_id
-            logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
+        logger_preset = loggers.get_preset()
+        if ChannelProperty().peer_id == leader_id:
+            logger_preset.is_leader = True
+            logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+            peer_type = loopchain_pb2.BLOCK_GENERATOR
+        else:
+            logger_preset.is_leader = False
+        logger_preset.update_logger()
 
-            logger_preset = loggers.get_preset()
-            if ChannelProperty().peer_id == leader_id:
-                logger_preset.is_leader = True
-                logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
-                peer_type = loopchain_pb2.BLOCK_GENERATOR
-            else:
-                logger_preset.is_leader = False
-            logger_preset.update_logger()
+        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
+            self.consensus.leader_id = leader_id
 
-            if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-                self.consensus.leader_id = leader_id
-
-            if peer_type == loopchain_pb2.BLOCK_GENERATOR:
-                self.block_manager.set_peer_type(peer_type)
+        if peer_type == loopchain_pb2.BLOCK_GENERATOR:
+            self.block_manager.set_peer_type(peer_type)
 
     def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
 
         blockchain.init_blockchain()
-        if blockchain.block_height > -1:
+        if blockchain.block_height == -1 and 'genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name]:
+            self.generate_genesis_block()
+        elif blockchain.block_height > -1:
             self.block_manager.rebuild_block()
 
     def show_peers(self):
