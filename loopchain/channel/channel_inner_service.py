@@ -824,6 +824,7 @@ class ChannelInnerTask:
                 self._channel_service.state_machine.turn_to_peer()
             block_manager.epoch.prev_leader_id = next_new_leader
             self._channel_service.reset_leader_complain_timer()
+            self._channel_service.reset_leader(next_new_leader)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):
