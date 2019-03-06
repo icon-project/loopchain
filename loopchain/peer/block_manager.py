@@ -363,7 +363,7 @@ class BlockManager:
         block = block_serializer.deserialize(get_block_result['block'])
         confirm_info = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
 
-        return block, json.loads(max_height_result.text)['block_height'], confirm_info, message_code.Response.success
+        return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
@@ -482,7 +482,8 @@ class BlockManager:
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
         if len(peer_stubs) == 0:
-            util.logger.warning("peer_service:block_height_sync there is no other peer to height sync!")
+            util.logger.warning("block_height_sync there is no other peer to height sync!")
+            self.__channel_service.state_machine.subscribe_network()
             return False
 
         if self.__blockchain.last_unconfirmed_block is not None:
@@ -493,7 +494,6 @@ class BlockManager:
         my_height = self.__current_block_height()
         retry_number = 0
         util.logger.spam(f"block_manager:block_height_sync my_height({my_height})")
-
         logging.info(f"In block height sync max: {max_height} yours: {my_height}")
 
         self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height)

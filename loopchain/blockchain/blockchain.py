@@ -711,19 +711,18 @@ class BlockChain:
     def generate_genesis_block(self):
         tx_info = None
         nid = NID.unknown.value
-        if "genesis_data_path" in conf.CHANNEL_OPTION[self.__channel_name]:
-            genesis_data_path = conf.CHANNEL_OPTION[self.__channel_name]["genesis_data_path"]
-            util.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
-            try:
-                with open(genesis_data_path, encoding="utf-8") as json_file:
-                    tx_info = json.load(json_file)["transaction_data"]
-                    nid = tx_info["nid"]
-                    # util.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
+        genesis_data_path = conf.CHANNEL_OPTION[self.__channel_name]["genesis_data_path"]
+        util.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
+        try:
+            with open(genesis_data_path, encoding="utf-8") as json_file:
+                tx_info = json.load(json_file)["transaction_data"]
+                nid = tx_info["nid"]
+                # util.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
 
-            except FileNotFoundError as e:
-                exit(f"cannot open json file in ({genesis_data_path}): {e}")
-            except KeyError as e:
-                exit(f"cannot find key name of {e} in genesis data file.")
+        except FileNotFoundError as e:
+            exit(f"cannot open json file in ({genesis_data_path}): {e}")
+        except KeyError as e:
+            exit(f"cannot find key name of {e} in genesis data file.")
 
         self.__add_genesis_block(tx_info)
         self.put_nid(nid)
