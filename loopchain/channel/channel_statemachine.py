@@ -81,7 +81,7 @@ class ChannelStateMachine(object):
     def subscribe_network(self):
         pass
 
-    @statemachine.transition(source='Vote', dest='Vote', after='_do_vote')
+    @statemachine.transition(source=('Vote', 'LeaderComplain'), dest='Vote', after='_do_vote')
     def vote(self):
         pass
 
