@@ -1,7 +1,7 @@
 @startuml State Machine in Siever
 
 [*] --> InitComponents
-InitComponents: AddTimer: Connect to Radiostation
+InitComponents: ChannelService init
 
 InitComponents --> Consensus : trigger::complete_init_components
 
@@ -20,10 +20,9 @@ state Consensus {
     state BlockHeightSync {
         [*] --> EvaluateNetwork : trigger::evaluate_network
 
-        EvaluateNetwork: Check Leader
-        EvaluateNetwork --> BlockSync : (if leader != self)\ntrigger::block_sync
-        EvaluateNetwork --> SubscribeNetwork : (if leader == self)\ntrigger::subscribe_network
-
+        EvaluateNetwork: ready to block height sync
+        EvaluateNetwork --> BlockSync : \ntrigger::block_sync
+        
         BlockSync: Check Highest Block in Network
         BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
 
@@ -31,18 +30,17 @@ state Consensus {
         SubscribeNetwork: \tStartTimer: Subscribe
         SubscribeNetwork: \tStartTimer: Shutdown
         SubscribeNetwork:}
-        SubscribeNetwork: Connect Network (Subscribe to Radiostation, Join a quorum if not yet)
+        SubscribeNetwork: Connect Network (Subscribe to Radiostation, Set peer type)
         SubscribeNetwork: on_exit {
         SubscribeNetwork: \tStopTimer: Subscribe
         SubscribeNetwork: \tStopTimer: Shutdown
         SubscribeNetwork:}
-        SubscribeNetwork -up-> EvaluateNetwork
         SubscribeNetwork -right-> [*]
     }
     BlockHeightSync: on_enter { evaluate_network }
-    BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_sync
-    BlockHeightSync -> Vote: (if leader != self)\ntrigger::complete_sync
-    BlockHeightSync --> BlockGenerate: (if leader == self)\ntrigger::complete_sync
+    BlockHeightSync --> BlockGenerate: (if not leader)\ntrigger::complete_subscribe
+    BlockHeightSync -> Vote: (if leader)\ntrigger::complete_subscribe
+    BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_subscribe
     
     Watch: Wait for new block announcement (subscribe_loop)
     Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)
