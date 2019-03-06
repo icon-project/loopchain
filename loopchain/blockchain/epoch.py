@@ -32,6 +32,7 @@ class Epoch:
         else:
             self.height = 1
         self.leader_id = leader_id
+        self.next_leader_id = None
         self.__block_manager = block_manager
         self.__blockchain = self.__block_manager.get_blockchain()
         util.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
@@ -67,8 +68,15 @@ class Epoch:
         vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
 
         #  detect complain vote fail, change new leader by order (of peer list) for next complain vote.
-        if self.__complain_vote.is_failed_vote(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO):
-            pass
+        if not vote_result.result:
+            util.logger.spam(f"complain vote fail! last voters({self.__complain_vote.get_voters()})")
+            voters = self.__complain_vote.get_voters()
+            peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
+            for i in range(len(peer_order_list)):
+                if peer_order_list[i+1] in voters:
+                    self.next_leader_id = peer_order_list[i+1]
+                    util.logger.info(f"set epoch new leader id({self.next_leader_id})")
+                    break
 
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result.result

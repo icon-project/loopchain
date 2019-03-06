@@ -54,6 +54,7 @@ class Vote:
         self.__data = data
         # self.__votes is { group_id : { peer_id : [vote_result, vote_sign] }, }:
         self.__votes = self.__make_vote_init(audience)
+        self.__last_voters = []  # [peer_id,]
 
     @property
     def type(self):
@@ -100,7 +101,11 @@ class Vote:
         if peer_id not in self.__votes[group_id].keys():
             return False
         self.__votes[group_id][peer_id] = (self.__parse_vote_sign(vote_sign), vote_sign)
+        self.__last_voters.append(peer_id)
         return True
+
+    def get_voters(self):
+        return list(set(self.__last_voters))
 
     def get_result(self, block_hash, voting_ratio):
         return self.get_result_detail(block_hash, voting_ratio).result

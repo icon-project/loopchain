@@ -616,11 +616,9 @@ class ChannelInnerTask:
         elif self._channel_service.state_machine.state != "LeaderComplain":
             return False
 
-        epoch = self._channel_service.block_manager.epoch
-        complained_leader_id = epoch.prev_leader_id or epoch.leader_id
         return last_unconfirmed_block.header.hash == unconfirmed_block.header.hash \
             and last_unconfirmed_block.header.height == unconfirmed_block.header.height \
-            and complained_leader_id == unconfirmed_block.header.peer_id.hex_hx()
+            and self._channel_service.block_manager.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx()
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped) -> None:

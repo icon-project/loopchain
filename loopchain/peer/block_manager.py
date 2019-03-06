@@ -691,14 +691,17 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def leader_complain(self):
+        new_leader_id = self.epoch.next_leader_id
         complained_leader_id = self.epoch.leader_id
-        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-            current_leader_peer_id=complained_leader_id
-        )
-        new_leader_id = new_leader.peer_id if new_leader else None
 
-        if not isinstance(new_leader_id, str):
-            new_leader_id = ""
+        if not new_leader_id:
+            new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
+                current_leader_peer_id=complained_leader_id
+            )
+            new_leader_id = new_leader.peer_id if new_leader else None
+
+            if not isinstance(new_leader_id, str):
+                new_leader_id = ""
 
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
@@ -717,7 +720,9 @@ class BlockManager:
             group_id=ChannelProperty().group_id
         )
 
-        util.logger.debug(f"complain group_id({ChannelProperty().group_id})")
+        util.logger.debug(f"leader complain "
+                          f"complained_leader_id({complained_leader_id}), "
+                          f"new_leader_id({new_leader_id})")
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 
