@@ -72,9 +72,21 @@ class Epoch:
             util.logger.spam(f"complain vote fail! last voters({self.__complain_vote.get_voters()})")
             voters = self.__complain_vote.get_voters()
             peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
-            for i in range(len(peer_order_list)):
-                if peer_order_list[i+1] in voters:
-                    self.next_leader_id = peer_order_list[i+1]
+            peer_order_len = len(peer_order_list)
+            start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
+
+            for i in range(peer_order_len):
+                index = i + start_order
+                if index >= peer_order_len:
+                    index -= peer_order_len
+
+                try:
+                    candidate_leader = peer_order_list[index]
+                except KeyError:
+                    candidate_leader = None
+
+                if candidate_leader in voters:
+                    self.next_leader_id = candidate_leader
                     util.logger.info(f"set epoch new leader id({self.next_leader_id})")
                     break
 
