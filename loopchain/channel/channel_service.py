@@ -759,6 +759,8 @@ class ChannelService:
         if timer:
             self.stop_leader_complain_timer()
             duration = min(timer.duration * 2, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
+
+        # utils.logger.notice(f"reset_leader_complain_timer duration({duration})")
         self.start_leader_complain_timer(duration=duration)
 
     def start_leader_complain_timer(self, duration=None):

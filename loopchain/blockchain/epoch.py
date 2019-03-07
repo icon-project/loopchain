@@ -33,7 +33,6 @@ class Epoch:
         else:
             self.height = 1
         self.leader_id = leader_id
-        self.next_leader_id = None
         self.__block_manager = block_manager
         self.__blockchain = self.__block_manager.get_blockchain()
         util.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")

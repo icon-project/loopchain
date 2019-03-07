@@ -691,6 +691,7 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def leader_complain(self):
+        # util.logger.notice(f"do leader complain.")
         new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 
