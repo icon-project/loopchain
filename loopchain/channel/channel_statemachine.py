@@ -163,6 +163,5 @@ class ChannelStateMachine(object):
 
     def _leadercomplain_on_exit(self):
         util.logger.debug(f"_leadercomplain_on_exit")
-        self.__channel_service.stop_leader_complain_timer()
 
     # }

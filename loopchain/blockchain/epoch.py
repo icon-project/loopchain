@@ -21,6 +21,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionStatusInQueue, TransactionVerifier
+from loopchain.channel.channel_property import ChannelProperty
 
 
 class Epoch:
@@ -32,7 +33,6 @@ class Epoch:
         else:
             self.height = 1
         self.leader_id = leader_id
-        self.prev_leader_id = None
         self.__block_manager = block_manager
         self.__blockchain = self.__block_manager.get_blockchain()
         util.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
@@ -65,10 +65,38 @@ class Epoch:
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
+        vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
         util.logger.debug(f"complain_result vote_result({vote_result})")
+        return vote_result.result
 
-        return vote_result
+    def pop_complained_candidate_leader(self):
+        voters = self.__complain_vote.get_voters()
+        if ChannelProperty().peer_id not in voters:
+            # Processing to complain leader
+            return None
+
+        # Complained by myself but not completed.
+
+        # I want to pop candidate leader with this method but this method can't pop, just get but will be pop
+        # self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+
+        peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
+        peer_order_len = len(peer_order_list)
+        start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
+
+        for i in range(peer_order_len):
+            index = (i + start_order) % (peer_order_len + 1)
+
+            try:
+                peer_id = peer_order_list[index]
+            except KeyError:
+                peer_id = None
+
+            if peer_id in voters:
+                util.logger.info(f"set epoch new leader id({peer_id}), voters length={len(voters)}")
+                return peer_id
+
+        return None
 
     def _check_unconfirmed_block(self):
         blockchain = self.__block_manager.get_blockchain()

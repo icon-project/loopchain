@@ -12,11 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """data object for peer votes to one block"""
+
 import logging
 from enum import Enum
 
 from loopchain import configure as conf
 from loopchain.baseservice import PeerManager
+import collections
+
+
+VoteResult = collections.namedtuple("VoteResult", 'result, '
+                                                  'agree_vote_group_count, '
+                                                  'total_vote_count, '
+                                                  'total_vote_group_count, '
+                                                  'total_group_count, '
+                                                  'agree_vote_peer_count, '
+                                                  'total_peer_count, '
+                                                  'voting_ratio')
 
 
 class VoteType(Enum):
@@ -43,6 +55,7 @@ class Vote:
         self.__data = data
         # self.__votes is { group_id : { peer_id : [vote_result, vote_sign] }, }:
         self.__votes = self.__make_vote_init(audience)
+        self.__last_voters = []  # [peer_id,]
 
     @property
     def type(self):
@@ -89,12 +102,16 @@ class Vote:
         if peer_id not in self.__votes[group_id].keys():
             return False
         self.__votes[group_id][peer_id] = (self.__parse_vote_sign(vote_sign), vote_sign)
+        self.__last_voters.append(peer_id)
         return True
 
-    def get_result(self, block_hash, voting_ratio):
-        return self.get_result_detail(block_hash, voting_ratio)[0]
+    def get_voters(self):
+        return list(set(self.__last_voters))
 
-    def get_result_detail(self, block_hash, voting_ratio):
+    def get_result(self, block_hash, voting_ratio):
+        return self.get_result_detail(block_hash, voting_ratio).result
+
+    def get_result_detail(self, block_hash, voting_ratio) -> VoteResult:
         """
 
         :param block_hash:
@@ -105,11 +122,12 @@ class Vote:
         """
 
         if self.__target_hash != block_hash:
-            return None, 0, 0, 0, 0, 0, 0
+            return None, 0, 0, 0, 0, 0, 0, 0
 
         total_group_count = len(self.__votes)
         total_peer_count = sum([len(self.__votes[group_id]) for group_id in list(self.__votes.keys())])
         agree_vote_group_count = 0
+        total_vote_count = 0
         total_vote_group_count = 0
         agree_vote_peer_count = 0
         result = None
@@ -124,6 +142,9 @@ class Vote:
             vote_peer_count_in_group = 0
             for peer_id in list(self.__votes[group_id].keys()):
                 total_peer_count_in_group += 1
+                if len(self.__votes[group_id][peer_id]) > 0:
+                    total_vote_count += 1
+
                 if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0]:
                     if result and result != self.__votes[group_id][peer_id][0]:
                         result = None
@@ -151,17 +172,26 @@ class Vote:
         logging.debug("=agree_vote_peer_count: " + str(agree_vote_peer_count))
         logging.debug("=total_peer_count: " + str(total_peer_count))
 
-        return result, agree_vote_group_count, total_vote_group_count, \
-            total_group_count, agree_vote_peer_count, total_peer_count, voting_ratio
+        vote_result = VoteResult(
+            result=result,
+            agree_vote_group_count=agree_vote_group_count,
+            total_vote_count=total_vote_count,
+            total_vote_group_count=total_vote_group_count,
+            total_group_count=total_group_count,
+            agree_vote_peer_count=agree_vote_peer_count,
+            total_peer_count=total_peer_count,
+            voting_ratio=voting_ratio
+        )
+
+        return vote_result
 
     def is_failed_vote(self, block_hash, voting_ratio):
-        result, agree_vote_group_count, total_vote_group_count, total_group_count, \
-            agree_vote_peer_count, total_peer_count, voting_ratio = self.get_result_detail(block_hash, voting_ratio)
+        vote_result = self.get_result_detail(block_hash, voting_ratio)
 
-        fail_vote_group_count = total_vote_group_count - agree_vote_group_count
-        possible_agree_vote_group_count = total_group_count - fail_vote_group_count
+        fail_vote_group_count = vote_result.total_vote_group_count - vote_result.agree_vote_group_count
+        possible_agree_vote_group_count = vote_result.total_group_count - fail_vote_group_count
 
-        if possible_agree_vote_group_count > total_group_count * voting_ratio:
+        if possible_agree_vote_group_count > vote_result.total_group_count * voting_ratio:
             # this vote still possible get consensus
             return False
         else:

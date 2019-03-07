@@ -282,7 +282,7 @@ class BlockManager:
     def add_confirmed_block(self, confirmed_block: Block):
         result = self.__blockchain.add_block(confirmed_block)
         if not result:
-            self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
+            self.block_height_sync()
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
@@ -691,14 +691,18 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def leader_complain(self):
-        complained_leader_id = self.epoch.prev_leader_id or self.epoch.leader_id
-        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-            current_leader_peer_id=complained_leader_id
-        )
-        new_leader_id = new_leader.peer_id if new_leader else None
+        # util.logger.notice(f"do leader complain.")
+        new_leader_id = self.epoch.pop_complained_candidate_leader()
+        complained_leader_id = self.epoch.leader_id
 
-        if not isinstance(new_leader_id, str):
-            new_leader_id = ""
+        if not new_leader_id:
+            new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
+                current_leader_peer_id=complained_leader_id
+            )
+            new_leader_id = new_leader.peer_id if new_leader else None
+
+            if not isinstance(new_leader_id, str):
+                new_leader_id = ""
 
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
@@ -717,7 +721,9 @@ class BlockManager:
             group_id=ChannelProperty().group_id
         )
 
-        util.logger.debug(f"complain group_id({ChannelProperty().group_id})")
+        util.logger.debug(f"leader complain "
+                          f"complained_leader_id({complained_leader_id}), "
+                          f"new_leader_id({new_leader_id})")
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 

@@ -129,7 +129,7 @@ class TestVote(unittest.TestCase):
 
         # THEN
         ret = vote.get_result_detail("block_hash", 0.51)
-        self.assertEqual(ret[5], 5)
+        self.assertEqual(ret.total_peer_count, 5)
 
     @unittest.skip("BVS")
     def test_fail_vote(self):
