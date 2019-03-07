@@ -691,7 +691,7 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def leader_complain(self):
-        new_leader_id = self.epoch.next_leader_id
+        new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 
         if not new_leader_id:

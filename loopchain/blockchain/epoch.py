@@ -21,6 +21,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionStatusInQueue, TransactionVerifier
+from loopchain.channel.channel_property import ChannelProperty
 
 
 class Epoch:
@@ -66,32 +67,37 @@ class Epoch:
         :return: new leader id or None
         """
         vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
-
-        #  detect complain vote fail, change new leader by order (of peer list) for next complain vote.
-        is_failed_vote = (vote_result.total_vote_count / vote_result.total_peer_count >= vote_result.voting_ratio
-                          and not vote_result.result)
-        if is_failed_vote:
-            util.logger.spam(f"complain vote fail! last voters({self.__complain_vote.get_voters()})")
-            voters = self.__complain_vote.get_voters()
-            peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
-            peer_order_len = len(peer_order_list)
-            start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
-
-            for i in range(peer_order_len):
-                index = (i + start_order) % (peer_order_len + 1)
-
-                try:
-                    candidate_leader = peer_order_list[index]
-                except KeyError:
-                    candidate_leader = None
-
-                if candidate_leader in voters:
-                    self.next_leader_id = candidate_leader
-                    util.logger.info(f"set epoch new leader id({self.next_leader_id})")
-                    break
-
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result.result
+
+    def pop_complained_candidate_leader(self):
+        voters = self.__complain_vote.get_voters()
+        if ChannelProperty().peer_id not in voters:
+            # Processing to complain leader
+            return None
+
+        # Complained by myself but not completed.
+
+        # I want to pop candidate leader with this method but this method can't pop, just get but will be pop
+        # self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+
+        peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
+        peer_order_len = len(peer_order_list)
+        start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
+
+        for i in range(peer_order_len):
+            index = (i + start_order) % (peer_order_len + 1)
+
+            try:
+                peer_id = peer_order_list[index]
+            except KeyError:
+                peer_id = None
+
+            if peer_id in voters:
+                util.logger.info(f"set epoch new leader id({peer_id}), voters length={len(voters)}")
+                return peer_id
+
+        return None
 
     def _check_unconfirmed_block(self):
         blockchain = self.__block_manager.get_blockchain()
