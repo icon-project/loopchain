@@ -23,6 +23,7 @@ import collections
 
 VoteResult = collections.namedtuple("VoteResult", 'result, '
                                                   'agree_vote_group_count, '
+                                                  'total_vote_count, '
                                                   'total_vote_group_count, '
                                                   'total_group_count, '
                                                   'agree_vote_peer_count, '
@@ -121,11 +122,12 @@ class Vote:
         """
 
         if self.__target_hash != block_hash:
-            return None, 0, 0, 0, 0, 0, 0
+            return None, 0, 0, 0, 0, 0, 0, 0
 
         total_group_count = len(self.__votes)
         total_peer_count = sum([len(self.__votes[group_id]) for group_id in list(self.__votes.keys())])
         agree_vote_group_count = 0
+        total_vote_count = 0
         total_vote_group_count = 0
         agree_vote_peer_count = 0
         result = None
@@ -140,6 +142,9 @@ class Vote:
             vote_peer_count_in_group = 0
             for peer_id in list(self.__votes[group_id].keys()):
                 total_peer_count_in_group += 1
+                if len(self.__votes[group_id][peer_id]) > 0:
+                    total_vote_count += 1
+
                 if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0]:
                     if result and result != self.__votes[group_id][peer_id][0]:
                         result = None
@@ -170,6 +175,7 @@ class Vote:
         vote_result = VoteResult(
             result=result,
             agree_vote_group_count=agree_vote_group_count,
+            total_vote_count=total_vote_count,
             total_vote_group_count=total_vote_group_count,
             total_group_count=total_group_count,
             agree_vote_peer_count=agree_vote_peer_count,

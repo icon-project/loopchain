@@ -699,7 +699,6 @@ class BlockManager:
                 current_leader_peer_id=complained_leader_id
             )
             new_leader_id = new_leader.peer_id if new_leader else None
-            self.epoch.next_leader_id = new_leader_id
 
             if not isinstance(new_leader_id, str):
                 new_leader_id = ""

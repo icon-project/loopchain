@@ -68,7 +68,9 @@ class Epoch:
         vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
 
         #  detect complain vote fail, change new leader by order (of peer list) for next complain vote.
-        if not vote_result.result and self.next_leader_id:
+        is_failed_vote = (vote_result.total_vote_count / vote_result.total_peer_count >= vote_result.voting_ratio
+                          and not vote_result.result)
+        if is_failed_vote:
             util.logger.spam(f"complain vote fail! last voters({self.__complain_vote.get_voters()})")
             voters = self.__complain_vote.get_voters()
             peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
