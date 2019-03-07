@@ -20,16 +20,15 @@ import traceback
 from asyncio import Event
 
 import websockets
-from websockets.exceptions import InvalidStatusCode, InvalidMessage
+from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
-from jsonrpcclient.request import Request
+from websockets.exceptions import InvalidStatusCode
 
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import BlockSerializer
 from loopchain.channel.channel_property import ChannelProperty
-
 
 config.log_requests = False
 config.log_responses = False
@@ -63,7 +62,7 @@ class NodeSubscriber:
                 await self.__subscribe_loop(websocket)
         except InvalidStatusCode as e:
             if not self.__tried_with_old_uri:
-                await self.try_subscribe_to_past_uri(block_height, event)
+                await self.try_subscribe_to_old_uri(block_height, event)
                 return
             logging.warning(f"websocket subscribe {type(e)} exception, caused by: {e}\n"
                             f"This target({self.__rs_target}) may not support websocket yet.")
@@ -86,7 +85,7 @@ class NodeSubscriber:
                 response_dict = json.loads(response)
                 await ws_methods.dispatch(response_dict)
 
-    async def try_subscribe_to_past_uri(self, block_height, event: Event):
+    async def try_subscribe_to_old_uri(self, block_height, event: Event):
         self.__target_uri = self.__target_uri.replace('/ws', '/node')
         self.__tried_with_old_uri = True
         logging.info(f"try websocket again with old uri... old uri: {self.__target_uri}")

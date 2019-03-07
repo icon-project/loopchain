@@ -282,7 +282,7 @@ class BlockManager:
     def add_confirmed_block(self, confirmed_block: Block):
         result = self.__blockchain.add_block(confirmed_block)
         if not result:
-            self.block_height_sync(target_peer_stub=ObjectManager().channel_service.radio_station_stub)
+            self.block_height_sync()
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()

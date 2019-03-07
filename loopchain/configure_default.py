@@ -245,6 +245,7 @@ REST_ADDITIONAL_TIMEOUT = 30  # seconds
 REST_PROXY_DEFAULT_PORT = 5000
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
+ENABLE_MULTI_CHANNEL_REQUEST = True
 
 
 class ApiVersion(IntEnum):
