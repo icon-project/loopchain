@@ -670,6 +670,8 @@ class ChannelInnerTask:
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
         try:
+            if self._channel_service.state_machine.state != "Watch":
+                return
             blockchain = self._channel_service.block_manager.get_blockchain()
             json_block = json.loads(serialized_block)
 

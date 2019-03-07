@@ -270,9 +270,9 @@ def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_htt
         ip = dns
         port = '443'
 
-    if version in (conf.ApiVersion.v3, conf.ApiVersion.node):
+    if conf.ENABLE_MULTI_CHANNEL_REQUEST and version in (conf.ApiVersion.v3, conf.ApiVersion.node):
         url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}/{channel}"
-    else:  # ApiVersion.v1 or ApiVersion.v2
+    else:
         url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
     return url
 
