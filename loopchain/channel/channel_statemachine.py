@@ -75,7 +75,7 @@ class ChannelStateMachine(object):
     def block_sync(self):
         pass
 
-    @statemachine.transition(source=('BlockSync', 'EvaluateNetwork', 'Watch'),
+    @statemachine.transition(source=('BlockSync', 'EvaluateNetwork'),
                              dest='SubscribeNetwork',
                              after='_do_subscribe_network')
     def subscribe_network(self):
@@ -163,5 +163,3 @@ class ChannelStateMachine(object):
 
     def _leadercomplain_on_exit(self):
         util.logger.debug(f"_leadercomplain_on_exit")
-
-    # }

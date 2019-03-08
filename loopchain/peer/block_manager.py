@@ -638,7 +638,10 @@ class BlockManager:
             rest_stub = ObjectManager().channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
             response = rest_stub.call("Status")
-            max_height = int(json.loads(response.text)["block_height"])
+            height_from_status = int(json.loads(response.text)["block_height"])
+            last_height = rest_stub.call("GetLastBlock").get('height')
+            logging.debug(f"last_height: {last_height}, height_from_status: {height_from_status}")
+            max_height = max(height_from_status, last_height)
             unconfirmed_block_height = int(
                 json.loads(response.text).get("unconfirmed_block_height", -1)
             )
