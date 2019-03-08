@@ -2,7 +2,7 @@ import time
 from typing import TYPE_CHECKING, Union
 from . import Transaction, HASH_SALT
 from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
+from ... import VarBytes
 
 if TYPE_CHECKING:
     from ... import Address
@@ -76,7 +76,7 @@ class TransactionBuilder(BaseTransactionBuilder):
 
         if self.data is not None and self.data_type is not None:
             if isinstance(self.data, str):
-                origin_data["data"] = self.data.encode('utf-8').hex()
+                origin_data["data"] = VarBytes(self.data.encode('utf-8')).hex_0x()
             else:
                 origin_data["data"] = self.data
             origin_data["dataType"] = self.data_type

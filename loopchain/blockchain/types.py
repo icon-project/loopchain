@@ -54,12 +54,15 @@ class Bytes(bytes):
         return MalformedStr(cls, value)
 
 
-class Hash32(Bytes):
-    size = 32
-    prefix = "0x"
+class VarBytes(Bytes):
+    prefix = '0x'
 
     def hex_0x(self):
         return self.prefix + self.hex()
+
+
+class Hash32(VarBytes):
+    size = 32
 
 
 class Address(Bytes, metaclass=ABCMeta):
