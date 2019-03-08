@@ -217,3 +217,66 @@ class Vote:
         vote_groups = list(self.__votes.keys())
         check_groups = list(self.__make_vote_init(audience).keys())
         return vote_groups.sort() == check_groups.sort()
+
+    @staticmethod
+    def __get_complained_group_result(group_vote: dict, voting_ratio):
+        vote_count = 0
+        result_agrees = dict()
+        for peer_id, vote_result in group_vote.items():
+            if len(vote_result) == 0:
+                continue
+            vote_count += 1
+            result = vote_result[0]
+            if not result:
+                continue
+            try:
+                result_agrees[result] += 1
+            except KeyError:
+                result_agrees[result] = 1
+
+        total_peer_count = len(group_vote)
+        for result, count in result_agrees.items():
+            if count > total_peer_count * voting_ratio:
+                return result, vote_count
+
+        return None, vote_count
+
+    def get_complained_result(self, block_hash, voting_ratio) -> VoteResult:
+        """
+
+        :param block_hash:
+        :param voting_ratio:
+        :return: result(str)
+        """
+
+        if self.__target_hash != block_hash:
+            return None
+
+        total_vote_group_count = 0
+        result_agree_groups = dict()
+        for group_vote in self.__votes.values():
+            group_result, vote_count = Vote.__get_complained_group_result(group_vote, voting_ratio)
+            if vote_count > 0:
+                total_vote_group_count += 1
+            if not group_result:
+                continue
+            try:
+                result_agree_groups[group_result] += 1
+            except KeyError:
+                result_agree_groups[group_result] = 1
+
+        total_group_count = len(self.__votes)
+        vote_result = None
+        chosen_group_count = 0
+        for result, count in result_agree_groups.items():
+            if count > total_group_count * voting_ratio:
+                vote_result = result
+                chosen_group_count = count
+                break
+
+        logging.debug(f"==result: {vote_result}")
+        logging.debug(f"=chosen_group_count: {chosen_group_count}")
+        logging.debug(f"=total_vote_group_count: {total_vote_group_count}")
+        logging.debug(f"=total_group_count: {total_group_count}")
+
+        return vote_result

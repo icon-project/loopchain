@@ -41,6 +41,7 @@ class Epoch:
         # But now! only collect leader complain votes.
         self.__candidate_blocks = None
         self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+        self.complained_result = None
 
     @staticmethod
     def new_epoch(leader_id=None):
@@ -48,9 +49,13 @@ class Epoch:
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
 
-    def set_epoch_leader(self, leader_id):
+    def set_epoch_leader(self, leader_id, complained=False):
         util.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
+        if complained and leader_id == ChannelProperty().peer_id:
+            self.complained_result = self.complain_result()
+        else:
+            self.complained_result = None
         self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
@@ -65,9 +70,9 @@ class Epoch:
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result_detail(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
+        vote_result = self.__complain_vote.get_complained_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
         util.logger.debug(f"complain_result vote_result({vote_result})")
-        return vote_result.result
+        return vote_result
 
     def pop_complained_candidate_leader(self):
         voters = self.__complain_vote.get_voters()
@@ -144,13 +149,13 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
-    def makeup_block(self, complained: str):
+    def makeup_block(self, complained_result: str):
         # self._check_unconfirmed_block(
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
-        if not complained:
+        if not complained_result:
             self.__add_tx_to_block(block_builder)
 
         return block_builder
