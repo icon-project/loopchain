@@ -82,7 +82,7 @@ class Vote:
 
     @staticmethod
     def __parse_vote_sign(vote_sign):
-        """서명된 vote로 부터 투표 결과를 추출한다."""
+        """Derive result of vote from vote_sign."""
 
         return vote_sign
 
@@ -93,8 +93,8 @@ class Vote:
         result = self.__parse_vote_sign(vote_sign)
 
         if self.__votes[peer_id]:
-            logging.debug(
-                f"This peer already votes.\nold:({peer_id} to {self.__votes[peer_id]})\nnew:({peer_id} to {result}) ")
+            logging.debug(f"This peer already votes.\n"
+                          f"old:({peer_id} to {self.__votes[peer_id][0]})\nnew:({peer_id} to {result}) ")
             return False
         else:
             self.__votes[peer_id] = (result, vote_sign)
@@ -118,9 +118,7 @@ class Vote:
 
         :param target_hash:
         :param voting_ratio:
-        :return: result(str),
-        agree_vote_group_count, total_vote_group_count, total_group_count,
-        agree_vote_peer_count, total_peer_count, voting_ratio
+        :return: result(str), total_vote_count, agree_vote_peer_count, total_peer_count, voting_ratio
         """
 
         if self.__target_hash != target_hash:
