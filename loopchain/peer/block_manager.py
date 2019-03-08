@@ -280,9 +280,13 @@ class BlockManager:
         return True
 
     def add_confirmed_block(self, confirmed_block: Block):
-        result = self.__blockchain.add_block(confirmed_block)
-        if not result:
-            self.block_height_sync()
+        my_height = self.__blockchain.last_block.header.height
+        if confirmed_block.header.height == my_height + 1:
+            result = self.__blockchain.add_block(confirmed_block)
+            if result:
+                return
+
+        self.block_height_sync()
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
