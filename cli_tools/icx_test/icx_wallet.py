@@ -6,7 +6,7 @@ import random
 
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
-from loopchain.blockchain import Hash32
+from loopchain.blockchain import Hash32, VarBytes
 from loopchain.crypto.hashing import build_hash_generator
 
 ICX_FACTOR = 10 ** 18
@@ -79,7 +79,7 @@ class IcxWallet:
         params["nid"] = self.nid
         if self.message is not None:
             params["dataType"] = "message"
-            params["data"] = self.message.encode('utf-8').hex()
+            params["data"] = VarBytes(self.message.encode('utf-8')).hex_0x()
 
         hash_for_sign = self.__hash_generators["0x3"].generate_hash(params)
         params["signature"] = self.create_signature(hash_for_sign)
