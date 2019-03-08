@@ -798,7 +798,7 @@ class ChannelInnerTask:
             consensus.count_votes(block_hash)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
+    async def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.notice(f"channel_inner_service:complain_leader "
                            f"complain_leader_id({complained_leader_id}), "
@@ -811,20 +811,8 @@ class ChannelInnerTask:
 
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
-            if next_new_leader == ChannelProperty().peer_id:
-                if self._channel_service.state_machine.state != "BlockGenerate":
-                    # Turn to Leader and Send Leader Complain Block
-                    util.logger.spam("No I'm your father....")
-                    self._channel_service.state_machine.turn_to_leader()
-            else:
-                util.logger.spam("I'm your Jedi.")
-                # TODO check new leader is alive.
-                # if not
-                #     self._channel_service.start_leader_complain_timer()
-                self._channel_service.state_machine.turn_to_peer()
-            block_manager.epoch.leader_id = next_new_leader
+            await self._channel_service.reset_leader(next_new_leader, complained=True)
             self._channel_service.reset_leader_complain_timer()
-            self._channel_service.reset_leader(next_new_leader)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

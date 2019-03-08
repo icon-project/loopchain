@@ -579,8 +579,9 @@ class ChannelService:
         for peer in self.peer_manager.get_IP_of_peers_in_group():
             logging.debug("peer_target: " + peer)
 
-    async def reset_leader(self, new_leader_id, block_height=0):
-        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
+    async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
+                          f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
@@ -593,22 +594,22 @@ class ChannelService:
             logging.warning(f"in peer_service:reset_leader There is no peer by peer_id({new_leader_id})")
             return
 
-        util.logger.spam(f"peer_service:reset_leader target({leader_peer.target})")
+        util.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
-        peer_type = loopchain_pb2.PEER
-        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
+        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id, complained)
 
-        if self_peer_object.target == leader_peer.target:
+        if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
         else:
             logging.debug("Set Peer Type Peer!")
+            peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
 
-            # 새 leader 에게 subscribe 하기
+            # subscribe new leader
             # await self.subscribe_to_radio_station()
             await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
