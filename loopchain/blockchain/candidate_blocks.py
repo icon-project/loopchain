@@ -76,7 +76,7 @@ class CandidateBlocks:
                 # util.logger.debug(f"-------------block_hash({block_hash}) self.blocks({self.blocks})")
                 self.blocks[block_hash] = CandidateBlock.from_hash(block_hash)
 
-        self.blocks[block_hash].vote.add_vote(group_id, peer_id, vote)
+        self.blocks[block_hash].vote.add_vote(peer_id, vote)
 
     def get_vote(self, block_hash):
         return self.blocks[block_hash].vote

@@ -22,10 +22,7 @@ import collections
 
 
 VoteResult = collections.namedtuple("VoteResult", 'result, '
-                                                  'agree_vote_group_count, '
                                                   'total_vote_count, '
-                                                  'total_vote_group_count, '
-                                                  'total_group_count, '
                                                   'agree_vote_peer_count, '
                                                   'total_peer_count, '
                                                   'voting_ratio')
@@ -53,8 +50,7 @@ class Vote:
         self.__target_hash = target_hash
         self.__sign = sign
         self.__data = data
-        # self.__votes is { group_id : { peer_id : [vote_result, vote_sign] }, }:
-        self.__votes = self.__make_vote_init(audience)
+        self.__votes, self.__result_count_list = self.__make_vote_init(audience)
         self.__last_voters = []  # [peer_id,]
 
     @property
@@ -76,19 +72,13 @@ class Vote:
 
         vote_init = {}
         if isinstance(audience, PeerManager):
-            for group_id in list(audience.peer_list.keys()):
-                if group_id == conf.ALL_GROUP_ID:
-                    continue
-                vote_init[group_id] = {}
-                for peer_id in list(audience.peer_list[group_id].keys()):
-                    vote_init[group_id][peer_id] = []
-        else:
-            for peer_id in audience:
-                vote_init[audience[peer_id].group_id] = {}
-                vote_init[audience[peer_id].group_id][peer_id] = []
+            audience = list(audience.peer_list[conf.ALL_GROUP_ID].keys())
+
+        for peer_id in audience:
+            vote_init[peer_id] = {}
 
         logging.debug("vote_init: " + str(vote_init))
-        return vote_init
+        return vote_init, {}
 
     @staticmethod
     def __parse_vote_sign(vote_sign):
@@ -96,12 +86,24 @@ class Vote:
 
         return vote_sign
 
-    def add_vote(self, group_id, peer_id, vote_sign):
-        if group_id not in self.__votes.keys():
+    def add_vote(self, peer_id, vote_sign):
+        if peer_id not in self.__votes.keys():
             return False
-        if peer_id not in self.__votes[group_id].keys():
+
+        result = self.__parse_vote_sign(vote_sign)
+
+        if self.__votes[peer_id]:
+            logging.debug(
+                f"This peer already votes.\nold:({peer_id} to {self.__votes[peer_id]})\nnew:({peer_id} to {result}) ")
             return False
-        self.__votes[group_id][peer_id] = (self.__parse_vote_sign(vote_sign), vote_sign)
+        else:
+            self.__votes[peer_id] = (result, vote_sign)
+
+        if result in self.__result_count_list:
+            self.__result_count_list[result] += 1
+        else:
+            self.__result_count_list[result] = 1
+
         self.__last_voters.append(peer_id)
         return True
 
@@ -111,73 +113,41 @@ class Vote:
     def get_result(self, block_hash, voting_ratio):
         return self.get_result_detail(block_hash, voting_ratio).result
 
-    def get_result_detail(self, block_hash, voting_ratio) -> VoteResult:
+    def get_result_detail(self, target_hash, voting_ratio) -> VoteResult:
         """
 
-        :param block_hash:
+        :param target_hash:
         :param voting_ratio:
         :return: result(str),
         agree_vote_group_count, total_vote_group_count, total_group_count,
         agree_vote_peer_count, total_peer_count, voting_ratio
         """
 
-        if self.__target_hash != block_hash:
-            return None, 0, 0, 0, 0, 0, 0, 0
+        if self.__target_hash != target_hash:
+            return None, -1, -1, -1
 
-        total_group_count = len(self.__votes)
-        total_peer_count = sum([len(self.__votes[group_id]) for group_id in list(self.__votes.keys())])
-        agree_vote_group_count = 0
-        total_vote_count = 0
-        total_vote_group_count = 0
-        agree_vote_peer_count = 0
+        total_peer_count = len(self.__votes)
         result = None
+        agree_vote_peer_count = 0
+        total_vote_count = 0
 
-        for group_id in list(self.__votes.keys()):
-            # don't treat with null group
-            if len(self.__votes[group_id]) == 0:
-                continue
+        for item in self.__result_count_list.items():
+            total_vote_count += item[1]
+            if item[1] > agree_vote_peer_count:
+                result = item[0]
+                agree_vote_peer_count = item[1]
 
-            total_peer_count_in_group = 0
-            agree_peer_count_in_group = 0
-            vote_peer_count_in_group = 0
-            for peer_id in list(self.__votes[group_id].keys()):
-                total_peer_count_in_group += 1
-                if len(self.__votes[group_id][peer_id]) > 0:
-                    total_vote_count += 1
-
-                if len(self.__votes[group_id][peer_id]) > 0 and self.__votes[group_id][peer_id][0]:
-                    if result and result != self.__votes[group_id][peer_id][0]:
-                        result = None
-                    else:
-                        agree_peer_count_in_group += 1
-                        agree_vote_peer_count += 1
-                        result = self.__votes[group_id][peer_id][0]
-                if len(self.__votes[group_id][peer_id]) > 0 and not self.__votes[group_id][peer_id][0]:
-                    vote_peer_count_in_group += 1
-
-            if agree_peer_count_in_group > total_peer_count_in_group * voting_ratio:
-                agree_vote_group_count += 1
-                total_vote_group_count += 1
-            elif (vote_peer_count_in_group - agree_peer_count_in_group) \
-                    >= total_peer_count_in_group * (1 - voting_ratio):
-                total_vote_group_count += 1
-
-        if agree_vote_group_count < total_group_count * voting_ratio:
+        if agree_vote_peer_count < total_peer_count * voting_ratio:
             result = None
 
-        logging.debug("==result: " + str(result))
-        logging.debug("=agree_vote_group_count: " + str(agree_vote_group_count))
-        logging.debug("=total_vote_group_count: " + str(total_vote_group_count))
-        logging.debug("=total_group_count: " + str(total_group_count))
-        logging.debug("=agree_vote_peer_count: " + str(agree_vote_peer_count))
-        logging.debug("=total_peer_count: " + str(total_peer_count))
+        logging.debug(f"==result: {result}")
+        logging.debug(f"=agree_vote_peer_count: {agree_vote_peer_count}")
+        logging.debug(f"=total_vote_count: {total_vote_count}")
+        logging.debug(f"=total_peer_count: {total_peer_count}")
 
         vote_result = VoteResult(
             result=result,
-            agree_vote_group_count=agree_vote_group_count,
             total_vote_count=total_vote_count,
-            total_vote_group_count=total_vote_group_count,
-            total_group_count=total_group_count,
             agree_vote_peer_count=agree_vote_peer_count,
             total_peer_count=total_peer_count,
             voting_ratio=voting_ratio
@@ -188,10 +158,10 @@ class Vote:
     def is_failed_vote(self, block_hash, voting_ratio):
         vote_result = self.get_result_detail(block_hash, voting_ratio)
 
-        fail_vote_group_count = vote_result.total_vote_group_count - vote_result.agree_vote_group_count
-        possible_agree_vote_group_count = vote_result.total_group_count - fail_vote_group_count
+        fail_vote_group_count = vote_result.total_peer_count - vote_result.agree_vote_peer_count
+        possible_agree_vote_group_count = vote_result.total_peer_count - fail_vote_group_count
 
-        if possible_agree_vote_group_count > vote_result.total_group_count * voting_ratio:
+        if possible_agree_vote_group_count > vote_result.total_peer_count * voting_ratio:
             # this vote still possible get consensus
             return False
         else:
@@ -215,68 +185,5 @@ class Vote:
         """
 
         vote_groups = list(self.__votes.keys())
-        check_groups = list(self.__make_vote_init(audience).keys())
+        check_groups = list(self.__make_vote_init(audience)[0].keys())
         return vote_groups.sort() == check_groups.sort()
-
-    @staticmethod
-    def __get_complained_group_result(group_vote: dict, voting_ratio):
-        vote_count = 0
-        result_agrees = dict()
-        for peer_id, vote_result in group_vote.items():
-            if len(vote_result) == 0:
-                continue
-            vote_count += 1
-            result = vote_result[0]
-            if not result:
-                continue
-            try:
-                result_agrees[result] += 1
-            except KeyError:
-                result_agrees[result] = 1
-
-        total_peer_count = len(group_vote)
-        for result, count in result_agrees.items():
-            if count > total_peer_count * voting_ratio:
-                return result, vote_count
-
-        return None, vote_count
-
-    def get_complained_result(self, block_hash, voting_ratio) -> VoteResult:
-        """
-
-        :param block_hash:
-        :param voting_ratio:
-        :return: result(str)
-        """
-
-        if self.__target_hash != block_hash:
-            return None
-
-        total_vote_group_count = 0
-        result_agree_groups = dict()
-        for group_vote in self.__votes.values():
-            group_result, vote_count = Vote.__get_complained_group_result(group_vote, voting_ratio)
-            if vote_count > 0:
-                total_vote_group_count += 1
-            if not group_result:
-                continue
-            try:
-                result_agree_groups[group_result] += 1
-            except KeyError:
-                result_agree_groups[group_result] = 1
-
-        total_group_count = len(self.__votes)
-        vote_result = None
-        chosen_group_count = 0
-        for result, count in result_agree_groups.items():
-            if count > total_group_count * voting_ratio:
-                vote_result = result
-                chosen_group_count = count
-                break
-
-        logging.debug(f"==result: {vote_result}")
-        logging.debug(f"=chosen_group_count: {chosen_group_count}")
-        logging.debug(f"=total_vote_group_count: {total_vote_group_count}")
-        logging.debug(f"=total_group_count: {total_group_count}")
-
-        return vote_result
