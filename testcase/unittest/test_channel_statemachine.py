@@ -39,6 +39,12 @@ class MockBlockManager:
     def block_height_sync(self):
         pass
 
+    def stop_block_height_sync_timer(self):
+        pass
+
+    def update_service_status(self, status):
+        pass
+
 
 class MockBlockManagerCitizen:
     peer_type = loopchain_pb2.PEER
@@ -47,6 +53,12 @@ class MockBlockManagerCitizen:
         pass
 
     def block_height_sync(self):
+        pass
+
+    def stop_block_height_sync_timer(self):
+        pass
+
+    def update_service_status(self, status):
         pass
 
 
@@ -118,12 +130,13 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
-        self.assertEqual(channel_state_machine.state, "EvaluateNetwork")
+        self.assertEqual("EvaluateNetwork", channel_state_machine.state)
 
     def test_change_state_by_condition(self):
         # GIVEN
         channel_state_machine = ChannelStateMachine(MockChannelService())
         channel_state_machine.complete_init_components()
+        channel_state_machine.block_sync()
         channel_state_machine.subscribe_network()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
@@ -132,12 +145,13 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
-        self.assertEqual(channel_state_machine.state, "BlockGenerate")
+        self.assertEqual("BlockGenerate", channel_state_machine.state)
 
     def test_change_state_by_multiple_condition(self):
         # GIVEN
         channel_state_machine = ChannelStateMachine(MockChannelServiceCitizen())
         channel_state_machine.complete_init_components()
+        channel_state_machine.block_sync()
         channel_state_machine.subscribe_network()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
@@ -146,13 +160,14 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
-        self.assertEqual(channel_state_machine.state, "Watch")
+        self.assertEqual("Watch", channel_state_machine.state)
 
     def test_change_state_from_same_state(self):
         # GIVEN
         mock_channel_service = MockChannelService()
         channel_state_machine = ChannelStateMachine(mock_channel_service)
         channel_state_machine.complete_init_components()
+        channel_state_machine.block_sync()
         channel_state_machine.subscribe_network()
         channel_state_machine.complete_subscribe()
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
@@ -164,7 +179,7 @@ class TestChannelStateMachine(unittest.TestCase):
         util.logger.spam(f"\nstate is {channel_state_machine.state}")
 
         # THEN
-        self.assertEqual(mock_channel_service.block_manager.timer_called, 1)
+        self.assertEqual(1, mock_channel_service.block_manager.timer_called)
 
 
 if __name__ == '__main__':

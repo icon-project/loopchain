@@ -181,7 +181,7 @@ class LogConfiguration:
             if not os.path.isdir(self.log_file_location):
                 raise RuntimeError(f"LogFileLocation({self.log_file_location}) is not a directory.")
         else:
-            os.makedirs(self.log_file_location)
+            os.makedirs(self.log_file_location, exist_ok=True)
 
         if self.log_file_rotate_when and self.log_file_rotate_max_bytes:
             file_handler = SizedTimedRotatingFileHandler(
