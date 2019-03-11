@@ -15,6 +15,7 @@
 
 import logging
 from enum import Enum
+from collections import Counter
 
 from loopchain import configure as conf
 from loopchain.baseservice import PeerManager
@@ -50,7 +51,7 @@ class Vote:
         self.__target_hash = target_hash
         self.__sign = sign
         self.__data = data
-        self.__votes, self.__result_count_list = self.__make_vote_init(audience)
+        self.__votes = self.__make_vote_init(audience)
         self.__last_voters = []  # [peer_id,]
 
     @property
@@ -65,8 +66,7 @@ class Vote:
     def target_hash(self):
         return self.__target_hash
 
-    @staticmethod
-    def __make_vote_init(audience):
+    def __make_vote_init(self, audience):
         if not audience:
             return None
 
@@ -75,13 +75,12 @@ class Vote:
             audience = list(audience.peer_list[conf.ALL_GROUP_ID].keys())
 
         for peer_id in audience:
-            vote_init[peer_id] = {}
+            vote_init[peer_id] = None
 
         logging.debug("vote_init: " + str(vote_init))
-        return vote_init, {}
+        return vote_init
 
-    @staticmethod
-    def __parse_vote_sign(vote_sign):
+    def __parse_vote_sign(self, vote_sign):
         """Derive result of vote from vote_sign."""
 
         return vote_sign
@@ -98,11 +97,6 @@ class Vote:
             return False
         else:
             self.__votes[peer_id] = (result, vote_sign)
-
-        if result in self.__result_count_list:
-            self.__result_count_list[result] += 1
-        else:
-            self.__result_count_list[result] = 1
 
         self.__last_voters.append(peer_id)
         return True
@@ -125,15 +119,9 @@ class Vote:
             return None, -1, -1, -1
 
         total_peer_count = len(self.__votes)
-        result = None
-        agree_vote_peer_count = 0
-        total_vote_count = 0
-
-        for item in self.__result_count_list.items():
-            total_vote_count += item[1]
-            if item[1] > agree_vote_peer_count:
-                result = item[0]
-                agree_vote_peer_count = item[1]
+        result_count_list = Counter([vote[0] for vote in self.__votes.values() if vote])
+        result, agree_vote_peer_count = result_count_list.most_common(1)[0]
+        total_vote_count = sum(result_count_list.values())
 
         if agree_vote_peer_count < total_peer_count * voting_ratio:
             result = None
@@ -183,5 +171,5 @@ class Vote:
         """
 
         vote_groups = list(self.__votes.keys())
-        check_groups = list(self.__make_vote_init(audience)[0].keys())
+        check_groups = list(self.__make_vote_init(audience).keys())
         return vote_groups.sort() == check_groups.sort()
