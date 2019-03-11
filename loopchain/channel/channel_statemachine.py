@@ -51,6 +51,7 @@ class ChannelStateMachine(object):
     def __init__(self, channel_service):
         self.__channel_service = channel_service
 
+        self.machine.add_transition('complete_sync', 'BlockSync', 'SubscribeNetwork', after='_do_subscribe_network')
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Vote')
@@ -84,6 +85,9 @@ class ChannelStateMachine(object):
         pass
 
     def complete_subscribe(self):
+        pass
+
+    def complete_sync(self):
         pass
 
     @statemachine.transition(source=('BlockGenerate', 'Vote', 'LeaderComplain'), dest='Vote')
