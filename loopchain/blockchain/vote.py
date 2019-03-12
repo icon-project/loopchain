@@ -68,17 +68,12 @@ class Vote:
 
     def __make_vote_init(self, audience):
         if not audience:
-            return None
+            return {}
 
-        vote_init = {}
         if isinstance(audience, PeerManager):
             audience = list(audience.peer_list[conf.ALL_GROUP_ID].keys())
 
-        for peer_id in audience:
-            vote_init[peer_id] = None
-
-        logging.debug("vote_init: " + str(vote_init))
-        return vote_init
+        return {peer_id: None for peer_id in audience}
 
     def __parse_vote_sign(self, vote_sign):
         """Derive result of vote from vote_sign."""
@@ -89,15 +84,13 @@ class Vote:
         if peer_id not in self.__votes.keys():
             return False
 
-        result = self.__parse_vote_sign(vote_sign)
-
         if self.__votes[peer_id]:
             logging.debug(f"This peer already votes.\n"
-                          f"old:({peer_id} to {self.__votes[peer_id][0]})\nnew:({peer_id} to {result}) ")
+                          f"old:({peer_id} to {self.__votes[peer_id][0]})\nnew:({peer_id} to {vote_sign}) ")
             return False
-        else:
-            self.__votes[peer_id] = (result, vote_sign)
 
+        result = self.__parse_vote_sign(vote_sign)
+        self.__votes[peer_id] = (result, vote_sign)
         self.__last_voters.append(peer_id)
         return True
 
@@ -115,13 +108,20 @@ class Vote:
         :return: result(str), total_vote_count, agree_vote_peer_count, total_peer_count, voting_ratio
         """
 
-        if self.__target_hash != target_hash:
-            return None, -1, -1, -1
-
         total_peer_count = len(self.__votes)
-        result_count_list = Counter([vote[0] for vote in self.__votes.values() if vote])
-        result, agree_vote_peer_count = result_count_list.most_common(1)[0]
-        total_vote_count = sum(result_count_list.values())
+        if self.__target_hash != target_hash:
+            return VoteResult(
+                result=None,
+                total_vote_count=-1,
+                agree_vote_peer_count=-1,
+                total_peer_count=total_peer_count,
+                voting_ratio=voting_ratio
+            )
+
+        count_list = Counter([vote[0] for vote in self.__votes.values() if vote])
+        most_common = count_list.most_common(1)
+        result, agree_vote_peer_count = most_common[0] if most_common else (None, 0)
+        total_vote_count = sum(count_list.values())
 
         if agree_vote_peer_count < total_peer_count * voting_ratio:
             result = None
@@ -141,13 +141,13 @@ class Vote:
 
         return vote_result
 
-    def is_failed_vote(self, block_hash, voting_ratio):
-        vote_result = self.get_result_detail(block_hash, voting_ratio)
+    def is_failed_vote(self, target_hash, voting_ratio):
+        vote_result = self.get_result_detail(target_hash, voting_ratio)
 
-        fail_vote_group_count = vote_result.total_peer_count - vote_result.agree_vote_peer_count
-        possible_agree_vote_group_count = vote_result.total_peer_count - fail_vote_group_count
+        fail_vote_count = vote_result.total_vote_count - vote_result.agree_vote_peer_count
+        possible_agree_vote_count = vote_result.total_peer_count - fail_vote_count
 
-        if possible_agree_vote_group_count > vote_result.total_peer_count * voting_ratio:
+        if possible_agree_vote_count > vote_result.total_peer_count * voting_ratio:
             # this vote still possible get consensus
             return False
         else:
