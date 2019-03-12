@@ -28,7 +28,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerListData, PeerManager, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -240,6 +240,8 @@ class ChannelService:
             if not self.block_manager.block_generation_scheduler.is_run():
                 self.block_manager.block_generation_scheduler.start()
         self.__state_machine.complete_subscribe()
+
+        self.start_leader_complain_timer_if_tx_exists()
 
     async def __init_peer_auth(self):
         try:
@@ -744,16 +746,6 @@ class ChannelService:
         stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 
-    def get_object_has_queue_by_consensus(self):
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            object_has_queue = self.__consensus
-        else:
-            object_has_queue = self.__block_manager
-
-        self.start_leader_complain_timer()
-
-        return object_has_queue
-
     def reset_leader_complain_timer(self):
         duration = None
         timer = self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
@@ -764,12 +756,17 @@ class ChannelService:
         # utils.logger.notice(f"reset_leader_complain_timer duration({duration})")
         self.start_leader_complain_timer(duration=duration)
 
+    def start_leader_complain_timer_if_tx_exists(self):
+        if not self.block_manager.get_tx_queue().is_empty_in_status(TransactionStatusInQueue.normal):
+            util.logger.debug("Start leader complain timer because unconfirmed tx exists.")
+            self.start_leader_complain_timer()
+
     def start_leader_complain_timer(self, duration=None):
         if not duration:
             duration = conf.TIMEOUT_FOR_LEADER_COMPLAIN
 
         util.logger.spam(f"start_leader_complain_timer in channel service.")
-        if self.state_machine.state != "BlockGenerate":
+        if self.state_machine.state not in ("BlockGenerate", "BlockSync", "Watch"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
                                                       is_repeat=True, callback=self.state_machine.leader_complain)

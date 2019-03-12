@@ -264,10 +264,11 @@ class BlockManager:
             if unconfirmed_block.body.confirm_prev_block:
                 self.confirm_prev_block(unconfirmed_block)
             elif self.__blockchain.last_unconfirmed_block is None:
-                if self.__blockchain.last_block.header.hash == unconfirmed_block.header.prev_hash:
-                    self.__blockchain.last_unconfirmed_block = unconfirmed_block
-                else:
+                if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
+
+                self.__blockchain.last_unconfirmed_block = unconfirmed_block
+                self.__channel_service.stop_leader_complain_timer()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
@@ -321,6 +322,7 @@ class BlockManager:
             need_to_sync = (self.__block_height_future is None or self.__block_height_future.done())
 
             if need_to_sync:
+                self.__channel_service.stop_leader_complain_timer()
                 self.__block_height_future = self.__block_height_thread_pool.submit(self.__block_height_sync)
             else:
                 logging.warning('Tried block_height_sync. But failed. The thread is already running')
