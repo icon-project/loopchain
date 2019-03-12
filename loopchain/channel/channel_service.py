@@ -486,7 +486,6 @@ class ChannelService:
         else:
             peer_target = f"https://{ChannelProperty().rest_target}"
 
-        response = None
         try:
             response = await self.__radio_station_stub.call_async(
                 "Subscribe", {
@@ -496,22 +495,41 @@ class ChannelService:
             )
 
         except Exception as e:
-            logging.warning(f"Due to Subscription fail to RadioStation(mother peer), "
+            logging.warning(f"Due to Subscription fail to RS peer({ChannelProperty().radio_station_target}), "
                             f"automatically retrying subscribe call")
+            return
 
         if response and response['response_code'] == message_code.Response.success:
-            logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
+            logging.debug(f"Subscription to RS peer({ChannelProperty().radio_station_target}) is successful.")
             event.set()
             self.start_check_last_block_rs_timer()
+
+    def __unsubscribe_call_by_rest_stub(self):
+        if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
+            peer_target = ChannelProperty().rest_target
+        else:
+            peer_target = f"https://{ChannelProperty().rest_target}"
+        try:
+            self.__radio_station_stub.call(
+                "Unsubscribe", {
+                    'channel': ChannelProperty().name,
+                    'peer_target': peer_target
+                }
+            )
+        except Exception as e:
+            logging.warning(f"Unsubscribe fail")
+            return
 
     def __check_last_block_to_rs(self):
         last_block = self.__radio_station_stub.call_async("GetLastBlock")
         if last_block['height'] <= self.__block_manager.get_blockchain().block_height:
             return
 
-        # RS peer didn't announced new block
+        # RS peer Connection Error
+        self.__unsubscribe_call_by_rest_stub()
         self.stop_check_last_block_rs_timer()
         if self.__state_machine.state != "SubscribeNetwork":
+            logging.error(f"changing state to subscribe network...")
             self.__state_machine.subscribe_network()
 
     def shutdown_peer(self, **kwargs):

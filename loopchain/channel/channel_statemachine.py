@@ -76,7 +76,7 @@ class ChannelStateMachine(object):
     def block_sync(self):
         pass
 
-    @statemachine.transition(source='BlockSync', dest='SubscribeNetwork', after='_do_subscribe_network')
+    @statemachine.transition(source=('BlockSync', 'Watch'), dest='SubscribeNetwork', after='_do_subscribe_network')
     def subscribe_network(self):
         pass
 

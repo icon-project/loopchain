@@ -52,7 +52,7 @@ class Timer:
         if time.time() - self.__start_time < self.duration:
             return False
 
-        util.logger.spam(f'gap: {time.time() - self.__start_time}')
+        util.logger.spam(f'timer({self.target}) gap: {time.time() - self.__start_time}')
         return True
 
     def reset(self):
@@ -176,7 +176,9 @@ class TimerService(CommonThread):
         :param key: key
         :return:
         """
+        logging.error(f"restart_timer key({key})")
         if key in self.__timer_list.keys():
+            logging.error(f"there is key({key}) in the timer list")
             timer = self.__timer_list[key]
             timer.off(OffType.time_out)
             timer.reset()
@@ -220,6 +222,7 @@ class TimerService(CommonThread):
         try:
             timer_in_list = self.__timer_list[key]
         except KeyError:
+            logging.error(f"there is no timer({key}) in timer list")
             pass
         else:
             if timer is not timer_in_list:
