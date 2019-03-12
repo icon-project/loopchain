@@ -246,7 +246,9 @@ class BlockManager:
         return len(self.__txQueue)
 
     def confirm_prev_block(self, current_block: Block):
-        self.__blockchain.confirm_prev_block(current_block)
+        confirmed_block = self.__blockchain.confirm_prev_block(current_block)
+        if confirmed_block is None:
+            return
 
         # stop leader complain timer
         self.__channel_service.stop_leader_complain_timer()
@@ -254,27 +256,28 @@ class BlockManager:
         # start new epoch
         self.epoch = Epoch.new_epoch()
 
-    def add_unconfirmed_block(self, unconfirmed_block):
+    def add_unconfirmed_block(self, unconfirmed_block: Block):
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
         # util.logger.debug(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
         #                    f"tx count({len(unconfirmed_block.body.transactions)}), "
         #                    f"height({unconfirmed_block.header.height})")
 
+        last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
+
         try:
             if unconfirmed_block.body.confirm_prev_block:
                 self.confirm_prev_block(unconfirmed_block)
-            elif self.__blockchain.last_unconfirmed_block is None:
+            elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
-
                 self.__blockchain.last_unconfirmed_block = unconfirmed_block
-                self.__channel_service.stop_leader_complain_timer()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
             return False
 
-        self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
+        if last_unconfirmed_block is None or last_unconfirmed_block.header.hash != unconfirmed_block.header.hash:
+            self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self.__unconfirmedBlockQueue.put(unconfirmed_block)
 
@@ -716,9 +719,8 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
-        self.epoch.add_complain(
-            complained_leader_id, new_leader_id, self.epoch.height, self.__peer_id, ChannelProperty().group_id
-        )
+        self.__channel_service.complain_leader(complained_leader_id, new_leader_id, self.epoch.height,
+                                               self.__peer_id, ChannelProperty().group_id)
 
         request = loopchain_pb2.ComplainLeaderRequest(
             complained_leader_id=complained_leader_id,

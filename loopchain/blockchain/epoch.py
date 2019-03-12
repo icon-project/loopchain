@@ -74,6 +74,15 @@ class Epoch:
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result
 
+    def expected_leader_id(self):
+        try:
+            vote = self.__complain_vote.votes[ChannelProperty().peer_id]
+            if vote is not None:
+                return vote[0]
+        except KeyError:
+            util.logger.error(f"Has no my complaint vote slot. Please check Vote class code")
+        return self.leader_id
+
     def pop_complained_candidate_leader(self):
         voters = self.__complain_vote.get_voters()
         if ChannelProperty().peer_id not in voters:

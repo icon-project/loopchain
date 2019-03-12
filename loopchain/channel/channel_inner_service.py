@@ -491,7 +491,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def reset_leader(self, new_leader, block_height=0) -> None:
-        await self._channel_service.reset_leader(new_leader, block_height)
+        self._channel_service.reset_leader(new_leader, block_height)
 
     @message_queue_task(priority=255)
     async def get_status(self):
@@ -616,16 +616,44 @@ class ChannelInnerTask:
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
 
-    def __is_unconfirmed_block_by_complained_leader(self, unconfirmed_block: Block):
-        last_unconfirmed_block = self._channel_service.block_manager.get_blockchain().last_unconfirmed_block
-        if last_unconfirmed_block is None:
-            return False
-        elif self._channel_service.state_machine.state != "LeaderComplain":
+    def __pre_validate_unconfirmed_block(self, unconfirmed_block: Block):
+        block_manager = self._channel_service.block_manager
+        last_block = block_manager.get_blockchain().last_block
+        last_unconfirmed_block = block_manager.get_blockchain().last_unconfirmed_block
+
+        if unconfirmed_block.header.height <= last_block.header.height:
+            util.logger.warning(f"Unconfirmed block height is under last block height. {unconfirmed_block}")
             return False
 
-        return last_unconfirmed_block.header.hash == unconfirmed_block.header.hash \
-            and last_unconfirmed_block.header.height == unconfirmed_block.header.height \
-            and self._channel_service.block_manager.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx()
+        if last_unconfirmed_block is None or unconfirmed_block.header.height > last_unconfirmed_block.header.height:
+            return True
+
+        # if it arrived here, unconfirmed block height equals last unconfirmed block height logically.
+
+        epoch = block_manager.epoch
+        if unconfirmed_block.header.hash == last_unconfirmed_block.header.hash:
+            if self._channel_service.state_machine.state == 'LeaderComplain' \
+                    and epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx():
+                util.logger.warning(f"Unconfirmed block is made by complained leader. {unconfirmed_block})")
+                return False
+            elif unconfirmed_block.header.next_leader.hex_hx() != epoch.leader_id:
+                util.logger.warning(f"Leader has been changed. leader_id={epoch.leader_id}, {unconfirmed_block}")
+                return False
+            # When node receive last unconfirmed block again, node need to vote. so return True
+            return True
+
+        if not unconfirmed_block.header.complained:
+            util.logger.warning(f"Unconfirmed block height equals my last uncofirmed block height. {unconfirmed_block}")
+            return False
+
+        leader_id = epoch.expected_leader_id()
+        if leader_id is None:
+            util.logger.warning(f"Leader id is None. Please check your code. {unconfirmed_block}")
+        elif leader_id != unconfirmed_block.header.peer_id.hex_hx():
+            util.logger.warning(f"Unconfirmed block is not made by expected leader({leader_id}). {unconfirmed_block}")
+            return False
+
+        return True
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped) -> None:
@@ -641,18 +669,13 @@ class ChannelInnerTask:
                       f"height({unconfirmed_block.header.height})\n"
                       f"hash({unconfirmed_block.header.hash.hex()})")
 
-        last_block = self._channel_service.block_manager.get_blockchain().last_block
-        if last_block is None:
+        if self._channel_service.block_manager.get_blockchain().last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
-            return
-        elif unconfirmed_block.header.height <= last_block.header.height:
-            util.logger.debug("Ignore unconfirmed block because the block height is under last block height.")
-            return
-        elif self.__is_unconfirmed_block_by_complained_leader(unconfirmed_block):
-            util.logger.debug("Ignore unconfirmed block because the block is made by complained leader.")
             return
         elif self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
+            return
+        elif not self.__pre_validate_unconfirmed_block(unconfirmed_block):
             return
 
         added = self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
@@ -664,7 +687,7 @@ class ChannelInnerTask:
         if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
                 unconfirmed_block.header.next_leader.hex_hx():
             util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
-            await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+            self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self._channel_service.start_leader_complain_timer_if_tx_exists()
 
@@ -802,20 +825,12 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
-        block_manager = self._channel_service.block_manager
         util.logger.notice(f"channel_inner_service:complain_leader "
                            f"complain_leader_id({complained_leader_id}), "
                            f"new_leader_id({new_leader_id}), "
                            f"block_height({block_height})")
 
-        block_manager.epoch.add_complain(
-            complained_leader_id, new_leader_id, block_height, peer_id, group_id
-        )
-
-        next_new_leader = block_manager.epoch.complain_result()
-        if next_new_leader:
-            await self._channel_service.reset_leader(next_new_leader, complained=True)
-            self._channel_service.reset_leader_complain_timer()
+        self._channel_service.complain_leader(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

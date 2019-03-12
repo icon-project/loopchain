@@ -596,7 +596,7 @@ class ChannelService:
         for peer in self.peer_manager.get_IP_of_peers_in_group():
             logging.debug("peer_target: " + peer)
 
-    async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+    def reset_leader(self, new_leader_id, block_height=0, complained=False):
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                           f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
@@ -626,11 +626,18 @@ class ChannelService:
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
 
-            # subscribe new leader
-            # await self.subscribe_to_radio_station()
-            await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
-
         self.block_manager.set_peer_type(peer_type)
+
+    def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
+        epoch = self.__block_manager.epoch
+        epoch.add_complain(
+            complained_leader_id, new_leader_id, block_height, peer_id, group_id
+        )
+
+        next_new_leader = epoch.complain_result()
+        if next_new_leader:
+            self.reset_leader(next_new_leader, complained=True)
+            self.reset_leader_complain_timer()
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
