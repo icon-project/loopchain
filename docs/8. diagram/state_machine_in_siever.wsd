@@ -24,7 +24,7 @@ state Consensus {
         EvaluateNetwork --> BlockSync : \ntrigger::block_sync
         
         BlockSync: Check Highest Block in Network
-        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
+        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::complete_sync
 
         SubscribeNetwork: on_enter {
         SubscribeNetwork: \tStartTimer: Subscribe
