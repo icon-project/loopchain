@@ -102,11 +102,11 @@ class TestVote(unittest.TestCase):
         logging.debug("votes: " + str(vote.votes))
 
         # WHEN
-        vote.add_vote("groupid-1", "peerid-1", None)
+        vote.add_vote("peerid-1", None)
         self.assertFalse(vote.get_result("block_hash", 0.51))
 
         # THEN
-        vote.add_vote("groupid-2", "peerid-2", None)
+        vote.add_vote("peerid-2", None)
         self.assertTrue(vote.get_result("block_hash", 0.51))
 
     def test_add_vote_fail_before_add_peer(self):
@@ -120,10 +120,10 @@ class TestVote(unittest.TestCase):
         logging.debug("votes: " + str(vote.votes))
 
         # WHEN
-        vote.add_vote("groupid-1", "peerid-1", None)
-        vote.add_vote("groupid-3", "peerid-4", None)
-        ret1 = vote.add_vote("groupid-4", "peerid-1", None)
-        ret2 = vote.add_vote("groupid-1", "peerid-9", None)
+        vote.add_vote("peerid-1", None)
+        vote.add_vote("peerid-4", None)
+        ret1 = vote.add_vote("peerid-1", None)
+        ret2 = vote.add_vote("peerid-9", None)
         self.assertFalse(ret1)
         self.assertFalse(ret2)
 
@@ -143,9 +143,9 @@ class TestVote(unittest.TestCase):
         logging.debug("votes: " + str(vote.votes))
 
         # WHEN
-        vote.add_vote("groupid-1", "peerid-1", conf.TEST_FAIL_VOTE_SIGN)
-        vote.add_vote("groupid-3", "peerid-4", conf.TEST_FAIL_VOTE_SIGN)
-        vote.add_vote("groupid-3", "peerid-5", conf.TEST_FAIL_VOTE_SIGN)
+        vote.add_vote("peerid-1", conf.TEST_FAIL_VOTE_SIGN)
+        vote.add_vote("peerid-4", conf.TEST_FAIL_VOTE_SIGN)
+        vote.add_vote("peerid-5", conf.TEST_FAIL_VOTE_SIGN)
         vote.get_result("block_hash", 0.51)
 
         # THEN

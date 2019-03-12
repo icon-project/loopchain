@@ -264,7 +264,6 @@ class _Broadcaster:
             # Send multiple tx
             remains, message = self.__make_tx_list_message()
             self.__broadcast_run("AddTxList", message)
-            ObjectManager().channel_service.start_leader_complain_timer()
             if remains:
                 self.__send_tx_in_timer()
 

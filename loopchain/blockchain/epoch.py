@@ -63,14 +63,14 @@ class Epoch:
                           f"new_leader_id({new_leader_id}), "
                           f"block_height({block_height}), "
                           f"peer_id({peer_id})")
-        self.__complain_vote.add_vote(group_id, peer_id, new_leader_id)
+        self.__complain_vote.add_vote(peer_id, new_leader_id)
 
     def complain_result(self) -> str:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_complained_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
+        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result
 

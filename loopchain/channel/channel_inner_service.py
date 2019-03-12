@@ -29,7 +29,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, TransactionStatusInQueue)
+                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
@@ -414,17 +414,24 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
-        for tx in tx_list:
-            # util.logger.spam(f"channel_inner_service:add_tx tx({tx.get_data_string()})")
+        block_manager = self._channel_service.block_manager
+        blockchain = block_manager.get_blockchain()
 
-            object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
-            object_has_queue.add_tx_obj(tx)
+        for tx in tx_list:
+            if blockchain.find_tx_by_key(tx.hash.hex()):
+                util.logger.warning(f"tx({tx})\n"
+                                    f"hash {tx.hash.hex()} already exists in blockchain.")
+                continue
+
+            block_manager.add_tx_obj(tx)
             util.apm_event(ChannelProperty().peer_id, {
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
                 'peer_name': conf.PEER_NAME,
                 'channel_name': ChannelProperty().name,
                 'data': {'tx_hash': tx.hash.hex()}})
+
+        self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
     async def hello(self):
@@ -571,9 +578,8 @@ class ChannelInnerTask:
         tv = TransactionVerifier.new(tx_version, tx_versioner)
         tv.verify(tx)
 
-        object_has_queue = self._channel_service.get_object_has_queue_by_consensus()
         if tx is not None:
-            object_has_queue.add_tx_obj(tx)
+            self._channel_service.block_manager.add_tx_obj(tx)
             util.apm_event(ChannelProperty().peer_id, {
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
@@ -581,6 +587,7 @@ class ChannelInnerTask:
                 'channel_name': ChannelProperty().name,
                 'data': {'tx_hash': tx.tx_hash}})
 
+        self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
     def get_tx(self, tx_hash):
@@ -659,11 +666,7 @@ class ChannelInnerTask:
             util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
             await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
-        tx_queue = self._channel_service.block_manager.get_tx_queue()
-        if self._channel_service.state_machine.state != "BlockSync" \
-                and not tx_queue.is_empty_in_status(TransactionStatusInQueue.normal):
-            util.logger.debug("Start leader complain timer because unconfirmed tx exists.")
-            self._channel_service.start_leader_complain_timer()
+        self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
