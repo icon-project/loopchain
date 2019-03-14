@@ -43,7 +43,7 @@ state Consensus {
     BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_subscribe
     
     Watch: Wait for new block announcement (subscribe_loop)
-    Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)
+    Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)\ntrigger::subscribe_network
     Vote: on_enter {
     Vote: }
     Vote: on_exit {
