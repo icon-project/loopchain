@@ -24,7 +24,7 @@ state Consensus {
         EvaluateNetwork --> BlockSync : \ntrigger::block_sync
         
         BlockSync: Check Highest Block in Network
-        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::subscribe_network
+        BlockSync --> SubscribeNetwork : Succeeded\ntrigger::complete_sync
 
         SubscribeNetwork: on_enter {
         SubscribeNetwork: \tStartTimer: Subscribe
@@ -43,7 +43,7 @@ state Consensus {
     BlockHeightSync -> Watch: (if node_type == citizen)\ntrigger::complete_subscribe
     
     Watch: Wait for new block announcement (subscribe_loop)
-    Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)
+    Watch --> BlockHeightSync: Reconnect to RS Peer\n(after connection error)\ntrigger::subscribe_network
     Vote: on_enter {
     Vote: }
     Vote: on_exit {

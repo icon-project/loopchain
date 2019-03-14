@@ -52,7 +52,7 @@ class Timer:
         if time.time() - self.__start_time < self.duration:
             return False
 
-        util.logger.spam(f'gap: {time.time() - self.__start_time}')
+        util.logger.spam(f'timer({self.target}) gap: {time.time() - self.__start_time}')
         return True
 
     def reset(self):

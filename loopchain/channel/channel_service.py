@@ -215,12 +215,9 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-                # broadcast AnnounceNewPeer to other peers
-                # If allow broadcast AnnounceNewPeer here, complained peer can be leader again.
+            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
-
-        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
@@ -486,7 +483,6 @@ class ChannelService:
         else:
             peer_target = f"https://{ChannelProperty().rest_target}"
 
-        response = None
         try:
             response = await self.__radio_station_stub.call_async(
                 "Subscribe", {
@@ -496,23 +492,42 @@ class ChannelService:
             )
 
         except Exception as e:
-            logging.warning(f"Due to Subscription fail to RadioStation(mother peer), "
+            logging.warning(f"Due to Subscription fail to RS peer({ChannelProperty().radio_station_target}), "
                             f"automatically retrying subscribe call")
+            return
 
         if response and response['response_code'] == message_code.Response.success:
-            logging.debug(f"Subscription to RadioStation(mother peer) is successful.")
+            logging.debug(f"Subscription to RS peer({ChannelProperty().radio_station_target}) is successful.")
             event.set()
             self.start_check_last_block_rs_timer()
 
-    def __check_last_block_to_rs(self):
-        last_block = self.__radio_station_stub.call_async("GetLastBlock")
-        if last_block['height'] <= self.__block_manager.get_blockchain().block_height:
+    def __unsubscribe_call_by_rest_stub(self):
+        if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
+            peer_target = ChannelProperty().rest_target
+        else:
+            peer_target = f"https://{ChannelProperty().rest_target}"
+        try:
+            self.__radio_station_stub.call(
+                "Unsubscribe", {
+                    'channel': ChannelProperty().name,
+                    'peer_target': peer_target
+                }
+            )
+        except Exception as e:
+            logging.warning(f"Unsubscribe fail")
             return
 
-        # RS peer didn't announced new block
-        self.stop_check_last_block_rs_timer()
-        if self.__state_machine.state != "SubscribeNetwork":
-            self.__state_machine.subscribe_network()
+    def __check_last_block_to_rs(self):
+        try:
+            self.__radio_station_stub.call("GetLastBlock")
+        except Exception as e:
+            logging.error(f"failed to check last block to RS peer({ChannelProperty().radio_station_target}), "
+                          f"caused by: {e}")
+            self.__unsubscribe_call_by_rest_stub()
+            self.stop_check_last_block_rs_timer()
+            if self.__state_machine.state != "SubscribeNetwork":
+                logging.error(f"changing state to subscribe network...")
+                self.__state_machine.subscribe_network()
 
     def shutdown_peer(self, **kwargs):
         logging.debug(f"channel_service:shutdown_peer")
