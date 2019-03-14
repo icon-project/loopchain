@@ -215,12 +215,9 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-                # broadcast AnnounceNewPeer to other peers
-                # If allow broadcast AnnounceNewPeer here, complained peer can be leader again.
+            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
-
-        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
