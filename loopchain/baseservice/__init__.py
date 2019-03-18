@@ -24,7 +24,6 @@ from .common_process import *
 from .rest_stub_manager import *
 from .timer_service import *
 from .broadcast_scheduler import *
-from .peer_score import *
 from .common_subprocess import *
 from .block_generation_scheduelr import *
 from .node_subscriber import *
