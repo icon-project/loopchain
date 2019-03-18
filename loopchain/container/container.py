@@ -23,7 +23,7 @@ import grpc
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import CommonProcess, MonitorAdapter, ObjectManager, Monitor, CommonSubprocess
+from loopchain.baseservice import CommonProcess, ObjectManager, CommonSubprocess
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import command_arguments
@@ -35,7 +35,7 @@ class ServerType(Enum):
     GRPC = 3
 
 
-class Container(CommonProcess, MonitorAdapter):
+class Container(CommonProcess):
 
     def __init__(self,
                  port,
@@ -46,9 +46,6 @@ class Container(CommonProcess, MonitorAdapter):
                  start_param_set=None):
 
         CommonProcess.__init__(self)
-        if server_type == ServerType.GRPC:
-            # monitoring gRPC Container
-            MonitorAdapter.__init__(self, channel=channel, process_name=f"{process_name}")
         self._port = port
         self._type = server_type
         self._peer_ip = peer_ip
@@ -75,7 +72,6 @@ class Container(CommonProcess, MonitorAdapter):
             return False
 
     def re_start(self):
-        Monitor().stop_wait_monitoring()
         ObjectManager().peer_service.channel_manager.stop_score_containers()
         ObjectManager().peer_service.service_stop()
         util.exit_and_msg(f"Score Container({self._channel}) Down!")

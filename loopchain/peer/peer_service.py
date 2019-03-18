@@ -21,7 +21,7 @@ import timeit
 from functools import partial
 
 from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, Monitor, ObjectManager, RestStubManager
+from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService, CommonService
 from loopchain.crypto.signature import Signer
@@ -54,10 +54,6 @@ class PeerService:
 
         util.logger.spam(f"Your Peer Service runs on debugging MODE!")
         util.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
-
-        # process monitor must start before any subprocess
-        if conf.ENABLE_PROCESS_MONITORING:
-            Monitor().start()
 
         self.__node_type = node_type
 
