@@ -630,6 +630,11 @@ class ChannelService:
 
     def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
         epoch = self.__block_manager.epoch
+
+        if new_leader_id == epoch.leader_id:
+            util.logger.info(f"Complained new leader is current leader({new_leader_id})")
+            return
+
         epoch.add_complain(
             complained_leader_id, new_leader_id, block_height, peer_id, group_id
         )
