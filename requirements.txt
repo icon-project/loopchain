@@ -1,10 +1,12 @@
-grpcio==1.3.5
-grpcio-tools==1.3.5
-protobuf==3.5.1
+grpcio==1.19.0; python_version >= '3.7'
+grpcio-tools==1.19.0; python_version >= '3.7'
+grpcio==1.3.5; python_version < '3.7'
+grpcio-tools==1.3.5; python_version < '3.7'
+protobuf==3.7.0; python_version >= '3.7'
+protobuf==3.5.1; python_version < '3.7'
 aio-pika==3.0.1
 aiohttp==3.4.4
 coloredlogs==10.0
-cryptography==2.3.1
 earlgrey==0.0.4
 fluent-logger==0.9.3
 GitPython==2.1.11
@@ -19,6 +21,7 @@ pyOpenSSL==18.0.0
 pysha3==1.0.2
 python-pkcs11==0.5.0
 requests==2.20.0
+cryptography==2.3.1
 sanic==0.8.3
 secp256k1==0.13.2
 setproctitle==1.1.10

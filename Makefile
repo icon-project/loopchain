@@ -1,9 +1,18 @@
 UNAME := $(shell uname)
+USER_MAKEFILE := user.mk
+
+PIP_INSTALL := pip3 install
+ifeq ($(wildcard $(USER_MAKEFILE)),)
+	PIP_INSTALL_REQUIREMENTS := $(PIP_INSTALL) -e .
+else
+	include $(USER_MAKEFILE)
+endif
+PIP_INSTALL += -U
 
 ifeq ($(UNAME), Darwin)
-RABBITMQ_CMD := rabbitmqctl
+	RABBITMQ_CMD := rabbitmqctl
 else ifeq ($(UNAME), Linux)
-RABBITMQ_CMD := sudo rabbitmqctl
+	RABBITMQ_CMD := sudo rabbitmqctl
 endif
 
 help:
@@ -28,11 +37,11 @@ develop: install generate-proto
 
 # pip install packages
 install:
-	pip3 install -U git+https://github.com/icon-project/icon-service.git@master
-	pip3 install -U git+https://github.com/icon-project/icon-commons.git@master
-	pip3 install -U git+https://github.com/icon-project/icon-rpc-server.git@master
-	pip3 install -U tbears
-	pip3 install -e .
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
+	$(PIP_INSTALL) tbears
+	$(PIP_INSTALL_REQUIREMENTS)
 
 # Generate python gRPC proto and generate a key
 generate: generate-proto generate-key
@@ -51,8 +60,7 @@ generate-key:
 # Check loopchain & gunicorn & rabbitmq processes
 check:
 	@echo "Check loopchain & Gunicorn & RabbitMQ Process..."
-	ps -ef | grep loop
-	ps -ef | grep gunicorn
+	ps -ef | egrep --color=auto "loop|gunicorn"
 	@$(RABBITMQ_CMD) list_queues
 
 # Run unittest
@@ -84,10 +92,11 @@ clean-pyc:
 	@find . -name '*~' -exec rm -f {} +
 
 clean-db:
-	@echo "Cleaning up all DB and logs..."
+	@echo "Cleaning up all DB..."
 	@rm -rf .storage*
 
 clean-log:
+	@echo "Cleaning up logs..."
 	@rm -rf log/
 
 # build
