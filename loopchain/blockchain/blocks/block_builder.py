@@ -40,6 +40,7 @@ class BlockBuilder(ABC):
         self.signature = None
         self.peer_id = None
 
+    @abstractmethod
     def build(self) -> 'Block':
         raise NotImplementedError
 
@@ -63,6 +64,7 @@ class BlockBuilder(ABC):
         self.hash = self._build_hash()
         return self.hash
 
+    @abstractmethod
     def _build_hash(self):
         raise NotImplementedError
 
@@ -101,6 +103,10 @@ class BlockBuilder(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
+        from . import v0_3
+        if version == v0_3.version:
+            return v0_3.BlockBuilder(tx_versioner)
+
         from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockBuilder(tx_versioner)
@@ -123,7 +129,3 @@ class BlockBuilder(ABC):
         self.hash = block.header.hash
         self.signature = block.header.signature
         self.peer_id = block.header.peer_id
-
-    @abstractmethod
-    def get_vote_result(self, block_info):
-        raise NotImplementedError

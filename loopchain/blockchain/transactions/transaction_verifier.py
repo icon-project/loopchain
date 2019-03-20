@@ -58,13 +58,18 @@ class TransactionVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, versioner: 'TransactionVersioner'):
-        from . import genesis, v2, v3
         hash_generator_version = versioner.get_hash_generator_version(version)
+
+        from . import v3
+        if version == v3.version:
+            return v3.TransactionVerifier(hash_generator_version)
+
+        from . import v2
+        if version == v2.version:
+            return v2.TransactionVerifier(hash_generator_version)
+
+        from . import genesis
         if version == genesis.version:
             return genesis.TransactionVerifier(hash_generator_version)
-        elif version == v2.version:
-            return v2.TransactionVerifier(hash_generator_version)
-        elif version == v3.version:
-            return v3.TransactionVerifier(hash_generator_version)
 
         raise RuntimeError(f"Not supported tx version({version})")
