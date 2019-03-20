@@ -27,15 +27,12 @@ all: install generate
 develop: install generate-proto
 
 # pip install packages
-install: uninstall
-	pip3 install git+https://github.com/icon-project/icon-service.git@master
-	pip3 install git+https://github.com/icon-project/icon-commons.git@master
-	pip3 install git+https://github.com/icon-project/icon-rpc-server.git@master
-	pip3 install tbears
+install:
+	pip3 install -U git+https://github.com/icon-project/icon-service.git@master
+	pip3 install -U git+https://github.com/icon-project/icon-commons.git@master
+	pip3 install -U git+https://github.com/icon-project/icon-rpc-server.git@master
+	pip3 install -U tbears
 	pip3 install -e .
-
-uninstall:
-	virtualenv --clear venv
 
 # Generate python gRPC proto and generate a key
 generate: generate-proto generate-key

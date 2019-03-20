@@ -523,7 +523,7 @@ class ChannelInnerTask:
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
-        status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID)
+        status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) or ""
         status_data["epoch_leader"] = \
             self._channel_service.block_manager.epoch.leader_id if self._channel_service.block_manager.epoch else ""
 
