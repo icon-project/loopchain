@@ -62,3 +62,10 @@ class BlockVerifier(BaseBlockVerifier):
             raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                f"Leader({block_header.peer_id.hex_xx()}), "
                                f"Expected({prev_block_header.next_leader.hex_xx()}).")
+
+    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
+        block_header: BlockHeader = block.header
+        if not block_header.complained and block.header.peer_id != generator:
+            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                               f"Generator({block.header.peer_id.hex_xx()}), "
+                               f"Expected({generator.hex_xx()}).")
