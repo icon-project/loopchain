@@ -14,12 +14,10 @@ class BlockVerifier(BaseBlockVerifier):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
-        builder = BlockBuilder.new(self.version, self._tx_versioner)
-        builder.height = header.height
-        builder.prev_hash = header.prev_hash
-        builder.next_leader = header.next_leader
-        builder.fixed_timestamp = header.timestamp
+        builder = BlockBuilder.from_new(block, self._tx_versioner)
+        builder.reset_cache()
         builder.peer_id = generator
+        builder.signature = block.header.signature
 
         for tx in body.transactions.values():
             builder.transactions[tx.hash] = tx
@@ -29,14 +27,21 @@ class BlockVerifier(BaseBlockVerifier):
             new_block, invoke_result = self.invoke_func(block)
             if header.state_root_hash != new_block.header.state_root_hash:
                 raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                   f"CommitState({header.state_root_hash}), "
+                                   f"StateRootHash({header.state_root_hash}), "
                                    f"Expected({new_block.header.state_root_hash}).")
             builder.state_root_hash = new_block.header.state_root_hash
+
+            builder.receipts = invoke_result
+            builder.build_receipt_root_hash()
+            if header.receipt_root_hash != builder.receipt_root_hash:
+                raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                   f"ReceiptRootHash({header.receipt_root_hash.hex()}), "
+                                   f"Expected({builder.receipt_root_hash.hex()}).")
 
         builder.build_transaction_root_hash()
         if header.transaction_root_hash != builder.transaction_root_hash:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                               f"MerkleTreeRootHash({header.transaction_root_hash.hex()}), "
+                               f"TransactionRootHash({header.transaction_root_hash.hex()}), "
                                f"Expected({builder.transaction_root_hash.hex()}).")
 
         builder.build_hash()
