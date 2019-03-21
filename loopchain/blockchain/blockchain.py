@@ -303,8 +303,7 @@ class BlockChain:
         byte_length = (bit_length + 7) // 8
         next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-        block_version = self.__block_versioner.get_version(block.header.height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block.header.version, self.tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 

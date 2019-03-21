@@ -29,7 +29,7 @@ class BlockSerializer(BaseBlockSerializer):
             "height": header.height,
             "peer_id": header.peer_id.hex_hx() if header.peer_id else '',
             "signature": header.signature.to_base64str() if header.signature else '',
-            "commit_state": header.state_root_hash,
+            "commit_state": header.state_root_hash.hex(),
             "next_leader": header.next_leader.hex_xx(),
             "complained": "0x1" if header.complained else "0x0"
         }
@@ -56,7 +56,7 @@ class BlockSerializer(BaseBlockSerializer):
             "signature": signature,
             "next_leader": next_leader,
             "transaction_root_hash": Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
-            "state_root_hash": json_data["commit_state"],
+            "state_root_hash": Hash32.fromhex(json_data["commit_state"], ignore_prefix=True),
             "complained": True if json_data["complained"] == "0x1" else False
         }
 
