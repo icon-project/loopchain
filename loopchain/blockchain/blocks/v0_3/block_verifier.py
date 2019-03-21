@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 from . import BlockHeader, BlockBody
 from .. import BlockVerifier as BaseBlockVerifier, BlockBuilder
+from ... import SignatureFlag
 
 if TYPE_CHECKING:
     from .. import Block
@@ -75,6 +76,28 @@ class BlockVerifier(BaseBlockVerifier):
             self.verify_generator(block, generator)
 
         return invoke_result
+
+    def __verify_hsm_signature(self, block: 'Block'):
+        from cryptography.hazmat.primitives import hashes, asymmetric
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.exceptions import InvalidSignature
+        from loopchain.baseservice import ObjectManager
+
+        self._public_key = \
+            ObjectManager().channel_service.peer_manager.get_peer(block.header.peer_id.hex_hx()).public_key
+        hash_algorithm = asymmetric.utils.Prehashed(hashes.SHA256())
+
+        try:
+            self._public_key.verify(block.header.signature.signature(), block.header.hash, ec.ECDSA(hash_algorithm))
+        except InvalidSignature:
+            raise RuntimeError(f"Invalid Signature in a Block.\n{block.header.signature.signature()}")
+
+    def verify_signature(self, block: 'Block'):
+        signature_flag = block.header.signature.flag()
+        if signature_flag == SignatureFlag.RECOVERABLE:
+            super().verify_signature(block)
+        elif signature_flag == SignatureFlag.HSM:
+            self.__verify_hsm_signature(block)
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:

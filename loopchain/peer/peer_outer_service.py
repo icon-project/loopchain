@@ -645,7 +645,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash})")
+        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash.hex()})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         channel_stub.sync_task().vote_unconfirmed_block(

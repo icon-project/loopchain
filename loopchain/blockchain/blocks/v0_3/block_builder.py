@@ -1,10 +1,15 @@
+import hashlib
 import time
 from functools import reduce
 from operator import or_
 from typing import List
+from secp256k1 import PublicKey
+
+from loopchain import configure as conf
+
 from . import BlockHeader, BlockBody, BlockProver
 from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
-from ... import ExternalAddress, Hash32, BloomFilter, TransactionVersioner
+from ... import Hash32, BloomFilter, TransactionVersioner, ExternalAddress, SignatureFlag, FlaggedSignature, FlaggedHsmSignature
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -175,6 +180,51 @@ class BlockBuilder(BaseBlockBuilder):
         )
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
+
+    def build_peer_id(self):
+        if self.peer_id is not None:
+            return self.peer_id
+
+        if self.peer_private_key is None:
+            raise RuntimeError
+
+        if conf.HSM_ENABLE_USE:
+            self.peer_id = self._build_peer_id_in_hsm()
+        else:
+            self.peer_id = self._build_peer_id()
+
+        return self.peer_id
+
+    def _build_peer_id_in_hsm(self):
+        from loopchain.tools.hsm_helper import HsmHelper
+        raw_pubkey_of_pair = PublicKey().deserialize(HsmHelper().get_serialize_pub_key())
+        serialized_pub = PublicKey(raw_pubkey_of_pair).serialize(compressed=False)
+        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
+        return ExternalAddress(hashed_pub[-20:])
+
+    def sign(self):
+        if self.signature is not None:
+            return self.signature
+
+        if self.hash is None:
+            raise RuntimeError
+
+        self.signature = self._sign_in_hsm() if conf.HSM_ENABLE_USE else self._sign()
+        return self.signature
+
+    def _sign(self):
+        raw_sig = self.peer_private_key.ecdsa_sign_recoverable(msg=self.hash,
+                                                               raw=True,
+                                                               digest=hashlib.sha3_256)
+        serialized_sig, recover_id = self.peer_private_key.ecdsa_recoverable_serialize(raw_sig)
+        signature = bytes([SignatureFlag.RECOVERABLE]) + serialized_sig + bytes((recover_id, ))
+        return FlaggedSignature(signature)
+
+    def _sign_in_hsm(self):
+        from loopchain.tools.hsm_helper import HsmHelper
+        HsmHelper().open()
+        signature = bytes([SignatureFlag.HSM]) + HsmHelper().ecdsa_sign(message=self.hash, is_raw=True)
+        return FlaggedHsmSignature(signature)
 
     def from_(self, block: 'Block'):
         super().from_(block)

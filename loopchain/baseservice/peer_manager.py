@@ -196,7 +196,18 @@ class PeerManager:
         """
 
         if isinstance(peer_info, dict):
-            peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
+            public_key = peer_info.get("public_key")
+            if public_key:
+                public_key = util.get_ec_key_object(public_key.encode(conf.PEER_DATA_ENCODING))
+
+            peer_info = PeerInfo(
+                peer_info["id"],
+                peer_info["id"],
+                peer_info["peer_target"],
+                order=peer_info["order"],
+                public_key=public_key
+            )
+            util.logger.warning(f"hrkim###############pubkey: {public_key}")
 
         logging.debug(f"add peer id: {peer_info.peer_id}")
 

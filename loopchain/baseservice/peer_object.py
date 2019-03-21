@@ -35,7 +35,7 @@ class PeerInfo:
     STATUS_UPDATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
 
     def __init__(self, peer_id: str, group_id: str,
-                 target: str = "", status: PeerStatus = PeerStatus.unknown, order: int = 0):
+                 target: str = "", status: PeerStatus = PeerStatus.unknown, order: int = 0, public_key: bytes = None):
         """ create PeerInfo
         if connected peer status PeerStatus.connected
 
@@ -44,12 +44,14 @@ class PeerInfo:
         :param target: grpc target info default ""
         :param status: connect status if db loaded peer to PeerStatus.unknown default ""
         :param order:
+        :param public_key: bytes from public key file
         :return:
         """
         self.__peer_id = peer_id
         self.__group_id = group_id
         self.__order: int = order
         self.__target: str = target
+        self.__public_key: bytes = public_key
 
         self.__status_update_time = datetime.datetime.now()
         self.__status = status
@@ -77,6 +79,10 @@ class PeerInfo:
     @target.setter
     def target(self, target):
         self.__target = target
+
+    @property
+    def public_key(self):
+        return self.__public_key
 
     @property
     def status(self):

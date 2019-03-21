@@ -2,7 +2,8 @@ from collections import OrderedDict
 
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import Hash32, ExternalAddress, Signature, BloomFilter, TransactionSerializer
+from ... import (Hash32, ExternalAddress, BloomFilter, TransactionSerializer, ABCSignature, SignatureFlag,
+                 FlaggedSignature, FlaggedHsmSignature)
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -48,7 +49,15 @@ class BlockSerializer(BaseBlockSerializer):
         peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
 
         signature = json_data.get('signature')
-        signature = Signature.from_base64str(signature) if signature else None
+
+        if signature:
+            signature_flag = ABCSignature.from_base64str(signature)[0]
+            if signature_flag == SignatureFlag.RECOVERABLE:
+                signature = FlaggedSignature.from_base64str(signature)
+            elif signature_flag == SignatureFlag.HSM:
+                signature = FlaggedHsmSignature.from_base64str(signature)
+        else:
+            signature = None
 
         next_leader = json_data.get("nextLeader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None

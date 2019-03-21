@@ -108,8 +108,8 @@ class BlockVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != block.header.peer_id:
-            raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
-                               f"expected {ExternalAddress(expect_address).hex_xx()}")
+            raise RuntimeError(f"block generator ID {block.header.peer_id.hex_xx()}, "
+                               f"expected peer ID {ExternalAddress(expect_address).hex_xx()}")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:

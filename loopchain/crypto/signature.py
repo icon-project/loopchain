@@ -17,11 +17,21 @@ import binascii
 import getpass
 import hashlib
 import logging
+import struct
+
 from typing import Union
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from secp256k1 import PrivateKey, PublicKey
+from secp256k1 import PrivateKey, PublicKey, ffi
+from yubihsm import YubiHsm
+from yubihsm.core import AuthSession
+from yubihsm.objects import AsymmetricKey
+from yubihsm.defs import OBJECT, COMMAND
+
+from loopchain import configure as conf
+from loopchain import utils
+from loopchain.tools.hsm_helper import HsmHelper
 
 
 class SignVerifier:
@@ -109,7 +119,7 @@ class SignVerifier:
                                               password,
                                               default_backend())
             except Exception as e:
-                raise ValueError("Invalid Password(Peer Certificate load test)")
+                raise ValueError(f"Invalid Password: {e}")
 
             no_pass_private = temp_private.private_bytes(
                 encoding=serialization.Encoding.DER,
@@ -117,7 +127,7 @@ class SignVerifier:
                 encryption_algorithm=serialization.NoEncryption()
             )
             key_info = keys.PrivateKeyInfo.load(no_pass_private)
-            prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+            prikey = utils.long_to_bytes(key_info['private_key'].native['private_key'])
         else:
             from tbears.libs.icx_signer import key_from_key_store
             prikey = key_from_key_store(prikey_file, password)
@@ -200,36 +210,18 @@ class Signer(SignVerifier):
         return auth
 
 
-def long_to_bytes (val, endianness='big'):
-    """
-    Use :ref:`string formatting` and :func:`~binascii.unhexlify` to
-    convert ``val``, a :func:`long`, to a byte :func:`str`.
+class YubiHsmSigner(SignVerifier):
+    def __init__(self):
+        super().__init__()
+        self.private_key: AsymmetricKey = None
 
-    :param long val: The value to pack
+    @classmethod
+    def from_address(cls, address: str):
+        verifier = YubiHsmSigner()
+        verifier.address = address
+        verifier.private_key = HsmHelper().private_key
+        return verifier
 
-    :param str endianness: The endianness of the result. ``'big'`` for
-      big-endian, ``'little'`` for little-endian.
-
-    If you want byte- and word-ordering to differ, you're on your own.
-
-    Using :ref:`string formatting` lets us use Python's C innards.
-    """
-
-    # one (1) hex digit per four (4) bits
-    width = val.bit_length()
-
-    # unhexlify wants an even multiple of eight (8) bits, but we don't
-    # want more digits than we need (hence the ternary-ish 'or')
-    width += 8 - ((width % 8) or 8)
-
-    # format width specifier: four (4) bits per hex digit
-    fmt = '%%0%dx' % (width // 4)
-
-    # prepend zero (0) to the width, to zero-pad the output
-    s = binascii.unhexlify(fmt % val)
-
-    if endianness == 'little':
-        # see http://stackoverflow.com/a/931095/309233
-        s = s[::-1]
-
-    return s
+    @classmethod
+    def from_hsm(cls):
+        return cls.from_pubkey(HsmHelper().get_serialize_pub_key())

@@ -445,7 +445,6 @@ class BlockManager:
         return self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
 
     def __add_block_by_sync(self, block_, confirm_info=None):
-        commit_state = block_.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
                       f"height({block_.header.height})")
 

@@ -1,6 +1,6 @@
 from . import Transaction, HASH_SALT
 from .. import TransactionSerializer as BaseTransactionSerializer
-from ... import Hash32, Signature, ExternalAddress, int_fromhex, int_tohex, int_fromstr, int_tostr
+from ... import Hash32, Signature, ExternalAddress, int_fromhex, int_fromstr
 
 
 class TransactionSerializer(BaseTransactionSerializer):

@@ -26,7 +26,7 @@ from loopchain.baseservice import CommonSubprocess
 from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService
-from loopchain.crypto.signature import Signer
+from loopchain.crypto.signature import Signer, YubiHsmSigner
 from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
@@ -235,7 +235,10 @@ class PeerService:
             self.__node_keys[channel] = signer.private_key.private_key
 
     def __make_peer_id(self, address):
-        self.__peer_id = address
+        if conf.HSM_ENABLE_USE:
+            self.__peer_id = YubiHsmSigner.from_hsm().address
+        else:
+            self.__peer_id = address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
@@ -255,13 +258,19 @@ class PeerService:
                 return True
         return False
 
-    def __init_kms_helper(self, agent_pin):
-        if self.__get_use_kms():
+    def __init_key_loading_helper(self, agent_pin):
+        if conf.HSM_ENABLE_USE:
+            from loopchain.tools.hsm_helper import HsmHelper
+            HsmHelper().open()
+        elif self.__get_use_kms():
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().set_agent_pin(agent_pin)
 
-    def __close_kms_helper(self):
-        if self.__get_use_kms():
+    def __close_key_loading_helper(self):
+        if conf.HSM_ENABLE_USE:
+            from loopchain.tools.hsm_helper import HsmHelper
+            HsmHelper().close()
+        elif self.__get_use_kms():
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
@@ -289,7 +298,7 @@ class PeerService:
 
         stopwatch_start = timeit.default_timer()
 
-        self.__init_kms_helper(agent_pin)
+        self.__init_key_loading_helper(agent_pin)
         self.__init_port(port)
         self.__init_level_db()
         self.__init_key_by_channel()
@@ -309,7 +318,7 @@ class PeerService:
         self.__run_rest_services(port)
         self.run_p2p_server()
 
-        self.__close_kms_helper()
+        self.__close_key_loading_helper()
 
         stopwatch_duration = timeit.default_timer() - stopwatch_start
         logging.info(f"Start Peer Service at port: {port} start duration({stopwatch_duration})")

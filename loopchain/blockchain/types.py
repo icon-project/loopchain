@@ -1,6 +1,6 @@
 import base64
-from abc import ABCMeta
-from enum import Enum
+from abc import ABCMeta, abstractmethod
+from enum import Enum, IntEnum
 from typing import Union
 
 
@@ -10,6 +10,7 @@ class Bytes(bytes):
 
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
+        # print(f"hrkim>>>>>>>>>>>>{cls.size}/{len(self)}")
         if cls.size is not None and cls.size != len(self):
             raise RuntimeError
 
@@ -126,14 +127,10 @@ class BloomFilter(VarBytes):
         return self.__class__(result.to_bytes(self.size, 'big'))
 
 
-class Signature(Bytes):
-    size = 65
-
-    def recover_id(self):
-        return self[-1]
-
+class ABCSignature(Bytes, metaclass=ABCMeta):
+    @abstractmethod
     def signature(self):
-        return self[:-1]
+        raise NotImplementedError()
 
     def to_base64(self):
         return base64.b64encode(self)
@@ -148,12 +145,48 @@ class Signature(Bytes):
     @classmethod
     def from_base64(cls, base64_bytes: bytes):
         sign_bytes = base64.b64decode(base64_bytes)
-        return Signature(sign_bytes)
+        return cls(sign_bytes)
 
     @classmethod
     def from_base64str(cls, base64_str: str):
         base64_bytes = base64_str.encode('utf-8')
         return cls.from_base64(base64_bytes)
+
+
+class Recoverable:
+    def recover_id(self):
+        return self[-1]
+
+
+class SignatureFlag(IntEnum):
+    RECOVERABLE = 0
+    HSM = 1
+
+
+class Flagged:
+    def flag(self):
+        return self[0]
+
+
+class Signature(ABCSignature, Recoverable):
+    size = 65
+
+    def signature(self):
+        return self[:-1]
+
+
+class FlaggedSignature(Signature, Flagged):
+    size = 66
+
+    def signature(self):
+        return self[1:-1]
+
+
+class FlaggedHsmSignature(Signature, Flagged):
+    size = None
+
+    def signature(self):
+        return self[1:]
 
 
 class MalformedStr:

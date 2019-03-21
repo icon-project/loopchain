@@ -33,9 +33,10 @@ from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.crypto.signature import Signer
+from loopchain.crypto.signature import *
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
+from loopchain.tools.hsm_helper import HsmHelper
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -46,7 +47,7 @@ class ChannelService:
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
-        self.__peer_auth: Signer = None
+        self.__peer_auth: SignVerifier = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
@@ -247,8 +248,12 @@ class ChannelService:
 
     async def __init_peer_auth(self):
         try:
-            node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
-            self.__peer_auth = Signer.from_prikey(node_key)
+            if conf.HSM_ENABLE_USE:
+                HsmHelper().open()
+                self.__peer_auth = YubiHsmSigner.from_hsm()
+            else:
+                node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
+                self.__peer_auth = Signer.from_prikey(node_key)
         except KeyError:
             self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:

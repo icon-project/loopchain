@@ -330,7 +330,7 @@ TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_B
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
-CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
+CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data_yubi.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel infos to which it belongs.
 ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
@@ -407,6 +407,18 @@ KMS_SIGNATURE_KEY_ID = ""
 KMS_SIGNATURE_KEY_ID_LIST = {}
 KMS_TLS_KEY_ID = ""
 KMS_SECRET_KEY_LABEL = "KEY_ENCRYPTION"
+
+
+#########
+# HSM ###
+#########
+# HSM_ENABLE_USE has higher priority than use configuration of KMS.
+HSM_ENABLE_USE = False
+HSM_YUBI_CONNECTOR = "http://127.0.0.1:12345"
+HSM_YUBI_SESSION_ID = 1
+HSM_YUBI_SESSION_PASSWORD = "password"
+# HSM_YUBI_KEY_LABEL = "LOOPCHAIN_KEY"
+HSM_YUBI_KEY_ID = 0x0064
 
 
 ####################

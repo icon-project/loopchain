@@ -498,6 +498,32 @@ def init_level_db(level_db_identity, allow_rename_path=True):
     return level_db, db_path
 
 
+def get_ec_key_object(public_bytes: bytes):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.backends import default_backend
+
+    try:
+        try:
+            return serialization.load_der_public_key(public_bytes, default_backend())
+        except Exception as e:
+            # try pem type private load
+            return serialization.load_pem_public_key(public_bytes, default_backend())
+    except Exception as e:
+        raise ValueError(f"Invalid Public Key File: {e}")
+
+
+def get_public_key_from_file(public_bytes: bytes):
+    from asn1crypto import keys
+    from cryptography.hazmat.primitives import serialization
+
+    temp_public = get_ec_key_object(public_bytes)
+    der_public = temp_public.public_bytes(encoding=serialization.Encoding.DER,
+                                          format=serialization.PublicFormat.SubjectPublicKeyInfo)
+    key_info = keys.PublicKeyInfo.load(der_public)
+
+    return key_info['public_key'].native
+
+
 def no_send_apm_event(peer_id, event_param):
     pass
 
