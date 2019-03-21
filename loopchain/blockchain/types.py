@@ -23,6 +23,14 @@ class Bytes(bytes):
         type_name = type(self).__qualname__
         return type_name + "(" + self.hex_xx() + ")"
 
+    @classmethod
+    def new(cls):
+        """
+        create sized value.
+        :return:
+        """
+        return cls(bytes(cls.size) if cls.size else 0)
+
     def hex_xx(self):
         if self.prefix:
             return self.prefix + self.hex()
@@ -104,6 +112,15 @@ class ContractAddress(Address):
 
     def hex_cx(self):
         return self.prefix + self.hex()
+
+
+class BloomFilter(Bytes):
+    size = 256
+    prefix = "0x"
+
+    def __or__(self, other):
+        result = int.from_bytes(self, 'big') | int.from_bytes(other, 'big')
+        return self.__class__(result.to_bytes(self.size, 'big'))
 
 
 class Signature(Bytes):

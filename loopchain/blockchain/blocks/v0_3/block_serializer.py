@@ -1,7 +1,8 @@
 from collections import OrderedDict
 
 from . import BlockHeader, BlockBody
-from ... import TransactionSerializer, Block, BlockSerializer as BaseBlockSerializer, Hash32, ExternalAddress, Signature
+from .. import Block, BlockSerializer as BaseBlockSerializer
+from ... import Hash32, ExternalAddress, Signature, BloomFilter, TransactionSerializer
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -22,15 +23,16 @@ class BlockSerializer(BaseBlockSerializer):
         return {
             "version": header.version,
             "prev_block_hash": header.prev_hash.hex() if header.prev_hash else '',
-            "merkle_tree_root_hash": header.transaction_root_hash.hex(),
-            "receipt_root_hash": header.receipt_root_hash.hex(),
+            "merkle_tree_root_hash": header.transaction_root_hash.hex() if header.transaction_root_hash else '',
+            "state_root_hash": header.state_root_hash.hex() if header.state_root_hash else '',
+            "receipt_root_hash": header.receipt_root_hash.hex() if header.receipt_root_hash else '',
+            "bloom_filter": header.bloom_filter.hex(),
             "time_stamp": header.timestamp,
             "confirmed_transaction_list": transactions,
             "block_hash": header.hash.hex(),
             "height": header.height,
             "peer_id": header.peer_id.hex_hx() if header.peer_id else '',
             "signature": header.signature.to_base64str() if header.signature else '',
-            "commit_state": header.state_root_hash.hex(),
             "next_leader": header.next_leader.hex_xx(),
             "complained": 1 if header.complained else 0,
         }
@@ -48,6 +50,15 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("next_leader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
+        tx_root_hash = json_data["merkle_tree_root_hash"]
+        tx_root_hash = Hash32.fromhex(tx_root_hash, ignore_prefix=True) if tx_root_hash else None
+
+        receipt_root_hash = json_data["receipt_root_hash"]
+        receipt_root_hash = Hash32.fromhex(receipt_root_hash, ignore_prefix=True) if receipt_root_hash else None
+
+        state_root_hash = json_data["state_root_hash"]
+        state_root_hash = Hash32.fromhex(state_root_hash, ignore_prefix=True) if state_root_hash else None
+
         if json_data["complained"] == 1:
             complained = True
         elif json_data["complained"] == 0:
@@ -63,9 +74,10 @@ class BlockSerializer(BaseBlockSerializer):
             "peer_id": peer_id,
             "signature": signature,
             "next_leader": next_leader,
-            "transaction_root_hash": Hash32.fromhex(json_data["merkle_tree_root_hash"], ignore_prefix=True),
-            "receipt_root_hash": Hash32.fromhex(json_data["receipt_root_hash"], ignore_prefix=True),
-            "state_root_hash": Hash32.fromhex(json_data["commit_state"], ignore_prefix=True),
+            "transaction_root_hash": tx_root_hash,
+            "receipt_root_hash": receipt_root_hash,
+            "state_root_hash": state_root_hash,
+            "bloom_filter": BloomFilter.fromhex(json_data["bloom_filter"], ignore_prefix=True),
             "complained": complained
         }
 

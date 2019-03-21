@@ -38,6 +38,12 @@ class BlockVerifier(BaseBlockVerifier):
                                    f"ReceiptRootHash({header.receipt_root_hash.hex()}), "
                                    f"Expected({builder.receipt_root_hash.hex()}).")
 
+            builder.build_bloom_filter()
+            if header.bloom_filter != builder.bloom_filter:
+                raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                   f"ReceiptRootHash({header.bloom_filter.hex()}), "
+                                   f"Expected({builder.bloom_filter.hex()}).")
+
         builder.build_transaction_root_hash()
         if header.transaction_root_hash != builder.transaction_root_hash:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
