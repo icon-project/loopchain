@@ -9,7 +9,7 @@ from ... import Hash32
 class BlockProver(BaseBlockProver):
     def __init__(self, values: Iterable, type_: 'BlockProverType'):
         self.type = type_
-        self.hashes = [self.to_hash32(value) for value in values]
+        self.hashes = [self.to_hash32(value) for value in values] if values else []
         self._merkle_tree = MerkleTree()
 
     def get_proof(self, hash_or_index: Union[Hash32, int]) -> list:
