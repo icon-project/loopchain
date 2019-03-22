@@ -34,7 +34,8 @@ class BlockVersioner:
     def get_height(self, block_dumped: Union[str, dict]):
         if isinstance(block_dumped, str):
            block_dumped = json.loads(block_dumped)
-        return block_dumped["height"]
+        height = block_dumped["height"]
+        return int(height, 16) if isinstance(height, str) else height
 
 
 default_block_versions = [
