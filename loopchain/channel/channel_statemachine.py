@@ -13,6 +13,7 @@
 # limitations under the License.
 """State Machine for Channel Service"""
 import asyncio
+import traceback
 
 from earlgrey import MessageQueueService
 from transitions import State
@@ -112,12 +113,10 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.block_height_sync()
 
     def _do_evaluate_network(self):
-        loop = MessageQueueService.loop
-        asyncio.run_coroutine_threadsafe(self.__channel_service.evaluate_network(), loop)
+        self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
     def _do_subscribe_network(self):
-        loop = MessageQueueService.loop
-        asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_network(), loop)
+        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
     def _do_vote(self):
         self.__channel_service.block_manager.vote_as_peer()
@@ -165,3 +164,13 @@ class ChannelStateMachine(object):
 
     def _leadercomplain_on_exit(self):
         util.logger.debug(f"_leadercomplain_on_exit")
+
+    def _run_coroutine_threadsafe(self, coro):
+        async def _run_with_handling_exception():
+            try:
+                await coro
+            except Exception:
+                traceback.print_exc()
+
+        loop = MessageQueueService.loop
+        asyncio.run_coroutine_threadsafe(_run_with_handling_exception(), loop)
