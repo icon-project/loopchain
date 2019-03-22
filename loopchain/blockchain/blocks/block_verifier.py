@@ -15,8 +15,8 @@
 import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
-
 from secp256k1 import PrivateKey, PublicKey
+from loopchain import utils
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
@@ -32,15 +32,16 @@ class BlockVerifier(ABC):
         self._tx_versioner = tx_versioner
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
         self.verify_transactions(block, blockchain)
-        return self.verify_common(block, prev_block, generator)
+        return self.verify_common(block, prev_block, generator, **kwargs)
 
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None):
+    def verify_loosely(self, block: 'Block', prev_block: 'Block',
+                       blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
         self.verify_transactions_loosely(block, blockchain)
-        return self.verify_common(block, prev_block, generator)
+        return self.verify_common(block, prev_block, generator, **kwargs)
 
-    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         header: BlockHeader = block.header
 
         if header.timestamp is None:
@@ -48,6 +49,11 @@ class BlockVerifier(ABC):
 
         if header.height > 0 and header.prev_hash is None:
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
+
+        if prev_block and not (prev_block.header.timestamp < header.timestamp < utils.get_time_stamp()):
+            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
+                               f"prev_block timestamp({prev_block.header.timestamp}), "
+                               f"current timestamp({utils.get_now_time_stamp()}")
 
         self.verify_version(block)
 
@@ -57,10 +63,10 @@ class BlockVerifier(ABC):
         if prev_block:
             self.verify_prev_block(block, prev_block)
 
-        self._verify_common(block, prev_block, generator)
+        self._verify_common(block, prev_block, generator, **kwargs)
 
     @abstractmethod
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         raise NotImplementedError
 
     def verify_transactions(self, block: 'Block', blockchain=None):

@@ -107,6 +107,9 @@ class ConsensusSiever(ConsensusBase):
             block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.private_key
             block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
 
+            # TODO: This should be changed when IISS is applied.
+            block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+
             candidate_block = block_builder.build()
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)

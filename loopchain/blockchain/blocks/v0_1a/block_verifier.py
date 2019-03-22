@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 class BlockVerifier(BaseBlockVerifier):
     version = BlockHeader.version
 
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 

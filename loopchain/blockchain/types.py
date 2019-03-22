@@ -31,6 +31,10 @@ class Bytes(bytes):
         """
         return cls(bytes(cls.size) if cls.size else 0)
 
+    @classmethod
+    def empty(cls):
+        return cls.new()
+
     def hex_xx(self):
         if self.prefix:
             return self.prefix + self.hex()
@@ -77,7 +81,7 @@ class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
     @classmethod
-    def fromhex_address(cls, value: int, allow_malformed=False):
+    def fromhex_address(cls, value: str, allow_malformed=False):
         try:
             prefix, contents = value[:2], value[2:]
 

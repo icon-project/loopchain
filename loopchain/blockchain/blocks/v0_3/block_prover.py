@@ -42,11 +42,15 @@ class BlockProver(BaseBlockProver):
             return None  # Do not need
         if self.type == BlockProverType.Receipt:
             return receipt_hash_generator
+        if self.type == BlockProverType.Rep:
+            return None
 
     def to_hash32(self, value: Union[Hash32, bytes, bytearray, int, bool, dict]):
-        if isinstance(value, Hash32):
+        if value is None:
+            return Hash32(bytes(32))
+        elif isinstance(value, Hash32):
             return value
-        if isinstance(value, (bytes, bytearray)) and len(value) == 32:
+        elif isinstance(value, (bytes, bytearray)) and len(value) == 32:
             return Hash32(value)
 
         if isinstance(value, bool):
