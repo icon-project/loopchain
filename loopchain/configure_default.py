@@ -19,8 +19,6 @@ configure 의 default 값으로 지정하여 사용한다.
 configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
 configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)
 
-configure_user.py 파일을 생성하여 일부 default 값을 로컬에서 변경하여 사용할 수 있다.
-configure_user.py 는 git 에서는 관리하지 않는다.
 """
 
 import os

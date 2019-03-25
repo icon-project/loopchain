@@ -18,22 +18,9 @@ import importlib
 import json
 import logging
 import re
-from types import ModuleType
 
 import loopchain
 from loopchain.configure_default import *
-
-try:
-    if ENABLE_USER_CONFIG:
-        pass
-except NameError:
-    ENABLE_USER_CONFIG = True
-
-try:
-    if ENABLE_USER_CONFIG:
-        from loopchain.configure_user import *
-except ImportError:
-    ENABLE_USER_CONFIG = False
 
 
 class DataType(IntEnum):
@@ -68,40 +55,10 @@ class Configure(metaclass=ConfigureMetaClass):
         # configure_info_list = {configure_attr: configure_type}
         self.__configure_info_list = {}
         self.__load_configure(loopchain.configure_default, use_env=True)
-        if ENABLE_USER_CONFIG:
-            self.__load_configure(loopchain.configure_user, use_env=False)
 
     @property
     def configure_info_list(self):
         return self.__configure_info_list
-
-    def save_user_configure_with_current_set(self):
-        """Gather the config values that are different from default, and save them in the configure_user file.
-
-        """
-        save_this = self.__collect_diff_config_from_default()
-        if os.path.isfile("loopchain/configure_user.py") \
-                and not os.path.isfile("loopchain/configure_user_ori.py"):
-            os.system("cp loopchain/configure_user.py loopchain/configure_user_ori.py")
-        if save_this:
-            with open("loopchain/configure_user.py", 'w+', encoding='utf-8') as file:
-                for key, value in save_this.items():
-                    if isinstance(value, dict):
-                        try:
-                            temp_str = json.dumps(value, indent=4)
-                            value = temp_str.replace("true", "True").replace("false", "False")
-                        except Exception as e:
-                            self.__change_enum_to_int(value)
-                    file.write(key + " = " + repr(value) + "\n")
-
-    def cleanup_configuration_setting_to_default(self):
-        if os.path.isfile("loopchain/configure_user_ori.py"):
-            os.system("cp loopchain/configure_user_ori.py loopchain/configure_user.py")
-            os.system("rm -f loopchain/configure_user_ori.py")
-        else:
-            os.system("rm -f loopchain/configure_user.py")
-
-        self.init_configure()
 
     def load_configure_json(self, configure_file_path: str) -> None:
         """method for reading and applying json configuration.
@@ -188,26 +145,6 @@ class Configure(metaclass=ConfigureMetaClass):
 
         return target_value
 
-    def __collect_diff_config_from_default(self):
-        diff_config = dict()
-        for key, value in globals().items():
-            if not callable(value) \
-                    and not key.startswith("__") \
-                    and not isinstance(value, ModuleType):
-                configure_key = getattr(loopchain.configure_default, key, "__no_configure_key__")
-                if configure_key != "__no_configure_key__":
-                    configure_value = os.getenv(key, configure_key)
-                    if configure_value != value:
-                        logging.warning(f"This item({key}, {value}) is different from default")
-                        diff_config[key] = value
-                else:
-                    logging.warning(f"This item({key}, {value}) does not exist in default")
-                    diff_config[key] = value
-
-        unused_keys = ["ENABLE_USER_CONFIG"]
-        diff_config = {k: v for k, v in diff_config.items() if k not in unused_keys}
-        return diff_config
-
     def __change_enum_to_int(self, dict_data):
         for key, value in copy.copy(dict_data).items():
             if isinstance(value, IntEnum):
@@ -229,9 +166,7 @@ def get_configuration(configure_name):
 
 def set_configuration(configure_name, configure_value):
     if configure_name in globals():
-        # print(f"!!!!!!!!!!!!!!!!!!!!!")
         globals()[configure_name] = configure_value
-        # print(f"{globals()[configure_name]} vs {configure_value}")
         return True
     else:
         return False
