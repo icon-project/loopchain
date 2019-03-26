@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """State Machine for Channel Service"""
+
 import asyncio
 import traceback
 
@@ -20,6 +21,7 @@ from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.blockchain import Block
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -118,8 +120,9 @@ class ChannelStateMachine(object):
     def _do_subscribe_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
-    def _do_vote(self):
-        self.__channel_service.block_manager.vote_as_peer()
+    def _do_vote(self, unconfirmed_block: Block):
+        util.logger.notice(f"in _do_vote unconfirmed_block({unconfirmed_block})")
+        self.__channel_service.block_manager.vote_as_peer(unconfirmed_block)
 
     def _consensus_on_enter(self):
         self.block_height_sync()
@@ -142,12 +145,11 @@ class ChannelStateMachine(object):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
 
-    def _vote_on_enter(self):
+    def _vote_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = False
         loggers.get_preset().update_logger()
 
-    def _vote_on_exit(self):
-        # util.logger.debug(f"_vote_on_exit")
+    def _vote_on_exit(self, *args, **kwargs):
         pass
 
     def _blockgenerate_on_enter(self):

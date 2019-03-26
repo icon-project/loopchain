@@ -660,7 +660,7 @@ class ChannelInnerTask:
         if not added:
             return
 
-        self._channel_service.state_machine.vote()
+        self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
         if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
                 unconfirmed_block.header.next_leader.hex_hx():

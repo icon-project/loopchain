@@ -741,7 +741,7 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    def vote_as_peer(self):
+    def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock
         """
         if self.__unconfirmedBlockQueue.empty():
