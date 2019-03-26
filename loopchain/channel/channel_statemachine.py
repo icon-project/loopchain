@@ -122,7 +122,7 @@ class ChannelStateMachine(object):
 
     def _do_vote(self, unconfirmed_block: Block):
         util.logger.notice(f"in _do_vote unconfirmed_block({unconfirmed_block})")
-        self.__channel_service.block_manager.vote_as_peer(unconfirmed_block)
+        self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
 
     def _consensus_on_enter(self):
         self.block_height_sync()

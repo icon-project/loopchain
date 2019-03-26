@@ -62,7 +62,6 @@ class BlockManager:
         )
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__unconfirmedBlockQueue = queue.Queue()
         self.__blockchain = BlockChain(self.__level_db, channel_name)
         self.__peer_type = None
         self.__consensus = None
@@ -276,8 +275,6 @@ class BlockManager:
             return False
 
         self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
-
-        self.__unconfirmedBlockQueue.put(unconfirmed_block)
 
         return True
 
@@ -576,7 +573,6 @@ class BlockManager:
         if self.__blockchain.last_unconfirmed_block is not None:
             self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
         self.__blockchain.last_unconfirmed_block = None
-        self.__unconfirmedBlockQueue = queue.Queue()
 
         my_height = self.__current_block_height()
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
@@ -741,15 +737,7 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    def vote_as_peer(self, unconfirmed_block: Block):
-        """Vote to AnnounceUnconfirmedBlock
-        """
-        if self.__unconfirmedBlockQueue.empty():
-            return
-
-        unconfirmed_block: Block = self.__unconfirmedBlockQueue.get()
-        logging.debug(f"we got unconfirmed block ....{unconfirmed_block.header.hash.hex()}")
-
+    def _vote(self, unconfirmed_block: Block):
         my_height = self.__blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 1):
             self.__channel_service.state_machine.block_sync()
@@ -782,3 +770,21 @@ class BlockManager:
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
             self.vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
+
+    async def vote_as_peer(self, unconfirmed_block: Block):
+        """Vote to AnnounceUnconfirmedBlock
+        """
+        util.logger.notice(f"in vote_as_peer unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+
+        added = self.add_unconfirmed_block(unconfirmed_block)
+        if not added:
+            return
+
+        self._vote(unconfirmed_block)
+
+        if self.__channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
+                unconfirmed_block.header.next_leader.hex_hx():
+            util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
+            await self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+
+        self.__channel_service.start_leader_complain_timer_if_tx_exists()
