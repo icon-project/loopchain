@@ -28,7 +28,7 @@ from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
 from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
 from loopchain.tools.grpc_helper import grpc_patcher
-from loopchain.utils import loggers, command_arguments, async
+from loopchain.utils import loggers, command_arguments, async_
 
 
 def main(argv):
@@ -60,8 +60,8 @@ def main(argv):
     loggers.update_other_loggers()
 
     grpc_patcher.monkey_patch()
-    async.thread_monkey_patch()
-    async.concurrent_future_monkey_patch()
+    async_.thread_monkey_patch()
+    async_.concurrent_future_monkey_patch()
 
     if args.service_type == "peer":
         start_as_peer(args, conf.NodeType.CommunityNode)

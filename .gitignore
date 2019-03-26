@@ -237,5 +237,7 @@ virtualenv-15.2.0-py2.py3-none-any.whl
 
 *.whl
 
+user.mk
+
 # start with _
 _*/
