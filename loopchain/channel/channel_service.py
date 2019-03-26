@@ -610,6 +610,16 @@ class ChannelService:
             logging.debug("peer_target: " + peer)
 
     async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+        """
+
+        :param new_leader_id:
+        :param block_height:
+        :param complained:
+        :return:
+        """
+        if self.peer_manager.get_leader_id(conf.ALL_GROUP_ID) == new_leader_id:
+            return
+
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                           f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
