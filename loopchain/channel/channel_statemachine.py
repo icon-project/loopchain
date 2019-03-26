@@ -121,27 +121,26 @@ class ChannelStateMachine(object):
         self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
     def _do_vote(self, unconfirmed_block: Block):
-        util.logger.notice(f"in _do_vote unconfirmed_block({unconfirmed_block})")
         self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
 
-    def _consensus_on_enter(self):
+    def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
 
-    def _blockheightsync_on_enter(self):
+    def _blockheightsync_on_enter(self, *args, **kwargs):
         self.evaluate_network()
 
-    def _blocksync_on_enter(self):
+    def _blocksync_on_enter(self, *args, **kwargs):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
 
-    def _blocksync_on_exit(self):
+    def _blocksync_on_exit(self, *args, **kwargs):
         self.__channel_service.block_manager.stop_block_height_sync_timer()
         self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
-    def _subscribe_network_on_enter(self):
+    def _subscribe_network_on_enter(self, *args, **kwargs):
         self.__channel_service.start_subscribe_timer()
         self.__channel_service.start_shutdown_timer()
 
-    def _subscribe_network_on_exit(self):
+    def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
 
@@ -152,19 +151,19 @@ class ChannelStateMachine(object):
     def _vote_on_exit(self, *args, **kwargs):
         pass
 
-    def _blockgenerate_on_enter(self):
+    def _blockgenerate_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = True
         loggers.get_preset().update_logger()
         self.__channel_service.block_manager.start_block_generate_timer()
 
-    def _blockgenerate_on_exit(self):
+    def _blockgenerate_on_exit(self, *args, **kwargs):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
-    def _leadercomplain_on_enter(self):
+    def _leadercomplain_on_enter(self, *args, **kwargs):
         util.logger.debug(f"_leadercomplain_on_enter")
         self.__channel_service.block_manager.leader_complain()
 
-    def _leadercomplain_on_exit(self):
+    def _leadercomplain_on_exit(self, *args, **kwargs):
         util.logger.debug(f"_leadercomplain_on_exit")
 
     def _run_coroutine_threadsafe(self, coro):
