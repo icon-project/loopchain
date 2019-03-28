@@ -15,7 +15,6 @@
 
 import json
 import logging
-import queue
 import shutil
 import threading
 import traceback
@@ -29,8 +28,7 @@ from loopchain.baseservice import TimerService, BlockGenerationScheduler, Object
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier
-from loopchain.blockchain.types import ExternalAddress
+    exception, BlockVerifier, AddUnconfirmedBlock
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -62,7 +60,6 @@ class BlockManager:
         )
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__unconfirmedBlockQueue = queue.Queue()
         self.__blockchain = BlockChain(self.__level_db, channel_name)
         self.__peer_type = None
         self.__consensus = None
@@ -256,10 +253,15 @@ class BlockManager:
         self.epoch = Epoch.new_epoch()
 
     def add_unconfirmed_block(self, unconfirmed_block):
+        """
+
+        :param unconfirmed_block:
+        :return: bool check_unconfirmed_block_has_valid_block_info_for_prev_block
+        """
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-        # util.logger.debug(f"-------------------add_unconfirmed_block---before confirm_prev_block, "
-        #                    f"tx count({len(unconfirmed_block.body.transactions)}), "
-        #                    f"height({unconfirmed_block.header.height})")
+
+        # TODO set below variable with right result.
+        check_unconfirmed_block_has_valid_block_info_for_prev_block = True
 
         try:
             if unconfirmed_block.body.confirm_prev_block:
@@ -277,9 +279,7 @@ class BlockManager:
 
         self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
 
-        self.__unconfirmedBlockQueue.put(unconfirmed_block)
-
-        return True
+        return check_unconfirmed_block_has_valid_block_info_for_prev_block
 
     def add_confirmed_block(self, confirmed_block: Block):
         my_height = self.__blockchain.last_block.header.height
@@ -576,7 +576,6 @@ class BlockManager:
         if self.__blockchain.last_unconfirmed_block is not None:
             self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
         self.__blockchain.last_unconfirmed_block = None
-        self.__unconfirmedBlockQueue = queue.Queue()
 
         my_height = self.__current_block_height()
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
@@ -741,44 +740,51 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    def vote_as_peer(self):
-        """Vote to AnnounceUnconfirmedBlock
-        """
-        if self.__unconfirmedBlockQueue.empty():
-            return
-
-        unconfirmed_block: Block = self.__unconfirmedBlockQueue.get()
-        logging.debug(f"we got unconfirmed block ....{unconfirmed_block.header.hash.hex()}")
-
+    async def _vote(self, unconfirmed_block: Block):
         my_height = self.__blockchain.block_height
-        if my_height < (unconfirmed_block.header.height - 1):
+        if my_height < (unconfirmed_block.header.height - 2):
             self.__channel_service.state_machine.block_sync()
+            util.logger.debug(f"trigger block sync in _vote my_height({my_height}), "
+                              f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
             return
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.header.height:
+            util.logger.debug(f"block is already added my_height({my_height}), "
+                              f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
             return
 
-        logging.info("PeerService received unconfirmed block: " + unconfirmed_block.header.hash.hex())
-
-        block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
-        block_verifier.invoke_func = self.__channel_service.score_invoke
-
-        reps = self.__channel_service.get_rep_ids()
-        exception = None
+        exc = None
         try:
+            if not self.add_unconfirmed_block(unconfirmed_block):
+                util.logger.debug(f"fail add_unconfirmed_block my_height({my_height}), "
+                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+                raise AddUnconfirmedBlock
+
+            block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
+            block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
+            block_verifier.invoke_func = self.__channel_service.score_invoke
+            reps = self.__channel_service.get_rep_ids()
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,
                                                    self.__blockchain.last_block.header.next_leader,
                                                    reps=reps)
         except Exception as e:
-            exception = e
+            exc = e
             logging.error(e)
             traceback.print_exc()
         else:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            self.vote_unconfirmed_block(unconfirmed_block.header.hash, exception is None)
+            self.vote_unconfirmed_block(unconfirmed_block.header.hash, exc is None)
+
+    async def vote_as_peer(self, unconfirmed_block: Block):
+        """Vote to AnnounceUnconfirmedBlock
+        """
+        util.logger.info(f"in vote_as_peer unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+
+        await self._vote(unconfirmed_block)
+        await self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+        self.__channel_service.start_leader_complain_timer_if_tx_exists()

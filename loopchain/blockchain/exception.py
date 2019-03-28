@@ -35,6 +35,12 @@ class BlockchainError(Exception):
     pass
 
 
+class AddUnconfirmedBlock(Exception):
+    """
+    """
+    pass
+
+
 class BlockVersionNotMatch(Exception):
     def __init__(self, block_version: str, target_version: str, msg: str):
         super().__init__(msg)

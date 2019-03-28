@@ -656,18 +656,7 @@ class ChannelInnerTask:
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
             return
 
-        added = self._channel_service.block_manager.add_unconfirmed_block(unconfirmed_block)
-        if not added:
-            return
-
-        self._channel_service.state_machine.vote()
-
-        if self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) != \
-                unconfirmed_block.header.next_leader.hex_hx():
-            util.logger.debug(f"reset leader to ({unconfirmed_block.header.next_leader.hex_hx()})")
-            await self._channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
-
-        self._channel_service.start_leader_complain_timer_if_tx_exists()
+        self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task
     async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
