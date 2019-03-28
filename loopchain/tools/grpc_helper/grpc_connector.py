@@ -19,19 +19,19 @@ from loopchain import configure as conf
 from loopchain.tools.grpc_helper.grpc_secure_key import GRPCSecureKeyCollection
 
 
-class GRPCConnector(metaclass=abc.ABCMeta):
+class GRPCConnector(abc.ABC):
     """
     A connector used in grpc is a component of the 'strategy pattern'.
     It abstracts and wraps 'grpc.add_port()' and 'grpc.channel()'
     """
 
     @classmethod
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def add_server_port(cls, keys: GRPCSecureKeyCollection, server, host, ssl_auth_type: conf.SSLAuthType):
         pass
 
     @classmethod
-    @abc.abstractclassmethod
+    @abc.abstractmethod
     def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType):
         pass
 

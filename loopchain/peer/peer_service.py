@@ -20,13 +20,16 @@ import signal
 import timeit
 from functools import partial
 
+import grpc
+
 from loopchain.baseservice import CommonSubprocess
 from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
 from loopchain.blockchain import *
-from loopchain.container import RestService, CommonService
+from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
@@ -70,7 +73,7 @@ class PeerService:
         if self.__group_id is None and conf.PEER_GROUP_ID != "":
             self.__group_id = conf.PEER_GROUP_ID
 
-        self.__common_service = None
+        self.p2p_outer_server: grpc.Server = None
         self.__channel_infos = None
 
         self.__rest_service = None
@@ -82,7 +85,6 @@ class PeerService:
         self.__score = None
         self.__peer_target = None
         self.__rest_target = None
-        self.__inner_target = None
         self.__peer_port = 0
 
         # gRPC service for Peer
@@ -96,10 +98,6 @@ class PeerService:
         self.__node_keys: dict = {}
 
         ObjectManager().peer_service = self
-
-    @property
-    def common_service(self):
-        return self.__common_service
 
     @property
     def inner_service(self):
@@ -168,8 +166,8 @@ class PeerService:
     def node_keys(self):
         return self.__node_keys
 
-    def service_stop(self):
-        self.__common_service.stop()
+    def p2p_server_stop(self):
+        self.p2p_outer_server.stop(None)
 
     def __get_channel_infos(self):
         # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
@@ -267,14 +265,9 @@ class PeerService:
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
-    def run_common_service(self):
-        inner_service_port = conf.PORT_INNER_SERVICE or (self.__peer_port + conf.PORT_DIFF_INNER_SERVICE)
-        self.__inner_target = conf.IP_LOCAL + ":" + str(inner_service_port)
-
-        self.__common_service = CommonService(loopchain_pb2, inner_service_port)
-        self.__common_service.start(str(self.__peer_port), self.__peer_id, self.__group_id)
-
-        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self.__outer_service, self.__common_service.outer_server)
+    def run_p2p_server(self):
+        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self.__peer_port))
+        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self.__outer_service, self.p2p_outer_server)
 
     def serve(self,
               port,
@@ -314,7 +307,7 @@ class PeerService:
             util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
 
         self.__run_rest_services(port)
-        self.run_common_service()
+        self.run_p2p_server()
 
         self.__close_kms_helper()
 
@@ -344,8 +337,6 @@ class PeerService:
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
 
-        self.__common_service.wait()
-
         # process monitor must stop monitoring before any subprocess stop
         # Monitor().stop()
 
@@ -361,7 +352,7 @@ class PeerService:
             for channel_stub in StubCollection().channel_stubs.values():
                 await channel_stub.async_task().stop("Close")
 
-            self.service_stop()
+            self.p2p_server_stop()
             loop.stop()
 
         loop = self.__inner_service.loop

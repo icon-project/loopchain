@@ -16,5 +16,4 @@
 from .container import *
 from .rest_service import *
 from .rest_service_rs import *
-from .common_service import *
 

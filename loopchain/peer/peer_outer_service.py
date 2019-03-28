@@ -321,7 +321,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 channel_stub.sync_task().stop()
 
-            self.peer_service.service_stop()
+            self.peer_service.p2p_server_stop()
 
         except Exception as e:
             logging.debug("Score Service Already stop by other reason. %s", e)

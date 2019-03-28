@@ -14,13 +14,16 @@
 """gRPC helper for security"""
 
 import logging
+from concurrent import futures
 
-from loopchain.tools.grpc_helper.grpc_secure_key import *
 from loopchain.components import SingletonMetaClass
 from loopchain.tools.grpc_helper.grpc_connector import *
 
 
 class GRPCHelper(metaclass=SingletonMetaClass):
+    """
+    gRPC helper class
+    """
 
     def __init__(self):
         self.__connectors = {
@@ -30,6 +33,24 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         }
 
         self.__keys = GRPCSecureKeyCollection()
+
+    def start_outer_server(self, port: str = None) -> grpc.Server:
+        outer_server = grpc.server(futures.ThreadPoolExecutor(conf.MAX_WORKERS, "GRPCOuterThread"))
+        target_host = f'[::]:{port}'
+        self.add_server_port(outer_server, target_host)
+        logging.debug(f"outer target host = {target_host}")
+
+        return outer_server
+
+    def start_inner_server(self, port: str = None) -> grpc.Server:
+        inner_service_port = f'{int(port) + conf.PORT_DIFF_INNER_SERVICE}'
+
+        inner_server = grpc.server(futures.ThreadPoolExecutor(conf.MAX_WORKERS, "GRPCInnerThread"))
+        target_host = conf.INNER_SERVER_BIND_IP + ':' + inner_service_port
+        self.add_server_port(inner_server, target_host, conf.SSLAuthType.none)
+        logging.debug(f"inner target host = {target_host}")
+
+        return inner_server
 
     def add_server_port(self, server, host, ssl_auth_type: conf.SSLAuthType=None, key_load_type: conf.KeyLoadType=None):
         """
