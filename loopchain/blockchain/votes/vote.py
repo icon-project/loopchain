@@ -64,6 +64,10 @@ class Vote(ABC, Generic[TResult]):
         signature = Signature(signer.sign_hash(hash_))
         return cls(rep_id, timestamp, signature, **kwargs)
 
+    @abstractmethod
+    def empty(self, rep: ExternalAddress, **kwargs):
+        raise NotImplementedError
+
     @classmethod
     def deserialize(cls, data: dict):
         vote_attributes = cls._deserialize(data)

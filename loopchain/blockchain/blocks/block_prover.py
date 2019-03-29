@@ -47,3 +47,4 @@ class BlockProverType(Enum):
     Transaction = auto()
     Receipt = auto()
     Rep = auto()
+    Vote = auto()

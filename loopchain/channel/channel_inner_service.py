@@ -30,6 +30,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import blocks
+from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote

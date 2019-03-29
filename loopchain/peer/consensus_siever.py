@@ -19,6 +19,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
+from loopchain.blockchain import Epoch
 from loopchain.blockchain.votes import Vote
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -75,7 +76,7 @@ class ConsensusSiever(ConsensusBase):
                     util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
                 vote_result = True
-                self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
+                # self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
                 self._made_block_count += 1
             elif len(block_builder.transactions) > 0:
                 util.logger.spam(f"consensus len(block_builder.transactions) > 0")
@@ -89,7 +90,7 @@ class ConsensusSiever(ConsensusBase):
                     ):
                         votes = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                         util.logger.info(votes)
-                        if not votes.completed() or votes.get_majority() is False:
+                        if not votes.is_completed() or votes.get_result() is False:
                             return self.__block_generation_timer.call()
 
                         self.__add_block(last_unconfirmed_block, votes)
@@ -103,7 +104,7 @@ class ConsensusSiever(ConsensusBase):
                 ):
                     votes = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                     util.logger.info(votes)
-                    if not votes.completed() or votes.get_majority() is False:
+                    if not votes.is_completed() or votes.get_result() is False:
                         return self.__block_generation_timer.call()
 
                     self.__add_block(last_unconfirmed_block, votes)
@@ -120,10 +121,11 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
+            self._blockchain.last_unconfirmed_block = candidate_block
+            self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
 
-            self._blockchain.last_unconfirmed_block = candidate_block
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
 
             # TODO Temporary ignore below line for developing leader complain
@@ -142,7 +144,7 @@ class ConsensusSiever(ConsensusBase):
         # count votes
         votes = self._block_manager.candidate_blocks.get_vote(block_hash)
         util.logger.info(votes)
-        if not votes.completed():
+        if not votes.is_completed():
             return   # vote not complete yet
 
         self.__stop_broadcast_send_unconfirmed_block_timer()

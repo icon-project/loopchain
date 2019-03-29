@@ -20,7 +20,7 @@ import zlib
 from enum import Enum
 from typing import Union, List
 
-import loopchain.utils as util
+from loopchain import utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue

@@ -61,15 +61,23 @@ class TestVote(unittest.TestCase):
         block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
         for i, signer in enumerate(self.signers):
-            if i % 4 <= 2:
-                block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
-            else:
-                block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            if i == 66:
+                break
+
+            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
-        logging.info(block_votes)
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
-        self.assertEqual(block_votes.get_majority(), True)
+        logging.info(block_votes)
+
+        self.assertEqual(block_votes.is_completed(), False)
+        self.assertEqual(block_votes.get_result(), None)
+
+        block_vote = BlockVote.new(self.signers[99].private_key, 0, 0, block_hash)
+        block_votes.add_vote(block_vote)
+
+        self.assertEqual(block_votes.is_completed(), True)
+        self.assertEqual(block_votes.get_result(), True)
 
     def test_block_votes_false(self):
         ratio = 0.67
@@ -85,7 +93,32 @@ class TestVote(unittest.TestCase):
 
         logging.info(block_votes)
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
-        self.assertEqual(block_votes.get_majority(), False)
+        self.assertEqual(block_votes.get_result(), False)
+
+    def test_block_votes_fail(self):
+        ratio = 0.67
+        block_hash = Hash32(os.urandom(Hash32.size))
+        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+
+        for i, signer in enumerate(self.signers):
+            if i == 33:
+                break
+
+            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_votes.add_vote(block_vote)
+
+        self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
+
+        logging.info(block_votes)
+        self.assertEqual(block_votes.is_completed(), False)
+        self.assertEqual(block_votes.get_result(), None)
+
+        block_vote = BlockVote.new(self.signers[99].private_key, 0, 0, Hash32.empty())
+        block_votes.add_vote(block_vote)
+
+        logging.info(block_votes)
+        self.assertEqual(block_votes.is_completed(), True)
+        self.assertEqual(block_votes.get_result(), False)
 
     def test_block_votes_completed(self):
         ratio = 0.67
@@ -98,32 +131,32 @@ class TestVote(unittest.TestCase):
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
-        self.assertEqual(block_votes.completed(), False)
-        self.assertEqual(block_votes.get_majority(), None)
+        self.assertEqual(block_votes.is_completed(), False)
+        self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[25:50]:
             block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
-        self.assertEqual(block_votes.completed(), False)
-        self.assertEqual(block_votes.get_majority(), None)
+        self.assertEqual(block_votes.is_completed(), False)
+        self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[50:75]:
             block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
-        self.assertEqual(block_votes.completed(), False)
-        self.assertEqual(block_votes.get_majority(), None)
+        self.assertEqual(block_votes.is_completed(), False)
+        self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[75:90]:
             block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
-        self.assertEqual(block_votes.completed(), True)
-        self.assertEqual(block_votes.get_majority(), None)
+        self.assertEqual(block_votes.is_completed(), True)
+        self.assertEqual(block_votes.get_result(), False)
 
     def test_block_invalid_vote(self):
         ratio = 0.67
@@ -185,8 +218,8 @@ class TestVote(unittest.TestCase):
             leader_votes.add_vote(leader_vote)
 
         logging.info(leader_votes)
-        self.assertEqual(leader_votes.completed(), True)
-        self.assertEqual(leader_votes.get_majority(), new_leaders[0])
+        self.assertEqual(leader_votes.is_completed(), True)
+        self.assertEqual(leader_votes.get_result(), new_leaders[0])
 
     def test_leader_votes_completed(self):
         ratio = 0.67
@@ -202,32 +235,32 @@ class TestVote(unittest.TestCase):
             leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
-        self.assertEqual(leader_votes.completed(), False)
-        self.assertEqual(leader_votes.get_majority(), None)
+        self.assertEqual(leader_votes.is_completed(), False)
+        self.assertEqual(leader_votes.get_result(), None)
 
         for i, (rep, signer) in enumerate(zip(self.reps[25:50], self.signers[25:50])):
             new_leader = new_leaders[1]
             leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
-        self.assertEqual(leader_votes.completed(), False)
-        self.assertEqual(leader_votes.get_majority(), None)
+        self.assertEqual(leader_votes.is_completed(), False)
+        self.assertEqual(leader_votes.get_result(), None)
 
         for i, (rep, signer) in enumerate(zip(self.reps[50:75], self.signers[50:75])):
             new_leader = new_leaders[0]
             leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
-        self.assertEqual(leader_votes.completed(), False)
-        self.assertEqual(leader_votes.get_majority(), None)
+        self.assertEqual(leader_votes.is_completed(), False)
+        self.assertEqual(leader_votes.get_result(), None)
 
         for i, (rep, signer) in enumerate(zip(self.reps[75:90], self.signers[75:90])):
             new_leader = new_leaders[1]
             leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
-        self.assertEqual(leader_votes.completed(), True)
-        self.assertEqual(leader_votes.get_majority(), None)
+        self.assertEqual(leader_votes.is_completed(), True)
+        self.assertEqual(leader_votes.get_result(), None)
 
     def test_leader_invalid_vote(self):
         ratio = 0.67

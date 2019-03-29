@@ -22,7 +22,7 @@ import traceback
 
 from earlgrey import MessageQueueService
 
-import loopchain.utils as util
+from loopchain import utils as util
 from loopchain import configure as conf
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.blocks import Block, BlockBuilder

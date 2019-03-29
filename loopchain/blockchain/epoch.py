@@ -28,10 +28,11 @@ from loopchain.channel.channel_property import ChannelProperty
 
 class Epoch:
     def __init__(self, block_manager, leader_id=None):
-        if block_manager.get_blockchain().last_block:
-            self.height = block_manager.get_blockchain().last_block.header.height + 1
+        blockchain = block_manager.get_blockchain()
+        if blockchain.last_unconfirmed_block:
+            self.height = blockchain.last_unconfirmed_block.header.height + 1
         else:
-            self.height = 1
+            self.height = blockchain.last_block.header.height + 1
         self.leader_id = leader_id
         self.__block_manager = block_manager
         self.__blockchain = self.__block_manager.get_blockchain()
@@ -42,6 +43,7 @@ class Epoch:
         self.__candidate_blocks = None
         self.__complain_votes: LeaderVotes = None
         self.complained_result = None
+        self.new_votes()
 
     @staticmethod
     def new_epoch(leader_id=None):
@@ -72,7 +74,10 @@ class Epoch:
                           f"new_leader_id({leader_vote.new_leader}), "
                           f"block_height({leader_vote.block_height}), "
                           f"peer_id({leader_vote.rep})")
-        self.__complain_votes.add_vote(leader_vote)
+        try:
+            self.__complain_votes.add_vote(leader_vote)
+        except RuntimeError as e:
+            logging.warning(e)
 
     def complain_result(self) -> Union[str, None]:
         """return new leader id when complete complain leader.
@@ -80,8 +85,8 @@ class Epoch:
         :return: new leader id or None
         """
         util.logger.debug(f"complain_result vote_result({self.__complain_votes})")
-        if self.__complain_votes.completed():
-            vote_result = self.__complain_votes.get_majority()
+        if self.__complain_votes.is_completed():
+            vote_result = self.__complain_votes.get_result()
             return vote_result.hex_hx()
         else:
             return None

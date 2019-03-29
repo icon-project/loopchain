@@ -699,6 +699,7 @@ class BlockManager:
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
             timestamp=util.get_time_stamp()
         )
+        logging.info(f"LeaderVote : \n{leader_vote}")
         self.epoch.add_complain(leader_vote)
 
         leader_vote_serialized = leader_vote.serialize()

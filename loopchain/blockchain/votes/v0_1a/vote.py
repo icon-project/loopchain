@@ -14,7 +14,7 @@
 from typing import Union
 from dataclasses import dataclass
 from secp256k1 import PrivateKey
-from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.blockchain.votes import Vote as BaseVote
 
 
@@ -32,11 +32,16 @@ class BlockVote(BaseVote[bool]):
             block_height: int, block_hash: Union[Hash32, None]) -> 'BlockVote':
         return super().new(rep_pri_key, timestamp, block_height=block_height, block_hash=block_hash)
 
+    # noinspection PyMethodOverriding
+    @classmethod
+    def empty(cls, rep: ExternalAddress, block_height: int):
+        return cls(rep, 0, Signature.empty(), block_height, Hash32.empty())
+
     @classmethod
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
-        data_deserialized["block_hash"] = Hash32.fromhex(data["blockHash"]) if data["blockHash"] is not None else None
+        data_deserialized["block_hash"] = Hash32.fromhex(data["blockHash"])
         return data_deserialized
 
     # noinspection PyMethodOverriding
@@ -68,6 +73,11 @@ class LeaderVote(BaseVote[ExternalAddress]):
             block_height: int, old_leader: ExternalAddress, new_leader: ExternalAddress) -> 'LeaderVote':
         return super().new(rep_pri_key, timestamp,
                            block_height=block_height, old_leader=old_leader, new_leader=new_leader)
+
+    # noinspection PyMethodOverriding
+    @classmethod
+    def empty(cls, rep: ExternalAddress, block_height: int, old_leader: ExternalAddress):
+        return cls(rep, 0, Signature.empty(), 0, old_leader, ExternalAddress.empty())
 
     @classmethod
     def _deserialize(cls, data: dict):
