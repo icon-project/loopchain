@@ -46,6 +46,7 @@ class Epoch:
         self.complain_votes: Optional[LeaderVotes] = None
         self.complained_result = None
 
+        self.new_votes()
         self.new_round(leader_id, 0)
 
     @property
@@ -92,7 +93,10 @@ class Epoch:
                           f"new_leader_id({leader_vote.new_leader}), "
                           f"block_height({leader_vote.block_height}), "
                           f"peer_id({leader_vote.rep})")
-        self.complain_votes.add_vote(leader_vote)
+        try:
+            self.complain_votes.add_vote(leader_vote)
+        except RuntimeError as e:
+            logging.warning(e)
 
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.
@@ -100,8 +104,8 @@ class Epoch:
         :return: new leader id or None
         """
         util.logger.debug(f"complain_result vote_result({self.complain_votes})")
-        if self.complain_votes and  self.complain_votes.completed():
-            vote_result = self.complain_votes.get_majority()
+        if self.complain_votes and  self.complain_votes.is_completed():
+            vote_result = self.complain_votes.get_result()
             return vote_result.hex_hx()
         else:
             return None

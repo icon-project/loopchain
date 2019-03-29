@@ -1,9 +1,11 @@
 from collections import OrderedDict
 
+from loopchain import configure as conf
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
 from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
+from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -15,7 +17,7 @@ class BlockSerializer(BaseBlockSerializer):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
-        transactions = list()
+        transactions = []
         for tx in body.transactions.values():
             ts = TransactionSerializer.new(tx.version, self._tx_versioner)
             tx_serialized = ts.to_full_data(tx)
@@ -23,20 +25,23 @@ class BlockSerializer(BaseBlockSerializer):
 
         return {
             "version": header.version,
-            "prevHash": header.prev_hash.hex_0x() if header.prev_hash else '',
-            "transactionHash": header.transaction_hash.hex_0x() if header.transaction_hash else '',
-            "stateHash": header.state_hash.hex_0x() if header.state_hash else '',
-            "receiptHash": header.receipt_hash.hex_0x() if header.receipt_hash else '',
+            "prevHash": header.prev_hash.hex_0x(),
+            "transactionHash": header.transaction_hash.hex_0x(),
+            "stateHash": header.state_hash.hex_0x(),
+            "receiptHash": header.receipt_hash.hex_0x(),
             "repHash": header.rep_hash.hex_0x(),
+            "leaderVoteHash": header.leader_vote_hash.hex_0x(),
+            "prevVoteHash": header.prev_vote_hash.hex_0x(),
             "bloomFilter": header.bloom_filter.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
+            "leaderVotes": body.leader_votes.serialize(),
+            "prevVotes": body.prev_votes.serialize(),
             "hash": header.hash.hex_0x(),
             "height": hex(header.height),
-            "leader": header.peer_id.hex_hx() if header.peer_id else '',
-            "signature": header.signature.to_base64str() if header.signature else '',
+            "leader": header.peer_id.hex_hx(),
+            "signature": header.signature.to_base64str(),
             "nextLeader": header.next_leader.hex_xx(),
-            "complained": "0x1" if header.complained else "0x0",
         }
 
     def _deserialize_header_data(self, json_data: dict):
@@ -55,29 +60,28 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
         transaction_hash = json_data["transactionHash"]
-        transaction_hash = Hash32.fromhex(transaction_hash) if transaction_hash else None
+        transaction_hash = Hash32.fromhex(transaction_hash)
 
         receipt_hash = json_data["receiptHash"]
-        receipt_hash = Hash32.fromhex(receipt_hash) if receipt_hash else None
+        receipt_hash = Hash32.fromhex(receipt_hash)
 
         state_hash = json_data["stateHash"]
-        state_hash = Hash32.fromhex(state_hash) if state_hash else None
+        state_hash = Hash32.fromhex(state_hash)
 
         rep_hash = json_data["repHash"]
-        rep_hash = Hash32.fromhex(rep_hash) if state_hash else None
+        rep_hash = Hash32.fromhex(rep_hash)
+
+        leader_vote_hash = json_data["leaderVoteHash"]
+        leader_vote_hash = Hash32.fromhex(leader_vote_hash)
+
+        prev_vote_hash = json_data["prevVoteHash"]
+        prev_vote_hash = Hash32.fromhex(prev_vote_hash)
 
         height = json_data["height"]
         height = int(height, 16)
 
         timestamp = json_data["timestamp"]
         timestamp = int(timestamp, 16)
-
-        if json_data["complained"] == "0x1":
-            complained = True
-        elif json_data["complained"] == "0x0":
-            complained = False
-        else:
-            raise RuntimeError
 
         return {
             "hash": hash_,
@@ -91,13 +95,12 @@ class BlockSerializer(BaseBlockSerializer):
             "receipt_hash": receipt_hash,
             "state_hash": state_hash,
             "rep_hash": rep_hash,
-            "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"]),
-            "complained": complained
+            "leader_vote_hash": leader_vote_hash,
+            "prev_vote_hash": prev_vote_hash,
+            "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"])
         }
 
     def _deserialize_body_data(self, json_data: dict):
-        confirm_prev_block = json_data.get("confirmPrevBlock")
-
         transactions = OrderedDict()
         for tx_data in json_data['transactions']:
             tx_version = self._tx_versioner.get_version(tx_data)
@@ -105,7 +108,11 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
+        leader_votes = LeaderVotes.deserialize(json_data["leaderVotes"], conf.LEADER_COMPLAIN_RATIO)
+        prev_votes = BlockVotes.deserialize(json_data["prevVotes"], conf.VOTING_RATIO)
+
         return {
             "transactions": transactions,
-            "confirm_prev_block": confirm_prev_block
+            "leader_votes": leader_votes,
+            "prev_votes": prev_votes
         }

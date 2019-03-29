@@ -20,9 +20,10 @@ import logging
 import json
 import random
 import sys
+import os
 import unittest
 
-import loopchain.utils as util
+from loopchain import utils as util
 import testcase.unittest.test_util as test_util
 
 from cli_tools.icx_test.icx_wallet import IcxWallet
@@ -34,6 +35,7 @@ sys.path.append('../')
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
 from loopchain.blockchain.transactions import TransactionBuilder, TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.votes.v0_3 import BlockVotes, BlockVote
 
 
 from loopchain.utils import loggers
@@ -227,7 +229,7 @@ class TestBlock(unittest.TestCase):
 
         dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
-        for i in range(1000):
+        for i in range(5):
             tx_builder = TransactionBuilder.new("0x3", tx_versioner)
             tx_builder.signer = private_auth
             tx_builder.to_address = ExternalAddress.new()
@@ -251,6 +253,11 @@ class TestBlock(unittest.TestCase):
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
+        vote = BlockVote.new(private_auth.private_key, util.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
+        votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
+        votes.add_vote(vote)
+        block_builder.prev_votes = votes
+
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
         block_verifier.invoke_func = lambda b: (block, dummy_receipts)
@@ -258,11 +265,12 @@ class TestBlock(unittest.TestCase):
 
         block_serializer = BlockSerializer.new("0.3", tx_versioner)
         block_serialized = block_serializer.serialize(block)
+        logging.info(json.dumps(block_serialized, indent=4))
         block_deserialized = block_serializer.deserialize(block_serialized)
+        logging.info(json.dumps(block_serializer.serialize(block_deserialized), indent=4))
 
         assert block.header == block_deserialized.header
-        # FIXME : confirm_prev_block not serialized
-        # assert block.body == block_deserialized.body
+        assert block.body == block_deserialized.body
 
         tx_hashes = list(block.body.transactions)
         tx_index = random.randrange(0, len(tx_hashes))

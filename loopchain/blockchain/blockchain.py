@@ -13,6 +13,7 @@
 # limitations under the License.
 """Block chain class with authorized blocks only"""
 
+import leveldb
 import json
 import pickle
 import threading
@@ -20,10 +21,7 @@ import zlib
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Union, List
-
-import leveldb
-
-import loopchain.utils as util
+from loopchain import utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
@@ -608,11 +606,12 @@ class BlockChain:
         block_version = self.block_versioner.get_version(0)
         block_builder = BlockBuilder.new(block_version, self.tx_versioner)
         block_builder.height = 0
-        block_builder.fixed_timestamp = 0
-        block_builder.prev_hash = None
+        block_builder.fixed_timestamp = util.get_now_time_stamp()
         block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
         block_builder.transactions[tx.hash] = tx
         block_builder.reps = reps
+        block_builder.prev_hash = Hash32.new()
+        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.private_key
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
