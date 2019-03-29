@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import (Hash32, ExternalAddress, BloomFilter, TransactionSerializer, ABCSignature, SignatureFlag,
+from ... import (Hash32, ExternalAddress, BloomFilter, TransactionSerializer, ABSignature, SignatureFlag,
                  FlaggedSignature, FlaggedHsmSignature)
 
 
@@ -10,6 +10,17 @@ class BlockSerializer(BaseBlockSerializer):
     version = BlockHeader.version
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
+
+    def __get_signature(self, signature: str):
+        signature_flag = ABSignature.from_base64str(signature)[0]
+        if signature_flag == SignatureFlag.RECOVERABLE:
+            signature = FlaggedSignature.from_base64str(signature)
+        elif signature_flag == SignatureFlag.HSM:
+            signature = FlaggedHsmSignature.from_base64str(signature)
+        else:
+            raise RuntimeError(f"Invalid Signature in a Block.\n{signature}")
+
+        return signature
 
     def _serialize(self, block: 'Block'):
         header: BlockHeader = block.header
@@ -49,15 +60,7 @@ class BlockSerializer(BaseBlockSerializer):
         peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
 
         signature = json_data.get('signature')
-
-        if signature:
-            signature_flag = ABCSignature.from_base64str(signature)[0]
-            if signature_flag == SignatureFlag.RECOVERABLE:
-                signature = FlaggedSignature.from_base64str(signature)
-            elif signature_flag == SignatureFlag.HSM:
-                signature = FlaggedHsmSignature.from_base64str(signature)
-        else:
-            signature = None
+        signature = self.__get_signature(signature)if signature else None
 
         next_leader = json_data.get("nextLeader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
@@ -104,7 +107,7 @@ class BlockSerializer(BaseBlockSerializer):
         }
 
     def _deserialize_body_data(self, json_data: dict):
-        confirm_prev_block = json_data.get("confirmPrevBlock")
+        confirm_prev_block = json_data.get("confirm_prev_block")
 
         transactions = OrderedDict()
         for tx_data in json_data['transactions']:

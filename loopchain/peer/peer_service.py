@@ -26,7 +26,6 @@ from loopchain.baseservice import CommonSubprocess
 from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService
-from loopchain.crypto.signature import Signer, YubiHsmSigner
 from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
@@ -228,17 +227,23 @@ class PeerService:
             self.__rest_service = RestService(int(port))
 
     def __init_key_by_channel(self):
+        from loopchain.crypto.signature import Signer
         for channel in conf.CHANNEL_OPTION:
             signer = Signer.from_channel(channel)
             if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
                 self.__make_peer_id(signer.address)
             self.__node_keys[channel] = signer.private_key.private_key
 
+    def __init_key_by_hsm(self):
+        from loopchain.crypto.signature import YubiHsmSigner
+        for channel in conf.CHANNEL_OPTION:
+            signer = YubiHsmSigner.from_hsm()
+            if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
+                self.__make_peer_id(signer.address)
+            self.__node_keys[channel] = signer.private_key
+
     def __make_peer_id(self, address):
-        if conf.HSM_ENABLE_USE:
-            self.__peer_id = YubiHsmSigner.from_hsm().address
-        else:
-            self.__peer_id = address
+        self.__peer_id = address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
@@ -301,7 +306,11 @@ class PeerService:
         self.__init_key_loading_helper(agent_pin)
         self.__init_port(port)
         self.__init_level_db()
-        self.__init_key_by_channel()
+
+        if conf.HSM_ENABLE_USE:
+            self.__init_key_by_hsm()
+        else:
+            self.__init_key_by_channel()
 
         StubCollection().amqp_target = amqp_target
         StubCollection().amqp_key = amqp_key

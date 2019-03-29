@@ -6,10 +6,12 @@ from typing import List
 from secp256k1 import PublicKey
 
 from loopchain import configure as conf
+from loopchain.tools.hsm_helper import HsmHelper
 
 from . import BlockHeader, BlockBody, BlockProver
 from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
-from ... import Hash32, BloomFilter, TransactionVersioner, ExternalAddress, SignatureFlag, FlaggedSignature, FlaggedHsmSignature
+from ... import (Hash32, BloomFilter, TransactionVersioner, ExternalAddress, SignatureFlag, FlaggedSignature,
+                 FlaggedHsmSignature)
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -196,7 +198,6 @@ class BlockBuilder(BaseBlockBuilder):
         return self.peer_id
 
     def _build_peer_id_in_hsm(self):
-        from loopchain.tools.hsm_helper import HsmHelper
         raw_pubkey_of_pair = PublicKey().deserialize(HsmHelper().get_serialize_pub_key())
         serialized_pub = PublicKey(raw_pubkey_of_pair).serialize(compressed=False)
         hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
@@ -217,11 +218,10 @@ class BlockBuilder(BaseBlockBuilder):
                                                                raw=True,
                                                                digest=hashlib.sha3_256)
         serialized_sig, recover_id = self.peer_private_key.ecdsa_recoverable_serialize(raw_sig)
-        signature = bytes([SignatureFlag.RECOVERABLE]) + serialized_sig + bytes((recover_id, ))
+        signature = bytes([SignatureFlag.RECOVERABLE]) + serialized_sig + bytes([recover_id])
         return FlaggedSignature(signature)
 
     def _sign_in_hsm(self):
-        from loopchain.tools.hsm_helper import HsmHelper
         HsmHelper().open()
         signature = bytes([SignatureFlag.HSM]) + HsmHelper().ecdsa_sign(message=self.hash, is_raw=True)
         return FlaggedHsmSignature(signature)

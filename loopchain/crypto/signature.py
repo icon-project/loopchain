@@ -17,20 +17,16 @@ import binascii
 import getpass
 import hashlib
 import logging
-import struct
 
 from typing import Union
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from secp256k1 import PrivateKey, PublicKey, ffi
-from yubihsm import YubiHsm
-from yubihsm.core import AuthSession
+from secp256k1 import PrivateKey, PublicKey
 from yubihsm.objects import AsymmetricKey
-from yubihsm.defs import OBJECT, COMMAND
 
-from loopchain import configure as conf
 from loopchain import utils
+from loopchain.blockchain import SignatureFlag, FlaggedHsmSignature
 from loopchain.tools.hsm_helper import HsmHelper
 
 
@@ -214,6 +210,11 @@ class YubiHsmSigner(SignVerifier):
     def __init__(self):
         super().__init__()
         self.private_key: AsymmetricKey = None
+
+    def sign(self, data, is_hash: bool):
+        HsmHelper().open()
+        signature = bytes([SignatureFlag.HSM]) + HsmHelper().ecdsa_sign(message=data, is_raw=is_hash)
+        return FlaggedHsmSignature(signature)
 
     @classmethod
     def from_address(cls, address: str):

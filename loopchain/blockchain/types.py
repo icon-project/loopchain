@@ -10,7 +10,6 @@ class Bytes(bytes):
 
     def __new__(cls, *args, **kwargs):
         self = super().__new__(cls, *args, **kwargs)
-        # print(f"hrkim>>>>>>>>>>>>{cls.size}/{len(self)}")
         if cls.size is not None and cls.size != len(self):
             raise RuntimeError
 
@@ -127,7 +126,7 @@ class BloomFilter(VarBytes):
         return self.__class__(result.to_bytes(self.size, 'big'))
 
 
-class ABCSignature(Bytes, metaclass=ABCMeta):
+class ABSignature(Bytes, metaclass=ABCMeta):
     @abstractmethod
     def signature(self):
         raise NotImplementedError()
@@ -168,7 +167,7 @@ class Flagged:
         return self[0]
 
 
-class Signature(ABCSignature, Recoverable):
+class Signature(ABSignature, Recoverable):
     size = 65
 
     def signature(self):

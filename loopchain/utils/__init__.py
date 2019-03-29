@@ -512,18 +512,6 @@ def get_ec_key_object(public_bytes: bytes):
         raise ValueError(f"Invalid Public Key File: {e}")
 
 
-def get_public_key_from_file(public_bytes: bytes):
-    from asn1crypto import keys
-    from cryptography.hazmat.primitives import serialization
-
-    temp_public = get_ec_key_object(public_bytes)
-    der_public = temp_public.public_bytes(encoding=serialization.Encoding.DER,
-                                          format=serialization.PublicFormat.SubjectPublicKeyInfo)
-    key_info = keys.PublicKeyInfo.load(der_public)
-
-    return key_info['public_key'].native
-
-
 def no_send_apm_event(peer_id, event_param):
     pass
 

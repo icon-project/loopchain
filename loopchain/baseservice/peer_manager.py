@@ -207,7 +207,6 @@ class PeerManager:
                 order=peer_info["order"],
                 public_key=public_key
             )
-            util.logger.warning(f"hrkim###############pubkey: {public_key}")
 
         logging.debug(f"add peer id: {peer_info.peer_id}")
 

@@ -33,7 +33,7 @@ from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.crypto.signature import *
+from loopchain.crypto.signature import Signer, SignVerifier, YubiHsmSigner
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.tools.hsm_helper import HsmHelper

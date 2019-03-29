@@ -32,7 +32,8 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
 from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
 from loopchain.components import SingletonMetaClass
-from loopchain.peer import PeerService, Signer
+from loopchain.crypto.signature import Signer
+from loopchain.peer import PeerService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
