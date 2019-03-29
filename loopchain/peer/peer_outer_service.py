@@ -18,7 +18,7 @@ import copy
 import datetime
 from functools import partial
 
-from loopchain.baseservice import Monitor, TimerService
+from loopchain.baseservice import TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
@@ -317,9 +317,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             logging.info('Peer will stop... by: ' + request.reason)
 
         try:
-            # process monitor must stop monitoring before any subprocess stop
-            Monitor().stop()
-
             for channel_name in self.peer_service.channel_infos:
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 channel_stub.sync_task().stop()
