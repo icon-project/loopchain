@@ -2,10 +2,12 @@ import time
 from functools import reduce
 from operator import or_
 from typing import List
+from loopchain import configure as conf
 from loopchain.blockchain.types import ExternalAddress, Hash32, BloomFilter
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.blocks import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockProver
+from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -17,8 +19,9 @@ class BlockBuilder(BaseBlockBuilder):
         super().__init__(tx_versioner)
 
         # Attributes that must be assigned
-        self.complained = False
-        self.confirm_prev_block = True
+        self.reps: List[ExternalAddress] = None
+        self.leader_votes: LeaderVotes = LeaderVotes([], conf.LEADER_COMPLAIN_RATIO, -1, ExternalAddress.empty())
+        self.prev_votes: BlockVotes = None
         self.next_leader: 'ExternalAddress' = None
 
         # Attributes to be assigned(optional)
@@ -29,8 +32,9 @@ class BlockBuilder(BaseBlockBuilder):
         self.transaction_hash: 'Hash32' = None
         self.receipt_hash: 'Hash32' = None
         self.rep_hash: 'Hash32' = None
+        self.leader_vote_hash: 'Hash32' = None
+        self.prev_vote_hash: 'Hash32' = None
         self.bloom_filter: 'BloomFilter' = None
-        self.reps: List[ExternalAddress] = None
         self._timestamp: int = None
         self._receipts: list = None
 
@@ -54,16 +58,15 @@ class BlockBuilder(BaseBlockBuilder):
         self.transaction_hash = None
         self.receipt_hash = None
         self.rep_hash = None
+        self.leader_vote_hash = None
+        self.prev_vote_hash = None
         self.bloom_filter = None
         self._timestamp = None
 
     def build(self):
-        if self.height > 0:
-            self.build_peer_id()
-            self.build_hash()
-            self.sign()
-        else:
-            self.build_hash()
+        self.build_peer_id()
+        self.build_hash()
+        self.sign()
 
         self.block = self.build_block()
         return self.block
@@ -81,14 +84,16 @@ class BlockBuilder(BaseBlockBuilder):
             "state_hash": self.state_hash,
             "receipt_hash": self.receipt_hash,
             "rep_hash": self.rep_hash,
+            "leader_vote_hash": self.leader_vote_hash,
+            "prev_vote_hash": self.prev_vote_hash,
             "bloom_filter": self.bloom_filter,
-            "complained": self.complained
         }
 
     def build_block_body_data(self) -> dict:
         return {
             "transactions": self.transactions,
-            "confirm_prev_block": self.confirm_prev_block
+            "leader_votes": self.leader_votes,
+            "prev_votes": self.prev_votes
         }
 
     def build_transaction_hash(self):
@@ -130,6 +135,33 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver(self.reps, BlockProverType.Rep)
         return block_prover.get_proof_root()
 
+    def build_leader_vote_hash(self):
+        if self.leader_vote_hash is not None:
+            return self.leader_vote_hash
+
+        self.leader_vote_hash = self._build_leader_vote_hash()
+        return self.leader_vote_hash
+
+    def _build_leader_vote_hash(self):
+        block_prover = BlockProver((vote.hash() for vote in self.leader_votes.votes),
+                                   BlockProverType.Vote)
+        return block_prover.get_proof_root()
+
+    def build_prev_vote_hash(self):
+        if self.prev_vote_hash is not None:
+            return self.prev_vote_hash
+
+        self.prev_vote_hash = self._build_prev_vote_hash()
+        return self.prev_vote_hash
+
+    def _build_prev_vote_hash(self):
+        if not self.prev_votes:
+            return Hash32.new()
+
+        block_prover = BlockProver((vote.hash() for vote in self.prev_votes.votes),
+                                   BlockProverType.Vote)
+        return block_prover.get_proof_root()
+
     def build_bloom_filter(self):
         if self.bloom_filter is not None:
             return self.bloom_filter
@@ -155,6 +187,8 @@ class BlockBuilder(BaseBlockBuilder):
         self.build_transaction_hash()
         self.build_receipt_hash()
         self.build_rep_hash()
+        self.build_leader_vote_hash()
+        self.build_prev_vote_hash()
         self.build_bloom_filter()
         self.hash = self._build_hash()
         return self.hash
@@ -169,6 +203,8 @@ class BlockBuilder(BaseBlockBuilder):
             self.prev_hash,
             self.transaction_hash,
             self.rep_hash,
+            self.leader_vote_hash,
+            self.prev_vote_hash,
             self.bloom_filter,
             self.height,
             self._timestamp,
@@ -183,11 +219,16 @@ class BlockBuilder(BaseBlockBuilder):
         header: BlockHeader = block.header
 
         self.next_leader = header.next_leader
+        self.transaction_hash = header.transaction_hash
         self.state_hash = header.state_hash
         self.receipt_hash = header.receipt_hash
-        self.bloom_filter = header.bloom_filter
-        self.transaction_hash = header.transaction_hash
-        self.fixed_timestamp = header.timestamp
-        self.complained = header.complained
         self.rep_hash = header.rep_hash
+        self.leader_vote_hash = header.leader_vote_hash
+        self.prev_vote_hash = header.prev_vote_hash
+        self.bloom_filter = header.bloom_filter
+        self.fixed_timestamp = header.timestamp
         self._timestamp = header.timestamp
+
+        body: BlockBody = block.body
+        self.leader_votes = body.leader_votes
+        self.prev_votes = body.prev_votes

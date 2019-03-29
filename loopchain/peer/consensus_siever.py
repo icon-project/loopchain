@@ -182,6 +182,8 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
+            self._blockchain.last_unconfirmed_block = candidate_block
+            self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self._blockchain.last_unconfirmed_block = candidate_block
@@ -213,8 +215,8 @@ class ConsensusSiever(ConsensusBase):
         while True:
             votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
             util.logger.info(f"Votes : {votes}")
-            vote_result = votes.get_majority()
-            if vote_result is not None or votes.completed():
+            vote_result = votes.get_result()
+            if vote_result is not None or votes.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote_result
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)

@@ -21,7 +21,7 @@ import os
 import time
 from urllib.parse import urlparse, ParseResult
 
-import loopchain.utils as util
+from loopchain import utils as util
 from loopchain import configure as conf
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService

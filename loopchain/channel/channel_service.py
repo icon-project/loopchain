@@ -22,7 +22,7 @@ import traceback
 
 from earlgrey import MessageQueueService
 
-import loopchain.utils as util
+from loopchain import utils as util
 from loopchain import configure as conf
 from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData
@@ -646,7 +646,7 @@ class ChannelService:
             return
 
         util.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
-                          f"complained={complained}")
+                         f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:

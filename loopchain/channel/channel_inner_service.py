@@ -811,7 +811,7 @@ class ChannelInnerTask:
 
         next_new_leader = block_manager.epoch.complain_result()
         if next_new_leader:
-            await self._channel_service.reset_leader(next_new_leader, complained=True)
+            self._channel_service.reset_leader(next_new_leader, complained=True)
             self._channel_service.reset_leader_complain_timer()
 
     @message_queue_task
