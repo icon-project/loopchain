@@ -206,8 +206,6 @@ score/develop/dev_score/deploy
 score/develop/test_score/deploy
 score/develop/test_score/.git
 score/develop/certificate
-loopchain/configure_user.py
-loopchain/configure_user_ori.py
 testcase/unittest/blockchain_db*
 channel_manage_data_test2.json
 channel_manage_data_ori.json

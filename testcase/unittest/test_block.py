@@ -46,7 +46,6 @@ class TestBlock(unittest.TestCase):
     __peer_id = 'aaa'
 
     def setUp(self):
-        conf.ENABLE_USER_CONFIG = False
         conf.Configure().init_configure()
         test_util.print_testname(self._testMethodName)
         self.peer_auth = test_util.create_default_peer_auth()
