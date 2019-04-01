@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 """base class for multi thread """
 
 import logging
@@ -61,12 +62,13 @@ class CommonThread:
 
     @abstractmethod
     def run(self, event: threading.Event):
-        """쓰레드로 동작할 루프를 정의한다.
-        sample 구현을 참고 한다.
         """
+        define loop for running thread.
+        see below sample implementation.
 
-        event.set()
-        # # sample 구현
+        # # sample implementation
+        # event.set()
         # while self.is_run():
         #     time.sleep(conf.SLEEP_SECONDS_IN_SERVICE_LOOP)
+        """
         pass

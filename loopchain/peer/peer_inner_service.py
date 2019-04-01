@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 from typing import TYPE_CHECKING
 from earlgrey import *
 
@@ -46,14 +47,24 @@ class PeerInnerTask:
     async def get_node_key(self, channel_name) -> bytes:
         return self._peer_service.node_keys[channel_name]
 
+    # FIXME : not used?
     @message_queue_task
     async def stop_outer(self):
-        self._peer_service.service_stop()
+        """
+        deprecated
+        """
+        import warnings
+        warnings.warn("stop_outer is not support", DeprecationWarning)
         return "stop outer"
 
+    # FIXME : not used?
     @message_queue_task
     async def start_outer(self):
-        self._peer_service.run_common_service()
+        """
+        deprecated
+        """
+        import warnings
+        warnings.warn("start_outer is not support", DeprecationWarning)
         return "start outer"
 
     @message_queue_task(type_=MessageQueueType.Worker)
