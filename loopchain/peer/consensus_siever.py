@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
-import logging
+
 import threading
 from functools import partial
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, BlockVerifier, Hash32, Vote, Block
+from loopchain.blockchain import ExternalAddress, Hash32, Vote, Block
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -42,6 +42,19 @@ class ConsensusSiever(ConsensusBase):
     def stop(self):
         self.__block_generation_timer.stop()
         self.__stop_broadcast_send_unconfirmed_block_timer()
+
+    def __build_candidate_block(self, block_builder, next_leader, vote_result):
+        last_block = self._blockchain.last_block
+        block_builder.height = last_block.header.height + 1
+        block_builder.prev_hash = last_block.header.hash
+        block_builder.next_leader = next_leader
+        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.private_key
+        block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
+
+        # TODO: This should be changed when IISS is applied.
+        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+
+        return block_builder.build()
 
     async def consensus(self):
         util.logger.debug(f"-------------------consensus "
@@ -100,17 +113,7 @@ class ConsensusSiever(ConsensusBase):
                 else:
                     return self.__block_generation_timer.call()
 
-            last_block = self._blockchain.last_block
-            block_builder.height = last_block.header.height + 1
-            block_builder.prev_hash = last_block.header.hash
-            block_builder.next_leader = next_leader
-            block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.private_key
-            block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
-
-            # TODO: This should be changed when IISS is applied.
-            block_builder.reps = ObjectManager().channel_service.get_rep_ids()
-
-            candidate_block = block_builder.build()
+            candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
@@ -125,7 +128,7 @@ class ConsensusSiever(ConsensusBase):
             # TODO Temporary ignore below line for developing leader complain
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
 
-            if len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
+            if len(candidate_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex_hx() != ChannelProperty().peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
