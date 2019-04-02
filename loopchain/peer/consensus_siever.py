@@ -100,7 +100,6 @@ class ConsensusSiever(ConsensusBase):
             self._blockchain.last_unconfirmed_block = candidate_block
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
 
-            # TODO Temporary ignore below line for developing leader complain
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
 
             if len(candidate_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
