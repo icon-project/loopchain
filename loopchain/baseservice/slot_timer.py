@@ -58,6 +58,9 @@ class SlotTimer:
         else:
             self.__delayed = True
 
+    def call_instantly(self):
+        self.__timer_service.get_event_loop().create_task(self.__callback())
+
     def stop(self):
         if self.__timer_key in self.__timer_service.timer_list:
             self.__timer_service.stop_timer(self.__timer_key)

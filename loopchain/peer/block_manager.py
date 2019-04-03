@@ -783,7 +783,9 @@ class BlockManager:
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock
         """
-        util.logger.info(f"in vote_as_peer unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+        util.logger.debug(f"in vote_as_peer "
+                          f"height({unconfirmed_block.header.height}) "
+                          f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
 
         await self._vote(unconfirmed_block)
         await self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())

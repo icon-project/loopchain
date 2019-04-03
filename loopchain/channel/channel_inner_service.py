@@ -779,16 +779,20 @@ class ChannelInnerTask:
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 
-        self._channel_service.block_manager.candidate_blocks.add_vote(
+        block_manager.candidate_blocks.add_vote(
             block_hash,
             group_id,
             peer_id,
             (False, True)[vote_code == message_code.Response.success_validate_block]
         )
 
-        consensus = block_manager.consensus_algorithm
         if self._channel_service.state_machine.state == "BlockGenerate":
-            consensus.count_votes(block_hash)
+            if block_manager.consensus_algorithm:
+                block_manager.consensus_algorithm.vote(
+                    block_hash,
+                    (False, True)[vote_code == message_code.Response.success_validate_block],
+                    peer_id,
+                    group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
