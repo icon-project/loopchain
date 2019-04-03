@@ -104,7 +104,7 @@ def start_as_channel(args):
 def start_as_rest_server(args):
     from iconcommons.icon_config import IconConfig
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
-    from iconrpcserver.icon_rpcserver_cli import start_process, find_procs_by_params
+    from iconrpcserver import icon_rpcserver_cli
 
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(args.port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -128,9 +128,7 @@ def start_as_rest_server(args):
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
 
-    if not find_procs_by_params(api_port):
-        start_process(conf=rpcserver_conf)
-        logging.info("start_command done!, IconRpcServerCli")
+    icon_rpcserver_cli.start(rpcserver_conf)
 
 
 def start_as_rest_server_rs(args):
