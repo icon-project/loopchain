@@ -25,3 +25,4 @@ verboselogs==1.7
 websockets==5.0.1
 yappi==0.98
 dataclasses; python_version < '3.7'
+yubihsm[http,usb]
