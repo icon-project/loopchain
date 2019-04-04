@@ -13,9 +13,7 @@ _size_attr_name_ = "_size_attr_"
 class Transaction:
     # TODO wrap `raw_data` to `MappingProxy`
     raw_data: dict
-
     hash: Hash32
-    signature: Signature
     timestamp: int
 
     version = ''
@@ -39,3 +37,9 @@ class Transaction:
             object.__setattr__(self, _size_attr_name_, len(tx_serialized))
 
         return getattr(self, _size_attr_name_)
+
+
+@dataclass(frozen=True)
+class SignedTransaction(Transaction):
+    signature: Signature
+

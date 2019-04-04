@@ -32,7 +32,6 @@ class TransactionBuilder(BaseTransactionBuilder):
         return Transaction(
             raw_data=self.raw_data,
             hash=self.hash,
-            signature=None,
             timestamp=0,
             nid=self.nid_generated,
             accounts=self.accounts,

@@ -1,11 +1,7 @@
 from enum import IntEnum, Enum
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Union
 from .. import Transaction as BaseTransition
 from ... import Hash32
-
-if TYPE_CHECKING:
-    from ... import Signature
 
 
 @dataclass(frozen=True)
@@ -16,9 +12,9 @@ class Transaction(BaseTransition):
 
     version = "genesis"
 
-    def __init__(self, raw_data: dict, hash: 'Hash32', signature: Union['Signature', None], timestamp: int,
+    def __init__(self, raw_data: dict, hash: 'Hash32', timestamp: int,
                  nid: int, accounts: list, message: str):
-        super().__init__(raw_data, hash, signature, timestamp)
+        super().__init__(raw_data, hash, timestamp)
 
         object.__setattr__(self, "nid", nid)
         object.__setattr__(self, "accounts", tuple(accounts))

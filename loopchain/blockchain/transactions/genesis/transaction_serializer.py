@@ -33,7 +33,6 @@ class TransactionSerializer(BaseTransactionSerializer):
         return Transaction(
             raw_data=tx_data,
             hash=Hash32(hash_),
-            signature=None,
             timestamp=0,
             nid=nid,
             accounts=tx_data['accounts'],

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .. import Transaction as BaseTransition
+from .. import SignedTransaction
 from ... import Address, MalformedStr
 from typing import TYPE_CHECKING, Mapping, Union
 
@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
-class Transaction(BaseTransition):
+class Transaction(SignedTransaction):
     from_address: Address
     to_address: Address
     value: Union[int, MalformedStr]
