@@ -24,14 +24,16 @@ class SlotTimer:
         self.__delayed = True
         self.__timer_key = timer_key
         self.__timer_service = timer_service
+        self.__duration = duration
         self.__callback = callback
         self.__callback_lock = callback_lock
 
-        timer_service.add_timer(
-            timer_key,
+    def start(self):
+        self.__timer_service.add_timer(
+            self.__timer_key,
             Timer(
-                target=timer_key,
-                duration=duration,
+                target=self.__timer_key,
+                duration=self.__duration,
                 is_repeat=True,
                 is_run_at_start=True,
                 callback=self.__timer_callback

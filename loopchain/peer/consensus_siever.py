@@ -42,6 +42,7 @@ class ConsensusSiever(ConsensusBase):
             self.consensus,
             self.__lock
         )
+        self.__block_generation_timer.start()
 
     def stop(self):
         self.__block_generation_timer.stop()

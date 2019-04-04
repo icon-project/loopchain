@@ -137,6 +137,7 @@ class ChannelService:
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
+        # loop.set_debug(True)
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)

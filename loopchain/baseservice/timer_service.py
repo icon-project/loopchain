@@ -102,6 +102,7 @@ class TimerService(CommonThread):
         CommonThread.__init__(self)
         self.__timer_list = {}
         self.__loop: asyncio.BaseEventLoop = asyncio.new_event_loop()
+        # self.__loop.set_debug(True)
 
     def get_event_loop(self):
         return self.__loop
