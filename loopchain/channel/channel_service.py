@@ -110,10 +110,6 @@ class ChannelService:
         return self.__consensus
 
     @property
-    def acceptor(self):
-        return self.__acceptor
-
-    @property
     def timer_service(self):
         return self.__timer_service
 
@@ -609,7 +605,7 @@ class ChannelService:
         for peer in self.peer_manager.get_IP_of_peers_in_group():
             logging.debug("peer_target: " + peer)
 
-    async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+    def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
 
         :param new_leader_id:
@@ -648,10 +644,6 @@ class ChannelService:
             logging.debug("Set Peer Type Peer!")
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
-
-            # subscribe new leader
-            # await self.subscribe_to_radio_station()
-            await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
 

@@ -154,7 +154,7 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
-                await ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
+                ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
