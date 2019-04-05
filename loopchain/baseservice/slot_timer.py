@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """loopchain timer service."""
-from loopchain.baseservice import TimerService, Timer
+
+import asyncio
+
 import loopchain.utils as util
+from loopchain.baseservice import TimerService, Timer
 
 
 class SlotTimer:
@@ -56,12 +59,14 @@ class SlotTimer:
         util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
         if self.__slot > 0:
             self.__slot -= 1
-            self.__timer_service.get_event_loop().create_task(self.__callback())
+            asyncio.get_event_loop().create_task(self.__callback())
+            # self.__timer_service.get_event_loop().create_task(self.__callback())
         else:
             self.__delayed = True
 
     def call_instantly(self):
-        self.__timer_service.get_event_loop().create_task(self.__callback())
+        asyncio.get_event_loop().create_task(self.__callback())
+        # self.__timer_service.get_event_loop().create_task(self.__callback())
 
     def stop(self):
         if self.__timer_key in self.__timer_service.timer_list:

@@ -28,8 +28,10 @@ class Epoch:
     COMPLAIN_VOTE_HASH = "complain_vote_hash_for_reuse_Vote_class"
 
     def __init__(self, block_manager, leader_id=None):
-        if block_manager.get_blockchain().last_block:
-            self.height = block_manager.get_blockchain().last_block.header.height + 1
+        blockchain = block_manager.get_blockchain()
+        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
+        if last_block:
+            self.height = last_block.header.height + 1
         else:
             self.height = 1
         self.leader_id = leader_id
@@ -40,8 +42,19 @@ class Epoch:
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
         # But now! only collect leader complain votes.
         self.__candidate_blocks = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+
+        self.round = -1  # +1 after each _init_complain_vote
+        self.__complain_vote = dict()  # complain vote dict { round : Vote }
+        self._init_complain_vote()
         self.complained_result = None
+
+    @property
+    def _complain_vote(self):
+        return self.__complain_vote[self.round]
+
+    def _init_complain_vote(self):
+        self.round += 1
+        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     @staticmethod
     def new_epoch(leader_id=None):
@@ -56,26 +69,26 @@ class Epoch:
             self.complained_result = self.complain_result()
         else:
             self.complained_result = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+        self._init_complain_vote()
 
     def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
         util.logger.debug(f"add_complain complain_leader_id({complained_leader_id}), "
                           f"new_leader_id({new_leader_id}), "
                           f"block_height({block_height}), "
                           f"peer_id({peer_id})")
-        self.__complain_vote.add_vote(peer_id, new_leader_id)
+        self._complain_vote.add_vote(peer_id, new_leader_id)
 
     def complain_result(self) -> str:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
+        vote_result = self._complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result
 
     def pop_complained_candidate_leader(self):
-        voters = self.__complain_vote.get_voters()
+        voters = self._complain_vote.get_voters()
         if ChannelProperty().peer_id not in voters:
             # Processing to complain leader
             return None

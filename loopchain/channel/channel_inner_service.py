@@ -520,6 +520,8 @@ class ChannelInnerTask:
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
+        status_data["round"] = block_manager.epoch.round if block_manager.epoch else -1
+        status_data["epoch_height"] = block_manager.epoch.height if block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = block_manager.get_total_tx()
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
@@ -527,8 +529,7 @@ class ChannelInnerTask:
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
         status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) or ""
-        status_data["epoch_leader"] = \
-            self._channel_service.block_manager.epoch.leader_id if self._channel_service.block_manager.epoch else ""
+        status_data["epoch_leader"] = block_manager.epoch.leader_id if block_manager.epoch else ""
 
         return status_data
 
