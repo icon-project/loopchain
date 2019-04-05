@@ -661,7 +661,7 @@ class BlockChain:
                     logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
-                    return
+                    return None
 
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
@@ -669,7 +669,7 @@ class BlockChain:
                     if current_block.header.complained:
                         util.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
-                    return
+                    return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
                                   f"block_hash({current_block.header.prev_hash.hex()})")
