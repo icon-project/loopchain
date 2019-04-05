@@ -24,7 +24,7 @@ import collections
 
 VoteResult = collections.namedtuple("VoteResult", 'result, '
                                                   'total_vote_count, '
-                                                  'agree_vote_peer_count, '
+                                                  'most_common_vote_count, '
                                                   'total_peer_count, '
                                                   'voting_ratio')
 
@@ -105,7 +105,7 @@ class Vote:
 
         :param target_hash:
         :param voting_ratio:
-        :return: result(str), total_vote_count, agree_vote_peer_count, total_peer_count, voting_ratio
+        :return: result(str), total_vote_count, most_common_vote_count, total_peer_count, voting_ratio
         """
 
         total_peer_count = len(self.__votes)
@@ -113,28 +113,27 @@ class Vote:
             return VoteResult(
                 result=None,
                 total_vote_count=-1,
-                agree_vote_peer_count=-1,
+                most_common_vote_count=-1,
                 total_peer_count=total_peer_count,
                 voting_ratio=voting_ratio
             )
 
         count_list = Counter([vote[0] for vote in self.__votes.values() if vote])
         most_common = count_list.most_common(1)
-        result, agree_vote_peer_count = most_common[0] if most_common else (None, 0)
+        result, most_common_vote_count = most_common[0] if most_common else (None, 0)
         total_vote_count = sum(count_list.values())
 
-        if agree_vote_peer_count < total_peer_count * voting_ratio:
+        if most_common_vote_count < total_peer_count * voting_ratio:
             result = None
 
-        logging.debug(f"==result: {result}")
-        logging.debug(f"=agree_vote_peer_count: {agree_vote_peer_count}")
+        logging.debug(f"==result: {result}({most_common_vote_count})")
         logging.debug(f"=total_vote_count: {total_vote_count}")
         logging.debug(f"=total_peer_count: {total_peer_count}")
 
         vote_result = VoteResult(
             result=result,
             total_vote_count=total_vote_count,
-            agree_vote_peer_count=agree_vote_peer_count,
+            most_common_vote_count=most_common_vote_count,
             total_peer_count=total_peer_count,
             voting_ratio=voting_ratio
         )
@@ -143,8 +142,8 @@ class Vote:
 
     def is_failed_vote(self, target_hash, voting_ratio):
         vote_result = self.get_result_detail(target_hash, voting_ratio)
-
-        fail_vote_count = vote_result.total_vote_count - vote_result.agree_vote_peer_count
+        opposite_vote_count = vote_result.total_vote_count - vote_result.most_common_vote_count
+        fail_vote_count = opposite_vote_count if vote_result.result else vote_result.most_common_vote_count
         possible_agree_vote_count = vote_result.total_peer_count - fail_vote_count
 
         if possible_agree_vote_count > vote_result.total_peer_count * voting_ratio:
