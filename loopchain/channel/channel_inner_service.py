@@ -492,7 +492,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def reset_leader(self, new_leader, block_height=0) -> None:
-        await self._channel_service.reset_leader(new_leader, block_height)
+        self._channel_service.reset_leader(new_leader, block_height)
 
     @message_queue_task(priority=255)
     async def get_status(self):
@@ -802,14 +802,7 @@ class ChannelInnerTask:
                            f"new_leader_id({new_leader_id}), "
                            f"block_height({block_height})")
 
-        block_manager.epoch.add_complain(
-            complained_leader_id, new_leader_id, block_height, peer_id, group_id
-        )
-
-        next_new_leader = block_manager.epoch.complain_result()
-        if next_new_leader:
-            await self._channel_service.reset_leader(next_new_leader, complained=True)
-            self._channel_service.reset_leader_complain_timer()
+        block_manager.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

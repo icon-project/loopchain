@@ -684,6 +684,18 @@ class BlockManager:
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
+    def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
+        if new_leader_id == self.epoch.leader_id:
+            util.logger.info(f"Complained new leader is current leader({new_leader_id})")
+            return
+
+        self.epoch.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
+
+        elected_leader = self.epoch.complain_result()
+        if elected_leader:
+            self.__channel_service.reset_leader(elected_leader, complained=True)
+            self.__channel_service.reset_leader_complain_timer()
+
     def leader_complain(self):
         # util.logger.notice(f"do leader complain.")
         new_leader_id = self.epoch.pop_complained_candidate_leader()
@@ -701,7 +713,7 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
-        self.epoch.add_complain(
+        self.add_complain(
             complained_leader_id, new_leader_id, self.epoch.height, self.__peer_id, ChannelProperty().group_id
         )
 
@@ -793,5 +805,5 @@ class BlockManager:
                           f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
 
         await self._vote(unconfirmed_block)
-        await self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+        self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
         self.__channel_service.start_leader_complain_timer_if_tx_exists()
