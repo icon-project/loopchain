@@ -91,7 +91,7 @@ class TransactionInvalidError(MessageCodeError):
         return f"{super().__str__()} tx_hash: {self.tx_hash}"
 
 
-class TransactionInvalidHashForamtError(TransactionInvalidError):
+class TransactionInvalidHashFormatError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_hash_format
 
 
