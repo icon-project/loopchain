@@ -244,7 +244,9 @@ class BlockManager:
         return len(self.__txQueue)
 
     def confirm_prev_block(self, current_block: Block):
-        self.__blockchain.confirm_prev_block(current_block)
+        confirmed_block = self.__blockchain.confirm_prev_block(current_block)
+        if confirmed_block is None:
+            return
 
         # stop leader complain timer
         self.__channel_service.stop_leader_complain_timer()
@@ -263,10 +265,12 @@ class BlockManager:
         # TODO set below variable with right result.
         check_unconfirmed_block_has_valid_block_info_for_prev_block = True
 
+        last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
+
         try:
             if unconfirmed_block.body.confirm_prev_block:
                 self.confirm_prev_block(unconfirmed_block)
-            elif self.__blockchain.last_unconfirmed_block is None:
+            elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
 
@@ -277,7 +281,8 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
             return False
 
-        self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
+        if last_unconfirmed_block is None or last_unconfirmed_block.header.hash != unconfirmed_block.header.hash:
+            self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         return check_unconfirmed_block_has_valid_block_info_for_prev_block
 
