@@ -35,7 +35,13 @@ class BlockchainError(Exception):
     pass
 
 
-class AddUnconfirmedBlock(Exception):
+class InvalidUnconfirmedBlock(Exception):
+    """
+    """
+    pass
+
+
+class DuplicationUnconfirmedBlock(Exception):
     """
     """
     pass
