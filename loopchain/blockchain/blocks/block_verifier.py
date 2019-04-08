@@ -123,6 +123,10 @@ class BlockVerifier(ABC):
         if version == v0_3.version:
             return v0_3.BlockVerifier(tx_versioner)
 
+        from . import v0_2
+        if version == v0_2.version:
+            return v0_2.BlockVerifier(tx_versioner)
+
         from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockVerifier(tx_versioner)

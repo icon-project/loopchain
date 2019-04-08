@@ -13,15 +13,20 @@
 # limitations under the License.
 """A consensus class based on the Siever algorithm for the loopchain"""
 
+import asyncio
+import logging
 import threading
 from functools import partial
-
+from earlgrey import MessageQueueService
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import ExternalAddress, Hash32, Vote, Block
+from loopchain.blockchain.blocks import v0_2
+from loopchain.blockchain.transactions import v3_issue
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
+from loopchain.utils.message_queue import StubCollection
 
 
 class ConsensusSiever(ConsensusBase):
@@ -43,7 +48,7 @@ class ConsensusSiever(ConsensusBase):
         self.__block_generation_timer.stop()
         self.__stop_broadcast_send_unconfirmed_block_timer()
 
-    def __build_candidate_block(self, block_builder, next_leader, vote_result):
+    async def __build_candidate_block(self, block_builder, next_leader, vote_result):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
@@ -54,7 +59,22 @@ class ConsensusSiever(ConsensusBase):
         # TODO: This should be changed when IISS is applied.
         block_builder.reps = ObjectManager().channel_service.get_rep_ids()
 
-        return block_builder.build()
+        if block_builder.version == v0_2.version:
+            icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+            issue_info = await asyncio.run_coroutine_threadsafe(icon_stub.async_task().get_issue_info(), MessageQueueService.loop)
+            logging.info(f"issue : {issue_info}")
+
+            hash_generator_version = self._blockchain.tx_versioner.get_hash_generator_version(v3_issue.Transaction.version)
+            issue_tx_builder = v3_issue.TransactionBuilder(hash_generator_version)
+            issue_tx_builder.nid = int(self._blockchain.find_nid(), 16)
+            issue_tx_builder.data = issue_info
+            issue_tx = issue_tx_builder.build()
+            block_builder.transactions[issue_tx.hash] = issue_tx
+            block_builder.transactions.move_to_end(issue_tx.hash, last=False)
+
+        block = block_builder.build()
+        logging.info(f"Issue block : {block}")
+        return block
 
     async def consensus(self):
         util.logger.debug(f"-------------------consensus "
@@ -113,7 +133,7 @@ class ConsensusSiever(ConsensusBase):
                 else:
                     return self.__block_generation_timer.call()
 
-            candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
+            candidate_block = await self.__build_candidate_block(block_builder, next_leader, vote_result)
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 

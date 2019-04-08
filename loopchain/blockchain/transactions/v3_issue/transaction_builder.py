@@ -15,7 +15,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         # Attributes that must be assigned
         self.nid: int = None
         self.data: dict = None
-        self.data_type: str = None
+        self.data_type: str = "issue"
 
         # Attributes to be assigned(optional)
         self.fixed_timestamp: int = None

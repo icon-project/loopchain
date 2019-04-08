@@ -35,6 +35,10 @@ class BlockProver(ABC):
         if version == v0_3.version:
             return v0_3.BlockProver(values, type_)
 
+        from . import v0_2
+        if version == v0_2.version:
+            return v0_2.BlockProver(values, type_)
+
         from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockProver(values, type_)

@@ -54,6 +54,10 @@ class BlockSerializer(ABC):
         if version == v0_3.version:
             return v0_3.BlockSerializer(tx_versioner)
 
+        from . import v0_2
+        if version == v0_2.version:
+            return v0_2.BlockSerializer(tx_versioner)
+
         from . import v0_1a
         if version == v0_1a.version:
             return v0_1a.BlockSerializer(tx_versioner)
