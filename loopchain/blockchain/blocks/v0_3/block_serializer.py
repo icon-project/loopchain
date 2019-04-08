@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 from . import BlockHeader, BlockBody
 from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import (Hash32, ExternalAddress, BloomFilter, TransactionSerializer, ABSignature, SignatureFlag,
+from ... import (Hash32, ExternalAddress, BloomFilter, TransactionSerializer, SignatureBase, SignatureFlag,
                  FlaggedSignature, FlaggedHsmSignature)
 
 
@@ -12,13 +12,13 @@ class BlockSerializer(BaseBlockSerializer):
     BlockBodyClass = BlockBody
 
     def __get_signature(self, signature: str):
-        signature_flag = ABSignature.from_base64str(signature)[0]
+        signature_flag = SignatureBase.from_base64str(signature)[0]
         if signature_flag == SignatureFlag.RECOVERABLE:
             signature = FlaggedSignature.from_base64str(signature)
         elif signature_flag == SignatureFlag.HSM:
             signature = FlaggedHsmSignature.from_base64str(signature)
         else:
-            raise RuntimeError(f"Invalid Signature in a Block.\n{signature}")
+            raise RuntimeError(f"Invalid Signature in a Block.\n{signature_flag}/{signature}")
 
         return signature
 

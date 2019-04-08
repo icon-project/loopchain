@@ -61,7 +61,7 @@ class HsmHelper(metaclass=SingletonMetaClass):
         )
         return key_info['public_key'].native
 
-    def ecdsa_sign(self, message: bytes, is_raw: bool = True, digest=hashlib.sha3_256()):
+    def ecdsa_sign(self, message: bytes, is_raw: bool = True, digest=hashlib.sha3_256):
         """Sign data using ECDSA.
 
         :param bytes message: The data to sign.
@@ -71,6 +71,7 @@ class HsmHelper(metaclass=SingletonMetaClass):
         :rtype: bytes
         """
         if not is_raw:
+            digest = digest()
             digest.update(message)
             data = digest.digest()
         else:

@@ -18,7 +18,9 @@ import getpass
 import hashlib
 import logging
 
-from typing import Union
+from typing import Union, Callable
+
+from abc import ABCMeta, abstractmethod
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -26,7 +28,7 @@ from secp256k1 import PrivateKey, PublicKey
 from yubihsm.objects import AsymmetricKey
 
 from loopchain import utils
-from loopchain.blockchain import SignatureFlag, FlaggedHsmSignature
+from loopchain.blockchain import SignatureFlag, FlaggedHsmSignature, Signature, FlaggedSignature
 from loopchain.tools.hsm_helper import HsmHelper
 
 
@@ -135,10 +137,35 @@ class SignVerifier:
         return cls.from_address(address)
 
 
+class MakeUpSignatureBase(metaclass=ABCMeta):
+    @classmethod
+    @abstractmethod
+    def make_up_signature(cls):
+        pass
+
+
+class MakeUpSignature(MakeUpSignatureBase):
+    @classmethod
+    def make_up_signature(cls, serialized_sig, recover_id):
+        signature = serialized_sig + bytes([recover_id])
+        return Signature(signature)
+
+
+class MakeUpFlaggedSignature(MakeUpSignatureBase):
+    @classmethod
+    def make_up_signature(cls, serialized_sig, recover_id):
+        signature = bytes([SignatureFlag.RECOVERABLE]) + serialized_sig + bytes([recover_id])
+        return FlaggedSignature(signature)
+
+
 class Signer(SignVerifier):
     def __init__(self):
         super().__init__()
         self.private_key: PrivateKey = None
+        self.__make_up_signature = None
+
+    def set_make_up_signature(self, make_up_signature_class: Callable[[bytes, bytes], Signature]):
+        self.__make_up_signature = make_up_signature_class
 
     def sign_data(self, data):
         return self.sign(data, False)
@@ -160,11 +187,15 @@ class Signer(SignVerifier):
             logging.error(f"data must be bytes \n")
             return None
 
+        if not self.__make_up_signature:
+            logging.error(f"There is no make up signature method. ")
+            return None
+
         raw_sig = self.private_key.ecdsa_sign_recoverable(msg=data,
                                                           raw=is_hash,
                                                           digest=hashlib.sha3_256)
         serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
-        return serialized_sig + bytes((recover_id, ))
+        return self.__make_up_signature(serialized_sig, recover_id)
 
     @classmethod
     def from_address(cls, address: str):
@@ -196,6 +227,7 @@ class Signer(SignVerifier):
     @classmethod
     def from_prikey(cls, prikey: bytes):
         auth = Signer()
+        auth.set_make_up_signature(MakeUpSignature.make_up_signature)
         auth.private_key = PrivateKey(prikey)
         auth.address = cls.address_from_prikey(prikey)
 
@@ -218,8 +250,12 @@ class YubiHsmSigner(SignVerifier):
 
     @classmethod
     def from_address(cls, address: str):
+        raise TypeError("Cannot create `YubiHsmSigner` from address")
+
+    @classmethod
+    def from_pubkey(cls, pubkey: bytes):
         verifier = YubiHsmSigner()
-        verifier.address = address
+        verifier.address = cls.address_from_pubkey(pubkey)
         verifier.private_key = HsmHelper().private_key
         return verifier
 

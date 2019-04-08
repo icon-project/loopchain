@@ -126,7 +126,7 @@ class BloomFilter(VarBytes):
         return self.__class__(result.to_bytes(self.size, 'big'))
 
 
-class ABSignature(Bytes, metaclass=ABCMeta):
+class SignatureBase(Bytes, metaclass=ABCMeta):
     @abstractmethod
     def signature(self):
         raise NotImplementedError()
@@ -167,7 +167,7 @@ class Flagged:
         return self[0]
 
 
-class Signature(ABSignature, Recoverable):
+class Signature(SignatureBase, Recoverable):
     size = 65
 
     def signature(self):
