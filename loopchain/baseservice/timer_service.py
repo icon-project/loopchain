@@ -120,10 +120,11 @@ class TimerService(CommonThread):
         :return:
         """
         self.__timer_list[key] = timer
-        asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
-        timer.on()
         if timer.is_run_at_start:
-            self.restart_timer(key)
+            asyncio.run_coroutine_threadsafe(self.__run_immediate(key, timer), self.__loop)
+        else:
+            asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+        timer.on()
 
     def add_timer_convenient(self, timer_key, duration, is_repeat=False, callback=None, callback_kwargs=None):
         if timer_key not in self.__timer_list:
@@ -214,11 +215,7 @@ class TimerService(CommonThread):
         asyncio.set_event_loop(self.__loop)
         self.__loop.run_forever()
 
-    async def __run(self, key, timer: Timer):
-        while not timer.is_timeout():
-            util.logger.spam(f"sleep {timer.remain_time()}, {key}")
-            await asyncio.sleep(timer.remain_time())
-
+    async def __run_immediate(self, key, timer: Timer):
         try:
             timer_in_list = self.__timer_list[key]
         except KeyError:
@@ -231,3 +228,10 @@ class TimerService(CommonThread):
                 self.restart_timer(key)
             else:
                 self.stop_timer(key, OffType.time_out)
+
+    async def __run(self, key, timer: Timer):
+        while not timer.is_timeout():
+            util.logger.spam(f"sleep {timer.remain_time()}, {key}")
+            await asyncio.sleep(timer.remain_time())
+
+        await self.__run_immediate(key, timer)
