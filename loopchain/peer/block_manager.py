@@ -28,7 +28,7 @@ from loopchain.baseservice import TimerService, BlockGenerationScheduler, Object
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, AddUnconfirmedBlock
+    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -254,16 +254,37 @@ class BlockManager:
         # start new epoch
         self.epoch = Epoch.new_epoch()
 
+    def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
+        last_unconfirmed_block: Block =  self.__blockchain.last_unconfirmed_block
+        try:
+            candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
+        except KeyError:
+            # When an unconfirmed block confirmed previous block, the block become last unconfirmed block,
+            # But if the block is failed to verify, the block doesn't be added into candidate block.
+            candidate_block: Block = last_unconfirmed_block
+
+        if candidate_block is None or unconfirmed_block.header.hash != candidate_block.header.hash:
+            return
+
+        if self.__channel_service.state_machine.state == 'LeaderComplain' \
+                and self.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx():
+            raise InvalidUnconfirmedBlock(f"Unconfirmed block is made by complained leader. {block})")
+
+        raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
+
     def add_unconfirmed_block(self, unconfirmed_block):
         """
 
         :param unconfirmed_block:
-        :return: bool check_unconfirmed_block_has_valid_block_info_for_prev_block
         """
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
 
+        self.__validate_duplication_unconfirmed_block(unconfirmed_block)
+
         # TODO set below variable with right result.
         check_unconfirmed_block_has_valid_block_info_for_prev_block = True
+        if not check_unconfirmed_block_has_valid_block_info_for_prev_block:
+            raise InvalidUnconfirmedBlock("Unconfirmed block has no valid block info for previous block")
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
@@ -279,12 +300,7 @@ class BlockManager:
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
-            return False
-
-        if last_unconfirmed_block is None or last_unconfirmed_block.header.hash != unconfirmed_block.header.hash:
-            self.epoch.set_epoch_leader(unconfirmed_block.header.next_leader.hex_hx())
-
-        return check_unconfirmed_block_has_valid_block_info_for_prev_block
+            raise InvalidUnconfirmedBlock(e)
 
     def add_confirmed_block(self, confirmed_block: Block):
         my_height = self.__blockchain.last_block.header.height
@@ -764,27 +780,21 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    async def _vote(self, unconfirmed_block: Block):
+    def __validate_unconfirmed_block_height(self, unconfirmed_block: Block):
         my_height = self.__blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
             self.__channel_service.state_machine.block_sync()
-            util.logger.debug(f"trigger block sync in _vote my_height({my_height}), "
-                              f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
-            return
+            raise BlockchainError(f"trigger block sync in _vote my_height({my_height}), "
+                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.header.height:
-            util.logger.debug(f"block is already added my_height({my_height}), "
-                              f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
-            return
+            raise BlockchainError(f"block is already added my_height({my_height}), "
+                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
+    async def _vote(self, unconfirmed_block: Block):
         exc = None
         try:
-            if not self.add_unconfirmed_block(unconfirmed_block):
-                util.logger.debug(f"fail add_unconfirmed_block my_height({my_height}), "
-                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
-                raise AddUnconfirmedBlock
-
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__channel_service.score_invoke
@@ -811,6 +821,21 @@ class BlockManager:
                           f"height({unconfirmed_block.header.height}) "
                           f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
 
-        await self._vote(unconfirmed_block)
-        self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+        try:
+            self.__validate_unconfirmed_block_height(unconfirmed_block)
+        except BlockchainError as e:
+            util.logger.debug(e)
+            return
+
+        try:
+            self.add_unconfirmed_block(unconfirmed_block)
+        except InvalidUnconfirmedBlock as e:
+            util.logger.warning(e)
+        except DuplicationUnconfirmedBlock as e:
+            util.logger.debug(e)
+            await self._vote(unconfirmed_block)
+        else:
+            await self._vote(unconfirmed_block)
+            self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
+
         self.__channel_service.start_leader_complain_timer_if_tx_exists()

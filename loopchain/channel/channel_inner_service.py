@@ -620,17 +620,6 @@ class ChannelInnerTask:
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
 
-    def __is_unconfirmed_block_by_complained_leader(self, unconfirmed_block: Block):
-        last_unconfirmed_block = self._channel_service.block_manager.get_blockchain().last_unconfirmed_block
-        if last_unconfirmed_block is None:
-            return False
-        elif self._channel_service.state_machine.state != "LeaderComplain":
-            return False
-
-        return last_unconfirmed_block.header.hash == unconfirmed_block.header.hash \
-            and last_unconfirmed_block.header.height == unconfirmed_block.header.height \
-            and self._channel_service.block_manager.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx()
-
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped) -> None:
         try:
@@ -648,12 +637,6 @@ class ChannelInnerTask:
         last_block = self._channel_service.block_manager.get_blockchain().last_block
         if last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
-            return
-        elif unconfirmed_block.header.height <= last_block.header.height:
-            util.logger.debug("Ignore unconfirmed block because the block height is under last block height.")
-            return
-        elif self.__is_unconfirmed_block_by_complained_leader(unconfirmed_block):
-            util.logger.debug("Ignore unconfirmed block because the block is made by complained leader.")
             return
         elif self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
