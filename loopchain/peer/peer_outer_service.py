@@ -565,7 +565,12 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 message=message_code.get_response_msg(message_code.Response.fail_wrong_subscribe_info)
             )
 
-        channel_stub = StubCollection().channel_stubs[channel_name]
+        try:
+            channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
+                                             message=f"There is no channel_stubs for channel({channel_name}).")
+
         peer_list = [target['peer_target'] for target in self.peer_service.channel_infos[channel_name]["peers"]]
 
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \

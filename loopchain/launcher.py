@@ -201,7 +201,7 @@ def start_as_rs(args):
                               f"input value : {seed}")
 
     RadioStationService(conf.IP_RADIOSTATION, cert, pw, seed).serve(port)
-    print_eplilogue()
+    print_epilogue()
 
 
 def start_as_admin(args):
@@ -213,7 +213,7 @@ def start_as_admin(args):
     else:
         gtool.main()
 
-    print_eplilogue()
+    print_epilogue()
 
 
 def start_as_tool(args):
@@ -226,7 +226,7 @@ def start_as_tool(args):
     else:
         demotool.main_menu(True)
 
-    print_eplilogue()
+    print_epilogue()
 
 
 def start_as_peer(args, node_type=None):
@@ -284,7 +284,7 @@ def start_as_peer(args, node_type=None):
         amqp_key=amqp_key
     )
 
-    print_eplilogue()
+    print_epilogue()
 
 
 def print_prologue():
@@ -308,28 +308,23 @@ def print_prologue():
     print()
 
 
-def print_eplilogue():
+def print_epilogue():
     time.sleep(0.1)
     print()
-    print('             ,            ')
-    print('            /|      __    ')
-    print('           / |   ,-~ /    ')
-    print('          Y :|  //  /     ')
-    print('          | jj /( .^      ')
-    print('          >-"~"-v"        ')
-    print('         /       Y        ')
-    print('        jo  o    |        ')
-    print('       ( ~T~     j        ')
-    print("        >._-' _./         ")
-    print('       /   "~"  |         ')
-    print('      Y     _,  |         ')
-    print('     /| ;-"~ _  l         ')
-    print('    / l/ ,-"~    \        ')
-    print('    \//\/      .- \       ')
-    print('     Y        /    Y      ')
-    print('     l       I     !      ')
-    print('     ]\      _\    /"\    ')
-    print('    (" ~----( ~   Y.  )   ')
-    print('~~~~~~~~~~~~~~~~~~~~~~~~~~')
-    print('To the moon.')
+    print("                 $$                                                                                ")
+    print("         $     $$$                                                                                 ")
+    print("      $$$$$$$  $$$                                                                                 ")
+    print("     $$$$$$$$                                                                                      ")
+    print("    $$$$   $          $$$   $$$$$$$    $$$$$$$   $$$   $$$  $$$      $$$$$$$     $$$$$$    $$$$$$$ ")
+    print("   $$$$       $$      $$$  $$$$$$$$$  $$$$$$$$$  $$$$  $$$  $$$     $$$$$$$$$   $$$$$$$$   $$$$$$$$")
+    print("   $$$       $$$      $$$ $$$    $$$ $$$    $$$  $$$$$ $$$  $$$     $$$    $$$ $$$    $$$  $$    $$")
+    print("   $$         $$      $$$ $$$        $$$     $$$ $$$$$ $$$  $$$     $$     $$$ $$      $$  $$    $$")
+    print("   $$         $$      $$$ $$         $$$     $$$ $$ $$$$$$  $$$     $$      $$ $$      $$  $$    $$")
+    print("   $$$        $$      $$$ $$$     $$ $$$     $$  $$  $$$$$  $$$     $$     $$$ $$     $$$  $$$$$$$$")
+    print("   $$$       $$$      $$$ $$$$   $$$ $$$$   $$$  $$   $$$$  $$$     $$$   $$$$ $$$   $$$$  $$$$$$$ ")
+    print("    $       $$$$      $$$  $$$$$$$$   $$$$$$$$   $$    $$$  $$$$$$$  $$$$$$$$   $$$$$$$$   $$      ")
+    print("       $$$$$$$$       $$$   $$$$$$     $$$$$$    $$    $$$  $$$$$$    $$$$$$     $$$$$$    $$      ")
+    print("  $$ $$$$$$$$$                                                                                     ")
+    print(" $$$$  $$$$$                                                                                       ")
+    print("  $$$                                                                                              ")
     print()

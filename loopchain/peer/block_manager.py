@@ -603,9 +603,13 @@ class BlockManager:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
             next_leader = self.__current_last_block().header.next_leader
             leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
+
+            if self.__channel_service.block_manager.epoch.height < my_height:
+                self.epoch = Epoch.new_epoch()
+
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
-                self.__channel_service.block_manager.epoch.set_epoch_leader(leader_peer.peer_id)
+                self.epoch.set_epoch_leader(leader_peer.peer_id)
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -689,12 +693,15 @@ class BlockManager:
             util.logger.info(f"Complained new leader is current leader({new_leader_id})")
             return
 
-        self.epoch.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
+        if self.epoch.height == block_height:
+            self.epoch.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
 
-        elected_leader = self.epoch.complain_result()
-        if elected_leader:
-            self.__channel_service.reset_leader(elected_leader, complained=True)
-            self.__channel_service.reset_leader_complain_timer()
+            elected_leader = self.epoch.complain_result()
+            if elected_leader:
+                self.__channel_service.reset_leader(elected_leader, complained=True)
+                self.__channel_service.reset_leader_complain_timer()
+        elif self.epoch.height < block_height:
+            self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
         # util.logger.notice(f"do leader complain.")
