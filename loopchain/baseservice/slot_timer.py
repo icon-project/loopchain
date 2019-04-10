@@ -13,8 +13,6 @@
 # limitations under the License.
 """loopchain timer service."""
 
-import asyncio
-
 import loopchain.utils as util
 from loopchain.baseservice import TimerService, Timer
 
