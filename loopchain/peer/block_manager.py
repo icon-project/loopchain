@@ -449,7 +449,8 @@ class BlockManager:
                       f"height({block_.header.height})")
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        block_verifier = BlockVerifier.new(block_version, block_.header, self.get_blockchain().tx_versioner)
+
         if block_.header.height == 0:
             block_verifier.invoke_func = self.__channel_service.genesis_invoke
         else:
@@ -470,7 +471,8 @@ class BlockManager:
         logging.debug(f"block_manager.py >> block_height_sync :: height({prev_block.header.height})")
 
         block_version = self.get_blockchain().block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        block_verifier = BlockVerifier.new(block_version, prev_block.header, self.get_blockchain().tx_versioner)
+
         if prev_block.header.height == 0:
             block_verifier.invoke_func = self.__channel_service.genesis_invoke
         else:
@@ -761,8 +763,9 @@ class BlockManager:
                 raise AddUnconfirmedBlock
 
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
-            block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
+            block_verifier = BlockVerifier.new(block_version, unconfirmed_block.header, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__channel_service.score_invoke
+
             reps = self.__channel_service.get_rep_ids()
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,

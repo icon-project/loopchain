@@ -12,15 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
-from secp256k1 import PrivateKey, PublicKey
+
+from secp256k1 import PrivateKey
+
 from loopchain import utils
+from . import BlockHeader
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import Block, BlockHeader
+    from . import Block
     from .. import TransactionVersioner
 
 
@@ -28,8 +30,9 @@ class BlockVerifier(ABC):
     version = None
     _ecdsa = PrivateKey()
 
-    def __init__(self, tx_versioner: 'TransactionVersioner'):
+    def __init__(self, tx_versioner: 'TransactionVersioner', sign_verifier: 'SignVerifier'):
         self._tx_versioner = tx_versioner
+        self.sign_verifier: 'SignVerifier' = sign_verifier
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
@@ -96,20 +99,10 @@ class BlockVerifier(ABC):
                                f"Expected({prev_block.header.height + 1}).")
 
     def verify_signature(self, block: 'Block'):
-        recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
-            block.header.signature.signature(),
-            block.header.signature.recover_id())
-        raw_public_key = self._ecdsa.ecdsa_recover(block.header.hash,
-                                                   recover_sig=recoverable_sig,
-                                                   raw=True,
-                                                   digest=hashlib.sha3_256)
-
-        public_key = PublicKey(raw_public_key, ctx=self._ecdsa.ctx)
-        hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
-        expect_address = hash_pub[-20:]
-        if expect_address != block.header.peer_id:
+        verified_address = self.sign_verifier.verify_hash(block.header.hash, block.header.signature)
+        if not verified_address.result:
             raise RuntimeError(f"block generator ID {block.header.peer_id.hex_xx()}, "
-                               f"expected peer ID {ExternalAddress(expect_address).hex_xx()}")
+                               f"expected peer ID {verified_address.expected_address}")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:
@@ -118,13 +111,20 @@ class BlockVerifier(ABC):
                                f"Expected({generator.hex_xx()}).")
 
     @classmethod
-    def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
+    def new(cls, version: str, block_header: BlockHeader, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
+        from loopchain.crypto.signature import SignVerifier, YubiHsmSignVerifier
         from . import v0_3
+        from .. import SignatureFlag
+
+        address = block_header.peer_id.hex_xx() if block_header.peer_id else None
         if version == v0_3.version:
-            return v0_3.BlockVerifier(tx_versioner)
+            flag = block_header.signature.flag() if block_header.signature else None
+            verifier = YubiHsmSignVerifier() if flag == SignatureFlag.HSM else SignVerifier()
+            verifier.address = address
+            return v0_3.BlockVerifier(tx_versioner, verifier)
 
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockVerifier(tx_versioner)
+            return v0_1a.BlockVerifier(tx_versioner, SignVerifier.from_address(address))
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")

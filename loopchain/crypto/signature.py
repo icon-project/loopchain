@@ -17,10 +17,10 @@ import binascii
 import getpass
 import hashlib
 import logging
-
+from abc import ABCMeta, abstractmethod
+from collections import namedtuple
 from typing import Union, Callable
 
-from abc import ABCMeta, abstractmethod
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
@@ -34,34 +34,37 @@ from loopchain.tools.hsm_helper import HsmHelper
 
 class SignVerifier:
     _pri = PrivateKey()
+    VerifiedAddress = namedtuple("VerifiedAddress", "result expected_address")
 
     def __init__(self):
         self.address: str = None
 
-    def verify_address(self, pubkey: bytes):
-        return self.address_from_pubkey(pubkey) == self.address
+    def verify_address(self, pubkey: bytes) -> VerifiedAddress:
+        expected_address = self.address_from_pubkey(pubkey)
+        verified_address = self.VerifiedAddress(expected_address == self.address, expected_address)
+        return verified_address
 
-    def verify_data(self, origin_data: bytes, signature: bytes):
+    def verify_data(self, origin_data: bytes, signature: Signature):
         return self.verify_signature(origin_data, signature, False)
 
-    def verify_hash(self, origin_data, signature):
+    def verify_hash(self, origin_data: bytes, signature: Signature):
         return self.verify_signature(origin_data, signature, True)
 
-    def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
+    def verify_signature(self, origin_data: bytes, signature: Signature, is_hash: bool) -> VerifiedAddress:
         try:
-            if is_hash:
-                origin_data = binascii.unhexlify(origin_data)
-            origin_signature, recover_code = signature[:-1], signature[-1]
-            recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
+            if not is_hash:
+                origin_data = hashlib.sha3_256(origin_data).digest()
+
+            recoverable_sig = self._pri.ecdsa_recoverable_deserialize(signature.signature(), signature.recover_id())
             pub = self._pri.ecdsa_recover(origin_data,
                                           recover_sig=recoverable_sig,
                                           raw=is_hash,
                                           digest=hashlib.sha3_256)
             extract_pub = PublicKey(pub).serialize(compressed=False)
             return self.verify_address(extract_pub)
-        except Exception:
-            logging.debug(f"signature verify fail : {origin_data} {signature}")
-            return False
+        except Exception as e:
+            logging.debug(f"Fail to verify the signature : ({origin_data})/({signature})\n{e}")
+            return self.VerifiedAddress(False, None)
 
     @classmethod
     def address_from_pubkey(cls, pubkey: bytes):
@@ -107,15 +110,9 @@ class SignVerifier:
                 private_bytes = file.read()
             try:
                 if prikey_file.endswith('.der'):
-                    temp_private = serialization \
-                        .load_der_private_key(private_bytes,
-                                              password,
-                                              default_backend())
+                    temp_private = serialization.load_der_private_key(private_bytes, password, default_backend())
                 if prikey_file.endswith('.pem'):
-                    temp_private = serialization \
-                        .load_pem_private_key(private_bytes,
-                                              password,
-                                              default_backend())
+                    temp_private = serialization.load_pem_private_key(private_bytes, password, default_backend())
             except Exception as e:
                 raise ValueError(f"Invalid Password: {e}")
 
@@ -254,11 +251,28 @@ class YubiHsmSigner(SignVerifier):
 
     @classmethod
     def from_pubkey(cls, pubkey: bytes):
-        verifier = YubiHsmSigner()
-        verifier.address = cls.address_from_pubkey(pubkey)
-        verifier.private_key = HsmHelper().private_key
-        return verifier
+        raise TypeError("Cannot create `YubiHsmSigner` from pubkey")
 
     @classmethod
     def from_hsm(cls):
-        return cls.from_pubkey(HsmHelper().get_serialize_pub_key())
+        verifier = YubiHsmSigner()
+        verifier.address = cls.address_from_pubkey(HsmHelper().get_serialize_pub_key())
+        verifier.private_key = HsmHelper().private_key
+        return verifier
+
+
+class YubiHsmSignVerifier(SignVerifier):
+    def verify_signature(self, origin_data: bytes, signature: Signature, is_hash: bool):
+        from cryptography.hazmat.primitives import hashes, asymmetric
+        from cryptography.hazmat.primitives.asymmetric import ec
+        from cryptography.exceptions import InvalidSignature
+        from loopchain.baseservice import ObjectManager
+
+        public_key = ObjectManager().channel_service.peer_manager.get_peer(self.address).public_key
+        hash_algorithm = asymmetric.utils.Prehashed(hashes.SHA256())
+
+        try:
+            public_key.verify(signature.signature(), origin_data, ec.ECDSA(hash_algorithm))
+            return self.VerifiedAddress(True, None)
+        except InvalidSignature:
+            raise RuntimeError(f"Invalid Signature in a Block.\n{signature.signature()}")
