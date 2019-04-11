@@ -217,9 +217,9 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
+        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()

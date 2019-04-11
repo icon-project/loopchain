@@ -645,7 +645,7 @@ class ChannelInnerTask:
         self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task
-    async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
+    async def announce_confirmed_block(self, serialized_block, commit_state):
         try:
             if self._channel_service.state_machine.state != "Watch":
                 return
@@ -677,7 +677,7 @@ class ChannelInnerTask:
                 raise RuntimeError(f"Commit states does not match. "
                                    f"Generated {header.commit_state}, Received {commit_state}")
 
-            if self._channel_service.block_manager.get_blockchain().block_height < confirmed_block.header.height:
+            if blockchain.block_height < confirmed_block.header.height:
                 self._channel_service.block_manager.add_confirmed_block(confirmed_block)
             else:
                 logging.debug(f"channel_inner_service:announce_confirmed_block "

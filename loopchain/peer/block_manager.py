@@ -620,7 +620,7 @@ class BlockManager:
             next_leader = self.__current_last_block().header.next_leader
             leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
 
-            if self.__channel_service.block_manager.epoch.height < my_height:
+            if self.epoch.height < my_height:
                 self.epoch = Epoch.new_epoch()
 
             if leader_peer:
