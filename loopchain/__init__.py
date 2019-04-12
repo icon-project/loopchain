@@ -13,4 +13,12 @@
 # limitations under the License.
 """ A package for configuration on the loopchain"""
 
+import pkg_resources
+
+__version__: str
+try:
+    __version__ = pkg_resources.get_distribution("loopchain").version
+except pkg_resources.DistributionNotFound:
+    __version__ = "0.0.0"
+
 from .launcher import *

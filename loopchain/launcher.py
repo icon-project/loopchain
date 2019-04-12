@@ -21,6 +21,7 @@ import os
 import time
 from urllib.parse import urlparse, ParseResult
 
+from loopchain import __version__
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
@@ -289,12 +290,16 @@ def start_as_peer(args, node_type=None):
 
 
 def print_prologue():
+    length = 8 - len(__version__)
+    if length < 0:
+        length = 0
+    version = "#" * (length // 2) + __version__ + "#" * (length // 2 + length % 2)
     print()
     print("                 ##                                                                                ")
     print("         #     ###                                                                                 ")
     print("      #######  ###                                                                                 ")
     print("     ########                                                                                      ")
-    print("    ####   #          ###   #######    #######   ###   ###  ###      #######     ######    ####### ")
+    print("    ####   #          ###   #######    #######   ###   ###  ###      #######     ######    " + version)
     print("   ####       ##      ###  #########  #########  ####  ###  ###     #########   ########   ########")
     print("   ###       ###      ### ###    ### ###    ###  ##### ###  ###     ###    ### ###    ###  ##    ##")
     print("   ##         ##      ### ###        ###     ### ##### ###  ###     ##     ### ##      ##  ##    ##")
