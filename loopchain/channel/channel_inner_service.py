@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ast
 import json
 import multiprocessing as mp
 import re
 import signal
 from asyncio import Condition
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union, Dict, List
 
 from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.rest_server.json_rpc import JsonError
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
@@ -34,6 +33,7 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
+from loopchain.rest_server.json_rpc import JsonError
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -389,8 +389,10 @@ class ChannelInnerTask:
         self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
         # Citizen
+        CitizenInfo = namedtuple("CitizenInfo", "peer_id target connected_time")
+        self._CitizenInfo = CitizenInfo
+        self._citizens: Dict[str, CitizenInfo] = dict()
         self._citizen_condition_new_block: Condition = None
-        self._citizen_set = set()
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
@@ -490,7 +492,7 @@ class ChannelInnerTask:
 
             new_block_height = subscriber_block_height + 1
             new_block = blockchain.find_block_by_height(new_block_height)
-            confirm_info: str = blockchain.find_confirm_info_by_height(new_block_height).decode("utf-8")
+            confirm_info: bytes = blockchain.find_confirm_info_by_height(new_block_height)
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -498,29 +500,38 @@ class ChannelInnerTask:
                 continue
 
             logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
-                          f"target: {self._citizen_set}")
+                          f"target: {self._citizens}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
-    async def register_subscriber(self, peer_id):
-        if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
+    async def register_citizen(self, peer_id, target, connected_time):
+        if len(self._citizens) >= conf.SUBSCRIBE_LIMIT:
             return False
         else:
-            self._citizen_set.add(peer_id)
-            logging.info(f"register new subscriber: {peer_id}")
-            logging.debug(f"remaining all subscribers: {self._citizen_set}")
+            new_citizen = self._CitizenInfo(peer_id, target, connected_time)
+            self._citizens[peer_id] = new_citizen
+            logging.info(f"register new citizen: {new_citizen}")
+            logging.debug(f"remaining all citizens: {self._citizens}")
             return True
 
     @message_queue_task
-    async def unregister_subscriber(self, peer_id):
-        logging.info(f"unregister subscriber: {peer_id}")
-        self._citizen_set.remove(peer_id)
-        logging.debug(f"remaining all subscribers: {self._citizen_set}")
+    async def unregister_citizen(self, peer_id):
+        try:
+            logging.info(f"unregister citizen: {peer_id}")
+            del self._citizens[peer_id]
+            logging.debug(f"remaining all citizens: {self._citizens}")
+        except KeyError as e:
+            logging.warning(f"already unregistered citizen({peer_id})")
 
     @message_queue_task
-    async def is_registered_subscriber(self, peer_id):
-        return peer_id in self._citizen_set
+    async def is_citizen_registered(self, peer_id) -> bool:
+        return peer_id in self._citizens
+
+    @message_queue_task
+    async def get_citizens(self) -> List[Dict[str, str]]:
+        return [{"id": ctz.peer_id, "target": ctz.target, "connected_time": ctz.connected_time}
+                for ctz in self._citizens.values()]
 
     @message_queue_task
     def get_peer_list(self):
@@ -788,7 +799,7 @@ class ChannelInnerTask:
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
-                         f"({ChannelProperty().name}) block_hash({block_hash})")
+                         f"({ChannelProperty().name}) block_hash({block_hash.hex()})")
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 

@@ -121,8 +121,6 @@ class NodeSubscriber:
             block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
             block_verifier.invoke_func = ObjectManager().channel_service.score_invoke
             reps = ObjectManager().channel_service.get_rep_ids()
-            logging.debug(f"last_block.header({blockchain.last_block.header}) "
-                          f"confirmed_block.header({confirmed_block.header})")
             block_verifier.verify(confirmed_block,
                                   blockchain.last_block,
                                   blockchain,
@@ -130,7 +128,7 @@ class NodeSubscriber:
                                   reps=reps)
 
             logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
-                          f"hash({confirmed_block.header.hash.hex()})")
+                          f"hash({confirmed_block.header.hash.hex()}), confirm_info({confirm_info})")
 
             ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                               confirm_info=confirm_info)
