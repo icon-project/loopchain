@@ -14,6 +14,7 @@
 """ A module for utility"""
 
 import datetime
+import hashlib
 import importlib.machinery
 import json
 import leveldb
@@ -525,8 +526,13 @@ def send_apm_event(peer_id, event_param):
 def is_hex(s):
     return re.fullmatch(r"^(0x)?[0-9a-f]{64}$", s or "") is not None
 
-
 # ------------------- data utils ----------------------------
+
+
+def address_from_pubkey(pubkey: bytes):
+    from loopchain.blockchain import ExternalAddress
+    hash_pub = hashlib.sha3_256(pubkey[1:]).digest()
+    return ExternalAddress(hash_pub[-20:])
 
 
 def get_now_time_stamp(init_time_seconds=None):

@@ -156,11 +156,11 @@ class Epoch:
                 block_tx_size += tx.size(tx_versioner)
 
     def makeup_block(self, complained_result: str):
-        # self._check_unconfirmed_block(
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
-        block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
+        block_builder = \
+            BlockBuilder.new(block_version, self.__blockchain.tx_versioner, ObjectManager().channel_service.peer_auth)
         if not complained_result:
             self.__add_tx_to_block(block_builder)
 

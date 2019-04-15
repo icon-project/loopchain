@@ -1,10 +1,8 @@
-import hashlib
-
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict
+from typing import Dict, Union
 
-from loopchain.crypto.signature import MakeUpSignature
+from loopchain.crypto.signature import SignatureType
 from . import Block
 from .. import Hash32, ExternalAddress, Signature
 from ..transactions import Transaction, TransactionVersioner
@@ -15,7 +13,7 @@ class BlockBuilder(ABC):
     BlockHeaderClass = None
     BlockBodyClass = None
 
-    def __init__(self, tx_versioner: 'TransactionVersioner'):
+    def __init__(self, tx_versioner: 'TransactionVersioner', signer: Union['RecoverableSigner', 'HSMSigner']):
         # Attributes that must be assigned
         self.height: int = None
         self.prev_hash: 'Hash32' = None
@@ -26,14 +24,11 @@ class BlockBuilder(ABC):
         self.block: Block = None
         self.hash: Hash32 = None
         self.signature: Signature = None
+        self.signature_type = SignatureType.NONE
         self.peer_id: 'ExternalAddress' = None
 
-        self._signer: 'Signer' = None
+        self.signer = signer
         self._tx_versioner = tx_versioner
-
-    def set_signer(self, signer: 'Signer'):
-        self._signer = signer
-        self._signer.set_make_up_signature(MakeUpSignature.make_up_signature)
 
     def size(self):
         return sum(tx.size(self._tx_versioner) for tx in self.transactions.values())
@@ -72,21 +67,6 @@ class BlockBuilder(ABC):
     def _build_hash(self):
         raise NotImplementedError
 
-    def build_peer_id(self):
-        if self.peer_id is not None:
-            return self.peer_id
-
-        if self._signer.private_key is None:
-            raise RuntimeError
-
-        self.peer_id = self._build_peer_id()
-        return self.peer_id
-
-    def _build_peer_id(self):
-        serialized_pub = self._signer.private_key.pubkey.serialize(compressed=False)
-        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return ExternalAddress(hashed_pub[-20:])
-
     def sign(self):
         if self.signature is not None:
             return self.signature
@@ -94,24 +74,25 @@ class BlockBuilder(ABC):
         if self.hash is None:
             raise RuntimeError
 
-        self.signature = self._signer.sign_hash(self.hash)
+        self.signature = self.signer.sign_hash(self.hash, self.signature_type)
         return self.signature
 
     @classmethod
-    def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
+    def new(cls, version: str, tx_versioner: 'TransactionVersioner', signer: Union['RecoverableSigner', 'HSMSigner']):
         from . import v0_3
         if version == v0_3.version:
-            return v0_3.BlockBuilder(tx_versioner)
+            return v0_3.BlockBuilder(tx_versioner, signer)
 
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockBuilder(tx_versioner)
+            return v0_1a.BlockBuilder(tx_versioner, signer)
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")
 
     @classmethod
-    def from_new(cls, block: 'Block', tx_versioner: 'TransactionVersioner'):
-        block_builder = cls.new(block.header.version, tx_versioner)
+    def from_new(
+            cls, block: 'Block', tx_versioner: 'TransactionVersioner', signer: Union['RecoverableSigner', 'HSMSigner']):
+        block_builder = cls.new(block.header.version, tx_versioner, signer)
         block_builder.from_(block)
         return block_builder
 

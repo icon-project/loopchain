@@ -22,7 +22,7 @@ class BlockVerifier(BaseBlockVerifier):
                                f"Leader({header.peer_id}) is not in "
                                f"Reps({reps})")
             
-        builder = BlockBuilder.from_new(block, self._tx_versioner)
+        builder = BlockBuilder.from_new(block, self._tx_versioner, None)
         builder.reset_cache()
         builder.peer_id = block.header.peer_id
         builder.signature = block.header.signature

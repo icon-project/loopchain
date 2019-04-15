@@ -16,7 +16,7 @@ class BlockVerifier(BaseBlockVerifier):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
-        builder = BlockBuilder.new(self.version, self._tx_versioner)
+        builder = BlockBuilder.new(self.version, self._tx_versioner, None)
         builder.height = header.height
         builder.prev_hash = header.prev_hash
         builder.fixed_timestamp = header.timestamp

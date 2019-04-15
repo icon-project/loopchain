@@ -16,8 +16,8 @@ class BlockBuilder(BaseBlockBuilder):
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
 
-    def __init__(self, tx_versioner: 'TransactionVersioner'):
-        super().__init__(tx_versioner)
+    def __init__(self, tx_versioner: 'TransactionVersioner', signer: 'RecoverableSigner'):
+        super().__init__(tx_versioner, signer)
 
         # Attributes to be assigned(optional)
         self.next_leader: Address = None
@@ -42,7 +42,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.build_hash()
 
         if self.height > 0:
-            self.build_peer_id()
+            self.peer_id = self.signer.address
             self.sign()
 
         self.block = self.build_block()

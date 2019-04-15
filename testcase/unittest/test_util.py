@@ -32,7 +32,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
 from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
 from loopchain.components import SingletonMetaClass
-from loopchain.crypto.signature import Signer
+from loopchain.crypto.signature import RecoverableSigner
 from loopchain.peer import PeerService
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
@@ -234,7 +234,7 @@ def clean_up_mq():
     os.system("rabbitmqctl start_app")
 
 
-def create_basic_tx(peer_auth: Signer) -> Transaction:
+def create_basic_tx(peer_auth: RecoverableSigner) -> Transaction:
     """
     :param peer_auth:
     :return: transaction
@@ -248,7 +248,7 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
     return tx_builder.build()
 
 
-def create_default_peer_auth() -> Signer:
+def create_default_peer_auth() -> RecoverableSigner:
     channel = list(conf.CHANNEL_OPTION)[0]
     peer_auth = Signer.from_channel(channel)
     return peer_auth

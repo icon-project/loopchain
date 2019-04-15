@@ -19,6 +19,7 @@ import logging
 import signal
 import time
 import traceback
+from typing import Union
 
 from earlgrey import MessageQueueService
 
@@ -33,7 +34,7 @@ from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.crypto.signature import Signer, SignVerifier, YubiHsmSigner
+from loopchain.crypto.signature import RecoverableSigner, HSMSigner
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
 from loopchain.tools.hsm_helper import HsmHelper
@@ -47,7 +48,7 @@ class ChannelService:
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
-        self.__peer_auth: SignVerifier = None
+        self.__peer_auth: Union[RecoverableSigner, HSMSigner] = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__radio_station_stub = None
@@ -250,12 +251,12 @@ class ChannelService:
         try:
             if conf.HSM_ENABLE_USE:
                 HsmHelper().open()
-                self.__peer_auth = YubiHsmSigner.from_hsm()
+                self.__peer_auth = HSMSigner.from_hsm()
             else:
                 node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
-                self.__peer_auth = Signer.from_prikey(node_key)
+                self.__peer_auth = RecoverableSigner.from_prikey(node_key)
         except KeyError:
-            self.__peer_auth = Signer.from_channel(ChannelProperty().name)
+            self.__peer_auth = RecoverableSigner.from_channel_with_private_key(ChannelProperty().name)
         except Exception as e:
             logging.exception(f"peer auth init fail cause : {e}")
             util.exit_and_msg(f"peer auth init fail cause : {e}")
@@ -723,7 +724,7 @@ class ChannelService:
         response_to_json_query(response)
 
         tx_receipts = response["txResults"]
-        block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
+        block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner, None)
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
         block_builder.signature = block.header.signature
@@ -764,7 +765,8 @@ class ChannelService:
         response_to_json_query(response)
 
         tx_receipts = response["txResults"]
-        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder = \
+            BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner, self.peer_auth)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
         block_builder.signature = _block.header.signature

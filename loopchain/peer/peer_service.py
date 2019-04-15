@@ -227,19 +227,19 @@ class PeerService:
             self.__rest_service = RestService(int(port))
 
     def __init_key_by_channel(self):
-        from loopchain.crypto.signature import Signer
+        from loopchain.crypto.signature import RecoverableSigner
         for channel in conf.CHANNEL_OPTION:
-            signer = Signer.from_channel(channel)
+            signer = RecoverableSigner.from_channel_with_private_key(channel)
             if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
-                self.__make_peer_id(signer.address)
+                self.__make_peer_id(signer.address.hex_hx())
             self.__node_keys[channel] = signer.private_key.private_key
 
     def __init_key_by_hsm(self):
-        from loopchain.crypto.signature import YubiHsmSigner
+        from loopchain.crypto.signature import HSMSigner
         for channel in conf.CHANNEL_OPTION:
-            signer = YubiHsmSigner.from_hsm()
+            signer = HSMSigner.from_hsm()
             if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
-                self.__make_peer_id(signer.address)
+                self.__make_peer_id(signer.address.hx())
             self.__node_keys[channel] = signer.private_key
 
     def __make_peer_id(self, address):

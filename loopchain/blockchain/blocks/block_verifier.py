@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Callable, Union
 
 from secp256k1 import PrivateKey
 
@@ -32,7 +32,7 @@ class BlockVerifier(ABC):
 
     def __init__(self, tx_versioner: 'TransactionVersioner', sign_verifier: 'SignVerifier'):
         self._tx_versioner = tx_versioner
-        self.sign_verifier: 'SignVerifier' = sign_verifier
+        self.sign_verifier: Union['RecoverableSignatureVerifier', 'HSMSignatureVerifier'] = sign_verifier
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
@@ -112,19 +112,19 @@ class BlockVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, block_header: BlockHeader, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
-        from loopchain.crypto.signature import SignVerifier, YubiHsmSignVerifier
+        from loopchain.crypto.signature import RecoverableSignatureVerifier, HSMSignatureVerifier
         from . import v0_3
         from .. import SignatureFlag
 
-        address = block_header.peer_id.hex_xx() if block_header.peer_id else None
+        address = block_header.peer_id if block_header.peer_id else None
         if version == v0_3.version:
             flag = block_header.signature.flag() if block_header.signature else None
-            verifier = YubiHsmSignVerifier() if flag == SignatureFlag.HSM else SignVerifier()
+            verifier = HSMSignatureVerifier() if flag == SignatureFlag.HSM else RecoverableSignatureVerifier()
             verifier.address = address
             return v0_3.BlockVerifier(tx_versioner, verifier)
 
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockVerifier(tx_versioner, SignVerifier.from_address(address))
+            return v0_1a.BlockVerifier(tx_versioner, RecoverableSignatureVerifier.from_address(address))
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")

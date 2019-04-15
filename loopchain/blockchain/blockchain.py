@@ -585,7 +585,7 @@ class BlockChain:
         tx = tx_builder.build()
 
         block_version = self.block_versioner.get_version(0)
-        block_builder = BlockBuilder.new(block_version, self.tx_versioner)
+        block_builder = BlockBuilder.new(block_version, self.tx_versioner, None)
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None

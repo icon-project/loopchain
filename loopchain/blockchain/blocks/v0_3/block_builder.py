@@ -1,13 +1,9 @@
-import hashlib
 import time
 from functools import reduce
 from operator import or_
-from typing import List
-from secp256k1 import PublicKey
+from typing import List, Union
 
-from loopchain import configure as conf
-from loopchain.crypto.signature import Signer, MakeUpFlaggedSignature
-
+from loopchain.crypto.signature import SignatureType
 from . import BlockHeader, BlockBody, BlockProver
 from .. import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
 from ... import Hash32, BloomFilter, TransactionVersioner, ExternalAddress
@@ -18,13 +14,14 @@ class BlockBuilder(BaseBlockBuilder):
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
 
-    def __init__(self, tx_versioner: 'TransactionVersioner'):
-        super().__init__(tx_versioner)
+    def __init__(self, tx_versioner: 'TransactionVersioner', signer: Union['RecoverableSigner', 'HSMSigner']):
+        super().__init__(tx_versioner, signer)
 
         # Attributes that must be assigned
         self.complained = False
         self.confirm_prev_block = True
         self.next_leader: 'ExternalAddress' = None
+        self.signature_type = SignatureType.FLAGGED
 
         # Attributes to be assigned(optional)
         self.fixed_timestamp: int = None
@@ -53,12 +50,6 @@ class BlockBuilder(BaseBlockBuilder):
 
         self._receipts = [dict(receipts[tx_hash.hex()]) for tx_hash in self.transactions]
 
-    def set_signer(self, signer: 'SignVerifier'):
-        self._signer = signer
-
-        if isinstance(signer, Signer):
-            self._signer.set_make_up_signature(MakeUpFlaggedSignature.make_up_signature)
-
     def reset_cache(self):
         super().reset_cache()
 
@@ -70,7 +61,7 @@ class BlockBuilder(BaseBlockBuilder):
 
     def build(self):
         if self.height > 0:
-            self.build_peer_id()
+            self.peer_id = self.signer.address
             self.build_hash()
             self.sign()
         else:
@@ -187,28 +178,6 @@ class BlockBuilder(BaseBlockBuilder):
         )
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
-
-    def build_peer_id(self):
-        if self.peer_id is not None:
-            return self.peer_id
-
-        if self._signer.private_key is None:
-            raise RuntimeError
-
-        if conf.HSM_ENABLE_USE:
-            self.peer_id = self._build_peer_id_in_hsm()
-        else:
-            self.peer_id = self._build_peer_id()
-
-        return self.peer_id
-
-    def _build_peer_id_in_hsm(self):
-        from loopchain.tools.hsm_helper import HsmHelper
-
-        raw_pubkey_of_pair = PublicKey().deserialize(HsmHelper().get_serialize_pub_key())
-        serialized_pub = PublicKey(raw_pubkey_of_pair).serialize(compressed=False)
-        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return ExternalAddress(hashed_pub[-20:])
 
     def from_(self, block: 'Block'):
         super().from_(block)
