@@ -17,7 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils
-from loopchain.blockchain.exception import BlockInvalidSignatureError
+from loopchain.blockchain.exception import BlockInvalidSignatureError, BlockInvalidTimestampError
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
@@ -52,9 +52,9 @@ class BlockVerifier(ABC):
             raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
 
         if prev_block and not (prev_block.header.timestamp < header.timestamp < utils.get_time_stamp()):
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
-                               f"prev_block timestamp({prev_block.header.timestamp}), "
-                               f"current timestamp({utils.get_now_time_stamp()}")
+            raise BlockInvalidTimestampError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp})"
+                                             f"prev_block timestamp({prev_block.header.timestamp}), "
+                                             f"current timestamp({utils.get_now_time_stamp()}")
 
         self.verify_version(block)
 

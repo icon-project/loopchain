@@ -28,6 +28,7 @@ from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerial
 from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
 from loopchain.blockchain import Hash32, ExternalAddress
 from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash, BlockInvalidSignatureError
+from loopchain.blockchain.exception import BlockInvalidTimestampError
 from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 
@@ -171,6 +172,28 @@ class TestBlock(unittest.TestCase):
         block_verifier = BlockVerifier.new("0.1a", self.tx_versioner)
         self.assertRaises(BlockInvalidSignatureError,
                           lambda: block_verifier.verify(block, None))
+
+    def test_block_invalid_timestamp(self):
+        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder.peer_private_key = self.signers[0].private_key
+        block_builder.height = 0
+        block_builder.prev_hash = None
+        block_builder.next_leader = self.reps[1]
+        block0 = block_builder.build()
+
+        block_verifier = BlockVerifier.new("0.1a", self.tx_versioner)
+        block_verifier.verify(block0, None)
+
+        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder.peer_private_key = random.choice(self.signers[1:]).private_key
+        block_builder.height = 1
+        block_builder.prev_hash = block0.header.hash
+        block_builder.next_leader = self.reps[2]
+        block_builder.fixed_timestamp = block0.header.timestamp - 1
+        block1 = block_builder.build()
+
+        self.assertRaises(BlockInvalidTimestampError,
+                          lambda: block_verifier.verify(block1, block0))
 
     def test_block_v0_3(self):
         private_auth = test_util.create_default_peer_auth()

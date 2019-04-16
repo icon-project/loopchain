@@ -45,6 +45,10 @@ class BlockInvalidSignatureError(Exception):
     pass
 
 
+class BlockInvalidTimestampError(Exception):
+    pass
+
+
 class BlockVersionNotMatch(Exception):
     def __init__(self, block_version: str, target_version: str, msg: str):
         super().__init__(msg)
