@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 from secp256k1 import PublicKey, PrivateKey
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
 from .. import Hash32, ExternalAddress
 if TYPE_CHECKING:
     from . import Transaction
@@ -28,8 +29,8 @@ class TransactionVerifier(ABC):
 
     def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
         if blockchain.find_tx_by_key(tx.hash.hex()):
-            raise RuntimeError(f"tx({tx})\n"
-                               f"hash {tx.hash.hex()} already exists in blockchain.")
+            raise TransactionInvalidDuplicatedHash(f"tx({tx})\n"
+                                                   f"hash {tx.hash.hex()} already exists in blockchain.")
 
     def verify_hash(self, tx: 'Transaction'):
         params = self._tx_serializer.to_origin_data(tx)

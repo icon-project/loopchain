@@ -17,209 +17,147 @@
 """Test Block functions"""
 
 import logging
-import json
 import random
-import sys
 import unittest
+import os
+from typing import List
 
-import loopchain.utils as util
-import testcase.unittest.test_util as test_util
-
-from cli_tools.icx_test.icx_wallet import IcxWallet
-from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager
-from testcase.unittest.mock_peer import set_mock
-
-sys.path.append('../')
+from testcase.unittest import test_util
+from loopchain import configure as conf, utils
 from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
 from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
 from loopchain.blockchain import Hash32, ExternalAddress
-
-
+from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 
+conf.Configure().init_configure()
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
 class TestBlock(unittest.TestCase):
-    __peer_id = 'aaa'
+    @classmethod
+    def setUpClass(cls):
+        cls.signers = [Signer.from_prikey(os.urandom(32)) for _ in range(100)]
+        cls.reps: List[ExternalAddress] = [ExternalAddress.fromhex(signer.address) for signer in cls.signers]
+        cls.tx_versioner = TransactionVersioner()
+        cls.nid = 100
 
     def setUp(self):
-        conf.Configure().init_configure()
         test_util.print_testname(self._testMethodName)
-        self.peer_auth = test_util.create_default_peer_auth()
-        set_mock(self)
 
-    def tearDown(self):
-        ObjectManager().peer_service = None
-        ObjectManager().channel_service = None
+    def _create_genesis_tx(self):
+        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner)
+        tx_builder.accounts = [
+            {
+                "name": "god",
+                "address": self.reps[0].hex_hx(),
+                "balance": "0xffffffffffffffffffffffffffffffffff"
+            }
+        ]
+        tx_builder.message = "Genesis Transaction"
+        tx_builder.nid = self.nid
+        return tx_builder.build()
 
-    def __generate_block_data(self) -> Block:
-        """ block data generate
-        :return: unsigned block
-        """
-        genesis = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        genesis.generate_block()
-        # Block 생성
-        block = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        # Transaction(s) 추가
-        for x in range(0, 10):
-            block.put_transaction(test_util.create_basic_tx(self.__peer_id, self.peer_auth))
+    def _create_v2_tx(self):
+        tx_builder = TransactionBuilder.new("0x2", self.tx_versioner)
+        tx_builder.private_key = self.signers[0].private_key
+        tx_builder.to_address = random.choice(self.reps[1:])
+        tx_builder.value = random.randint(1, (10 ** 18) * 100)
+        return tx_builder.build()
 
-        # Hash 생성 이 작업까지 끝내고 나서 Block을 peer에 보낸다
-        block.generate_block(genesis)
-        return block
+    def _create_v3_tx(self):
+        tx_builder = TransactionBuilder.new("0x3", self.tx_versioner)
+        tx_builder.private_key = self.signers[0].private_key
+        tx_builder.to_address = random.choice(self.reps[1:])
+        tx_builder.value = random.randint(1, (10 ** 18) * 100)
+        tx_builder.step_limit = random.randint(100000000, 1000000000000)
+        tx_builder.nid = self.nid
+        return tx_builder.build()
 
-    def __generate_block(self) -> Block:
-        """ block data generate, add sign
-        :return: signed block
-        """
-        block = self.__generate_block_data()
-        block.sign(self.peer_auth)
-        return block
+    def test_block_tx_duplication0(self):
+        txs = [self._create_v2_tx() if random.randint(0, 1) % 2 == 0 else self._create_v3_tx()
+               for _ in range(random.randint(10, 100))]
 
-    def __generate_invalid_block(self) -> Block:
-        """ create invalid signature block
-        :return: invalid signature block
-        """
-        block = self.__generate_block_data()
-        block._Block__signature = b'invalid signature '
-        return block
+        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder.peer_private_key = random.choice(self.signers).private_key
+        for tx in txs:
+            block_builder.transactions[tx.hash] = tx
+        block_builder.height = 10
+        block_builder.prev_hash = Hash32(os.urandom(Hash32.size))
+        block_builder.next_leader = random.choice(self.signers).private_key
+        block_builder.fixed_timestamp = utils.get_now_time_stamp()
 
-    @unittest.skip("BVS")
-    def test_put_transaction(self):
-        """
-        Block 에 여러 개 transaction 들을 넣는 것을 test.
-        """
-        block = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        tx_list = []
-        tx_size = 10
-        for x in range(0, tx_size):
-            tx = test_util.create_basic_tx(self.__peer_id, self.peer_auth)
-            tx2 = test_util.create_basic_tx(self.__peer_id, self.peer_auth)
-            tx_list.append(tx2)
-            self.assertNotEqual(tx.tx_hash, "", "트랜잭션 생성 실패")
-            self.assertTrue(block.put_transaction(tx), "Block에 트랜잭션 추가 실패")
-        self.assertTrue(block.put_transaction(tx_list), "Block에 여러 트랜잭션 추가 실패")
-        self.assertEqual(block.confirmed_tx_len, tx_size * 2, "트랜잭션 사이즈 확인 실패")
+        block0 = block_builder.build()
+        self.assertIsNotNone(block_builder.hash)
+        self.assertIsNotNone(block_builder.merkle_tree_root_hash)
+        self.assertEqual(len(block_builder.transactions), len(txs))
 
-    @unittest.skip("BVS")
-    def test_validate_block(self):
-        """ GIVEN correct block and invalid signature block
-        WHEN validate two block
-        THEN correct block validate return True, invalid block raise exception
-        """
-        # GIVEN
-        # create correct block
-        block = self.__generate_block()
-        # WHEN THEN
-        self.assertTrue(Block.validate(block), "Fail to validate block!")
+        block_builder.reset_cache()
+        self.assertIsNone(block_builder.hash)
+        self.assertIsNone(block_builder.merkle_tree_root_hash)
+        self.assertEqual(len(block_builder.transactions), len(txs))
 
-        # GIVEN
-        # create invalid block
-        invalid_signature_block = self.__generate_invalid_block()
+        # add duplicate txs
+        for tx in txs:
+            block_builder.transactions[tx.hash] = tx
+        block1 = block_builder.build()
 
-        # WHEN THEN
-        with self.assertRaises(BlockInValidError):
-            Block.validate(invalid_signature_block)
+        self.assertEqual(block0.body.transactions, block1.body.transactions)
+        self.assertEqual(block0.header.merkle_tree_root_hash, block1.header.merkle_tree_root_hash)
+        self.assertEqual(block0.header.hash, block1.header.hash)
 
-    @unittest.skip("BVS")
-    def test_transaction_merkle_tree_validate_block(self):
-        """
-        머클트리 검증
-        """
-        # 블럭을 검증 - 모든 머클트리의 내용 검증
-        block = self.__generate_block_data()
-        mk_result = True
-        for tx in block.confirmed_transaction_list:
-            # FIND tx index
-            idx = block.confirmed_transaction_list.index(tx)
-            sm_result = Block.merkle_path(block, idx)
-            mk_result &= sm_result
-            # logging.debug("Transaction %i th is %s (%s)", idx, sm_result, tx.tx_hash)
-        # logging.debug("block mekletree : %s ", block.merkle_tree)
-        self.assertTrue(mk_result, "머클트리검증 실패")
+    def test_block_tx_duplication1(self):
+        blockchain = BlockchainMock(self.nid)
+        block_builder0 = BlockBuilder.new("0.1a", self.tx_versioner)
 
-    @unittest.skip("BVS")
-    def test_serialize_and_deserialize(self):
-        """
-        블럭 serialize and deserialize 테스트
-        """
-        block = self.__generate_block()
-        test_dmp = block.serialize_block()
-        block2 = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        block2.deserialize_block(test_dmp)
-        logging.debug("serialize block hash : %s , deserialize block hash %s",
-                      block.merkle_tree_root_hash, block2.merkle_tree_root_hash)
-        self.assertEqual(block.merkle_tree_root_hash, block2.merkle_tree_root_hash, "블럭이 같지 않습니다 ")
+        signer_index0 = random.randint(0, len(self.signers) - 1)
+        block_builder0.peer_private_key = self.signers[signer_index0].private_key
+        block_builder0.height = 0
+        block_builder0.prev_hash = None
 
-    @unittest.skip("BVS")
-    def test_block_rebuild(self):
-        """ GIVEN 1Block with 3tx, and conf remove failed tx when in block
-        WHEN Block call verify_through_score_invoke
-        THEN all order 3tx must removed in block
-        """
-        block = Block(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        fail_tx_hash = None
-        for i in range(3):
-            tx = Transaction()
-            tx.put_meta(Transaction.CHANNEL_KEY, conf.LOOPCHAIN_DEFAULT_CHANNEL)
-            tx.put_data("aaaaa")
-            tx.sign_hash(self.peer_auth)
-            block.put_transaction(tx)
-            if i == 2:
-                fail_tx_hash = tx.tx_hash
-        verify, need_rebuild, invoke_results = block.verify_through_score_invoke(True)
-        self.assertTrue(need_rebuild)
-        logging.debug(f"fail tx hash : {fail_tx_hash}")
-        self.assertEqual(block.confirmed_tx_len, 2)
-        for i, tx in enumerate(block.confirmed_transaction_list):
-            self.assertNotEqual(i, 2, "index 2 must be deleted")
-            self.assertNotEqual(tx.tx_hash, fail_tx_hash)
+        signer_index1 = signer_index0 + 1
+        signer_index1 %= len(self.signers)
+        block_builder0.next_leader = self.reps[signer_index1]
 
-    @unittest.skip("BVS")
-    def test_block_hash_must_be_the_same_regardless_of_the_commit_state(self):
-        # ENGINE-302
-        # GIVEN
-        block1 = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
-        block2 = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
+        genesis_tx = self._create_genesis_tx()
+        block_builder0.transactions[genesis_tx.hash] = genesis_tx
 
-        # WHEN
-        block1.commit_state = {"TEST": "TEST_VALUE1234"}
-        block1.generate_block()
-        block2.generate_block()
-        util.logger.spam(f"block1 hash({block1.block_hash})")
-        util.logger.spam(f"block1 hash({block2.block_hash})")
+        block0 = block_builder0.build()
+        block_verifier = BlockVerifier.new(block0.header.version, self.tx_versioner)
+        block_verifier.verify(block0, None, blockchain, None)
+        blockchain.add_block(block0)
 
-        # THEN
-        self.assertEqual(block1.block_hash, block2.block_hash)
+        block_builder1 = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder1.peer_private_key = self.signers[signer_index1].private_key
+        block_builder1.height = 1
+        block_builder1.prev_hash = block0.header.hash
 
-    @unittest.skip("BVS")
-    def test_block_prevent_tx_duplication(self):
-        origin_send_tx_type = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"]
-        conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"] = conf.SendTxType.icx
-        tx_validator.refresh_tx_validators()
+        signer_index2 = signer_index1 + 1
+        signer_index2 %= len(self.signers)
+        block_builder1.next_leader = self.reps[signer_index2]
 
-        try:
-            block = Block(channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL)
+        txv2 = self._create_v2_tx()
+        block_builder1.transactions[txv2.hash] = txv2
 
-            client = IcxWallet()
-            client.to_address = 'hxebf3a409845cd09dcb5af31ed5be5e34e2af9433'
-            client.value = 1
+        block1 = block_builder1.build()
+        block_verifier.verify(block1, block0, blockchain, self.reps[signer_index1])
+        blockchain.add_block(block1)
 
-            hash_generator = get_tx_hash_generator(conf.LOOPCHAIN_DEFAULT_CHANNEL)
-            validator = IconValidateStrategy(hash_generator)
-            icx_origin = client.create_icx_origin()
-            for i in range(10):
-                tx = validator.restore(json.dumps(icx_origin), 'icx/score')
-                block.put_transaction(tx)
+        block_builder2 = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder2.peer_private_key = self.signers[signer_index2].private_key
+        block_builder2.height = 2
+        block_builder2.prev_hash = block1.header.hash
 
-            block.generate_block()
-            self.assertEqual(block.confirmed_tx_len, 1)
-        finally:
-            conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["send_tx_type"] = origin_send_tx_type
-            tx_validator.refresh_tx_validators()
+        signer_index3 = signer_index2 + 1
+        signer_index3 %= len(self.signers)
+        block_builder2.next_leader = self.reps[signer_index3]
+
+        block_builder2.transactions[txv2.hash] = txv2
+        block2 = block_builder2.build()
+        self.assertRaises(TransactionInvalidDuplicatedHash,
+                          lambda: block_verifier.verify(block2, block1, blockchain, self.reps[signer_index2]))
 
     def test_block_v0_3(self):
         private_auth = test_util.create_default_peer_auth()
@@ -276,5 +214,27 @@ class TestBlock(unittest.TestCase):
         assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
 
 
-if __name__ == '__main__':
-    unittest.main()
+class BlockchainMock:
+    def __init__(self, nid):
+        self.nid = nid
+        self.last_block = None
+        self.block_db = {}
+        self.tx_db = {}
+
+    @property
+    def block_height(self):
+        return self.last_block.header.height if self.last_block else -1
+
+    def add_block(self, block: Block):
+        self.block_db[block.header.hash] = block
+        self.tx_db.update(block.body.transactions)
+        self.last_block = block
+
+    def find_nid(self):
+        return self.nid
+
+    def find_tx_by_key(self, tx_hash: str):
+        try:
+            return self.tx_db[Hash32.fromhex(tx_hash, ignore_prefix=True)]
+        except KeyError:
+            return None
