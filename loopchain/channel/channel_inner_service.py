@@ -33,6 +33,7 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
+from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.rest_server.json_rpc import JsonError
 from loopchain.utils.message_queue import StubCollection
 
@@ -56,6 +57,9 @@ class ChannelTxCreatorInnerTask:
         scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
+        self.__qos_controller = QosController()
+        self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
+
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
             raise TransactionInvalidOutOfTimeBound(tx.hash.hex(), tx.timestamp, util.get_now_time_stamp())
@@ -71,6 +75,10 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        if self.__qos_controller.limit():
+            util.logger.debug(f"Out of TPS limit. tx={kwargs}")
+            return message_code.Response.fail_out_of_tps_limit, None
+
         node_type = self.__properties.get('node_type', None)
         if node_type is None:
             util.logger.warning("Node type has not been set yet.")
