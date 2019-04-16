@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils
+from loopchain.blockchain.exception import BlockInvalidSignatureError
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
@@ -108,8 +109,8 @@ class BlockVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != block.header.peer_id:
-            raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
-                               f"expected {ExternalAddress(expect_address).hex_xx()}")
+            raise BlockInvalidSignatureError(f"block peer id {block.header.peer_id.hex_xx()}, "
+                                             f"expected {ExternalAddress(expect_address).hex_xx()}")
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:

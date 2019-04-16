@@ -27,7 +27,7 @@ from loopchain import configure as conf, utils
 from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
 from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
 from loopchain.blockchain import Hash32, ExternalAddress
-from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
+from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash, BlockInvalidSignatureError
 from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 
@@ -158,6 +158,19 @@ class TestBlock(unittest.TestCase):
         block2 = block_builder2.build()
         self.assertRaises(TransactionInvalidDuplicatedHash,
                           lambda: block_verifier.verify(block2, block1, blockchain, self.reps[signer_index2]))
+
+    def test_block_invalid_signature(self):
+        block_builder = BlockBuilder.new("0.1a", self.tx_versioner)
+        block_builder.peer_private_key = random.choice(self.signers[1:]).private_key
+        block_builder.height = 1
+        block_builder.prev_hash = Hash32(os.urandom(Hash32.size))
+        block = block_builder.build()
+
+        object.__setattr__(block.header, "peer_id", self.reps[0])
+
+        block_verifier = BlockVerifier.new("0.1a", self.tx_versioner)
+        self.assertRaises(BlockInvalidSignatureError,
+                          lambda: block_verifier.verify(block, None))
 
     def test_block_v0_3(self):
         private_auth = test_util.create_default_peer_auth()

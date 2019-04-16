@@ -41,6 +41,10 @@ class AddUnconfirmedBlock(Exception):
     pass
 
 
+class BlockInvalidSignatureError(Exception):
+    pass
+
+
 class BlockVersionNotMatch(Exception):
     def __init__(self, block_version: str, target_version: str, msg: str):
         super().__init__(msg)
