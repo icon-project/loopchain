@@ -49,7 +49,8 @@ class TransactionBuilder(BaseTransactionBuilder):
             to_address=self.to_address,
             value=self.value,
             fee=self.fee,
-            nonce=self.nonce
+            nonce=self.nonce,
+            extra={}
         )
 
     def build_origin_data(self):
