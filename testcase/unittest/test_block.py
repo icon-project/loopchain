@@ -226,9 +226,9 @@ class TestBlock(unittest.TestCase):
         tx_versioner = TransactionVersioner()
 
         dummy_receipts = {}
-        block_builder = BlockBuilder.new("0.3", tx_versioner)
+        block_builder = BlockBuilder.new("0.3", tx_versioner, private_auth)
         for i in range(1000):
-            tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+            tx_builder = TransactionBuilder.new("0x3", tx_versioner, private_auth)
             tx_builder.private_key = private_auth.private_key
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
@@ -247,11 +247,11 @@ class TestBlock(unittest.TestCase):
         block_builder.height = 0
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
-        block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
+        block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address.hex_hx())]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
         block = block_builder.build()
-        block_verifier = BlockVerifier.new("0.3", tx_versioner)
+        block_verifier = BlockVerifier.new("0.3", block.header, tx_versioner)
         block_verifier.invoke_func = lambda b: (block, dummy_receipts)
         block_verifier.verify(block, None, None, block.header.peer_id, reps=block_builder.reps)
 

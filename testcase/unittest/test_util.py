@@ -39,7 +39,6 @@ from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
-
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
@@ -250,7 +249,7 @@ def create_basic_tx(peer_auth: RecoverableSigner) -> Transaction:
 
 def create_default_peer_auth() -> RecoverableSigner:
     channel = list(conf.CHANNEL_OPTION)[0]
-    peer_auth = Signer.from_channel(channel)
+    peer_auth = RecoverableSigner.from_channel_with_private_key(channel)
     return peer_auth
 
 

@@ -36,7 +36,8 @@ class TestCandidateBlocks(unittest.TestCase):
 
     @staticmethod
     def __get_test_block():
-        block_builder = BlockBuilder.new("0.1a", TransactionVersioner())
+        private_auth = test_util.create_default_peer_auth()
+        block_builder = BlockBuilder.new("0.1a", TransactionVersioner(), private_auth)
         block_builder.height = 0
         block_builder.prev_hash = None
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
