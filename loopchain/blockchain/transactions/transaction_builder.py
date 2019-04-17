@@ -1,10 +1,10 @@
-import hashlib
-
+from abc import abstractmethod, ABC
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from loopchain.crypto.hashing import build_hash_generator
 
-from .. import Signature, ExternalAddress, Hash32
+from loopchain.crypto.hashing import build_hash_generator
+from loopchain.crypto.signature import SignatureType
+from .. import Signature, Hash32
 
 if TYPE_CHECKING:
     from secp256k1 import PrivateKey
@@ -14,14 +14,15 @@ if TYPE_CHECKING:
 class TransactionBuilder(ABC):
     _hash_salt = None
 
-    def __init__(self, hash_generator_version: int):
+    def __init__(self, hash_generator_version: int, signer: 'RecoverableSigner'):
         self._hash_generator = build_hash_generator(hash_generator_version, self._hash_salt)
 
         # Attributes that must be assigned
+        self.signer = signer
         self.private_key: 'PrivateKey' = None
 
         # Attributes to be generated
-        self.from_address: 'ExternalAddress' = None
+        self.from_address: 'Address' = signer.address
         self.hash: 'Hash32' = None
         self.signature: 'Signature' = None
         self.origin_data: dict = None
@@ -48,18 +49,6 @@ class TransactionBuilder(ABC):
     def _build_hash(self):
         return Hash32(self._hash_generator.generate_hash(self.origin_data))
 
-    def build_from_address(self):
-        if self.private_key is None:
-            raise RuntimeError(f"private_key is required.")
-
-        self.from_address = self._build_from_address()
-        return self.from_address
-
-    def _build_from_address(self):
-        serialized_pub = self.private_key.pubkey.serialize(compressed=False)
-        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return ExternalAddress(hashed_pub[-20:])
-
     @abstractmethod
     def build_raw_data(self) -> dict:
         pass
@@ -72,31 +61,23 @@ class TransactionBuilder(ABC):
         if self.hash is None:
             self.build_hash()
 
-        self.signature = self._sign()
+        self.signature = self.signer.sign_hash(self.hash, SignatureType.NONE)
         return self.signature
 
-    def _sign(self):
-        raw_sig = self.private_key.ecdsa_sign_recoverable(msg=self.hash,
-                                                          raw=True,
-                                                          digest=hashlib.sha3_256)
-        serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
-        signature = serialized_sig + bytes((recover_id, ))
-        return Signature(signature)
-
     @classmethod
-    def new(cls, version: str, versioner: 'TransactionVersioner'):
+    def new(cls, version: str, versioner: 'TransactionVersioner', signer: 'RecoverableSigner'):
         hash_generator_version = versioner.get_hash_generator_version(version)
 
         from . import v3
         if version == v3.version:
-            return v3.TransactionBuilder(hash_generator_version)
+            return v3.TransactionBuilder(hash_generator_version, signer)
 
         from . import v2
         if version == v2.version:
-            return v2.TransactionBuilder(hash_generator_version)
+            return v2.TransactionBuilder(hash_generator_version, signer)
 
         from . import genesis
         if version == genesis.version:
-            return genesis.TransactionBuilder(hash_generator_version)
+            return genesis.TransactionBuilder(hash_generator_version, signer)
 
         raise RuntimeError(f"Not supported tx version({version})")

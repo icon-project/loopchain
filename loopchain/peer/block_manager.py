@@ -258,7 +258,8 @@ class BlockManager:
         :param unconfirmed_block:
         :return: bool check_unconfirmed_block_has_valid_block_info_for_prev_block
         """
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
+        logging.info(
+            f"unconfirmed_block ({unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block})")
 
         # TODO set below variable with right result.
         check_unconfirmed_block_has_valid_block_info_for_prev_block = True

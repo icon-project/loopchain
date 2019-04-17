@@ -1,13 +1,12 @@
 from . import Transaction, NID, NTxHash, HASH_SALT
 from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
 
 
 class TransactionBuilder(BaseTransactionBuilder):
     _hash_salt = HASH_SALT
 
-    def __init__(self, hash_generator_version: int):
-        super().__init__(hash_generator_version)
+    def __init__(self, hash_generator_version: int, signer: 'RecoverableSigner'):
+        super().__init__(hash_generator_version, signer)
 
         # Attributes that must be assigned
         self.accounts: list = None

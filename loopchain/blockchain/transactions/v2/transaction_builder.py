@@ -1,8 +1,8 @@
 import time
 from typing import TYPE_CHECKING
+
 from . import Transaction, HASH_SALT
 from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
 
 if TYPE_CHECKING:
     from ... import Address
@@ -14,8 +14,8 @@ ICX_FEE = int(0.01 * 10**18)
 class TransactionBuilder(BaseTransactionBuilder):
     _hash_salt = HASH_SALT
 
-    def __init__(self, hash_generator_version: int):
-        super().__init__(hash_generator_version)
+    def __init__(self, hash_generator_version: int, signer: 'RecoverableSigner'):
+        super().__init__(hash_generator_version, signer)
 
         # Attributes that must be assigned
         self.to_address: 'Address' = None
@@ -34,7 +34,6 @@ class TransactionBuilder(BaseTransactionBuilder):
         self._timestamp = None
 
     def build(self):
-        self.build_from_address()
         self.build_origin_data()
         self.build_hash()
         self.sign()

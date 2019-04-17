@@ -573,8 +573,11 @@ class BlockChain:
         :param tx_info: Transaction data for making genesis block from an initial file
         :return:
         """
+        from loopchain.crypto.signature import RecoverableSigner
+
         logging.info("Make Genesis Block....")
-        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner)
+        signer = RecoverableSigner.from_channel_with_private_key(ChannelProperty().name)
+        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner, signer)
 
         nid = tx_info.get("nid")
         if nid is not None:
@@ -585,7 +588,7 @@ class BlockChain:
         tx = tx_builder.build()
 
         block_version = self.block_versioner.get_version(0)
-        block_builder = BlockBuilder.new(block_version, self.tx_versioner, None)
+        block_builder = BlockBuilder.new(block_version, self.tx_versioner, ObjectManager().channel_service.peer_auth)
         block_builder.height = 0
         block_builder.fixed_timestamp = 0
         block_builder.prev_hash = None

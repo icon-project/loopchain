@@ -530,9 +530,8 @@ def is_hex(s):
 
 
 def address_from_pubkey(pubkey: bytes):
-    from loopchain.blockchain import ExternalAddress
     hash_pub = hashlib.sha3_256(pubkey[1:]).digest()
-    return ExternalAddress(hash_pub[-20:])
+    return hash_pub[-20:]
 
 
 def get_now_time_stamp(init_time_seconds=None):

@@ -125,6 +125,6 @@ class BlockVerifier(ABC):
 
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockVerifier(tx_versioner, RecoverableSignatureVerifier.from_address(address))
+            return v0_1a.BlockVerifier(tx_versioner, RecoverableSignatureVerifier.from_address(address.hex_hx()))
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")

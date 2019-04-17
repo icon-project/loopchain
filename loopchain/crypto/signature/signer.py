@@ -26,7 +26,8 @@ from cryptography.hazmat.primitives import serialization
 from secp256k1 import PrivateKey
 
 from loopchain import utils
-from loopchain.blockchain import SignatureFlag, FlaggedHsmSignature, Signature, FlaggedSignature, IntEnum
+from loopchain.blockchain import SignatureFlag, FlaggedHsmSignature, Signature, FlaggedSignature, IntEnum, \
+    ExternalAddress
 from loopchain.tools.hsm_helper import HsmHelper
 
 
@@ -38,7 +39,7 @@ class SignatureType(IntEnum):
 class SignerBase(metaclass=ABCMeta):
     _private_key = None
     private_key = None
-    address: 'ExternalAddress' = None
+    address: 'Address' = None
 
     def sign_data(self, data, signature_type: SignatureType):
         return self.sign(data, False, signature_type)
@@ -49,7 +50,7 @@ class SignerBase(metaclass=ABCMeta):
     @classmethod
     def address_from_prikey(cls, prikey: bytes):
         pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
-        return utils.address_from_pubkey(pubkey)
+        return ExternalAddress(utils.address_from_pubkey(pubkey))
 
     @abstractmethod
     def sign(self):
@@ -131,7 +132,7 @@ class RecoverableSigner(SignerBase):
         signer.address = cls.address_from_prikey(prikey)
 
         signature = signer.sign_data(b'TEST', SignatureType.NONE)
-        verifier = RecoverableSignatureVerifier.from_address(signer.address)
+        verifier = RecoverableSignatureVerifier.from_address(signer.address.hex_xx())
         if verifier.verify_data(b'TEST', signature) is False:
             raise ValueError("Invalid Signature.")
         return signer
@@ -162,7 +163,7 @@ class HSMSigner(SignerBase):
     @classmethod
     def from_hsm(cls):
         signer = HSMSigner()
-        signer.address = utils.address_from_pubkey(HsmHelper().get_serialize_pub_key())
+        signer.address = ExternalAddress(utils.address_from_pubkey(HsmHelper().get_serialize_pub_key()))
         signer.private_key = HsmHelper().private_key
         return signer
 

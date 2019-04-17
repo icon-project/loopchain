@@ -61,7 +61,7 @@ class BlockBuilder(BaseBlockBuilder):
 
     def build(self):
         if self.height > 0:
-            self.peer_id = self.signer.address
+            self.peer_id = self._set_peer_id()
             self.build_hash()
             self.sign()
         else:

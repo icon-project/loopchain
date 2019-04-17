@@ -766,7 +766,7 @@ class ChannelService:
 
         tx_receipts = response["txResults"]
         block_builder = \
-            BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner, self.peer_auth)
+            BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner, None)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
         block_builder.signature = _block.header.signature

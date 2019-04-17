@@ -1,10 +1,12 @@
-import hashlib
-
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from secp256k1 import PublicKey, PrivateKey
+
+from secp256k1 import PrivateKey
+
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.crypto.signature import SignatureType, RecoverableSignatureVerifier
 from .. import Hash32, ExternalAddress
+
 if TYPE_CHECKING:
     from . import Transaction
     from .. import TransactionVersioner
@@ -40,21 +42,12 @@ class TransactionVerifier(ABC):
                                f"expected {Hash32(tx_hash_expected).hex()}")
 
     def verify_signature(self, tx: 'Transaction'):
-        recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
-            tx.signature.signature(),
-            tx.signature.recover_id())
-        raw_public_key = self._ecdsa.ecdsa_recover(tx.hash,
-                                                   recover_sig=recoverable_sig,
-                                                   raw=True,
-                                                   digest=hashlib.sha3_256)
-
-        public_key = PublicKey(raw_public_key, ctx=self._ecdsa.ctx)
-        hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
-        expect_address = hash_pub[-20:]
-        if expect_address != tx.from_address:
+        verifier = RecoverableSignatureVerifier.from_address(tx.from_address.hex_xx())
+        verified_address = verifier.verify_hash(tx.hash, tx.signature)
+        if not verified_address.result:
             raise RuntimeError(f"tx({tx})\n"
                                f"from address {tx.from_address.hex_xx()}\n"
-                               f"expected {ExternalAddress(expect_address).hex_xx()}")
+                               f"expected {ExternalAddress(verified_address.expected_address).hex_xx()}")
 
     @classmethod
     def new(cls, version: str, versioner: 'TransactionVersioner'):

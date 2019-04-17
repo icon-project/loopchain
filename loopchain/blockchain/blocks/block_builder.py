@@ -67,6 +67,16 @@ class BlockBuilder(ABC):
     def _build_hash(self):
         raise NotImplementedError
 
+    def _set_peer_id(self):
+        if self.peer_id is not None:
+            return self.peer_id
+
+        if self.signer.private_key is None:
+            raise RuntimeError
+
+        self.peer_id = self.signer.address
+        return self.peer_id
+
     def sign(self):
         if self.signature is not None:
             return self.signature

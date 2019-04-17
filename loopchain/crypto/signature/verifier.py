@@ -19,8 +19,9 @@ from abc import ABCMeta, abstractmethod
 from collections import namedtuple
 
 from secp256k1 import PrivateKey, PublicKey
+
 from loopchain import utils
-from loopchain.blockchain import Signature
+from loopchain.blockchain import Signature, ExternalAddress, Address
 
 
 class SignatureVerifierBase(metaclass=ABCMeta):
@@ -50,13 +51,13 @@ class SignatureVerifierBase(metaclass=ABCMeta):
 
     @classmethod
     def from_pubkey(cls, pubkey: bytes):
-        address = utils.address_from_pubkey(pubkey)
-        return cls.from_address(address)
+        address = ExternalAddress(utils.address_from_pubkey(pubkey))
+        return cls.from_address(address.hex_hx())
 
     @classmethod
     def from_address(cls, address: str):
         verifier = RecoverableSignatureVerifier()
-        verifier.address = address
+        verifier.address = Address.fromhex_address(address)
         return verifier
 
     @abstractmethod
@@ -65,8 +66,8 @@ class SignatureVerifierBase(metaclass=ABCMeta):
 
 
 class RecoverableSignatureVerifier(SignatureVerifierBase):
-    def verify_address(self, pubkey: bytes) -> 'VerifiedAddress':
-        expected_address = utils.address_from_pubkey(pubkey)
+    def __verify_address(self, pubkey: bytes) -> 'VerifiedAddress':
+        expected_address = Address(utils.address_from_pubkey(pubkey))
         verified_address = self.VerifiedAddress(expected_address == self.address, expected_address)
         return verified_address
 
@@ -82,7 +83,7 @@ class RecoverableSignatureVerifier(SignatureVerifierBase):
                                                   raw=is_hash,
                                                   digest=hashlib.sha3_256)
             extract_pub = PublicKey(pub).serialize(compressed=False)
-            return self.verify_address(extract_pub)
+            return self.__verify_address(extract_pub)
         except Exception as e:
             logging.debug(f"Fail to verify the signature : ({origin_data})/({signature})\n{e}")
             return self.VerifiedAddress(False, None)
@@ -95,7 +96,7 @@ class HSMSignatureVerifier(SignatureVerifierBase):
         from cryptography.exceptions import InvalidSignature
         from loopchain.baseservice import ObjectManager
 
-        public_key = ObjectManager().channel_service.peer_manager.get_peer(self.address).public_key
+        public_key = ObjectManager().channel_service.peer_manager.get_peer(self.address.hex_hx()).public_key
         hash_algorithm = asymmetric.utils.Prehashed(hashes.SHA256())
 
         try:

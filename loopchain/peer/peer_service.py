@@ -239,7 +239,7 @@ class PeerService:
         for channel in conf.CHANNEL_OPTION:
             signer = HSMSigner.from_hsm()
             if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
-                self.__make_peer_id(signer.address.hx())
+                self.__make_peer_id(signer.address.hex_hx())
             self.__node_keys[channel] = signer.private_key
 
     def __make_peer_id(self, address):
