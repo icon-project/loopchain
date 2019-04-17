@@ -171,7 +171,7 @@ class TestTxValidator(unittest.TestCase):
 
         params = wallet.create_icx_origin()
         params['tx_hash'] = "12312"
-        self.__test_wallet_exception(params, TransactionInvalidHashForamtError)
+        self.__test_wallet_exception(params, TransactionInvalidHashFormatError)
 
     def test_transaction_invalid_address(self):
         wallet = IcxWallet()
