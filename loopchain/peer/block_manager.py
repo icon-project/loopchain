@@ -252,10 +252,11 @@ class BlockManager:
         self.__channel_service.stop_leader_complain_timer()
 
         # start new epoch
-        self.epoch = Epoch.new_epoch()
+        if not current_block.header.complained:
+            self.epoch = Epoch.new_epoch()
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
-        last_unconfirmed_block: Block =  self.__blockchain.last_unconfirmed_block
+        last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
         try:
             candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
         except KeyError:
@@ -268,7 +269,7 @@ class BlockManager:
 
         if self.__channel_service.state_machine.state == 'LeaderComplain' \
                 and self.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx():
-            raise InvalidUnconfirmedBlock(f"Unconfirmed block is made by complained leader. {block})")
+            raise InvalidUnconfirmedBlock(f"Unconfirmed block is made by complained leader. {unconfirmed_block})")
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
@@ -625,7 +626,7 @@ class BlockManager:
 
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
-                self.epoch.set_epoch_leader(leader_peer.peer_id)
+                self.epoch = Epoch.new_epoch(leader_peer.peer_id)
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"

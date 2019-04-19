@@ -42,24 +42,31 @@ class Epoch:
         # But now! only collect leader complain votes.
         self.__candidate_blocks = None
 
-        self.round = -1  # +1 after each _init_complain_vote
+        self.round = 0
         self.__complain_vote = dict()  # complain vote dict { round : Vote }
-        self._init_complain_vote()
+        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
         self.complained_result = None
 
     @property
     def _complain_vote(self):
         return self.__complain_vote[self.round]
 
-    def _init_complain_vote(self):
-        self.round += 1
-        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
-
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
+
+    def new_round(self, new_leader_id, round_=None):
+        self.set_epoch_leader(new_leader_id, True)
+
+        if round_ is None:
+            self.round += 1
+        else:
+            self.round = round_
+        logging.debug(f"new round {round_}, {self.round}")
+
+        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     def set_epoch_leader(self, leader_id, complained=False):
         util.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -68,7 +75,6 @@ class Epoch:
             self.complained_result = self.complain_result()
         else:
             self.complained_result = None
-        self._init_complain_vote()
 
     def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
         util.logger.debug(f"add_complain complain_leader_id({complained_leader_id}), "
