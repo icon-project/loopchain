@@ -29,9 +29,8 @@ class Epoch:
 
     def __init__(self, block_manager, leader_id=None):
         blockchain = block_manager.get_blockchain()
-        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
-        if last_block:
-            self.height = last_block.header.height + 1
+        if blockchain.last_block:
+            self.height = blockchain.last_block.header.height + 1
         else:
             self.height = 1
         self.leader_id = leader_id
