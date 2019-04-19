@@ -20,7 +20,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, Vote, Block
+from loopchain.blockchain import ExternalAddress, Vote, Block, Epoch
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -142,14 +142,15 @@ class ConsensusSiever(ConsensusBase):
 
             self._block_manager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
-
             self._blockchain.last_unconfirmed_block = candidate_block
+
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
 
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
             if await self._wait_for_voting(candidate_block) is None:
                 return
 
+            self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
             if len(candidate_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex_hx() != ChannelProperty().peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
