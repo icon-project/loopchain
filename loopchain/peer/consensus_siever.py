@@ -94,7 +94,6 @@ class ConsensusSiever(ConsensusBase):
                     util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
 
-                self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
                 self._made_block_count += 1
             elif len(block_builder.transactions) > 0:
                 util.logger.spam(f"consensus len(block_builder.transactions) > 0")
