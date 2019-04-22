@@ -255,6 +255,9 @@ class BlockManager:
         if not current_block.header.complained:
             self.epoch = Epoch.new_epoch()
 
+        # reset leader
+        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
+
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
         try:
@@ -866,6 +869,5 @@ class BlockManager:
             await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
-            self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self.__channel_service.start_leader_complain_timer_if_tx_exists()
