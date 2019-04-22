@@ -661,17 +661,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
-    def AnnounceNewLeader(self, request, context):
-        if not request.channel:
-            raise Exception("peer_outer_service:AnnounceNewLeader : Channel is not defined.")
-
-        logging.debug(f"AnnounceNewLeader({request.channel}): " + request.message)
-
-        channel_stub = StubCollection().channel_stubs[request.channel]
-        channel_stub.sync_task().reset_leader(request.new_leader_id)
-
-        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
     def GetChannelInfos(self, request: loopchain_pb2.GetChannelInfosRequest, context):
         """Return channels by peer target
 
