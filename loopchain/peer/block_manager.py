@@ -470,7 +470,7 @@ class BlockManager:
                       f"height({block_.header.height})")
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
         if block_.header.height == 0:
             block_verifier.invoke_func = self.__channel_service.genesis_invoke
         else:
@@ -481,6 +481,10 @@ class BlockManager:
                                                        self.__blockchain.last_block,
                                                        self.__blockchain,
                                                        reps=reps)
+        exception = next((exc for exc in block_verifier.exceptions
+                          if not isinstance(exc, TransactionInvalidDuplicatedHash)), None)
+        if exception:
+            raise exception
 
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
         return self.__blockchain.add_block(block_, confirm_info)
