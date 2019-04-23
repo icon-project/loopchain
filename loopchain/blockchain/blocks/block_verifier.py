@@ -28,8 +28,11 @@ class BlockVerifier(ABC):
     version = None
     _ecdsa = PrivateKey()
 
-    def __init__(self, tx_versioner: 'TransactionVersioner'):
+    def __init__(self, tx_versioner: 'TransactionVersioner', raise_exceptions=True):
         self._tx_versioner = tx_versioner
+        self._raise_exceptions = raise_exceptions
+
+        self.exceptions = []
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
@@ -45,15 +48,18 @@ class BlockVerifier(ABC):
         header: BlockHeader = block.header
 
         if header.timestamp is None:
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have timestamp.")
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have timestamp.")
+            self._handle_exception(exception)
 
         if header.height > 0 and header.prev_hash is None:
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
+            self._handle_exception(exception)
 
         if prev_block and not (prev_block.header.timestamp < header.timestamp < utils.get_time_stamp()):
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
-                               f"prev_block timestamp({prev_block.header.timestamp}), "
-                               f"current timestamp({utils.get_now_time_stamp()}")
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
+                                     f"prev_block timestamp({prev_block.header.timestamp}), "
+                                     f"current timestamp({utils.get_now_time_stamp()}")
+            self._handle_exception(exception)
 
         self.verify_version(block)
 
@@ -71,29 +77,36 @@ class BlockVerifier(ABC):
 
     def verify_transactions(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner)
+            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
             tv.verify(tx, blockchain)
+            if not self._raise_exceptions:
+                self.exceptions.extend(tv.exceptions)
 
     def verify_transactions_loosely(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner)
+            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
             tv.verify_loosely(tx, blockchain)
+            if not self._raise_exceptions:
+                self.exceptions.extend(tv.exceptions)
 
     def verify_version(self, block: 'Block'):
         if block.header.version != self.version:
-            raise BlockVersionNotMatch(block.header.version, self.version,
-                                       f"The block version is incorrect. Block({block.header})")
+            exception = BlockVersionNotMatch(block.header.version, self.version,
+                                             f"The block version is incorrect. Block({block.header})")
+            self._handle_exception(exception)
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.prev_hash != prev_block.header.hash:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"PrevHash({block.header.prev_hash.hex()}), "
-                               f"Expected({prev_block.header.hash.hex()}).")
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"PrevHash({block.header.prev_hash.hex()}), "
+                                     f"Expected({prev_block.header.hash.hex()}).")
+            self._handle_exception(exception)
 
         if block.header.height != prev_block.header.height + 1:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Height({block.header.height}), "
-                               f"Expected({prev_block.header.height + 1}).")
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Height({block.header.height}), "
+                                     f"Expected({prev_block.header.height + 1}).")
+            self._handle_exception(exception)
 
     def verify_signature(self, block: 'Block'):
         recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
@@ -108,23 +121,31 @@ class BlockVerifier(ABC):
         hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
         expect_address = hash_pub[-20:]
         if expect_address != block.header.peer_id:
-            raise RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
-                               f"expected {ExternalAddress(expect_address).hex_xx()}")
+            exception = RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
+                                     f"expected {ExternalAddress(expect_address).hex_xx()}")
+            self._handle_exception(exception)
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if block.header.peer_id != generator:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Generator({block.header.peer_id.hex_xx()}), "
-                               f"Expected({generator.hex_xx()}).")
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Generator({block.header.peer_id.hex_xx()}), "
+                                     f"Expected({generator.hex_xx()}).")
+            self._handle_exception(exception)
+
+    def _handle_exception(self, exception: Exception):
+        if self._raise_exceptions:
+            raise exception
+        else:
+            self.exceptions.append(exception)
 
     @classmethod
-    def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockVerifier':
+    def new(cls, version: str, tx_versioner: 'TransactionVersioner', raise_exceptions=True) -> 'BlockVerifier':
         from . import v0_3
         if version == v0_3.version:
-            return v0_3.BlockVerifier(tx_versioner)
+            return v0_3.BlockVerifier(tx_versioner, raise_exceptions)
 
         from . import v0_1a
         if version == v0_1a.version:
-            return v0_1a.BlockVerifier(tx_versioner)
+            return v0_1a.BlockVerifier(tx_versioner, raise_exceptions)
 
         raise NotImplementedError(f"BlockBuilder Version({version}) not supported.")

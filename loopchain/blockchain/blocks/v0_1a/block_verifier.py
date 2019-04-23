@@ -31,21 +31,24 @@ class BlockVerifier(BaseBlockVerifier):
                 # vote block
                 pass
             elif header.commit_state != new_block.header.commit_state:
-                raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                   f"CommitState({header.commit_state}), "
-                                   f"Expected({new_block.header.commit_state}).")
+                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                         f"CommitState({header.commit_state}), "
+                                         f"Expected({new_block.header.commit_state}).")
+                self._handle_exception(exception)
 
         builder.build_merkle_tree_root_hash()
         if header.merkle_tree_root_hash != builder.merkle_tree_root_hash:
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                               f"MerkleTreeRootHash({header.merkle_tree_root_hash.hex()}), "
-                               f"Expected({builder.merkle_tree_root_hash.hex()}).")
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"MerkleTreeRootHash({header.merkle_tree_root_hash.hex()}), "
+                                     f"Expected({builder.merkle_tree_root_hash.hex()}).")
+            self._handle_exception(exception)
 
         builder.build_hash()
         if header.hash != builder.hash:
-            raise RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                               f"Hash({header.hash.hex()}, "
-                               f"Expected({builder.hash.hex()}).")
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"Hash({header.hash.hex()}, "
+                                     f"Expected({builder.hash.hex()}).")
+            self._handle_exception(exception)
 
         if generator:
             self.verify_generator(block, generator)
@@ -59,13 +62,15 @@ class BlockVerifier(BaseBlockVerifier):
 
         if not block_header.complained and prev_block_header.next_leader and \
                 prev_block_header.next_leader != block_header.peer_id:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Leader({block_header.peer_id.hex_xx()}), "
-                               f"Expected({prev_block_header.next_leader.hex_xx()}).")
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Leader({block_header.peer_id.hex_xx()}), "
+                                     f"Expected({prev_block_header.next_leader.hex_xx()}).")
+            self._handle_exception(exception)
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         block_header: BlockHeader = block.header
         if not block_header.complained and block.header.peer_id != generator:
-            raise RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                               f"Generator({block.header.peer_id.hex_xx()}), "
-                               f"Expected({generator.hex_xx()}).")
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Generator({block.header.peer_id.hex_xx()}), "
+                                     f"Expected({generator.hex_xx()}).")
+            self._handle_exception(exception)
