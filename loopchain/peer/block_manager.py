@@ -28,7 +28,7 @@ from loopchain.baseservice import TimerService, BlockGenerationScheduler, Object
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock
+    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -467,12 +467,11 @@ class BlockManager:
         return self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
 
     def __add_block_by_sync(self, block_, confirm_info=None):
-        commit_state = block_.header.commit_state
         logging.debug(f"block_manager.py >> block_height_sync :: "
                       f"height({block_.header.height})")
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
+        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
         if block_.header.height == 0:
             block_verifier.invoke_func = self.__channel_service.genesis_invoke
         else:
@@ -483,8 +482,23 @@ class BlockManager:
                                                        self.__blockchain.last_block,
                                                        self.__blockchain,
                                                        reps=reps)
+        need_to_write_tx_info, need_to_score_invoke = True, True
+        for exc in block_verifier.exceptions:
+            if isinstance(exc, TransactionInvalidDuplicatedHash):
+                need_to_write_tx_info = False
+            if isinstance(exc, ScoreInvokeError) and not need_to_write_tx_info:
+                need_to_score_invoke = False
+
+        exc = next((exc for exc in block_verifier.exceptions
+                    if not isinstance(exc, TransactionInvalidDuplicatedHash)), None)
+        if exc:
+            if isinstance(exc, ScoreInvokeError) and not need_to_score_invoke:
+                pass
+            else:
+                raise exc
+
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(block_, confirm_info)
+        return self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
         prev_block = self.__blockchain.last_unconfirmed_block
