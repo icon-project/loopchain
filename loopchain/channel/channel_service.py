@@ -28,7 +28,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch
 from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -635,7 +635,11 @@ class ChannelService:
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
-        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id, complained)
+        if complained:
+            self.block_manager.epoch.new_round(leader_peer.peer_id)
+        else:
+            self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")

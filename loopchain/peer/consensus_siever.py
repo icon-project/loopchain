@@ -20,7 +20,7 @@ from functools import partial
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, Vote, Block
+from loopchain.blockchain import ExternalAddress, Vote, Block, Epoch
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -94,7 +94,6 @@ class ConsensusSiever(ConsensusBase):
                     util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                     return
 
-                self._block_manager.epoch.set_epoch_leader(ChannelProperty().peer_id)
                 self._made_block_count += 1
             elif len(block_builder.transactions) > 0:
                 util.logger.spam(f"consensus len(block_builder.transactions) > 0")
@@ -112,6 +111,7 @@ class ConsensusSiever(ConsensusBase):
                             return self.__block_generation_timer.call()
 
                         self.__add_block(last_unconfirmed_block, vote)
+                        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
 
                         next_leader = last_unconfirmed_block.header.next_leader
             else:
@@ -142,10 +142,9 @@ class ConsensusSiever(ConsensusBase):
 
             self._block_manager.vote_unconfirmed_block(candidate_block.header.hash, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
-
             self._blockchain.last_unconfirmed_block = candidate_block
-            broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
 
+            broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
             if await self._wait_for_voting(candidate_block) is None:
                 return
@@ -157,6 +156,7 @@ class ConsensusSiever(ConsensusBase):
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
+                self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
                 else:
