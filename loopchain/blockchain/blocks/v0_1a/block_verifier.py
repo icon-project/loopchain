@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 
+from loopchain.blockchain.exception import ScoreInvokeError
 from . import BlockHeader
 from .. import BlockBuilder, BlockVerifier as BaseBlockVerifier
 
@@ -26,7 +27,13 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            new_block, invoke_result = self.invoke_func(block)
+            try:
+                new_block, invoke_result = self.invoke_func(block)
+            except Exception as e:
+                if hasattr(e, 'message') and 'Failed to invoke a block' in e.message:
+                    exception = ScoreInvokeError(f"{e.message} with block({header.hash.hex()})")
+                    return self._handle_exception(exception)
+
             if not header.commit_state and len(body.transactions) == 0:
                 # vote block
                 pass
@@ -74,3 +81,9 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Generator({block.header.peer_id.hex_xx()}), "
                                      f"Expected({generator.hex_xx()}).")
             self._handle_exception(exception)
+
+    def _handle_exception(self, exception: Exception):
+        if self._raise_exceptions:
+            raise exception
+        else:
+            self.exceptions.append(exception)

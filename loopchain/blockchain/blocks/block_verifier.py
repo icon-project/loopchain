@@ -69,7 +69,7 @@ class BlockVerifier(ABC):
         if prev_block:
             self.verify_prev_block(block, prev_block)
 
-        self._verify_common(block, prev_block, generator, **kwargs)
+        return self._verify_common(block, prev_block, generator, **kwargs)
 
     @abstractmethod
     def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
