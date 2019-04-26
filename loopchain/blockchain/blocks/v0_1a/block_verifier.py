@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
-from loopchain.blockchain.exception import ScoreInvokeError
+from loopchain.blockchain.exception import ScoreInvokeError, ScoreInvokeResultError
+from loopchain.rest_server.json_rpc import GenericJsonRpcServerError
 from . import BlockHeader
 from .. import BlockBuilder, BlockVerifier as BaseBlockVerifier
 
@@ -29,19 +30,21 @@ class BlockVerifier(BaseBlockVerifier):
         if self.invoke_func:
             try:
                 new_block, invoke_result = self.invoke_func(block)
-            except Exception as e:
+            except GenericJsonRpcServerError as e:
                 if hasattr(e, 'message') and 'Failed to invoke a block' in e.message:
-                    exception = ScoreInvokeError(f"{e.message} with block({header.hash.hex()})")
-                    return self._handle_exception(exception)
-
-            if not header.commit_state and len(body.transactions) == 0:
-                # vote block
-                pass
-            elif header.commit_state != new_block.header.commit_state:
-                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"CommitState({header.commit_state}), "
-                                         f"Expected({new_block.header.commit_state}).")
-                self._handle_exception(exception)
+                    e = ScoreInvokeError(f"{e.message} with block({header.hash.hex()})")
+                self._handle_exception(e)
+            except Exception as e:
+                self._handle_exception(e)
+            else:
+                if not header.commit_state and len(body.transactions) == 0:
+                    # vote block
+                    pass
+                elif header.commit_state != new_block.header.commit_state:
+                    exception = ScoreInvokeResultError(f"Block({header.height}, {header.hash.hex()}, "
+                                                       f"CommitState({header.commit_state}), "
+                                                       f"Expected({new_block.header.commit_state}).")
+                    self._handle_exception(exception)
 
         builder.build_merkle_tree_root_hash()
         if header.merkle_tree_root_hash != builder.merkle_tree_root_hash:
