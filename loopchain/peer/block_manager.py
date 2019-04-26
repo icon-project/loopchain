@@ -304,6 +304,10 @@ class BlockManager:
             raise InvalidUnconfirmedBlock(e)
 
     def add_confirmed_block(self, confirmed_block: Block, confirm_info=None):
+        if self.__channel_service.state_machine.state != "Watch":
+            util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
+            return
+
         my_height = self.__blockchain.last_block.header.height
         if confirmed_block.header.height == my_height + 1:
             result = self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
@@ -536,6 +540,9 @@ class BlockManager:
         retry_number = 0
 
         while max_height > my_height:
+            if self.__channel_service.state_machine.state != 'BlockSync':
+                break
+
             peer_stub = peer_stubs[peer_index]
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
@@ -630,6 +637,11 @@ class BlockManager:
             traceback.print_exc()
             self.__start_block_height_sync_timer()
             return False
+
+        curr_state = self.__channel_service.state_machine.state
+        if curr_state != 'BlockSync':
+            util.logger.info(f"Current state{curr_state} is not BlockSync")
+            return True
 
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")

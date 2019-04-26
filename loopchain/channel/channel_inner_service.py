@@ -43,7 +43,7 @@ if TYPE_CHECKING:
 class ChannelTxCreatorInnerTask:
     def __init__(self, channel_name: str, peer_target: str, tx_versioner: TransactionVersioner):
         self.__channel_name = channel_name
-        self.__nid: int = None
+        self.__properties = dict()
         self.__tx_versioner = tx_versioner
 
         scheduler = BroadcastSchedulerFactory.new(channel=channel_name,
@@ -67,13 +67,17 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def update_properties(self, properties: dict):
-        try:
-            self.__nid = properties['nid']
-        except KeyError:
-            pass
+        self.__properties.update(properties)
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        node_type = self.__properties.get('node_type', None)
+        if node_type is None:
+            util.logger.warning("Node type has not been set yet.")
+            return NodeInitializationError.message_code, None
+        elif node_type != conf.NodeType.CommunityNode.value:
+            return message_code.Response.fail_no_permission, None
+
         result_code = None
         exception = None
         tx = None
@@ -84,11 +88,13 @@ class ChannelTxCreatorInnerTask:
             ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
             tx = ts.from_(kwargs)
 
-            if self.__nid is None:
+            nid = self.__properties.get('nid', None)
+            if nid is None:
+                util.logger.warning(f"NID has not been set yet.")
                 raise NodeInitializationError(tx.hash.hex())
 
             tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
-            tv.pre_verify(tx, nid=self.__nid)
+            tv.pre_verify(tx, nid=nid)
 
             self.__pre_validate(tx)
 

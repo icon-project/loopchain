@@ -209,6 +209,9 @@ class TimerService(CommonThread):
 
         self.__loop.call_soon_threadsafe(self.__loop.stop)
 
+    def clean(self):
+        self.__timer_list = {}
+
     def run(self, e: threading.Event):
         e.set()
 
