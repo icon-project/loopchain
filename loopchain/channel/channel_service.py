@@ -208,7 +208,7 @@ class ChannelService:
 
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
-        self.__inner_service.init_sub_services()
+        await self.__init_sub_services()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
@@ -241,6 +241,10 @@ class ChannelService:
         self.__state_machine.complete_subscribe()
 
         self.start_leader_complain_timer_if_tx_exists()
+
+    def update_sub_services_properties(self):
+        nid = self.block_manager.get_blockchain().find_nid()
+        self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
     async def __init_peer_auth(self):
         try:
@@ -300,6 +304,11 @@ class ChannelService:
 
             else:
                 break
+
+    async def __init_sub_services(self):
+        self.__inner_service.init_sub_services()
+        await StubCollection().create_channel_tx_creator_stub(ChannelProperty().name)
+        await StubCollection().create_channel_tx_receiver_stub(ChannelProperty().name)
 
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(

@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 class ChannelTxCreatorInnerTask:
     def __init__(self, channel_name: str, peer_target: str, tx_versioner: TransactionVersioner):
         self.__channel_name = channel_name
+        self.__nid: int = None
         self.__tx_versioner = tx_versioner
 
         scheduler = BroadcastSchedulerFactory.new(channel=channel_name,
@@ -65,6 +66,13 @@ class ChannelTxCreatorInnerTask:
         self.__broadcast_scheduler: BroadcastScheduler = None
 
     @message_queue_task
+    async def update_properties(self, properties: dict):
+        try:
+            self.__nid = properties['nid']
+        except KeyError:
+            pass
+
+    @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
         result_code = None
         exception = None
@@ -76,8 +84,11 @@ class ChannelTxCreatorInnerTask:
             ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
             tx = ts.from_(kwargs)
 
+            if self.__nid is None:
+                raise NodeInitializationError(tx.hash.hex())
+
             tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
-            tv.verify(tx)
+            tv.pre_verify(tx, nid=self.__nid)
 
             self.__pre_validate(tx)
 
@@ -86,7 +97,7 @@ class ChannelTxCreatorInnerTask:
             self.__broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, self.__tx_versioner))
             return message_code.Response.success, tx.hash.hex()
 
-        except TransactionInvalidError as e:
+        except MessageCodeError as e:
             result_code = e.message_code
             exception = e
             traceback.print_exc()
@@ -190,11 +201,24 @@ class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
 
 class ChannelTxReceiverInnerTask:
     def __init__(self, tx_versioner: TransactionVersioner, tx_queue: mp.Queue):
+        self.__nid: int = None
         self.__tx_versioner = tx_versioner
         self.__tx_queue = tx_queue
 
+    @message_queue_task
+    async def update_properties(self, properties: dict):
+        try:
+            self.__nid = properties['nid']
+        except KeyError:
+            pass
+
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx_list(self, request) -> tuple:
+        if self.__nid is None:
+            response_code = message_code.Response.fail
+            message = "Node initialization is not completed."
+            return response_code, message
+
         tx_list = []
         for tx_item in request.tx_list:
             tx_json = json.loads(tx_item.tx_json)
@@ -205,7 +229,7 @@ class ChannelTxReceiverInnerTask:
             tx = ts.from_(tx_json)
 
             tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
-            tv.verify(tx)
+            tv.pre_verify(tx, nid=self.__nid)
 
             tx.size(self.__tx_versioner)
 
@@ -233,8 +257,8 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
         util.exit_and_msg("MQ Connection lost.")
 
     @staticmethod
-    def main(channel_name: str, amqp_target: str, amqp_key: str, tx_versioner: TransactionVersioner, tx_queue: mp.Queue,
-             properties: ModuleProcessProperties=None):
+    def main(channel_name: str, amqp_target: str, amqp_key: str,
+             tx_versioner: TransactionVersioner, tx_queue: mp.Queue, properties: ModuleProcessProperties=None):
         if properties is not None:
             ModuleProcess.load_properties(properties, "txreceiver")
 
@@ -391,6 +415,14 @@ class ChannelInnerTask:
                                                         crash_callback_in_join_thread)
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
+
+    def update_sub_services_properties(self, **properties):
+        logging.info(f"ppppropertis {properties}")
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+
+        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
 
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
@@ -1038,6 +1070,9 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
+
+    def update_sub_services_properties(self, **properties):
+        self._task.update_sub_services_properties(**properties)
 
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():

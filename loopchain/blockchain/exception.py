@@ -93,6 +93,17 @@ class MessageCodeError(Exception):
     message_code = None
 
 
+class NodeInitializationError(MessageCodeError):
+    message_code = message_code.Response.fail_create_tx
+
+    def __init__(self, tx_hash=None, message=''):
+        super().__init__(message)
+        self.tx_hash = tx_hash
+
+    def __str__(self):
+        return f"{super().__str__()} tx_hash: {self.tx_hash} Node initialization is not completed."
+
+
 class TransactionInvalidError(MessageCodeError):
     message_code = message_code.Response.fail_tx_invalid_unknown
 
