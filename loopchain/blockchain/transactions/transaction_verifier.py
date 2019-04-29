@@ -23,6 +23,10 @@ class TransactionVerifier(ABC):
         self._raise_exceptions = raise_exceptions
 
     @abstractmethod
+    def pre_verify(self, tx: 'Transaction', **kwargs):
+        raise NotImplementedError
+
+    @abstractmethod
     def verify(self, tx: 'Transaction', blockchain=None):
         raise NotImplementedError
 
