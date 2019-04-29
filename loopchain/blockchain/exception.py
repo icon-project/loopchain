@@ -192,7 +192,7 @@ class TransactionInvalidOutOfTimeBound(TransactionInvalidError):
         return f"{super().__str__()} tx_timestamp: {self.tx_timestamp} cur_timestamp: {self.cur_timestamp}"
 
 
-class TransactionInvalidNoNidError(TransactionInvalidError):
+class TransactionInvalidNidError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_wrong_nid
 
     def __init__(self, tx_hash, nid, expected_nid, message=''):
