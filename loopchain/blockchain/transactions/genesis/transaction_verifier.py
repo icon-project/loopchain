@@ -14,6 +14,9 @@ class TransactionVerifier(BaseTransactionVerifier):
         super().__init__(hash_generator_version, raise_exceptions)
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
+    def pre_verify(self, tx: 'Transaction', **kwargs):
+        raise RuntimeError("Genesis Tx pre verify cannot be called.")
+
     def verify(self, tx: 'Transaction', blockchain=None):
         self.verify_loosely(tx, blockchain)
 
