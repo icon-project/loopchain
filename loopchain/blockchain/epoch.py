@@ -46,6 +46,7 @@ class Epoch:
         self.__complain_vote = dict()  # complain vote dict { round : Vote }
         self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
         self.complained_result = None
+        self.complain_duration = conf.TIMEOUT_FOR_LEADER_COMPLAIN
 
     @property
     def _complain_vote(self):
@@ -62,8 +63,10 @@ class Epoch:
 
         if round_ is None:
             self.round += 1
+            self.complain_duration = min(self.complain_duration * 2, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
         else:
             self.round = round_
+            # TODO: Set a duration which belongs to the `round_` to `complain_duration`.
         logging.debug(f"new round {round_}, {self.round}")
 
         self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)

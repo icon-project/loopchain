@@ -806,14 +806,10 @@ class ChannelService:
         return True
 
     def reset_leader_complain_timer(self):
-        duration = None
-        timer = self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
-        if timer:
+        if self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN):
             self.stop_leader_complain_timer()
-            duration = min(timer.duration * 2, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
 
-        # utils.logger.notice(f"reset_leader_complain_timer duration({duration})")
-        self.start_leader_complain_timer(duration=duration)
+        self.start_leader_complain_timer()
 
     def start_leader_complain_timer_if_tx_exists(self):
         if not self.block_manager.get_tx_queue().is_empty_in_status(TransactionStatusInQueue.normal):
@@ -822,9 +818,10 @@ class ChannelService:
 
     def start_leader_complain_timer(self, duration=None):
         if not duration:
-            duration = conf.TIMEOUT_FOR_LEADER_COMPLAIN
+            duration = self.block_manager.epoch.complain_duration
 
-        util.logger.spam(f"start_leader_complain_timer in channel service.")
+        # util.logger.spam(
+        #     f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
         if self.state_machine.state not in ("BlockGenerate", "BlockSync", "Watch"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
