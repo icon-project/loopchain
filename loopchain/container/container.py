@@ -16,39 +16,29 @@
 import logging
 import multiprocessing
 import setproctitle
-from concurrent import futures
 from enum import Enum
 
-import grpc
-
-import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import CommonProcess, MonitorAdapter, ObjectManager, Monitor, CommonSubprocess
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.baseservice import CommonProcess, CommonSubprocess
 from loopchain.utils import command_arguments
 
 
 class ServerType(Enum):
     REST_RS = 1
     REST_PEER = 2
-    GRPC = 3
 
 
-class Container(CommonProcess, MonitorAdapter):
+class Container(CommonProcess):
 
     def __init__(self,
                  port,
-                 server_type=ServerType.GRPC,
+                 server_type=None,
                  peer_ip=None,
                  process_name="",
                  channel="",
                  start_param_set=None):
 
         CommonProcess.__init__(self)
-        if server_type == ServerType.GRPC:
-            # monitoring gRPC Container
-            MonitorAdapter.__init__(self, channel=channel, process_name=f"{process_name}")
         self._port = port
         self._type = server_type
         self._peer_ip = peer_ip
@@ -57,43 +47,10 @@ class Container(CommonProcess, MonitorAdapter):
         self._start_param_set = start_param_set
         self._service_stub = None
 
-    def is_alive(self):
-        try:
-            # util.logger.spam(f"{self._process_name} is_alive")
-            response = self._service_stub.call(
-                "Request",
-                loopchain_pb2.Message(code=message_code.Request.is_alive))
-            return True if response is not None else False
-        except Exception as e:
-            if self._service_stub is None:
-                util.logger.spam(f"container:is_alive service_stub set now! ignore this exception({e})")
-                peer_service = ObjectManager().peer_service
-                if peer_service is not None:
-                    self._service_stub = peer_service.channel_manager.get_score_container_stub(self._channel)
-                return True
-            logging.warning(f"container:is_alive has exception({e})")
-            return False
-
-    def re_start(self):
-        Monitor().stop_wait_monitoring()
-        ObjectManager().peer_service.channel_manager.stop_score_containers()
-        ObjectManager().peer_service.service_stop()
-        util.exit_and_msg(f"Score Container({self._channel}) Down!")
-
     def run(self, conn, event: multiprocessing.Event):
         logging.debug("Container run...")
 
-        if self._type == ServerType.GRPC:
-            logging.info(f'Container run grpc port {self._port}')
-
-            setproctitle.setproctitle(f"{setproctitle.getproctitle()} {self._process_name}")
-
-            server = grpc.server(futures.ThreadPoolExecutor(conf.MAX_WORKERS, "ContainerThread"))
-            loopchain_pb2_grpc.add_ContainerServicer_to_server(self, server)
-            GRPCHelper().add_server_port(server, '[::]:' + str(self._port), conf.SSLAuthType.none)
-
-            logging.info(f'Container run complete grpc port {self._port}')
-        elif self._type == ServerType.REST_PEER:
+        if self._type == ServerType.REST_PEER:
             args = ['python3', '-m', 'loopchain', 'rest', '-p', str(self._port)]
             args += command_arguments.get_raw_commands_by_filter(
                 command_arguments.Type.AMQPTarget,
@@ -121,9 +78,6 @@ class Container(CommonProcess, MonitorAdapter):
         # complete init
         event.set()
 
-        if self._type == ServerType.GRPC:
-            self._append_monitor()
-
         command = None
         while command != "quit":
             try:
@@ -134,9 +88,5 @@ class Container(CommonProcess, MonitorAdapter):
             except KeyboardInterrupt:
                 pass
 
-        if self._type == ServerType.GRPC:
-            server.stop(0)
-        else:
-            server.stop()
-
+        server.stop()
         logging.info("Server Container Ended.")

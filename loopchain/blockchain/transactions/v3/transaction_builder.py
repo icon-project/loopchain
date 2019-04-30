@@ -35,8 +35,10 @@ class TransactionBuilder(BaseTransactionBuilder):
 
     def build(self):
         self.build_from_address()
+        self.build_origin_data()
         self.build_hash()
         self.sign()
+        self.build_raw_data()
 
         return Transaction(
             raw_data=self.raw_data,
@@ -84,7 +86,7 @@ class TransactionBuilder(BaseTransactionBuilder):
         return self.origin_data
 
     def build_raw_data(self):
-        raw_data = dict(self.raw_data)
+        raw_data = dict(self.origin_data)
         raw_data["signature"] = self.signature.to_base64str()
         self.raw_data = raw_data
         return self.raw_data

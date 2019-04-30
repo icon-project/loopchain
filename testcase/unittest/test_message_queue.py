@@ -129,17 +129,11 @@ class TestMessageQueue(unittest.TestCase):
                 self.assertEqual(result, 'peer_hello')
 
                 bad_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
-                try:
+                with self.assertRaises(ChannelClosed):
                     await bad_service.connect()
-                    raise RuntimeError('Peer inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
 
-                try:
+                with self.assertRaises(ChannelClosed):
                     await bad_service.connect(exclusive=True)
-                    raise RuntimeError('Peer inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
             finally:
                 await service._connection.close()
                 await stub._connection.close()
@@ -166,59 +160,11 @@ class TestMessageQueue(unittest.TestCase):
                 self.assertEqual(result, 'channel_hello')
 
                 bad_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
-                try:
+                with self.assertRaises(ChannelClosed):
                     await bad_service.connect()
-                    raise RuntimeError('Channel inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
 
-                try:
+                with self.assertRaises(ChannelClosed):
                     await bad_service.connect(exclusive=True)
-                    raise RuntimeError('Channel inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
-            finally:
-                await service._connection.close()
-                await stub._connection.close()
-
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(_run())
-
-    @unittest.skip
-    def test_score_task(self):
-        # TODO This test needs to be updated as the ScoreService has been replaced by IconService
-        route_key = conf.SCORE_QUEUE_NAME_FORMAT.format(
-            score_package_name=conf.DEFAULT_SCORE_PACKAGE,
-            channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL,
-            amqp_key=conf.AMQP_KEY)
-
-        service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
-        service._callback_connection_lost_callback = lambda conn: None
-
-        stub = ScoreInnerStub(conf.AMQP_TARGET, route_key)
-        stub._callback_connection_lost_callback = lambda conn: None
-
-        async def _run():
-            try:
-                await service.connect(exclusive=True)
-                await stub.connect()
-
-                result = await stub.async_task().hello()
-                self.assertEqual(result, 'score_hello')
-
-                bad_service = ScoreInnerService(conf.AMQP_TARGET, route_key, score_service=None)
-                try:
-                    await bad_service.connect()
-                    raise RuntimeError('Score inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
-
-                try:
-                    await bad_service.connect(exclusive=True)
-                    raise RuntimeError('Score inner service is not exclusive.')
-                except ChannelClosed:
-                    pass
-
             finally:
                 await service._connection.close()
                 await stub._connection.close()

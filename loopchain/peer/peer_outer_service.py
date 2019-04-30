@@ -18,7 +18,7 @@ import copy
 import datetime
 from functools import partial
 
-from loopchain.baseservice import Monitor, TimerService
+from loopchain.baseservice import TimerService
 from loopchain.blockchain import *
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
@@ -317,14 +317,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             logging.info('Peer will stop... by: ' + request.reason)
 
         try:
-            # process monitor must stop monitoring before any subprocess stop
-            Monitor().stop()
-
             for channel_name in self.peer_service.channel_infos:
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 channel_stub.sync_task().stop()
 
-            self.peer_service.service_stop()
+            self.peer_service.p2p_server_stop()
 
         except Exception as e:
             logging.debug("Score Service Already stop by other reason. %s", e)
@@ -568,7 +565,12 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 message=message_code.get_response_msg(message_code.Response.fail_wrong_subscribe_info)
             )
 
-        channel_stub = StubCollection().channel_stubs[channel_name]
+        try:
+            channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
+                                             message=f"There is no channel_stubs for channel({channel_name}).")
+
         peer_list = [target['peer_target'] for target in self.peer_service.channel_infos[channel_name]["peers"]]
 
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \

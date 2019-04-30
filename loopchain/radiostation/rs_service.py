@@ -15,20 +15,18 @@
 
 import logging
 import multiprocessing
-import random
 import signal
 import time
 import timeit
 
-import loopchain_pb2
-
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.container import RestServiceRS, CommonService
+from loopchain.container import RestServiceRS
 from loopchain.peer import ChannelManager
 from loopchain.protos import loopchain_pb2_grpc
 from loopchain.radiostation import OuterService, AdminService, AdminManager
+from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import loggers
 from .certificate_authorization import CertificateAuthorization
 
@@ -58,7 +56,6 @@ class RadioStationService:
         if cert_path is not None:
             logging.info("CA Certificate Path : " + cert_path)
 
-        self.__common_service = CommonService(loopchain_pb2)
         self.__admin_manager = AdminManager("station")
         self.__channel_manager = None
         self.__rest_service = None
@@ -76,6 +73,9 @@ class RadioStationService:
             self.__ca.load_pki(cert_path, cert_pass)
 
         logging.info("Current RadioStation SECURITY_MODE : " + str(self.__ca.is_secure))
+
+        self.p2p_inner_server = None
+        self.p2p_outer_server = None
 
         # gRPC service for Radiostation
         self.__outer_service = OuterService()
@@ -104,10 +104,6 @@ class RadioStationService:
         return self.__channel_manager
 
     @property
-    def common_service(self) -> CommonService:
-        return self.__common_service
-
-    @property
     def timer_service(self) -> TimerService:
         return self.__timer_service
 
@@ -121,21 +117,6 @@ class RadioStationService:
 
         peer_manager = self.__channel_manager.get_peer_manager(channel)
         peer_manager.check_peer_status()
-
-    def __create_random_table(self, rand_seed: int) -> list:
-        """create random_table using random_seed
-        table size define in conf.RANDOM_TABLE_SIZE
-
-        :param rand_seed: random seed for create random table
-        :return: random table
-        """
-        random.seed(rand_seed)
-        random_table = []
-        for i in range(conf.RANDOM_TABLE_SIZE):
-            random_num: int = random.getrandbits(conf.RANDOM_SIZE)
-            random_table.append(random_num)
-
-        return random_table
 
     def register_peers(self):
         util.logger.spam(f"register_peers() : start register to peer_manager")
@@ -167,7 +148,7 @@ class RadioStationService:
                         )
                     )
 
-    def serve(self, port=None, event_for_init: multiprocessing.Event=None):
+    def serve(self, port: int = None, event_for_init: multiprocessing.Event=None):
         """Peer(BlockGenerator Peer) to RadioStation
 
         :param port: RadioStation Peer
@@ -177,7 +158,7 @@ class RadioStationService:
             port = conf.PORT_RADIOSTATION
         stopwatch_start = timeit.default_timer()
 
-        self.__channel_manager = ChannelManager(self.__common_service)
+        self.__channel_manager = ChannelManager()
 
         self.register_peers()
     
@@ -188,12 +169,14 @@ class RadioStationService:
         if conf.ENABLE_REST_SERVICE:
             self.__rest_service = RestServiceRS(int(port))
 
-        loopchain_pb2_grpc.add_RadioStationServicer_to_server(self.__outer_service, self.__common_service.outer_server)
-        loopchain_pb2_grpc.add_AdminServiceServicer_to_server(self.__admin_service, self.__common_service.inner_server)
+        self.p2p_outer_server = GRPCHelper().start_outer_server(str(port))
+        self.p2p_inner_server = GRPCHelper().start_inner_server(str(port))
+
+        loopchain_pb2_grpc.add_RadioStationServicer_to_server(self.__outer_service, self.p2p_outer_server)
+        loopchain_pb2_grpc.add_AdminServiceServicer_to_server(self.__admin_service, self.p2p_inner_server)
 
         logging.info("Start Radio Station service at port: " + str(port))
 
-        self.__common_service.start(port)
         self.__timer_service.start()
 
         stopwatch_duration = timeit.default_timer() - stopwatch_start
@@ -205,13 +188,12 @@ class RadioStationService:
         signal.signal(signal.SIGINT, self.close)
         signal.signal(signal.SIGTERM, self.close)
 
-        # service 종료를 기다린다.
-        self.__common_service.wait()
         self.__timer_service.wait()
 
         if self.__rest_service is not None:
             self.__rest_service.stop()
 
     def close(self, sig, frame):
-        self.__common_service.stop()
+        self.p2p_inner_server.stop(None)
+        self.p2p_outer_server.stop(None)
         self.__timer_service.stop()

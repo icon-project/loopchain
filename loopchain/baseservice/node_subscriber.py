@@ -23,7 +23,7 @@ import websockets
 from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
-from websockets.exceptions import InvalidStatusCode
+from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
@@ -60,7 +60,7 @@ class NodeSubscriber:
                 request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
                 await websocket.send(json.dumps(request))
                 await self.__subscribe_loop(websocket)
-        except InvalidStatusCode as e:
+        except (InvalidStatusCode, InvalidMessage) as e:
             if not self.__tried_with_old_uri:
                 await self.try_subscribe_to_old_uri(block_height, event)
                 return

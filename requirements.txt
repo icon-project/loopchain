@@ -1,30 +1,29 @@
-grpcio==1.3.5
-grpcio-tools==1.3.5
-protobuf==3.5.1
+grpcio==1.19.0; python_version >= '3.7'
+grpcio-tools==1.19.0; python_version >= '3.7'
+grpcio==1.3.5; python_version < '3.7'
+grpcio-tools==1.3.5; python_version < '3.7'
+protobuf==3.7.0; python_version >= '3.7'
+protobuf==3.5.1; python_version < '3.7'
 aio-pika==3.0.1
 aiohttp==3.4.4
 coloredlogs==10.0
-cryptography==2.3.1
 earlgrey==0.0.4
 fluent-logger==0.9.3
-GitPython==2.1.11
 gunicorn==19.9.0
 jsonrpcclient==2.6.0
 jsonrpcserver==3.5.6
 leveldb==0.20
-ordered-set==3.0.2
 pika==0.12.0
-PyJWT==1.6.4
-pyOpenSSL==18.0.0
-pysha3==1.0.2
 python-pkcs11==0.5.0
 requests==2.20.0
-sanic==0.8.3
+cryptography==2.3.1
+sanic==18.12.0; python_version >= '3.7'
+sanic==0.8.3; python_version < '3.7'
 secp256k1==0.13.2
 setproctitle==1.1.10
-terminaltables==3.1.0
 transitions==0.6.8
 verboselogs==1.7
-websockets==5.0.1
+websockets==6.0; python_version >= '3.7'
+websockets==5.0.1; python_version < '3.7'
 yappi==0.98
 dataclasses; python_version < '3.7'

@@ -16,7 +16,6 @@ import logging
 
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastSchedulerFactory, BroadcastCommand, PeerManager, ObjectManager
-from loopchain.container import CommonService
 
 
 class ChannelManager:
@@ -25,8 +24,7 @@ class ChannelManager:
     key 생성을 위한 난수표는 메모리상에만 존재해야 하며 나머지 데이터는 level DB 를 사용한다.
     """
 
-    def __init__(self, common_service: CommonService):
-        self.__common_service = common_service
+    def __init__(self):
         self.__peer_managers = {}  # key(channel_name):value(peer_manager)
         self.__broadcast_schedulers = {}  # key(channel_name):value(broadcast_thread)
         self.__init_rs_channel_manager()

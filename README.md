@@ -15,7 +15,9 @@ Loopchain development and execution requires following environments.
 
 * Python
 
-  * Python 3.6.5+ (recommended version, 3.7 is not supported)
+  * Python 3.6.5+ or 3.7.x (recommended version)
+
+    **We will support 3.7.x only in future. Please upgrade python version to 3.7.x.**
 
     Optional) We recommend to create an isolated Python 3 virtual environment with [virtualenv](https://virtualenv.pypa.io/en/stable/).
 

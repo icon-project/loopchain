@@ -484,14 +484,16 @@ def init_level_db(level_db_identity, allow_rename_path=True):
     while level_db is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
             level_db = leveldb.LevelDB(db_path, create_if_missing=True)
-        except leveldb.LevelDBError:
+        except leveldb.LevelDBError as e:
+            logging.error(f"LevelDBError: {e}")
+            logger.debug(f"retry_count: {retry_count}, path: {db_path}")
             if allow_rename_path:
                 db_path = db_default_path + str(retry_count)
         retry_count += 1
 
     if level_db is None:
-        logging.error("Fail! Create LevelDB")
-        raise leveldb.LevelDBError("Fail To Create Level DB(path): " + db_path)
+        logging.error("Fail! Initialize LevelDB")
+        raise leveldb.LevelDBError("Fail To Initialize Level DB(path): " + db_path)
 
     return level_db, db_path
 

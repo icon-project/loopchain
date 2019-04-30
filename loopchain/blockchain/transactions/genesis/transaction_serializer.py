@@ -1,4 +1,4 @@
-from . import Transaction, NTxHash, NID, HASH_SALT
+from . import Transaction, NTxHash, NID, HASH_SALT, Hash32
 from .. import TransactionSerializer as BaseTransactionSerializer
 
 
@@ -32,7 +32,7 @@ class TransactionSerializer(BaseTransactionSerializer):
 
         return Transaction(
             raw_data=tx_data,
-            hash=hash_,
+            hash=Hash32(hash_),
             signature=None,
             timestamp=0,
             nid=nid,

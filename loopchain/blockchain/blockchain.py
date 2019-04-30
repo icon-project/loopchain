@@ -18,11 +18,12 @@ import pickle
 import threading
 import zlib
 from enum import Enum
+from typing import Union, List
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockVersioner,
+from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockProver, BlockProverType, BlockVersioner,
                                   Transaction, TransactionBuilder, TransactionSerializer,
                                   Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
 from loopchain.blockchain.exception import *
@@ -176,13 +177,15 @@ class BlockChain:
 
         return None
 
-    def find_block_by_hash(self, block_hash):
+    def find_block_by_hash(self, block_hash: Union[str, Hash32]):
         """find block by block hash.
 
         :param block_hash: plain string,
         key 로 사용되기전에 함수내에서 encoding 되므로 미리 encoding 된 key를 parameter 로 사용해선 안된다.
         :return: None or Block
         """
+        if isinstance(block_hash, Hash32):
+            block_hash = block_hash.hex()
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
@@ -224,15 +227,22 @@ class BlockChain:
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block: Block, confirm_info=None) -> bool:
+    def add_block(self,
+                  block: Block,
+                  confirm_info=None,
+                  need_to_write_tx_info=True,
+                  need_to_score_invoke=True) -> bool:
         """
 
         :param block:
         :param confirm_info: additional info for this block, but It came from next block of this block.
+        :param need_to_write_tx_info:
+        :param need_to_score_invoke:
         :return:
         """
         with self.__add_block_lock:
-            if not self.prevent_next_block_mismatch(block.header.height):
+            if need_to_write_tx_info and need_to_score_invoke and \
+                    not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
             peer_id = ChannelProperty().peer_id
@@ -245,27 +255,28 @@ class BlockChain:
                     'block_hash': block.header.hash.hex(),
                     'total_tx': self.total_tx}})
 
-            return self.__add_block(block, confirm_info)
+            return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __add_block(self, block: Block, confirm_info):
+    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
-            if invoke_results is None:
+            if invoke_results is None and need_to_score_invoke:
                 if block.header.height == 0:
                     block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
                 else:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                self.__add_tx_to_block_db(block, invoke_results)
-                ObjectManager().channel_service.score_write_precommit_state(block)
+                if need_to_write_tx_info:
+                    self.__add_tx_to_block_db(block, invoke_results)
+                if need_to_score_invoke:
+                    ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
                 logging.warning(f"blockchain:add_block FAIL "
                                 f"channel_service.score_write_precommit_state")
                 raise e
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
-
             next_total_tx = self.__write_block_data(block, confirm_info)
 
             self.__last_block = block
@@ -303,8 +314,7 @@ class BlockChain:
         byte_length = (bit_length + 7) // 8
         next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-        block_version = self.__block_versioner.get_version(block.header.height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block.header.version, self.tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
@@ -525,12 +535,14 @@ class BlockChain:
         tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
         return tx_serializer.from_(tx_data)
 
-    def find_invoke_result_by_tx_hash(self, tx_hash):
+    def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
 
         :param tx_hash: tx_hash
         :return: {"code" : "code", "error_message" : "error_message if not fail this is not exist"}
         """
+        if isinstance(tx_hash, Hash32):
+            tx_hash = tx_hash.hex()
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
@@ -546,7 +558,7 @@ class BlockChain:
 
         return tx_info['result']
 
-    def find_tx_info(self, tx_hash_key):
+    def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
         if isinstance(tx_hash_key, Hash32):
             tx_hash_key = tx_hash_key.hex()
 
@@ -564,7 +576,7 @@ class BlockChain:
 
         return tx_info_json
 
-    def __add_genesis_block(self, tx_info: dict=None):
+    def __add_genesis_block(self, tx_info: dict, reps: List[ExternalAddress]):
         """
         :param tx_info: Transaction data for making genesis block from an initial file
         :return:
@@ -587,6 +599,7 @@ class BlockChain:
         block_builder.prev_hash = None
         block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
         block_builder.transactions[tx.hash] = tx
+        block_builder.reps = reps
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
@@ -656,7 +669,7 @@ class BlockChain:
                     logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
-                    return
+                    return None
 
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
@@ -664,7 +677,7 @@ class BlockChain:
                     if current_block.header.complained:
                         util.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
-                    return
+                    return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
                                   f"block_hash({current_block.header.prev_hash.hex()})")
@@ -708,7 +721,7 @@ class BlockChain:
             self.__block_height = self.__last_block.header.height
         logging.debug(f"ENGINE-303 init_blockchain: {self.__block_height}")
 
-    def generate_genesis_block(self):
+    def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None
         nid = NID.unknown.value
         genesis_data_path = conf.CHANNEL_OPTION[self.__channel_name]["genesis_data_path"]
@@ -724,7 +737,7 @@ class BlockChain:
         except KeyError as e:
             exit(f"cannot find key name of {e} in genesis data file.")
 
-        self.__add_genesis_block(tx_info)
+        self.__add_genesis_block(tx_info, reps)
         self.put_nid(nid)
         ChannelProperty().nid = nid
 
@@ -763,3 +776,68 @@ class BlockChain:
         block_version = self.__block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
         return block_serializer.deserialize(block_serialized)
+
+    def get_transaction_proof(self, tx_hash: Hash32):
+        try:
+            tx_info = self.find_tx_info(tx_hash.hex())
+        except KeyError:
+            raise RuntimeError(f"Tx does not exist.")
+
+        block_hash = tx_info["block_hash"]
+        block = self.find_block_by_hash(block_hash)
+
+        if block.header.version == "0.1a":
+            raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
+
+        block_prover = BlockProver.new(block.header.version, block.body.transactions, BlockProverType.Transaction)
+        return block_prover.get_proof(tx_hash)
+
+    def prove_transaction(self, tx_hash: Hash32, proof: list):
+        try:
+            tx_info = self.find_tx_info(tx_hash.hex())
+        except KeyError:
+            raise RuntimeError(f"Tx does not exist.")
+
+        block_hash = tx_info["block_hash"]
+        block = self.find_block_by_hash(block_hash)
+
+        if block.header.version == "0.1a":
+            raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
+
+        block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
+        return block_prover.prove(tx_hash, block.header.transaction_hash, proof)
+
+    def get_receipt_proof(self, tx_hash: Hash32):
+        try:
+            tx_info = self.find_tx_info(tx_hash.hex())
+        except KeyError:
+            raise RuntimeError(f"Tx does not exist.")
+        tx_result = tx_info["result"]
+
+        block_hash = tx_info["block_hash"]
+        block = self.find_block_by_hash(block_hash)
+
+        if block.header.version == "0.1a":
+            raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
+
+        tx_results = (self.find_tx_info(tx_hash)["result"] for tx_hash in block.body.transactions)
+        block_prover = BlockProver.new(block.header.version, tx_results, BlockProverType.Receipt)
+        receipt_hash = block_prover.to_hash32(tx_result)
+        return block_prover.get_proof(receipt_hash)
+
+    def prove_receipt(self, tx_hash: Hash32, proof: list):
+        try:
+            tx_info = self.find_tx_info(tx_hash.hex())
+        except KeyError:
+            raise RuntimeError(f"Tx does not exist.")
+        tx_result = tx_info["result"]
+
+        block_hash = tx_info["block_hash"]
+        block = self.find_block_by_hash(block_hash)
+
+        if block.header.version == "0.1a":
+            raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
+
+        block_prover = BlockProver.new(block.header.version, None, BlockProverType.Receipt)    # Do not need receipts
+        receipt_hash = block_prover.to_hash32(tx_result)
+        return block_prover.prove(receipt_hash, block.header.receipt_hash, proof)

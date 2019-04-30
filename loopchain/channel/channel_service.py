@@ -27,8 +27,9 @@ from loopchain import configure as conf, utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerListData, PeerManager, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, TransactionStatusInQueue
+from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch
+from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -52,6 +53,7 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__channel_infos: dict = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -108,10 +110,6 @@ class ChannelService:
         return self.__consensus
 
     @property
-    def acceptor(self):
-        return self.__acceptor
-
-    @property
     def timer_service(self):
         return self.__timer_service
 
@@ -126,7 +124,10 @@ class ChannelService:
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
-            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(ChannelProperty().name)
+
+            channel_name = ChannelProperty().name
+            self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
+            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
 
             await self.init(*results)
 
@@ -136,6 +137,7 @@ class ChannelService:
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
+        # loop.set_debug(True)
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)
@@ -215,9 +217,9 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
+        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
@@ -373,13 +375,21 @@ class ChannelService:
         channel_option = conf.CHANNEL_OPTION
         return channel_option[ChannelProperty().name]
 
+    def get_channel_infos(self) -> dict:
+        return self.__channel_infos
+
+    def get_rep_ids(self) -> list:
+        return [ExternalAddress.fromhex_address(peer.get('id'), allow_malformed=True)
+                for peer in self.get_channel_infos()['peers']]
+
     def generate_genesis_block(self):
         blockchain = self.block_manager.get_blockchain()
         if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
-        blockchain.generate_genesis_block()
+        reps = self.get_rep_ids()
+        blockchain.generate_genesis_block(reps)
 
     def connect_to_radio_station(self, is_reconnect=False):
         response = self.__radio_station_stub.call_in_times(
@@ -596,7 +606,17 @@ class ChannelService:
         for peer in self.peer_manager.get_IP_of_peers_in_group():
             logging.debug("peer_target: " + peer)
 
-    async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+    def reset_leader(self, new_leader_id, block_height=0, complained=False):
+        """
+
+        :param new_leader_id:
+        :param block_height:
+        :param complained:
+        :return:
+        """
+        if self.peer_manager.get_leader_id(conf.ALL_GROUP_ID) == new_leader_id:
+            return
+
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                           f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
@@ -615,7 +635,11 @@ class ChannelService:
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
-        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id, complained)
+        if complained:
+            self.block_manager.epoch.new_round(leader_peer.peer_id)
+        else:
+            self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")
@@ -625,10 +649,6 @@ class ChannelService:
             logging.debug("Set Peer Type Peer!")
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
-
-            # subscribe new leader
-            # await self.subscribe_to_radio_station()
-            await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
 
@@ -694,12 +714,20 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
+        tx_receipts = response["txResults"]
         block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = block.header.peer_id
+        block_builder.signature = block.header.signature
+
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
+        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
+        block_builder.reps = self.get_rep_ids()
         new_block = block_builder.build()
-        return new_block, response["txResults"]
+        return new_block, tx_receipts
 
     def score_invoke(self, _block: Block) -> dict or None:
         method = "icx_sendTransaction"
@@ -727,13 +755,20 @@ class ChannelService:
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
+        tx_receipts = response["txResults"]
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = _block.header.peer_id
+        block_builder.signature = _block.header.signature
+
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
+        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
+        block_builder.reps = self.get_rep_ids()
         new_block = block_builder.build()
-
-        return new_block, response["txResults"]
+        return new_block, tx_receipts
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
         change_hash_info = json.dumps({"block_height": block_height, "old_block_hash": old_block_hash,

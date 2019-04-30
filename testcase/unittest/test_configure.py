@@ -80,42 +80,6 @@ class TestConfigure(unittest.TestCase):
         conf.IP_LOCAL = ip_local_before_load_json
         conf.TOKEN_TYPE_TOKEN = token_type_token_before_load_json
 
-    def test_save_and_restore_user_configure(self):
-        # GIVEN
-        conf.DISABLE_V1_API = False
-        conf.CHANNEL_OPTION = {
-            conf.LOOPCHAIN_DEFAULT_CHANNEL: {
-                "load_cert": False,
-                "consensus_cert_use": False,
-                "tx_cert_use": False,
-                "key_load_type": conf.KeyLoadType.FILE_LOAD,
-                "public_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
-                "private_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
-                "private_password": b'test'
-            },
-            conf.LOOPCHAIN_TEST_CHANNEL: {
-                "load_cert": False,
-                "consensus_cert_use": False,
-                "tx_cert_use": False,
-                "key_load_type": conf.KeyLoadType.FILE_LOAD,
-                "public_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
-                "private_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
-                "private_password": b'test'
-            }
-        }
-
-        # WHEN
-        conf.Configure().save_user_configure_with_current_set()
-
-        # THEN
-        self.assertEqual(conf.DISABLE_V1_API, False)
-
-        # WHEN
-        conf.Configure().cleanup_configuration_setting_to_default()
-
-        # THEN
-        self.assertNotEqual(conf.DISABLE_V1_API, False)
-
     def test_is_support_node_function(self):
         # GIVEN
         community_node = conf.NodeType.CommunityNode

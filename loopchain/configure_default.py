@@ -19,8 +19,6 @@ configure 의 default 값으로 지정하여 사용한다.
 configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
 configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)
 
-configure_user.py 파일을 생성하여 일부 default 값을 로컬에서 변경하여 사용할 수 있다.
-configure_user.py 는 git 에서는 관리하지 않는다.
 """
 
 import os
@@ -150,6 +148,7 @@ class ConsensusAlgorithm(IntEnum):
 # 블록 생성 간격, tx 가 없을 경우 다음 간격까지 건너 뛴다.
 INTERVAL_BLOCKGENERATION = 2
 INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK = INTERVAL_BLOCKGENERATION
+WAIT_SECONDS_FOR_VOTE = 0.2
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
 # default level db path
@@ -184,6 +183,9 @@ TX_LIST_ADDRESS_PREFIX = b'tx_list_by_address_'
 MAX_TX_LIST_SIZE_BY_ADDRESS = 100
 MAX_PRE_VALIDATE_TX_CACHE = 10000
 ALLOW_TIMESTAMP_BOUNDARY_SECOND = 60 * 5
+# Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
+# The engine limits the timestamp of tx to a lower value.
+ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 READ_CACHED_TX_COUNT = True
 
@@ -275,7 +277,6 @@ WAIT_SECONDS_FOR_SUB_THREAD_START = 5  # seconds
 SLEEP_SECONDS_FOR_SUB_PROCESS_START = 1  # seconds
 WAIT_SUB_PROCESS_RETRY_TIMES = 5
 PEER_GROUP_ID = ""  # "8d4e8d08-0d2c-11e7-a589-acbc32b0aaa1"  # vote group id
-ENABLE_PROCESS_MONITORING = True
 INTERVAL_SECONDS_PROCESS_MONITORING = 30  # seconds
 PEER_NAME = "no_name"
 IS_BROADCAST_ASYNC = True
@@ -446,5 +447,5 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-TIMEOUT_FOR_LEADER_COMPLAIN = 20
+TIMEOUT_FOR_LEADER_COMPLAIN = 60
 MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300

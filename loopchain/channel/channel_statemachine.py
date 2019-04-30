@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """State Machine for Channel Service"""
+
 import asyncio
+import traceback
 
 from earlgrey import MessageQueueService
 from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain.blockchain import Block
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -112,56 +115,63 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.block_height_sync()
 
     def _do_evaluate_network(self):
-        loop = MessageQueueService.loop
-        asyncio.run_coroutine_threadsafe(self.__channel_service.evaluate_network(), loop)
+        self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
     def _do_subscribe_network(self):
-        loop = MessageQueueService.loop
-        asyncio.run_coroutine_threadsafe(self.__channel_service.subscribe_network(), loop)
+        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
-    def _do_vote(self):
-        self.__channel_service.block_manager.vote_as_peer()
+    def _do_vote(self, unconfirmed_block: Block):
+        self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
 
-    def _consensus_on_enter(self):
+    def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
 
-    def _blockheightsync_on_enter(self):
+    def _blockheightsync_on_enter(self, *args, **kwargs):
         self.evaluate_network()
 
-    def _blocksync_on_enter(self):
+    def _blocksync_on_enter(self, *args, **kwargs):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
 
-    def _blocksync_on_exit(self):
+    def _blocksync_on_exit(self, *args, **kwargs):
         self.__channel_service.block_manager.stop_block_height_sync_timer()
         self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
-    def _subscribe_network_on_enter(self):
+    def _subscribe_network_on_enter(self, *args, **kwargs):
         self.__channel_service.start_subscribe_timer()
         self.__channel_service.start_shutdown_timer()
 
-    def _subscribe_network_on_exit(self):
+    def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
 
-    def _vote_on_enter(self):
+    def _vote_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = False
         loggers.get_preset().update_logger()
 
-    def _vote_on_exit(self):
-        # util.logger.debug(f"_vote_on_exit")
+    def _vote_on_exit(self, *args, **kwargs):
         pass
 
-    def _blockgenerate_on_enter(self):
+    def _blockgenerate_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = True
         loggers.get_preset().update_logger()
         self.__channel_service.block_manager.start_block_generate_timer()
 
-    def _blockgenerate_on_exit(self):
+    def _blockgenerate_on_exit(self, *args, **kwargs):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
-    def _leadercomplain_on_enter(self):
+    def _leadercomplain_on_enter(self, *args, **kwargs):
         util.logger.debug(f"_leadercomplain_on_enter")
         self.__channel_service.block_manager.leader_complain()
 
-    def _leadercomplain_on_exit(self):
+    def _leadercomplain_on_exit(self, *args, **kwargs):
         util.logger.debug(f"_leadercomplain_on_exit")
+
+    def _run_coroutine_threadsafe(self, coro):
+        async def _run_with_handling_exception():
+            try:
+                await coro
+            except Exception:
+                traceback.print_exc()
+
+        loop = MessageQueueService.loop
+        asyncio.run_coroutine_threadsafe(_run_with_handling_exception(), loop)

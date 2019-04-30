@@ -28,8 +28,9 @@ class Epoch:
     COMPLAIN_VOTE_HASH = "complain_vote_hash_for_reuse_Vote_class"
 
     def __init__(self, block_manager, leader_id=None):
-        if block_manager.get_blockchain().last_block:
-            self.height = block_manager.get_blockchain().last_block.header.height + 1
+        blockchain = block_manager.get_blockchain()
+        if blockchain.last_block:
+            self.height = blockchain.last_block.header.height + 1
         else:
             self.height = 1
         self.leader_id = leader_id
@@ -40,14 +41,32 @@ class Epoch:
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
         # But now! only collect leader complain votes.
         self.__candidate_blocks = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
+
+        self.round = 0
+        self.__complain_vote = dict()  # complain vote dict { round : Vote }
+        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
         self.complained_result = None
+
+    @property
+    def _complain_vote(self):
+        return self.__complain_vote[self.round]
 
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
+
+    def new_round(self, new_leader_id, round_=None):
+        self.set_epoch_leader(new_leader_id, True)
+
+        if round_ is None:
+            self.round += 1
+        else:
+            self.round = round_
+        logging.debug(f"new round {round_}, {self.round}")
+
+        self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     def set_epoch_leader(self, leader_id, complained=False):
         util.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -56,26 +75,25 @@ class Epoch:
             self.complained_result = self.complain_result()
         else:
             self.complained_result = None
-        self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
     def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
         util.logger.debug(f"add_complain complain_leader_id({complained_leader_id}), "
                           f"new_leader_id({new_leader_id}), "
                           f"block_height({block_height}), "
                           f"peer_id({peer_id})")
-        self.__complain_vote.add_vote(peer_id, new_leader_id)
+        self._complain_vote.add_vote(peer_id, new_leader_id)
 
     def complain_result(self) -> str:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
         """
-        vote_result = self.__complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
+        vote_result = self._complain_vote.get_result(Epoch.COMPLAIN_VOTE_HASH, conf.LEADER_COMPLAIN_RATIO)
         util.logger.debug(f"complain_result vote_result({vote_result})")
         return vote_result
 
     def pop_complained_candidate_leader(self):
-        voters = self.__complain_vote.get_voters()
+        voters = self._complain_vote.get_voters()
         if ChannelProperty().peer_id not in voters:
             # Processing to complain leader
             return None
@@ -135,6 +153,12 @@ class Epoch:
             )
             if tx is None:
                 break
+
+            if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK):
+                util.logger.info(f"fail add tx to block by ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK"
+                                 f"({conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
+                                 f"tx({tx.hash}), timestamp({tx.timestamp})")
+                continue
 
             tv = TransactionVerifier.new(tx.version, tx_versioner)
 
