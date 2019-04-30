@@ -54,7 +54,7 @@ class ChannelStateMachine(object):
     def __init__(self, channel_service):
         self.__channel_service = channel_service
 
-        self.machine.add_transition('complete_sync', 'BlockSync', 'SubscribeNetwork', after='_do_subscribe_network')
+        self.machine.add_transition('complete_sync', 'BlockSync', 'SubscribeNetwork', after='_complete_sync_on_after')
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Vote')
@@ -117,11 +117,12 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
-    def _do_subscribe_network(self):
-        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
-
     def _do_vote(self, unconfirmed_block: Block):
         self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
+
+    def _complete_sync_on_after(self):
+        self.__channel_service.update_sub_services_properties()
+        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()

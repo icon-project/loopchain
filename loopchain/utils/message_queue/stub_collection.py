@@ -19,7 +19,8 @@ from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
     from loopchain.peer import PeerInnerStub
-    from loopchain.channel.channel_inner_service import ChannelInnerStub, ChannelTxReceiverInnerStub
+    from loopchain.channel.channel_inner_service import ChannelInnerStub, \
+        ChannelTxReceiverInnerStub, ChannelTxCreatorInnerStub
     from loopchain.scoreservice import ScoreInnerStub, IconScoreInnerStub
 
 
@@ -30,6 +31,7 @@ class StubCollection(metaclass=SingletonMetaClass):
 
         self.peer_stub: PeerInnerStub = None
         self.channel_stubs: Dict[str, ChannelInnerStub] = {}
+        self.channel_tx_creator_stubs: Dict[str, ChannelTxCreatorInnerStub] = {}
         self.channel_tx_receiver_stubs: Dict[str, ChannelTxReceiverInnerStub] = {}
         self.score_stubs: Dict[str, ScoreInnerStub] = {}
         self.icon_score_stubs: Dict[str, IconScoreInnerStub] = {}
@@ -54,6 +56,18 @@ class StubCollection(metaclass=SingletonMetaClass):
         self.channel_stubs[channel_name] = stub
 
         logging.debug(f"ChannelTasks : {channel_name}, Queue : {queue_name}")
+        return stub
+
+    async def create_channel_tx_creator_stub(self, channel_name):
+        from loopchain import configure as conf
+        from loopchain.channel.channel_inner_service import ChannelTxCreatorInnerStub
+
+        queue_name = conf.CHANNEL_TX_CREATOR_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=self.amqp_key)
+        stub = ChannelTxCreatorInnerStub(self.amqp_target, queue_name)
+        await stub.connect()
+        self.channel_tx_creator_stubs[channel_name] = stub
+
+        logging.debug(f"ChannelTxCreatorTasks : {channel_name}, Queue : {queue_name}")
         return stub
 
     async def create_channel_tx_receiver_stub(self, channel_name):

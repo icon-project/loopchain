@@ -14,6 +14,9 @@ class TransactionVerifier(BaseTransactionVerifier):
         super().__init__(hash_generator_version, raise_exceptions)
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
+    def pre_verify(self, tx: 'Transaction', **kwargs):
+        self.verify(tx, None)
+
     def verify(self, tx: 'Transaction', blockchain=None):
         if isinstance(tx.from_address, MalformedStr):
             exception = RuntimeError(f"Tx({tx})\n"
