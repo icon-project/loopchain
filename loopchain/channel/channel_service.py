@@ -28,7 +28,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch
 from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -110,10 +110,6 @@ class ChannelService:
         return self.__consensus
 
     @property
-    def acceptor(self):
-        return self.__acceptor
-
-    @property
     def timer_service(self):
         return self.__timer_service
 
@@ -141,6 +137,7 @@ class ChannelService:
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
+        # loop.set_debug(True)
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)
@@ -220,9 +217,9 @@ class ChannelService:
                 await self.__load_peers_from_file()
                 # subscribe to other peers
                 self.__subscribe_to_peer_list()
-            self.block_manager.init_epoch()
         else:
             self.__init_node_subscriber()
+        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
@@ -609,7 +606,7 @@ class ChannelService:
         for peer in self.peer_manager.get_IP_of_peers_in_group():
             logging.debug("peer_target: " + peer)
 
-    async def reset_leader(self, new_leader_id, block_height=0, complained=False):
+    def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
 
         :param new_leader_id:
@@ -638,7 +635,11 @@ class ChannelService:
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
-        self.block_manager.epoch.set_epoch_leader(leader_peer.peer_id, complained)
+        if complained:
+            self.block_manager.epoch.new_round(leader_peer.peer_id)
+        else:
+            self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")
@@ -648,10 +649,6 @@ class ChannelService:
             logging.debug("Set Peer Type Peer!")
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
-
-            # subscribe new leader
-            # await self.subscribe_to_radio_station()
-            await self.subscribe_to_peer(leader_peer.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
         self.block_manager.set_peer_type(peer_type)
 

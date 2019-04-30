@@ -419,9 +419,11 @@ class ChannelInnerTask:
         blockchain = block_manager.get_blockchain()
 
         for tx in tx_list:
+            if tx.hash.hex() in block_manager.get_tx_queue():
+                util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
+                continue
             if blockchain.find_tx_by_key(tx.hash.hex()):
-                util.logger.warning(f"tx({tx})\n"
-                                    f"hash {tx.hash.hex()} already exists in blockchain.")
+                util.logger.warning(f"hash {tx.hash.hex()} already exists in blockchain. tx({tx})")
                 continue
 
             block_manager.add_tx_obj(tx)
@@ -492,7 +494,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def reset_leader(self, new_leader, block_height=0) -> None:
-        await self._channel_service.reset_leader(new_leader, block_height)
+        self._channel_service.reset_leader(new_leader, block_height)
 
     @message_queue_task(priority=255)
     async def get_status(self):
@@ -518,6 +520,8 @@ class ChannelInnerTask:
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
+        status_data["round"] = block_manager.epoch.round if block_manager.epoch else -1
+        status_data["epoch_height"] = block_manager.epoch.height if block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = block_manager.get_total_tx()
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
@@ -525,8 +529,7 @@ class ChannelInnerTask:
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
         status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) or ""
-        status_data["epoch_leader"] = \
-            self._channel_service.block_manager.epoch.leader_id if self._channel_service.block_manager.epoch else ""
+        status_data["epoch_leader"] = block_manager.epoch.leader_id if block_manager.epoch else ""
 
         return status_data
 
@@ -617,17 +620,6 @@ class ChannelInnerTask:
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
 
-    def __is_unconfirmed_block_by_complained_leader(self, unconfirmed_block: Block):
-        last_unconfirmed_block = self._channel_service.block_manager.get_blockchain().last_unconfirmed_block
-        if last_unconfirmed_block is None:
-            return False
-        elif self._channel_service.state_machine.state != "LeaderComplain":
-            return False
-
-        return last_unconfirmed_block.header.hash == unconfirmed_block.header.hash \
-            and last_unconfirmed_block.header.height == unconfirmed_block.header.height \
-            and self._channel_service.block_manager.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx()
-
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped) -> None:
         try:
@@ -646,12 +638,6 @@ class ChannelInnerTask:
         if last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
             return
-        elif unconfirmed_block.header.height <= last_block.header.height:
-            util.logger.debug("Ignore unconfirmed block because the block height is under last block height.")
-            return
-        elif self.__is_unconfirmed_block_by_complained_leader(unconfirmed_block):
-            util.logger.debug("Ignore unconfirmed block because the block is made by complained leader.")
-            return
         elif self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
             return
@@ -659,7 +645,7 @@ class ChannelInnerTask:
         self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task
-    async def announce_confirmed_block(self, serialized_block, commit_state="{}"):
+    async def announce_confirmed_block(self, serialized_block, commit_state):
         try:
             if self._channel_service.state_machine.state != "Watch":
                 return
@@ -691,7 +677,7 @@ class ChannelInnerTask:
                 raise RuntimeError(f"Commit states does not match. "
                                    f"Generated {header.commit_state}, Received {commit_state}")
 
-            if self._channel_service.block_manager.get_blockchain().block_height < confirmed_block.header.height:
+            if blockchain.block_height < confirmed_block.header.height:
                 self._channel_service.block_manager.add_confirmed_block(confirmed_block)
             else:
                 logging.debug(f"channel_inner_service:announce_confirmed_block "
@@ -779,16 +765,20 @@ class ChannelInnerTask:
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 
-        self._channel_service.block_manager.candidate_blocks.add_vote(
+        block_manager.candidate_blocks.add_vote(
             block_hash,
             group_id,
             peer_id,
             (False, True)[vote_code == message_code.Response.success_validate_block]
         )
 
-        consensus = block_manager.consensus_algorithm
         if self._channel_service.state_machine.state == "BlockGenerate":
-            consensus.count_votes(block_hash)
+            if block_manager.consensus_algorithm:
+                block_manager.consensus_algorithm.vote(
+                    block_hash,
+                    (False, True)[vote_code == message_code.Response.success_validate_block],
+                    peer_id,
+                    group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:
@@ -798,14 +788,7 @@ class ChannelInnerTask:
                            f"new_leader_id({new_leader_id}), "
                            f"block_height({block_height})")
 
-        block_manager.epoch.add_complain(
-            complained_leader_id, new_leader_id, block_height, peer_id, group_id
-        )
-
-        next_new_leader = block_manager.epoch.complain_result()
-        if next_new_leader:
-            await self._channel_service.reset_leader(next_new_leader, complained=True)
-            self._channel_service.reset_leader_complain_timer()
+        block_manager.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

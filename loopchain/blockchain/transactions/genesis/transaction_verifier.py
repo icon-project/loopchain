@@ -10,8 +10,8 @@ if TYPE_CHECKING:
 class TransactionVerifier(BaseTransactionVerifier):
     _hash_salt = HASH_SALT
 
-    def __init__(self, hash_generator_version: int):
-        super().__init__(hash_generator_version)
+    def __init__(self, hash_generator_version: int, raise_exceptions=True):
+        super().__init__(hash_generator_version, raise_exceptions)
         self._tx_serializer = TransactionSerializer(hash_generator_version)
 
     def verify(self, tx: 'Transaction', blockchain=None):

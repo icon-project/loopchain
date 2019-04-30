@@ -35,7 +35,13 @@ class BlockchainError(Exception):
     pass
 
 
-class AddUnconfirmedBlock(Exception):
+class InvalidUnconfirmedBlock(Exception):
+    """
+    """
+    pass
+
+
+class DuplicationUnconfirmedBlock(Exception):
     """
     """
     pass
@@ -60,6 +66,13 @@ class BlockVersionNotMatch(Exception):
 class ScoreInvokeError(Exception):
     """Error While Invoke Score
     """
+    message_code = message_code.Response.fail_score_invoke
+
+
+class ScoreInvokeResultError(ScoreInvokeError):
+    """Score Invoke Result Error
+    """
+    message_code = message_code.Response.fail_score_invoke_result
 
 
 class ChannelStatusError(Exception):

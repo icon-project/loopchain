@@ -227,15 +227,22 @@ class BlockChain:
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self, block: Block, confirm_info=None) -> bool:
+    def add_block(self,
+                  block: Block,
+                  confirm_info=None,
+                  need_to_write_tx_info=True,
+                  need_to_score_invoke=True) -> bool:
         """
 
         :param block:
         :param confirm_info: additional info for this block, but It came from next block of this block.
+        :param need_to_write_tx_info:
+        :param need_to_score_invoke:
         :return:
         """
         with self.__add_block_lock:
-            if not self.prevent_next_block_mismatch(block.header.height):
+            if need_to_write_tx_info and need_to_score_invoke and \
+                    not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
             peer_id = ChannelProperty().peer_id
@@ -248,27 +255,28 @@ class BlockChain:
                     'block_hash': block.header.hash.hex(),
                     'total_tx': self.total_tx}})
 
-            return self.__add_block(block, confirm_info)
+            return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __add_block(self, block: Block, confirm_info):
+    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
-            if invoke_results is None:
+            if invoke_results is None and need_to_score_invoke:
                 if block.header.height == 0:
                     block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
                 else:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block)
 
             try:
-                self.__add_tx_to_block_db(block, invoke_results)
-                ObjectManager().channel_service.score_write_precommit_state(block)
+                if need_to_write_tx_info:
+                    self.__add_tx_to_block_db(block, invoke_results)
+                if need_to_score_invoke:
+                    ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
                 logging.warning(f"blockchain:add_block FAIL "
                                 f"channel_service.score_write_precommit_state")
                 raise e
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
-
             next_total_tx = self.__write_block_data(block, confirm_info)
 
             self.__last_block = block
@@ -661,7 +669,7 @@ class BlockChain:
                     logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
-                    return
+                    return None
 
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
@@ -669,7 +677,7 @@ class BlockChain:
                     if current_block.header.complained:
                         util.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
-                    return
+                    return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
                                   f"block_hash({current_block.header.prev_hash.hex()})")
