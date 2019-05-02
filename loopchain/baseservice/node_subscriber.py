@@ -95,7 +95,8 @@ class NodeSubscriber:
         if 'error' in kwargs:
             return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
-        block_dict = kwargs.get('block')
+        block_dict, confirm_info_str = kwargs.get('block'), kwargs.get('confirm_info')
+        confirm_info = confirm_info_str.encode("utf-8") if confirm_info_str else None
         blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
 
         new_block_height = blockchain.block_versioner.get_height(block_dict)
@@ -107,7 +108,8 @@ class NodeSubscriber:
             logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
                           f"hash({confirmed_block.header.hash.hex()})")
 
-            ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block)
+            ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
+                                                                              confirm_info=confirm_info)
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):

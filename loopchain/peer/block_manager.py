@@ -303,10 +303,10 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
             raise InvalidUnconfirmedBlock(e)
 
-    def add_confirmed_block(self, confirmed_block: Block):
+    def add_confirmed_block(self, confirmed_block: Block, confirm_info=None):
         my_height = self.__blockchain.last_block.header.height
         if confirmed_block.header.height == my_height + 1:
-            result = self.__blockchain.add_block(confirmed_block)
+            result = self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
             if result:
                 return
 
