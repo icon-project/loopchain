@@ -215,7 +215,6 @@ class ChannelService:
 
     async def __init_network(self):
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
-
         self.__init_radio_station_stub()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
