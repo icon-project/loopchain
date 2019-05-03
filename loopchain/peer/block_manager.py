@@ -814,6 +814,8 @@ class BlockManager:
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__channel_service.score_invoke
             reps = self.__channel_service.get_rep_ids()
+            logging.debug(f"last_block.header({self.__blockchain.last_block.header}) "
+                          f"unconfirmed_block.header({unconfirmed_block.header})")
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,

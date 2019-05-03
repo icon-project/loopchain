@@ -30,7 +30,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32)
+                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, BlockVerifier)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
@@ -417,7 +417,7 @@ class ChannelInnerTask:
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
     def update_sub_services_properties(self, **properties):
-        logging.info(f"ppppropertis {properties}")
+        logging.info(f"properties {properties}")
         stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
         asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
 
@@ -686,25 +686,23 @@ class ChannelInnerTask:
             bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
 
             confirmed_block = bs.deserialize(json_block)
-            util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
-                             f"hash({confirmed_block.header.hash.hex()}) "
-                             f"block height({confirmed_block.header.height}), "
-                             f"commit_state({commit_state})")
-
             header: blocks.v0_1a.BlockHeader = confirmed_block.header
             if not header.commit_state:
                 bb = BlockBuilder.from_new(confirmed_block, blockchain.tx_versioner)
                 confirmed_block = bb.build()  # to generate commit_state
-                header = confirmed_block.header
-            try:
-                commit_state = ast.literal_eval(commit_state)
-            except Exception as e:
-                logging.warning(f"channel_inner_service:announce_confirmed_block FAIL get commit_state_dict, "
-                                f"error by : {e}")
 
-            if header.commit_state != commit_state:
-                raise RuntimeError(f"Commit states does not match. "
-                                   f"Generated {header.commit_state}, Received {commit_state}")
+            block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
+            block_verifier.invoke_func = self._channel_service.score_invoke
+            logging.error(f"self.__blockchain.last_block.header.next_leader: {blockchain.last_block.header.next_leader}")
+            block_verifier.verify(confirmed_block,
+                                  blockchain.last_block,
+                                  blockchain,
+                                  blockchain.last_block.header.next_leader)
+
+            util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
+                             f"hash({confirmed_block.header.hash.hex()}) "
+                             f"block height({confirmed_block.header.height}), "
+                             f"commit_state({commit_state})")
 
             if blockchain.block_height < confirmed_block.header.height:
                 self._channel_service.block_manager.add_confirmed_block(confirmed_block)

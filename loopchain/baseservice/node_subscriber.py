@@ -27,7 +27,7 @@ from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import BlockSerializer
+from loopchain.blockchain import BlockSerializer, BlockVerifier
 from loopchain.channel.channel_property import ChannelProperty
 
 config.log_requests = False
@@ -104,6 +104,17 @@ class NodeSubscriber:
             block_version = blockchain.block_versioner.get_version(new_block_height)
             block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
             confirmed_block = block_serializer.deserialize(block_dict)
+
+            block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
+            block_verifier.invoke_func = ObjectManager().channel_service.score_invoke
+            reps = ObjectManager().channel_service.get_rep_ids()
+            logging.debug(f"last_block.header({blockchain.last_block.header}) "
+                          f"confirmed_block.header({confirmed_block.header})")
+            block_verifier.verify(confirmed_block,
+                                  blockchain.last_block,
+                                  blockchain,
+                                  blockchain.last_block.header.next_leader,
+                                  reps=reps)
 
             logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
                           f"hash({confirmed_block.header.hash.hex()})")
