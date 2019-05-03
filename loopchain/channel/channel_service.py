@@ -678,8 +678,7 @@ class ChannelService:
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             self.consensus.leader_id = leader_id
 
-        if peer_type == loopchain_pb2.BLOCK_GENERATOR:
-            self.block_manager.set_peer_type(peer_type)
+        self.block_manager.set_peer_type(peer_type)
 
     def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
