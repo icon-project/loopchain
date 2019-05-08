@@ -639,6 +639,7 @@ class BlockManager:
                 self.epoch = Epoch.new_epoch()
 
             if leader_peer:
+                logging.warning(f"set_leader_peer: {leader_peer}")
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.epoch = Epoch.new_epoch(leader_peer.peer_id)
             self.__channel_service.state_machine.complete_sync()
@@ -729,6 +730,7 @@ class BlockManager:
 
             elected_leader = self.epoch.complain_result()
             if elected_leader:
+                util.logger.warning(f"add_complain")
                 self.__channel_service.reset_leader(elected_leader, complained=True)
                 self.__channel_service.reset_leader_complain_timer()
         elif self.epoch.height < block_height:
@@ -851,6 +853,7 @@ class BlockManager:
             await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
+            util.logger.warning(f"vote_as_peer")
             self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self.__channel_service.start_leader_complain_timer_if_tx_exists()

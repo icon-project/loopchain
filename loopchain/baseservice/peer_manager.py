@@ -522,6 +522,7 @@ class PeerManager:
         try:
             channel_service = ObjectManager().channel_service
             if channel_service:
+                util.logger.warning(f"===============================11")
                 response = channel_service.radio_station_stub.call("AnnounceNewLeader", announce_message)
                 if response.response_code == message_code.Response.fail_no_peer_info_in_rs:
                     util.logger.spam(
@@ -548,6 +549,7 @@ class PeerManager:
                 peer_each = self.peer_list[conf.ALL_GROUP_ID][peer_id]
                 stub_manager = self.get_peer_stub_manager(peer_each, conf.ALL_GROUP_ID)
                 try:
+                    util.logger.warning(f"===============================22")
                     stub_manager.call_async("AnnounceNewLeader", announce_message, is_stub_reuse=True)
                 except Exception as e:
                     logging.warning("gRPC Exception: " + str(e))

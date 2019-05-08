@@ -581,6 +581,7 @@ class ChannelService:
 
         if last_block and last_block.header.next_leader is not None:
             leader_id = last_block.header.next_leader.hex_hx()
+            logging.warning(f"set_leader_peer: {leader_id}")
             self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
         else:
             leader_id = self.peer_manager.get_leader_peer().peer_id
@@ -648,6 +649,8 @@ class ChannelService:
             self.block_manager.epoch.new_round(leader_peer.peer_id)
         else:
             self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+
+        logging.warning(f"set_leader_peer: {leader_peer.peer_id}")
         logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:

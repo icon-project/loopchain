@@ -58,6 +58,7 @@ class Epoch:
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
+        util.logger.warning(f"leader ... : {leader_id}/{ObjectManager().channel_service.block_manager.epoch.leader_id}")
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
 
