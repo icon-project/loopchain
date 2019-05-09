@@ -41,7 +41,7 @@ class SlotTimer:
                 target=self.__timer_key,
                 duration=self.__duration,
                 is_repeat=True,
-                is_run_at_start=True,
+                is_run_at_start=False,
                 callback=self.__timer_callback
             )
         )

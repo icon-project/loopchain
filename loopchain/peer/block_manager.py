@@ -731,8 +731,7 @@ class BlockManager:
         # for reuse level db when restart channel.
         self.__close_level_db()
 
-        if conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self.__block_generation_scheduler.stop()
+        self.__block_generation_scheduler.stop()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()

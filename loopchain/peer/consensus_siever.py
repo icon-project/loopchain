@@ -108,32 +108,8 @@ class ConsensusSiever(ConsensusBase):
                 """
 
                 self._made_block_count += 1
-            elif len(block_builder.transactions) > 0:
-                util.logger.spam(f"consensus len(block_builder.transactions) > 0")
+            elif self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
                 if last_unconfirmed_block:
-                    if (
-                            len(last_unconfirmed_block.body.transactions) > 0 or
-                            last_unconfirmed_block.header.complained
-                    ) or (
-                            len(last_unconfirmed_block.body.transactions) == 0 and
-                            last_unconfirmed_block.header.peer_id.hex_hx() != ChannelProperty().peer_id
-                    ):
-                        vote = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
-                        vote_result = await self._wait_for_voting(last_unconfirmed_block)
-                        if not vote_result:
-                            return self.__block_generation_timer.call()
-
-                        self.__add_block(last_unconfirmed_block, vote)
-                        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-
-                        next_leader = last_unconfirmed_block.header.next_leader
-            else:
-                if (
-                        last_unconfirmed_block
-                ) and (
-                        len(last_unconfirmed_block.body.transactions) > 0 or
-                        last_unconfirmed_block.header.complained
-                ):
                     vote = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
                     vote_result = await self._wait_for_voting(last_unconfirmed_block)
                     if not vote_result:
@@ -146,6 +122,22 @@ class ConsensusSiever(ConsensusBase):
                         current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                 else:
                     return self.__block_generation_timer.call()
+            else:
+                if last_unconfirmed_block:
+                    vote = self._block_manager.candidate_blocks.get_vote(last_unconfirmed_block.header.hash)
+                    vote_result = await self._wait_for_voting(last_unconfirmed_block)
+                    if not vote_result:
+                        return self.__block_generation_timer.call()
+
+                    self.__add_block(last_unconfirmed_block, vote)
+
+                    if self.made_block_count == 1:
+                        for tx_hash_in_unconfirmed_block in last_unconfirmed_block.body.transactions:
+                            block_builder.transactions.pop(tx_hash_in_unconfirmed_block, None)
+
+                    self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+
+                    next_leader = last_unconfirmed_block.header.next_leader
 
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
@@ -162,18 +154,18 @@ class ConsensusSiever(ConsensusBase):
             if await self._wait_for_voting(candidate_block) is None:
                 return
 
-            if len(candidate_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
-                    next_leader.hex_hx() != ChannelProperty().peer_id:
+            if self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1) and next_leader.hex_hx() != ChannelProperty().peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
-                if not conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    self.__block_generation_timer.call_instantly()
-                else:
-                    self.__block_generation_timer.call()
+                self.__block_generation_timer.call()
+                # if not conf.ALLOW_MAKE_EMPTY_BLOCK:
+                #     self.__block_generation_timer.call_instantly()
+                # else:
+                #     self.__block_generation_timer.call()
 
     async def _wait_for_voting(self, candidate_block: 'Block'):
         """Waiting validator's vote for the candidate_block.
