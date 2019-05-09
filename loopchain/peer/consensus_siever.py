@@ -29,33 +29,41 @@ class ConsensusSiever(ConsensusBase):
     def __init__(self, block_manager):
         super().__init__(block_manager)
         self.__block_generation_timer = None
-        self.__lock = threading.Lock()
+        self.__lock = None
 
         self._loop: asyncio.BaseEventLoop = None
         self._vote_queue: asyncio.Queue = None
 
-    def start_timer(self, timer_service):
+    def start_timer(self, timer_service: TimerService):
+        self._loop = timer_service.get_event_loop()
+        self.__lock = asyncio.Lock(loop=self._loop)
         self.__block_generation_timer = SlotTimer(
             TimerService.TIMER_KEY_BLOCK_GENERATE,
             conf.INTERVAL_BLOCKGENERATION,
             timer_service,
             self.consensus,
-            self.__lock
+            self.__lock,
+            self._loop
         )
         self.__block_generation_timer.start()
+
+    def __put_vote(self, vote):
+        async def _put():
+            if self._vote_queue is not None:
+                await self._vote_queue.put(vote)  # sentinel
+
+        asyncio.run_coroutine_threadsafe(_put(), self._loop)
 
     def stop(self):
         self.__block_generation_timer.stop()
         self.__stop_broadcast_send_unconfirmed_block_timer()
 
         if self._loop:
-            coroutine = self._vote_queue.put(None)  # sentinel
-            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+            self.__put_vote(None)
 
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
         if self._loop:
-            coroutine = self._vote_queue.put((vote_block_hash, vote_code, peer_id, group_id))
-            asyncio.run_coroutine_threadsafe(coroutine, self._loop)
+            self.__put_vote((vote_block_hash, vote_code, peer_id, group_id))
             return
 
         util.logger.debug("Cannot vote before starting consensus.")
@@ -77,8 +85,11 @@ class ConsensusSiever(ConsensusBase):
     async def consensus(self):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
-        with self.__lock:
-            self._loop = asyncio.get_event_loop()
+        async with self.__lock:
+            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
+                util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
+                return
+
             self._vote_queue = asyncio.Queue(loop=self._loop)
 
             complained_result = self._block_manager.epoch.complained_result
