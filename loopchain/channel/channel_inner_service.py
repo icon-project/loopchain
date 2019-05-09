@@ -478,16 +478,13 @@ class ChannelInnerTask:
 
         while True:
             my_block_height = blockchain.block_height
-            if subscriber_block_height > my_block_height:
-                message = {'error': "Announced block height is lower than subscriber's."}
-                return json.dumps(message)
-
-            if subscriber_block_height == my_block_height:
+            if subscriber_block_height >= my_block_height:
                 async with self._citizen_condition_new_block:
                     await self._citizen_condition_new_block.wait()
 
             new_block_height = subscriber_block_height + 1
             new_block = blockchain.find_block_by_height(new_block_height)
+            confirm_info: str = blockchain.find_confirm_info_by_height(new_block_height).decode("utf-8")
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -497,7 +494,7 @@ class ChannelInnerTask:
             logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
                           f"target: {self._citizen_set}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
-            return json.dumps(bs.serialize(new_block))
+            return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
     async def register_subscriber(self, peer_id):
