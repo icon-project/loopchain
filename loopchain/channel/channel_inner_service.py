@@ -684,16 +684,10 @@ class ChannelInnerTask:
             block_height = blockchain.block_versioner.get_height(json_block)
             block_version = blockchain.block_versioner.get_version(block_height)
             bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
-
             confirmed_block = bs.deserialize(json_block)
-            header: blocks.v0_1a.BlockHeader = confirmed_block.header
-            if not header.commit_state:
-                bb = BlockBuilder.from_new(confirmed_block, blockchain.tx_versioner)
-                confirmed_block = bb.build()  # to generate commit_state
 
             block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
             block_verifier.invoke_func = self._channel_service.score_invoke
-            logging.error(f"self.__blockchain.last_block.header.next_leader: {blockchain.last_block.header.next_leader}")
             block_verifier.verify(confirmed_block,
                                   blockchain.last_block,
                                   blockchain,
