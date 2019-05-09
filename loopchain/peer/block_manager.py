@@ -255,6 +255,9 @@ class BlockManager:
         if not current_block.header.complained:
             self.epoch = Epoch.new_epoch()
 
+        # reset leader
+        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
+
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
         try:
@@ -648,12 +651,12 @@ class BlockManager:
             next_leader = self.__current_last_block().header.next_leader
             leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
 
-            if self.epoch.height < my_height:
-                self.epoch = Epoch.new_epoch()
-
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.epoch = Epoch.new_epoch(leader_peer.peer_id)
+            elif self.epoch.height < my_height:
+                self.epoch = Epoch.new_epoch()
+
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -866,6 +869,5 @@ class BlockManager:
             await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
-            self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self.__channel_service.start_leader_complain_timer_if_tx_exists()

@@ -364,9 +364,6 @@ class PeerManager:
 
         # logging.debug(str(leader_peer))
         # self.set_leader_peer(leader_peer)
-        #
-        # if is_announce_new_peer:
-        #     self.announce_new_leader("", leader_peer.peer_id)
 
         return leader_peer
 
@@ -492,67 +489,6 @@ class PeerManager:
             logging.debug("try get peer stub except: " + str(e))
             return None
 
-    def announce_new_leader(self, complained_leader_id, new_leader_id, is_broadcast=True, self_peer_id=None):
-        """Announce New Leader Id to Network
-
-        :param complained_leader_id:
-        :param new_leader_id:
-        :param is_broadcast: False(notify to RS only), True(broadcast to network include RS)
-        :param self_peer_id:
-        :return:
-        """
-        util.logger.spam(f"peer_manager:announce_new_leader channel({self.__channel_name}), "
-                         f"complained_leader_id({complained_leader_id}), "
-                         f"new_leader_id({new_leader_id}), "
-                         f"is_broadcast({is_broadcast})")
-        is_rs: bool = ObjectManager().rs_service is not None
-
-        announce_message = loopchain_pb2.ComplainLeaderRequest(
-            complained_leader_id=complained_leader_id,
-            channel=self.__channel_name,
-            new_leader_id=new_leader_id,
-            message="Announce New Leader",
-            peer_id=ChannelProperty().peer_id,
-            group_id=ChannelProperty().group_id
-        )
-
-        # new_leader_peer = self.get_peer(new_leader_id)
-
-        # Announce New Leader to Radio station
-        try:
-            channel_service = ObjectManager().channel_service
-            if channel_service:
-                response = channel_service.radio_station_stub.call("AnnounceNewLeader", announce_message)
-                if response.response_code == message_code.Response.fail_no_peer_info_in_rs:
-                    util.logger.spam(
-                        f"peer_manager:announce_new_leader fail no peer info in rs! is_broadcast({is_broadcast})")
-                    announce_message.message = message_code.get_response_msg(
-                        message_code.Response.fail_no_peer_info_in_rs)
-                    ObjectManager().channel_service.connect_to_radio_station(is_reconnect=True)
-
-                    ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-                        "Request",
-                        loopchain_pb2.Message(
-                            code=message_code.Request.peer_reconnect_to_rs,
-                            channel=self.__channel_name))
-        except Exception as e:
-            # logging.debug("in RS there is no peer_service....")
-            is_rs = True
-
-        if is_broadcast is True:
-            for peer_id in list(self.peer_list[conf.ALL_GROUP_ID]):
-                if new_leader_id == peer_id and is_rs is not True:
-                    util.logger.spam(f"Prevent reset leader loop in AnnounceNewLeader message")
-                    continue
-
-                peer_each = self.peer_list[conf.ALL_GROUP_ID][peer_id]
-                stub_manager = self.get_peer_stub_manager(peer_each, conf.ALL_GROUP_ID)
-                try:
-                    stub_manager.call_async("AnnounceNewLeader", announce_message, is_stub_reuse=True)
-                except Exception as e:
-                    logging.warning("gRPC Exception: " + str(e))
-                    logging.debug("No response target: " + str(peer_each.target))
-
     def announce_new_peer(self, peer_request):
         logging.debug("announce_new_peer")
         for peer_id in list(self.peer_list[conf.ALL_GROUP_ID]):
@@ -593,12 +529,6 @@ class PeerManager:
                 # 변경된 리더를 announce 해야 한다
                 logging.warning("Change peer to leader that complain old leader.")
                 self.set_leader_peer(new_leader, None)
-                if is_announce is True:
-                    self.announce_new_leader(
-                        complained_leader_id=new_leader.peer_id,
-                        new_leader_id=new_leader.peer_id,
-                        is_broadcast=True
-                    )
         return new_leader
 
     def __find_highest_peer(self, group_id) -> PeerInfo:
