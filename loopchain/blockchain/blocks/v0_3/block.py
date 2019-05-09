@@ -19,6 +19,10 @@ class BlockHeader(BaseBlockHeader):
 
     version = "0.3"
 
+    @property
+    def complained(self):
+        return self.leader_vote_hash != Hash32.empty()
+
 
 @dataclass(frozen=True)
 class BlockBody(BaseBlockBody):

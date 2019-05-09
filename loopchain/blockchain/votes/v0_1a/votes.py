@@ -28,9 +28,7 @@ class BlockVotes(BaseVotes[BlockVote]):
         self.block_hash = block_hash
         super().__init__(reps, voting_ratio)
 
-    def verify(self, vote: BlockVote):
-        super().verify(vote)
-
+    def verify_vote(self, vote: BlockVote):
         if vote.block_height != self.block_height:
             raise RuntimeError(f"Vote block_height not match. {vote.block_height} != {self.block_height}\n"
                                f"{vote}")
@@ -38,6 +36,7 @@ class BlockVotes(BaseVotes[BlockVote]):
         if vote.block_hash != self.block_hash and vote.block_hash != Hash32.empty():
             raise RuntimeError(f"Vote block_hash not match. {vote.block_hash} != {self.block_hash}\n"
                                f"{vote}")
+        super().verify_vote(vote)
 
     def empty_vote(self, rep: ExternalAddress):
         return self.VoteType.empty(rep, self.block_height)
@@ -76,10 +75,11 @@ class BlockVotes(BaseVotes[BlockVote]):
         if votes_data:
             votes = [BlockVote.deserialize(vote_data) for vote_data in votes_data]
             reps = [vote.rep for vote in votes]
-            votes_cls = cls(reps, voting_ratio, votes[0].block_height, votes[0].block_hash)
+            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].block_hash)
             for vote in votes:
-                votes_cls.add_vote(vote)
-            return votes_cls
+                index = reps.index(vote.rep)
+                votes_instance.votes[index] = vote
+            return votes_instance
         else:
             return cls([], voting_ratio, -1, Hash32.empty())
 
@@ -93,9 +93,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
         self.old_leader = old_leader
         super().__init__(reps, voting_ratio)
 
-    def verify(self, vote: LeaderVote):
-        super().verify(vote)
-
+    def verify_vote(self, vote: LeaderVote):
         if vote.block_height != self.block_height:
             raise RuntimeError(f"Vote block_height not match. {vote.block_height} != {self.block_height}\n"
                                f"{vote}")
@@ -103,6 +101,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
         if vote.old_leader != self.old_leader:
             raise RuntimeError(f"Vote old_leader not match. {vote.old_leader} != {self.old_leader}\n"
                                f"{vote}")
+        super().verify_vote(vote)
 
     def empty_vote(self, rep: ExternalAddress):
         return self.VoteType.empty(rep, self.block_height, self.old_leader)
@@ -147,10 +146,11 @@ class LeaderVotes(BaseVotes[LeaderVote]):
     def deserialize(cls, votes_data: List[Dict], voting_ratio: float):
         if votes_data:
             votes = [LeaderVote.deserialize(vote_data) for vote_data in votes_data]
-            reps = (vote.rep for vote in votes)
-            votes_cls = cls(reps, voting_ratio, votes[0].block_height, votes[0].old_leader)
+            reps = [vote.rep for vote in votes]
+            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].old_leader)
             for vote in votes:
-                votes_cls.add_vote(vote)
-            return votes_cls
+                index = reps.index(vote.rep)
+                votes_instance.votes[index] = vote
+            return votes_instance
         else:
             return cls([], voting_ratio, -1, ExternalAddress.empty())

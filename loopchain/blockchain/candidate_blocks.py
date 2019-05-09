@@ -82,10 +82,16 @@ class CandidateBlocks:
 
     def add_vote(self, vote: BlockVote):
         with self.__blocks_lock:
-            if vote.block_hash not in self.blocks:
+            if vote.block_hash != Hash32.empty() and vote.block_hash not in self.blocks:
                 # util.logger.debug(f"-------------block_hash({block_hash}) self.blocks({self.blocks})")
                 self.blocks[vote.block_hash] = CandidateBlock.from_hash(vote.block_hash, vote.block_height)
-        self.blocks[vote.block_hash].votes.add_vote(vote)
+
+        if vote.block_hash != Hash32.empty():
+            self.blocks[vote.block_hash].votes.add_vote(vote)
+        else:
+            for block in self.blocks.values():
+                if block.height == vote.block_height:
+                    block.votes.add_vote(vote)
 
     def get_votes(self, block_hash):
         return self.blocks[block_hash].votes

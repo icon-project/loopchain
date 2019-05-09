@@ -29,6 +29,7 @@ from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.votes.v0_1a import BlockVotes, LeaderVotes
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -342,7 +343,7 @@ class BlockChain:
         if confirm_info:
             batch.Put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                b'0x1'
+                json.dumps(confirm_info.serialize()).encode("utf-8")
             )
 
         self.__confirmed_block_db.Write(batch)
@@ -613,7 +614,9 @@ class BlockChain:
         block_builder.transactions[tx.hash] = tx
         block_builder.reps = reps
         block_builder.prev_hash = Hash32.new()
-        block_builder.peer_private_key = ObjectManager().channel_service.peer_auth.private_key
+        block_builder.signer = ObjectManager().channel_service.peer_auth
+        block_builder.prev_votes = BlockVotes([], conf.VOTING_RATIO, -1, Hash32.empty())
+        block_builder.leader_votes = LeaderVotes([], conf.LEADER_COMPLAIN_RATIO, -1, ExternalAddress.empty())
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
@@ -705,7 +708,8 @@ class BlockChain:
 
             # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
-            self.add_block(unconfirmed_block, current_block.body.confirm_prev_block)
+            confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
+            self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 

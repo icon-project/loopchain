@@ -17,8 +17,9 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 
 import logging
 import traceback
-from typing import Optional
 from loopchain import configure as conf, utils
+from typing import Dict, Optional
+from loopchain import configure as conf, utils as util
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
@@ -44,7 +45,7 @@ class Epoch:
         self.__candidate_blocks = None
 
         self.round = 0
-        self.complain_votes: Optional[LeaderVotes] = None
+        self.complain_votes: Dict[int, LeaderVotes] = {}
         self.complained_result = None
 
         self.new_votes()
@@ -76,10 +77,11 @@ class Epoch:
         audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
         rep_info = sorted(audience.values(), key=lambda peer: peer.order)
         reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
-        self.complain_votes = LeaderVotes(reps,
-                                          conf.LEADER_COMPLAIN_RATIO,
-                                          self.height,
-                                          ExternalAddress.fromhex_address(self.leader_id))
+        leader_votes = LeaderVotes(reps,
+                                   conf.LEADER_COMPLAIN_RATIO,
+                                   self.height,
+                                   ExternalAddress.fromhex_address(self.leader_id))
+        self.complain_votes[self.round] = leader_votes
 
     def set_epoch_leader(self, leader_id, complained=False):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -95,7 +97,7 @@ class Epoch:
                           f"block_height({leader_vote.block_height}), "
                           f"peer_id({leader_vote.rep})")
         try:
-            self.complain_votes.add_vote(leader_vote)
+            self.complain_votes[self.round].add_vote(leader_vote)
         except RuntimeError as e:
             logging.warning(e)
 
@@ -104,15 +106,15 @@ class Epoch:
 
         :return: new leader id or None
         """
-        utils.logger.debug(f"complain_result vote_result({self.complain_votes})")
-        if self.complain_votes and self.complain_votes.is_completed():
-            vote_result = self.complain_votes.get_result()
+        utils.logger.debug(f"complain_result vote_result({self.complain_votes[self.round]})")
+        if self.complain_votes[self.round].is_completed():
+            vote_result = self.complain_votes[self.round].get_result()
             return vote_result.hex_hx()
         else:
             return None
 
     def pop_complained_candidate_leader(self):
-        voters = self.complain_votes.reps
+        voters = self.complain_votes[self.round].reps
         if ExternalAddress.fromhex_address(ChannelProperty().peer_id) not in voters:
             # Processing to complain leader
             return None
@@ -192,11 +194,16 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
-    def makeup_block(self, prev_block, block_version, complained_result):
+    def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
+        # self._check_unconfirmed_block(
+        last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
+        block_height = last_block.header.height + 1
+        block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
-        block_builder.fixed_timestamp = max(utils.get_time_stamp(), prev_block.header.timestamp + 1)
-
-        if not complained_result:
+        block_builder.prev_votes = prev_votes
+        if complain_votes and complain_votes.get_result():
+            block_builder.leader_votes = complain_votes
+        else:
             self.__add_tx_to_block(block_builder)
 
         return block_builder
