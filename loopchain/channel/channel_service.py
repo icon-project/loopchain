@@ -204,25 +204,33 @@ class ChannelService:
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
-        self.__init_radio_station_stub()
 
         await self.__init_score_container()
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
+
+        self.block_manager.init_epoch()
+
+    async def __init_network(self):
+        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
+
+        self.__init_radio_station_stub()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
             else:
                 await self.__load_peers_from_file()
-                # subscribe to other peers
-                self.__subscribe_to_peer_list()
         else:
             self.__init_node_subscriber()
-        self.block_manager.init_epoch()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
+
+        # Do not consider to change peer list by IISS this time.
+        await self.__select_node_type()
+        await self.__init_network()
+
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -245,6 +253,68 @@ class ChannelService:
     def update_sub_services_properties(self):
         nid = self.block_manager.get_blockchain().find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
+
+    def __get_role_switch_block_height(self):
+        # Currently, only one way role switch is supported from Citizen to Rep
+        if ChannelProperty().node_type != conf.NodeType.CitizenNode:
+            return -1
+        return self.get_channel_option().get('role_switch_block_height', -1)
+
+    def __get_node_type_by_peer_list(self):
+        # FIXME: this is temporary codes. get peer list with IISS API
+        #        IISS peer list include just peer_id and a URL that a server provide peer details
+        channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        for peer_info in channels[ChannelProperty().name]["peers"]:
+            if peer_info['id'] == ChannelProperty().peer_id:
+                return conf.NodeType.CommunityNode
+        return conf.NodeType.CitizenNode
+
+    async def __clean_network(self):
+        if self.__node_subscriber is not None:
+            await self.__node_subscriber.close()
+            self.__node_subscriber: NodeSubscriber = None
+
+        self.__timer_service.clean()
+
+        peer_ids = set()
+        for peer_list in self.__peer_manager.peer_list.values():
+            for peer_id in peer_list.keys():
+                peer_ids.add(peer_id)
+        for peer_id in peer_ids:
+            self.__peer_manager.remove_peer(peer_id)
+
+        self.__radio_station_stub = None
+
+    async def __select_node_type(self):
+        # If block height is under zero this node has not synchronized blocks yet.
+        block_height = self.__block_manager.get_blockchain().block_height
+        if block_height < 0:
+            util.logger.debug(f"Currently, Can't select node type without block height. block height={block_height}")
+            return
+
+        switch_block_height = self.__get_role_switch_block_height()
+        if switch_block_height < 0 or block_height < switch_block_height:
+            util.logger.debug(f"Does not need to select node type. role switch block height={switch_block_height}")
+            return
+
+        node_type: conf.NodeType = self.__get_node_type_by_peer_list()
+        if node_type == ChannelProperty().node_type:
+            util.logger.info(f"Node type equals previous note type ({node_type}). force={force}")
+            return
+
+        util.logger.info(f"Selected node type {node_type}")
+        ChannelProperty().node_type = node_type
+
+        await StubCollection().peer_stub.async_task().change_node_type(node_type.value)
+
+    def reset_network_by_block_height(self, height):
+        if height == self.__get_role_switch_block_height():
+            self.__state_machine.switch_role()
+
+    async def reset_network(self):
+        util.logger.info("Reset network")
+        await self.__clean_network()
+        self.__state_machine.evaluate_network()
 
     async def __init_peer_auth(self):
         try:
@@ -478,6 +548,11 @@ class ChannelService:
     async def __subscribe_call_from_citizen(self):
         def _handle_exception(future: asyncio.Future):
             logging.debug(f"error: {type(future.exception())}, {str(future.exception())}")
+
+            if ChannelProperty().node_type != conf.NodeType.CitizenNode:
+                logging.debug(f"This node is not Citizen anymore.")
+                return
+
             if isinstance(future.exception(), NotImplementedError):
                 asyncio.ensure_future(self.__subscribe_call_by_rest_stub(subscribe_event))
 
@@ -579,10 +654,15 @@ class ChannelService:
         blockchain = self.block_manager.get_blockchain()
         last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
+        leader_id = None
         if last_block and last_block.header.next_leader is not None:
             leader_id = last_block.header.next_leader.hex_hx()
-            self.peer_manager.set_leader_peer(self.peer_manager.get_peer(leader_id))
-        else:
+            peer = self.peer_manager.get_peer(leader_id)
+            if peer is None:
+                leader_id = None
+            else:
+                self.peer_manager.set_leader_peer(peer)
+        if leader_id is None:
             leader_id = self.peer_manager.get_leader_peer().peer_id
         logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 

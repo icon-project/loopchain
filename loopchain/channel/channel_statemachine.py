@@ -47,6 +47,8 @@ class ChannelStateMachine(object):
                     on_enter='_blockgenerate_on_enter', on_exit='_blockgenerate_on_exit'),
               State(name='LeaderComplain', ignore_invalid_triggers=True,
                     on_enter='_leadercomplain_on_enter', on_exit='_leadercomplain_on_exit'),
+              State(name='ResetNetwork', ignore_invalid_triggers=True,
+                    on_enter='_do_reset_network_on_enter'),
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -67,7 +69,7 @@ class ChannelStateMachine(object):
     def block_height_sync(self):
         pass
 
-    @statemachine.transition(source='BlockHeightSync',
+    @statemachine.transition(source=('BlockHeightSync', 'ResetNetwork'),
                              dest='EvaluateNetwork',
                              after='_do_evaluate_network')
     def evaluate_network(self):
@@ -103,6 +105,10 @@ class ChannelStateMachine(object):
 
     @statemachine.transition(source=('Vote', 'LeaderComplain'), dest='LeaderComplain')
     def leader_complain(self):
+        pass
+
+    @statemachine.transition(source=('BlockSync', 'BlockGenerate', 'Vote', 'Watch'), dest='ResetNetwork')
+    def switch_role(self):
         pass
 
     def _is_leader(self):
@@ -144,6 +150,9 @@ class ChannelStateMachine(object):
     def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
+
+    def _do_reset_network_on_enter(self):
+        self._run_coroutine_threadsafe(self.__channel_service.reset_network())
 
     def _vote_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = False

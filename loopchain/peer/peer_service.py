@@ -302,9 +302,7 @@ class PeerService:
         self.__inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        self.__channel_infos = self.__get_channel_infos()
-        if not self.__channel_infos:
-            util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
+        self.__reset_channel_infos()
 
         self.__run_rest_services(port)
         self.run_p2p_server()
@@ -388,3 +386,21 @@ class PeerService:
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
+
+    def __reset_channel_infos(self):
+        self.__channel_infos = self.__get_channel_infos()
+        if not self.__channel_infos:
+            util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
+
+    async def change_node_type(self, node_type):
+        if self.__node_type.value == node_type:
+            util.logger.warning(f"Does not change node type because new note type equals current node type")
+            return
+
+        self.__node_type = conf.NodeType(node_type)
+        self.is_support_node_function = \
+            partial(conf.NodeType.is_support_node_function, node_type=node_type)
+
+        self.__radio_station_stub = None
+
+        self.__reset_channel_infos()

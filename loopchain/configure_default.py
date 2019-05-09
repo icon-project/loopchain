@@ -378,7 +378,8 @@ CHANNEL_OPTION = {
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "key_load_type": KeyLoadType.FILE_LOAD
+        "key_load_type": KeyLoadType.FILE_LOAD,
+        "role_switch_block_height": -1
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
@@ -392,7 +393,8 @@ CHANNEL_OPTION = {
         "load_cert": False,
         "consensus_cert_use": False,
         "tx_cert_use": False,
-        "key_load_type": KeyLoadType.FILE_LOAD
+        "key_load_type": KeyLoadType.FILE_LOAD,
+        "role_switch_block_height": -1
     }
 }
 

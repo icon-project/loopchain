@@ -26,6 +26,7 @@ from jsonrpcserver.aio import AsyncMethods
 from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import BlockSerializer, BlockVerifier
 from loopchain.channel.channel_property import ChannelProperty
@@ -42,24 +43,34 @@ class NodeSubscriber:
         self.__target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{self.__rs_target}/api/ws/{channel}"
         self.__exception = None
         self.__tried_with_old_uri = False
+        self.__websocket = None
 
         ws_methods.add(self.node_ws_PublishHeartbeat)
         ws_methods.add(self.node_ws_PublishNewBlock)
 
         logging.debug(f"websocket target uri : {self.__target_uri}")
 
+    def __del__(self):
+        if self.__websocket is not None:
+            utils.logger.warning(f"Have to close before delete NodeSubscriber instance({self})")
+
+    async def close(self):
+        if self.__websocket is not None:
+            await self.__websocket.close()
+            self.__websocket = None
+
     async def subscribe(self, block_height, event: Event):
         self.__exception = None
 
         try:
             # set websocket payload maxsize to 4MB.
-            async with websockets.connect(self.__target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK) as websocket:
-                event.set()
+            self.__websocket = await websockets.connect(self.__target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK)
+            event.set()
 
-                logging.debug(f"Websocket connection is Completed.")
-                request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
-                await websocket.send(json.dumps(request))
-                await self.__subscribe_loop(websocket)
+            logging.debug(f"Websocket connection is Completed.")
+            request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
+            await self.__websocket.send(json.dumps(request))
+            await self.__subscribe_loop(self.__websocket)
         except (InvalidStatusCode, InvalidMessage) as e:
             if not self.__tried_with_old_uri:
                 await self.try_subscribe_to_old_uri(block_height, event)
@@ -71,6 +82,8 @@ class NodeSubscriber:
             traceback.print_exc()
             logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
             raise ConnectionError
+        finally:
+            await self.close()
 
     async def __subscribe_loop(self, websocket):
         while True:
