@@ -159,8 +159,6 @@ class ConsensusSiever(ConsensusBase):
 
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
-            if await self._wait_for_voting(candidate_block) is None:
-                return
 
             if len(candidate_block.body.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
                     next_leader.hex_hx() != ChannelProperty().peer_id:
@@ -169,6 +167,9 @@ class ConsensusSiever(ConsensusBase):
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
+                if await self._wait_for_voting(candidate_block) is None:
+                    return
+
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
