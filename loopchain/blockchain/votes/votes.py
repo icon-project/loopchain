@@ -34,25 +34,36 @@ class Votes(ABC, Generic[TVote]):
 
     def add_vote(self, vote: TVote):
         try:
-            self.verify(vote)
+            self.verify_vote(vote)
         except VoteSafeDuplicateError:
-            return
+            pass
+        else:
+            index = self.reps.index(vote.rep)
+            self.votes[index] = vote
 
-        index = self.reps.index(vote.rep)
-        self.votes[index] = vote
+    def verify(self):
+        for rep, vote in zip(self.reps, self.votes):
+            if self.is_empty_vote(vote):
+                continue
+            if rep != vote.rep:
+                raise RuntimeError(f"Incorrect Rep : {rep}, {vote.rep}")
+            try:
+                self.verify_vote(vote)
+            except VoteSafeDuplicateError:
+                pass
 
-    def verify(self, vote: TVote):
-        # IndexError
+    def verify_vote(self, vote: TVote):
+        vote.verify()
+
         index = self.reps.index(vote.rep)
 
         # FIXME Leave the evidence, Duplicate voting
         if self.votes[index] != self.empty_vote(vote.rep):
             if self.votes[index].result() == vote.result():
+                # It should be checked last.
                 raise VoteSafeDuplicateError
             else:
                 raise VoteDuplicateError(f"Duplicate voting. {self.votes[index]}, {vote}")
-
-        vote.verify()
 
     @abstractmethod
     def empty_vote(self, rep: ExternalAddress):

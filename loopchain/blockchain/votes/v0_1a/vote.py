@@ -77,7 +77,7 @@ class LeaderVote(BaseVote[ExternalAddress]):
     # noinspection PyMethodOverriding
     @classmethod
     def empty(cls, rep: ExternalAddress, block_height: int, old_leader: ExternalAddress):
-        return cls(rep, 0, Signature.empty(), 0, old_leader, ExternalAddress.empty())
+        return cls(rep, 0, Signature.empty(), block_height, old_leader, ExternalAddress.empty())
 
     @classmethod
     def _deserialize(cls, data: dict):

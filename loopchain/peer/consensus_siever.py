@@ -14,12 +14,14 @@
 """A consensus class based on the Siever algorithm for the loopchain"""
 
 import asyncio
+import json
 from functools import partial
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
+from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.exception import NotEnoughVotes
@@ -126,14 +128,36 @@ class ConsensusSiever(ConsensusBase):
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
 
-            complained_result = self._block_manager.epoch.complained_result
-            block_builder = self._block_manager.epoch.makeup_block(complained_result)
+            if self._block_manager.epoch.round > 0:
+                complain_votes = self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
+                util.logger.info(f"complain_votes : {complain_votes}")
+
+            else:
+                complain_votes = None
+
+            if self._blockchain.last_unconfirmed_block and self._block_manager.epoch.round == 0:
+                last_block = self._blockchain.last_unconfirmed_block
+                prev_votes = self._block_manager.candidate_blocks.get_votes(last_block.header.hash)
+            else:
+                last_block = self._blockchain.last_block
+                prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(last_block.header.hash)
+                util.logger.info(f"prev_votes_dumped : {prev_votes_dumped}")
+                if prev_votes_dumped:
+                    prev_votes_serialized = json.loads(prev_votes_dumped)
+                    prev_votes = BlockVotes.deserialize(prev_votes_serialized, conf.VOTING_RATIO)
+                else:
+                    prev_votes = BlockVotes([], conf.VOTING_RATIO,
+                                            last_block.header.height,
+                                            last_block.header.hash)
+
+            block_builder = self._block_manager.epoch.makeup_block(complain_votes, prev_votes)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
 
             need_next_call = False
             try:
+                complained_result = self._block_manager.epoch.complained_result
                 if complained_result:
                     util.logger.spam("consensus block_builder.complained")
                     """

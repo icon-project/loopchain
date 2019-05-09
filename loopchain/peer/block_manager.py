@@ -27,7 +27,7 @@ from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
-from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
@@ -265,14 +265,14 @@ class BlockManager:
 
         :param unconfirmed_block:
         """
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-
+        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}")
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
         try:
-            if unconfirmed_block.body.confirm_prev_block:
+            if (unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block) or \
+               (unconfirmed_block.header.version == "0.3" and unconfirmed_block.body.leader_votes.get_result() is None):
                 self.confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
@@ -328,7 +328,7 @@ class BlockManager:
 
     def block_height_sync(self):
         def _print_exception(fut):
-            exc = self.__block_height_future.exception()
+            exc = fut.exception()
             if exc:
                 traceback.print_exception(type(exc), exc, exc.__traceback__)
 
@@ -780,7 +780,7 @@ class BlockManager:
         vote = BlockVote.new(
             rep_pri_key=self.__channel_service.peer_auth.private_key,
             block_height=block.header.height,
-            block_hash=block.header.hash if is_validated else None,
+            block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()
         )
         self.candidate_blocks.add_vote(vote)
