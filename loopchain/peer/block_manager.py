@@ -32,7 +32,7 @@ from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
     ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
@@ -361,8 +361,16 @@ class BlockManager:
             except Exception as e:
                 traceback.print_exc()
                 raise exception.BlockError(f"Received block is invalid: original exception={e}")
+
+            votes_dumped = response.confirm_info
+            if votes_dumped:
+                votes_serialized = json.loads(votes_dumped)
+                votes = BlockVotes.deserialize(votes_serialized, conf.VOTING_RATIO)
+            else:
+                votes = None
+
             return block, response.max_block_height, response.unconfirmed_block_height,\
-                response.confirm_info, response.response_code
+                votes, response.response_code
         else:
             # request REST(json-rpc) way to RS peer
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
