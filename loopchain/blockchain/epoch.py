@@ -104,7 +104,7 @@ class Epoch:
 
         :return: new leader id or None
         """
-        util.logger.debug(f"complain_result vote_result({self.complain_votes[self.round]})")
+        util.logger.debug(f"complain_result vote_result({self.complain_votes[self.round].get_summary()})")
         if self.complain_votes[self.round].is_completed():
             vote_result = self.complain_votes[self.round].get_result()
             return vote_result.hex_hx()

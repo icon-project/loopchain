@@ -25,10 +25,13 @@ TVote = TypeVar("TVote", bound=Vote)
 class Votes(ABC, Generic[TVote]):
     VoteType: TVote = None
 
-    def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float):
+    def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float, votes: List[TVote] = None):
         super().__init__()
         self.reps = tuple(reps)
-        self.votes: List[TVote] = [self.empty_vote(rep) for rep in self.reps]
+        if votes is None:
+            self.votes: List[TVote] = [self.empty_vote(rep) for rep in self.reps]
+        else:
+            self.votes = votes
         self.voting_ratio = voting_ratio
         self.quorum = math.ceil(voting_ratio * len(self.reps))
 
@@ -85,10 +88,7 @@ class Votes(ABC, Generic[TVote]):
         majorities = counter.most_common(1)
         return majorities[0] if majorities else None
 
-    def serialize(self) -> list:
-        return [vote.serialize() for vote in self.votes]
-
-    def __str__(self):
+    def get_summary(self):
         def _fill_space(left_str):
             return ' ' * (length - len(str(left_str)))
 
@@ -107,6 +107,14 @@ class Votes(ABC, Generic[TVote]):
         msg += f"Result {_fill_space('Result')}: {self.get_result()}\n"
         msg += f"Quorum {_fill_space('Quorum')}: {self.quorum}\n"
         return msg
+
+    def serialize(self) -> list:
+        return [vote.serialize() for vote in self.votes]
+
+    def __repr__(self):
+        return \
+            f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, " \
+            f"votes={self.votes!r})"
 
     def __eq__(self, other: 'Votes'):
         return \
