@@ -23,10 +23,10 @@ class BlockVotes(BaseVotes[BlockVote]):
     VoteType = BlockVote
 
     def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float,
-                 block_height: int, block_hash: Hash32):
+                 block_height: int, block_hash: Hash32, votes: List[BlockVote] = None):
         self.block_height = block_height
         self.block_hash = block_hash
-        super().__init__(reps, voting_ratio)
+        super().__init__(reps, voting_ratio, votes)
 
     def verify_vote(self, vote: BlockVote):
         if vote.block_height != self.block_height:
@@ -56,6 +56,12 @@ class BlockVotes(BaseVotes[BlockVote]):
             return False
         return None
 
+    def get_summary(self):
+        msg = super().get_summary()
+        msg += f"block height({self.block_height})\n"
+        msg += f"block hash({self.block_hash.hex_0x()})"
+        return msg
+
     def __eq__(self, other: 'BlockVotes'):
         return (
             super().__eq__(other) and
@@ -63,11 +69,11 @@ class BlockVotes(BaseVotes[BlockVote]):
             self.block_height == other.block_height
         )
 
-    def __str__(self):
-        msg = super().__str__()
-        msg += f"block height({self.block_height})\n"
-        msg += f"block hash({self.block_hash.hex_0x()})"
-        return msg
+    def __repr__(self):
+        return (
+            f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, "
+            f"block_height={self.block_height!r}, block_hash={self.block_hash!r}, votes={self.votes!r})"
+        )
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -88,10 +94,10 @@ class LeaderVotes(BaseVotes[LeaderVote]):
     VoteType = LeaderVote
 
     def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float,
-                 block_height: int, old_leader: ExternalAddress):
+                 block_height: int, old_leader: ExternalAddress, votes: List[LeaderVote] = None):
         self.block_height = block_height
         self.old_leader = old_leader
-        super().__init__(reps, voting_ratio)
+        super().__init__(reps, voting_ratio, votes)
 
     def verify_vote(self, vote: LeaderVote):
         if vote.block_height != self.block_height:
@@ -128,6 +134,12 @@ class LeaderVotes(BaseVotes[LeaderVote]):
                 return majority_value
         return None
 
+    def get_summary(self):
+        msg = super().get_summary()
+        msg += f"block height({self.block_height})\n"
+        msg += f"old leader({self.old_leader.hex_hx()})"
+        return msg
+
     def __eq__(self, other: 'LeaderVotes'):
         return (
             super().__eq__(other) and
@@ -135,11 +147,11 @@ class LeaderVotes(BaseVotes[LeaderVote]):
             self.old_leader == other.old_leader
         )
 
-    def __str__(self):
-        msg = super().__str__()
-        msg += f"block height({self.block_height})\n"
-        msg += f"old leader({self.old_leader.hex_hx()})"
-        return msg
+    def __repr__(self):
+        return (
+            f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, "
+            f"block_height={self.block_height!r}, old_leader={self.old_leader!r}, votes={self.votes!r})"
+        )
 
     # noinspection PyMethodOverriding
     @classmethod

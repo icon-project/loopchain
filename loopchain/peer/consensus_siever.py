@@ -148,7 +148,6 @@ class ConsensusSiever(ConsensusBase):
             else:
                 last_block = self._blockchain.last_block
                 prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(last_block.header.hash)
-                util.logger.info(f"prev_votes_dumped : {prev_votes_dumped}")
                 if prev_votes_dumped:
                     prev_votes_serialized = json.loads(prev_votes_dumped)
                     prev_votes = BlockVotes.deserialize(prev_votes_serialized, conf.VOTING_RATIO)
@@ -237,7 +236,7 @@ class ConsensusSiever(ConsensusBase):
         # util.logger.notice(f"_wait_for_voting block({candidate_block.header.hash})")
         while True:
             votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
-            util.logger.info(f"Votes : {votes}")
+            util.logger.info(f"Votes : {votes.get_summary()}")
             vote_result = votes.get_result()
             if vote_result is not None or votes.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
