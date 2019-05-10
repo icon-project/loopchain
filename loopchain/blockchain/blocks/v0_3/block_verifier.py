@@ -16,11 +16,6 @@ class BlockVerifier(BaseBlockVerifier):
 
         # TODO It should check rep's order.
         reps = kwargs.get("reps")
-        if header.height > 0 and header.peer_id not in reps:
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"Leader({header.peer_id}) is not in "
-                                     f"Reps({reps})")
-            self._handle_exception(exception)
         if header.peer_id not in reps:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                      f"Leader({header.peer_id}) is not in "
