@@ -35,6 +35,12 @@ class BlockchainError(Exception):
     pass
 
 
+class NotEnoughVotes(Exception):
+    """Consensus loop needs more time to collect votes.
+    """
+    pass
+
+
 class InvalidUnconfirmedBlock(Exception):
     """
     """

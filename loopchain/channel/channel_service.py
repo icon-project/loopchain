@@ -239,9 +239,6 @@ class ChannelService:
         else:
             await self.subscribe_to_radio_station()
 
-        if not self.block_manager.block_generation_scheduler.is_run():
-            self.block_manager.block_generation_scheduler.start()
-
         self.__state_machine.complete_subscribe()
 
         self.start_leader_complain_timer_if_tx_exists()

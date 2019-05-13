@@ -68,7 +68,6 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.__block_generation_scheduler = BlockGenerationScheduler(self.__channel_name)
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = name
@@ -132,10 +131,6 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    @property
-    def block_generation_scheduler(self):
-        return self.__block_generation_scheduler
-
     def get_level_db(self):
         return self.__level_db
 
@@ -145,15 +140,6 @@ class BlockManager:
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
-
-    async def __create_block_generation_schedule(self):
-        # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            Schedule = namedtuple("Schedule", "callback kwargs")
-            schedule = Schedule(self.__consensus_algorithm.consensus, {})
-            self.__block_generation_scheduler.add_schedule(schedule)
-        else:
-            await self.__consensus_algorithm.consensus()
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
@@ -252,7 +238,7 @@ class BlockManager:
         self.__channel_service.stop_leader_complain_timer()
 
         # start new epoch
-        if not current_block.header.complained:
+        if not (current_block.header.complained and self.epoch.complained_result):
             self.epoch = Epoch.new_epoch()
 
         # reset leader
@@ -730,8 +716,6 @@ class BlockManager:
     def stop(self):
         # for reuse level db when restart channel.
         self.__close_level_db()
-
-        self.__block_generation_scheduler.stop()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()

@@ -33,7 +33,7 @@ class SlotTimer:
         self.__loop = loop
         self.__is_running = False
 
-    def start(self):
+    def start(self, is_run_at_start=True):
         self.__is_running = True
         self.__timer_service.add_timer(
             self.__timer_key,
@@ -41,7 +41,7 @@ class SlotTimer:
                 target=self.__timer_key,
                 duration=self.__duration,
                 is_repeat=True,
-                is_run_at_start=False,
+                is_run_at_start=is_run_at_start,
                 callback=self.__timer_callback
             )
         )

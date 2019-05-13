@@ -429,7 +429,13 @@ SLEEP_SECONDS_FOR_INIT_COMMON_PROCESS = 0.5
 
 
 ####################
-# LFT ####
+# There are two strategy for block generation in loopchain.
+# ALLOW_MAKE_EMPTY_BLOCK = False
+# One is treat tx immediately and make Block also.
+# But if there is no tx, loopchain is wait tx without repeated empty block generation.
+# ALLOW_MAKE_EMPTY_BLOCK = True
+# Another is make Block repeat whether tx is or not.
+# This Option can effect that strategy.
 ####################
 ALLOW_MAKE_EMPTY_BLOCK = True
 
