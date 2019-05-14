@@ -14,14 +14,13 @@
 """Block chain class with authorized blocks only"""
 
 import json
+import leveldb
 import pickle
 import threading
 import zlib
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Union, List
-
-import leveldb
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -764,7 +763,7 @@ class BlockChain:
 
     def block_dumps(self, block: Block) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         block_serialized = block_serializer.serialize(block)
 
         """
@@ -785,7 +784,7 @@ class BlockChain:
         block_serialized = json.loads(block_json)
         block_height = self.__block_versioner.get_height(block_serialized)
         block_version = self.__block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         return block_serializer.deserialize(block_serialized)
 
     def get_transaction_proof(self, tx_hash: Hash32):

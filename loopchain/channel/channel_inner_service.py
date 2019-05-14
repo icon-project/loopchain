@@ -857,7 +857,7 @@ class ChannelInnerTask:
     @message_queue_task
     async def get_block_v2(self, block_height, block_hash, block_data_filter, tx_data_filter):
         # This is a temporary function for v2 support of exchanges.
-        block, block_filter, block_hash, _, fail_response_code, tx_filter = \
+        block, block_filter, block_hash, _, fail_response_code, tx_filter, max_height, unconfirmed_height = \
             await self.__get_block(block_data_filter, block_hash, block_height, tx_data_filter)
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
@@ -904,7 +904,7 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def get_block(self, block_height, block_hash, block_data_filter, tx_data_filter):
-        block, block_filter, block_hash, confirm_info, fail_response_code, tx_filter = \
+        block, block_filter, block_hash, confirm_info, fail_response_code, tx_filter, max_height, unconfirmed_height = \
             await self.__get_block(block_data_filter, block_hash, block_height, tx_data_filter)
 
         if fail_response_code:
@@ -938,7 +938,11 @@ class ChannelInnerTask:
         else:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
-        return block, block_filter, block_hash, bytes(confirm_info), fail_response_code, tx_filter
+        last_unconfirmed_block = blockchain.last_unconfirmed_block
+        unconfirmed_height = last_unconfirmed_block.header.height if last_unconfirmed_block is not None else -1
+
+        return block, block_filter, block_hash, bytes(confirm_info), fail_response_code, tx_filter, \
+               blockchain.block_height, unconfirmed_height
 
     @message_queue_task
     def get_precommit_block(self, last_block_height: int):

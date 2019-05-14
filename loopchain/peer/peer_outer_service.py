@@ -437,7 +437,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         # Peer To Client
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, _, block_data_json, tx_data_json_list = \
+        response_code, block_hash, _, block_data_json, tx_data_json_list, max_height, unconfirmed_height = \
             channel_stub.sync_task().get_block(
                 block_height=-1,
                 block_hash='',
@@ -466,7 +466,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = \
+        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list, max_height, unconfirmed_height = \
             channel_stub.sync_task().get_block(
                 block_height=request.block_height,
                 block_hash=request.block_hash,
