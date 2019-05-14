@@ -795,6 +795,8 @@ class ChannelService:
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
         new_block = block_builder.build()
+
+        self.__block_manager.set_old_block_hash(new_block.header.hash, _block.header.hash)
         return new_block, tx_receipts
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
@@ -807,14 +809,20 @@ class ChannelService:
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")
 
+        new_block_hash = block.header.hash
+        old_block_hash = self.__block_manager.get_old_block_hash(new_block_hash)
+
         request = {
             "blockHeight": block.header.height,
-            "blockHash": block.header.hash.hex(),
+            "oldBlockHash": old_block_hash.hex(),
+            "newBlockHash": new_block_hash.hex()
         }
         request = convert_params(request, ParamType.write_precommit_state)
 
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         stub.sync_task().write_precommit_state(request)
+
+        self.__block_manager.pop_old_block_hash(new_block_hash)
         return True
 
     def score_remove_precommit_state(self, block: Block):

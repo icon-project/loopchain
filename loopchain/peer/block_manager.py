@@ -19,7 +19,7 @@ import shutil
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -73,6 +73,7 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
+        self.__old_block_hashes: Dict[Hash32, Hash32] = {}
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = name
@@ -141,6 +142,15 @@ class BlockManager:
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
+
+    def set_old_block_hash(self, new_block_hash: Hash32, old_block_hash: Hash32):
+        self.__old_block_hashes[new_block_hash] = old_block_hash
+
+    def get_old_block_hash(self, new_block_hash: Hash32):
+        return self.__old_block_hashes[new_block_hash]
+
+    def pop_old_block_hash(self, new_block_hash: Hash32):
+        self.__old_block_hashes.pop(new_block_hash)
 
     def get_total_tx(self):
         """
