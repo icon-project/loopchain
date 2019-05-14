@@ -65,9 +65,6 @@ class PeerService:
 
         self.__radio_station_stub = None
 
-        self.__level_db = None
-        self.__level_db_path = ""
-
         self.__peer_id = None
         self.__group_id = group_id
         if self.__group_id is None and conf.PEER_GROUP_ID != "":
@@ -214,13 +211,6 @@ class PeerService:
 
         logging.info("Start Peer Service at port: " + str(port))
 
-    def __init_level_db(self):
-        # level db for peer service not a channel, It store unique peer info like peer_id
-        self.__level_db, self.__level_db_path = util.init_level_db(
-            level_db_identity=self.__peer_target,
-            allow_rename_path=False
-        )
-
     def __run_rest_services(self, port):
         if conf.ENABLE_REST_SERVICE and conf.RUN_ICON_IN_LAUNCHER:
             logging.debug(f'Launch Sanic RESTful server. '
@@ -291,7 +281,6 @@ class PeerService:
 
         self.__init_kms_helper(agent_pin)
         self.__init_port(port)
-        self.__init_level_db()
         self.__init_key_by_channel()
 
         StubCollection().amqp_target = amqp_target
