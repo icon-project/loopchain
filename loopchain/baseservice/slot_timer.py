@@ -13,6 +13,8 @@
 # limitations under the License.
 """loopchain timer service."""
 
+import asyncio
+
 import loopchain.utils as util
 from loopchain.baseservice import TimerService, Timer
 
@@ -20,7 +22,7 @@ from loopchain.baseservice import TimerService, Timer
 class SlotTimer:
     """Slot Timer"""
 
-    def __init__(self, timer_key, duration, timer_service: TimerService, callback, callback_lock):
+    def __init__(self, timer_key, duration, timer_service: TimerService, callback, callback_lock: asyncio.Lock, loop):
         self.__slot = 0
         self.__delayed = True
         self.__timer_key = timer_key
@@ -28,8 +30,11 @@ class SlotTimer:
         self.__duration = duration
         self.__callback = callback
         self.__callback_lock = callback_lock
+        self.__loop = loop
+        self.__is_running = False
 
     def start(self):
+        self.__is_running = True
         self.__timer_service.add_timer(
             self.__timer_key,
             Timer(
@@ -48,24 +53,35 @@ class SlotTimer:
             self.__delayed = False
             self.call()
         elif self.__slot > 0:
-            if self.__callback_lock.acquire(timeout=0):
-                self.__callback_lock.release()
+            if not self.__callback_lock.locked():
                 util.logger.warning(f"consensus timer loop broken slot({self.__slot}) delayed({self.__delayed})")
                 self.call()
 
+    def __add_task(self):
+        if not self.__is_running:
+            util.logger.warning(f"SlotTimer is not running. slot({self.__slot}) delayed({self.__delayed})")
+            return
+        self.__loop.create_task(self.__callback())
+
     def call(self):
         util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
+
         if self.__slot > 0:
             self.__slot -= 1
-            self.__timer_service.get_event_loop().create_task(self.__callback())
+            self.__add_task()
         else:
             self.__delayed = True
 
     def call_instantly(self):
-        self.__timer_service.get_event_loop().create_task(self.__callback())
+        self.__add_task()
 
     def stop(self):
+        self.__is_running = False
         if self.__timer_key in self.__timer_service.timer_list:
             self.__timer_service.stop_timer(self.__timer_key)
-        self.__slot = 0
-        self.__delayed = False
+
+        async def _clean_slot():
+            self.__slot = 0
+            self.__delayed = True
+
+        self.__loop.create_task(_clean_slot())

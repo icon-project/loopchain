@@ -51,6 +51,10 @@ class Epoch:
     def _complain_vote(self):
         return self.__complain_vote[self.round]
 
+    @property
+    def complain_duration(self):
+        return min((2 ** self.round) * conf.TIMEOUT_FOR_LEADER_COMPLAIN, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
+
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
@@ -64,6 +68,7 @@ class Epoch:
             self.round += 1
         else:
             self.round = round_
+
         logging.debug(f"new round {round_}, {self.round}")
 
         self.__complain_vote[self.round] = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)

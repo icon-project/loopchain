@@ -255,6 +255,9 @@ class BlockManager:
         if not current_block.header.complained:
             self.epoch = Epoch.new_epoch()
 
+        # reset leader
+        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
+
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
         try:
@@ -303,10 +306,14 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
             raise InvalidUnconfirmedBlock(e)
 
-    def add_confirmed_block(self, confirmed_block: Block):
+    def add_confirmed_block(self, confirmed_block: Block, confirm_info=None):
+        if self.__channel_service.state_machine.state != "Watch":
+            util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
+            return
+
         my_height = self.__blockchain.last_block.header.height
         if confirmed_block.header.height == my_height + 1:
-            result = self.__blockchain.add_block(confirmed_block)
+            result = self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
             if result:
                 return
 
@@ -536,6 +543,9 @@ class BlockManager:
         retry_number = 0
 
         while max_height > my_height:
+            if self.__channel_service.state_machine.state != 'BlockSync':
+                break
+
             peer_stub = peer_stubs[peer_index]
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
@@ -616,7 +626,8 @@ class BlockManager:
         my_height = self.__current_block_height()
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
-        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height)
+        # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
+        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
 
         try:
             if peer_stubs:
@@ -630,17 +641,22 @@ class BlockManager:
             self.__start_block_height_sync_timer()
             return False
 
+        curr_state = self.__channel_service.state_machine.state
+        if curr_state != 'BlockSync':
+            util.logger.info(f"Current state{curr_state} is not BlockSync")
+            return True
+
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
             next_leader = self.__current_last_block().header.next_leader
             leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
 
-            if self.epoch.height < my_height:
-                self.epoch = Epoch.new_epoch()
-
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.epoch = Epoch.new_epoch(leader_peer.peer_id)
+            elif self.epoch.height < my_height:
+                self.epoch = Epoch.new_epoch()
+
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -814,6 +830,8 @@ class BlockManager:
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__channel_service.score_invoke
             reps = self.__channel_service.get_rep_ids()
+            logging.debug(f"last_block.header({self.__blockchain.last_block.header}) "
+                          f"unconfirmed_block.header({unconfirmed_block.header})")
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,
@@ -851,6 +869,5 @@ class BlockManager:
             await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
-            self.__channel_service.reset_leader(unconfirmed_block.header.next_leader.hex_hx())
 
         self.__channel_service.start_leader_complain_timer_if_tx_exists()

@@ -85,6 +85,9 @@ class PeerInnerTask:
 
         util.exit_and_msg(message)
 
+    @message_queue_task
+    async def change_node_type(self, node_type):
+        await self._peer_service.change_node_type(node_type)
 
 class PeerInnerService(MessageQueueService[PeerInnerTask]):
     TaskType = PeerInnerTask

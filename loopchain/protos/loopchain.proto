@@ -62,7 +62,6 @@ service PeerService {
     rpc Echo (CommonRequest) returns (CommonReply) {}
     // Leader 선정을 위한 인터페이스
     rpc ComplainLeader (ComplainLeaderRequest) returns (CommonReply) {}
-    rpc AnnounceNewLeader (ComplainLeaderRequest) returns (CommonReply) {}
     // RadioStation(High layer node) function
     rpc GetChannelInfos (GetChannelInfosRequest) returns (GetChannelInfosReply) {}
 

@@ -12,10 +12,10 @@
       "load_cert": false,
       "consensus_cert_use": false,
       "tx_cert_use": false,
-      "key_load_type": 0,
-      "private_path": "./my_keystore.json"
+      "key_load_type": 0
     }
   },
+  "PRIVATE_PATH": "./my_keystore.json",
   "RUN_ICON_IN_LAUNCHER": true,
   "PORT_PEER": 7200,
   "AMQP_KEY": "7200",

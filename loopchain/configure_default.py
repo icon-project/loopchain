@@ -379,9 +379,7 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
-        "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
-        "private_password": b'test'
+        "role_switch_block_height": -1
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
@@ -396,11 +394,13 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "public_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der'),
-        "private_path": os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der'),
-        "private_password": b'test'
+        "role_switch_block_height": -1
     }
 }
+
+PUBLIC_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der')
+PRIVATE_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der')
+PRIVATE_PASSWORD = b'test'
 
 # KMS
 KMS_AGENT_PASSWORD = ""
