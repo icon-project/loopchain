@@ -201,6 +201,8 @@ class BlockBuilder(BaseBlockBuilder):
         leaves = (
             self.prev_hash,
             self.transactions_hash,
+            self.receipts_hash,
+            self.state_hash,
             self.reps_hash,
             self.leader_votes_hash,
             self.prev_votes_hash,
