@@ -301,6 +301,9 @@ class BlockChain:
 
             # notify new block
             ObjectManager().channel_service.inner_service.notify_new_block()
+            # reset_network_by_block_height is called in critical section by self.__add_block_lock.
+            # Other Blocks must not be added until reset_network_by_block_height function finishes.
+            ObjectManager().channel_service.reset_network_by_block_height(self.__last_block.header.height)
 
             return True
 
@@ -348,10 +351,6 @@ class BlockChain:
         response = score_stub.sync_task().query(request)
         score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
 
-        if score_last_block_height == next_height:
-            logging.debug(f"already invoked block in score...")
-            return False
-
         if score_last_block_height < next_height:
             for invoke_block_height in range(score_last_block_height + 1, next_height):
                 logging.debug(f"mismatch invoke_block_height({invoke_block_height}) "
@@ -373,7 +372,11 @@ class BlockChain:
 
             return True
 
-        if score_last_block_height == next_height + 1:
+        elif score_last_block_height == next_height:
+            logging.debug(f"already invoked block in score...")
+            return False
+
+        elif score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
                     self.__confirmed_block_db.Get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
@@ -385,6 +388,7 @@ class BlockChain:
             except KeyError:
                 logging.debug("There is no invoke result height in db.")
         else:
+            # score_last_block_height is two or more higher than loopchain_last_block_height.
             util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
                               f"loopchain({next_height})/score({score_last_block_height})")

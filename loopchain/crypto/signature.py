@@ -75,7 +75,12 @@ class SignVerifier:
     def from_channel(cls, channel: str):
         from loopchain import configure as conf
 
-        public_file = conf.CHANNEL_OPTION[channel]["public_path"]
+        if 'public_path' in conf.CHANNEL_OPTION[channel]:
+            logging.warning(f"This setting(public_path) will be deprecated soon. "
+                            f"Please refer to the key configuration guide.")
+            public_file = conf.CHANNEL_OPTION[channel]['public_path']
+        else:
+            public_file = conf.PUBLIC_PATH
         return cls.from_pubkey_file(public_file)
 
     @classmethod
@@ -168,10 +173,21 @@ class Signer(SignVerifier):
     def from_channel(cls, channel: str):
         from loopchain import configure as conf
 
-        prikey_file = conf.CHANNEL_OPTION[channel]["private_path"]
-        if 'private_password' in conf.CHANNEL_OPTION[channel]:
-            password = conf.CHANNEL_OPTION[channel]["private_password"]
+        if 'private_path' in conf.CHANNEL_OPTION[channel]:
+            logging.warning(f"This setting(private_path) will be deprecated soon. "
+                            f"Please refer to the key configuration guide.")
+            prikey_file = conf.CHANNEL_OPTION[channel]['private_path']
         else:
+            prikey_file = conf.PRIVATE_PATH
+        if prikey_file.endswith(".der") or prikey_file.endswith(".pem"):
+            if 'private_password' in conf.CHANNEL_OPTION[channel]:
+                logging.warning(f"This setting(private_password) will be deprecated soon. "
+                                f"Please refer to the key configuration guide.")
+                password = conf.CHANNEL_OPTION[channel]['private_password']
+            else:
+                password = conf.PRIVATE_PASSWORD
+        else:
+            # created the private key file from tbears.
             password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
         return cls.from_prikey_file(prikey_file, password)
 
@@ -200,7 +216,7 @@ class Signer(SignVerifier):
         return auth
 
 
-def long_to_bytes (val, endianness='big'):
+def long_to_bytes(val, endianness='big'):
     """
     Use :ref:`string formatting` and :func:`~binascii.unhexlify` to
     convert ``val``, a :func:`long`, to a byte :func:`str`.

@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING
+from loopchain.blockchain.exception import TransactionInvalidNidError
 from . import TransactionSerializer, HASH_SALT
 from .. import TransactionVerifier as BaseTransactionVerifier
 
@@ -12,6 +13,12 @@ class TransactionVerifier(BaseTransactionVerifier):
     def __init__(self, hash_generator_version: int, raise_exceptions=True):
         super().__init__(hash_generator_version, raise_exceptions)
         self._tx_serializer = TransactionSerializer(hash_generator_version)
+
+    def pre_verify(self, tx: 'Transaction', **kwargs):
+        nid = kwargs.get('nid')
+        if nid != tx.nid:
+            raise TransactionInvalidNidError(tx.hash, tx.nid, nid)
+        self.verify(tx, None)
 
     def verify(self, tx: 'Transaction', blockchain=None):
         self.verify_loosely(tx, blockchain)

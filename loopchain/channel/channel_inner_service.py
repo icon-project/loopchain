@@ -30,7 +30,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32)
+                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, BlockVerifier)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 class ChannelTxCreatorInnerTask:
     def __init__(self, channel_name: str, peer_target: str, tx_versioner: TransactionVersioner):
         self.__channel_name = channel_name
+        self.__properties = dict()
         self.__tx_versioner = tx_versioner
 
         scheduler = BroadcastSchedulerFactory.new(channel=channel_name,
@@ -65,7 +66,18 @@ class ChannelTxCreatorInnerTask:
         self.__broadcast_scheduler: BroadcastScheduler = None
 
     @message_queue_task
+    async def update_properties(self, properties: dict):
+        self.__properties.update(properties)
+
+    @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        node_type = self.__properties.get('node_type', None)
+        if node_type is None:
+            util.logger.warning("Node type has not been set yet.")
+            return NodeInitializationError.message_code, None
+        elif node_type != conf.NodeType.CommunityNode.value:
+            return message_code.Response.fail_no_permission, None
+
         result_code = None
         exception = None
         tx = None
@@ -76,8 +88,13 @@ class ChannelTxCreatorInnerTask:
             ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
             tx = ts.from_(kwargs)
 
+            nid = self.__properties.get('nid', None)
+            if nid is None:
+                util.logger.warning(f"NID has not been set yet.")
+                raise NodeInitializationError(tx.hash.hex())
+
             tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
-            tv.verify(tx)
+            tv.pre_verify(tx, nid=nid)
 
             self.__pre_validate(tx)
 
@@ -86,7 +103,7 @@ class ChannelTxCreatorInnerTask:
             self.__broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, self.__tx_versioner))
             return message_code.Response.success, tx.hash.hex()
 
-        except TransactionInvalidError as e:
+        except MessageCodeError as e:
             result_code = e.message_code
             exception = e
             traceback.print_exc()
@@ -190,11 +207,24 @@ class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
 
 class ChannelTxReceiverInnerTask:
     def __init__(self, tx_versioner: TransactionVersioner, tx_queue: mp.Queue):
+        self.__nid: int = None
         self.__tx_versioner = tx_versioner
         self.__tx_queue = tx_queue
 
+    @message_queue_task
+    async def update_properties(self, properties: dict):
+        try:
+            self.__nid = properties['nid']
+        except KeyError:
+            pass
+
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx_list(self, request) -> tuple:
+        if self.__nid is None:
+            response_code = message_code.Response.fail
+            message = "Node initialization is not completed."
+            return response_code, message
+
         tx_list = []
         for tx_item in request.tx_list:
             tx_json = json.loads(tx_item.tx_json)
@@ -205,7 +235,7 @@ class ChannelTxReceiverInnerTask:
             tx = ts.from_(tx_json)
 
             tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
-            tv.verify(tx)
+            tv.pre_verify(tx, nid=self.__nid)
 
             tx.size(self.__tx_versioner)
 
@@ -233,8 +263,8 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
         util.exit_and_msg("MQ Connection lost.")
 
     @staticmethod
-    def main(channel_name: str, amqp_target: str, amqp_key: str, tx_versioner: TransactionVersioner, tx_queue: mp.Queue,
-             properties: ModuleProcessProperties=None):
+    def main(channel_name: str, amqp_target: str, amqp_key: str,
+             tx_versioner: TransactionVersioner, tx_queue: mp.Queue, properties: ModuleProcessProperties=None):
         if properties is not None:
             ModuleProcess.load_properties(properties, "txreceiver")
 
@@ -392,6 +422,14 @@ class ChannelInnerTask:
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
+    def update_sub_services_properties(self, **properties):
+        logging.info(f"properties {properties}")
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+
+        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
             process.terminate()
@@ -446,16 +484,13 @@ class ChannelInnerTask:
 
         while True:
             my_block_height = blockchain.block_height
-            if subscriber_block_height > my_block_height:
-                message = {'error': "Announced block height is lower than subscriber's."}
-                return json.dumps(message)
-
-            if subscriber_block_height == my_block_height:
+            if subscriber_block_height >= my_block_height:
                 async with self._citizen_condition_new_block:
                     await self._citizen_condition_new_block.wait()
 
             new_block_height = subscriber_block_height + 1
             new_block = blockchain.find_block_by_height(new_block_height)
+            confirm_info: str = blockchain.find_confirm_info_by_height(new_block_height).decode("utf-8")
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -465,7 +500,7 @@ class ChannelInnerTask:
             logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
                           f"target: {self._citizen_set}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
-            return json.dumps(bs.serialize(new_block))
+            return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
     async def register_subscriber(self, peer_id):
@@ -655,27 +690,19 @@ class ChannelInnerTask:
             block_height = blockchain.block_versioner.get_height(json_block)
             block_version = blockchain.block_versioner.get_version(block_height)
             bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
-
             confirmed_block = bs.deserialize(json_block)
+
+            block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
+            block_verifier.invoke_func = self._channel_service.score_invoke
+            block_verifier.verify(confirmed_block,
+                                  blockchain.last_block,
+                                  blockchain,
+                                  blockchain.last_block.header.next_leader)
+
             util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
                              f"hash({confirmed_block.header.hash.hex()}) "
                              f"block height({confirmed_block.header.height}), "
                              f"commit_state({commit_state})")
-
-            header: blocks.v0_1a.BlockHeader = confirmed_block.header
-            if not header.commit_state:
-                bb = BlockBuilder.from_new(confirmed_block, blockchain.tx_versioner)
-                confirmed_block = bb.build()  # to generate commit_state
-                header = confirmed_block.header
-            try:
-                commit_state = ast.literal_eval(commit_state)
-            except Exception as e:
-                logging.warning(f"channel_inner_service:announce_confirmed_block FAIL get commit_state_dict, "
-                                f"error by : {e}")
-
-            if header.commit_state != commit_state:
-                raise RuntimeError(f"Commit states does not match. "
-                                   f"Generated {header.commit_state}, Received {commit_state}")
 
             if blockchain.block_height < confirmed_block.header.height:
                 self._channel_service.block_manager.add_confirmed_block(confirmed_block)
@@ -1038,6 +1065,9 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
+
+    def update_sub_services_properties(self, **properties):
+        self._task.update_sub_services_properties(**properties)
 
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():

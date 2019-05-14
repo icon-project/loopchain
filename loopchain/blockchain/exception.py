@@ -93,6 +93,17 @@ class MessageCodeError(Exception):
     message_code = None
 
 
+class NodeInitializationError(MessageCodeError):
+    message_code = message_code.Response.fail_create_tx
+
+    def __init__(self, tx_hash=None, message=''):
+        super().__init__(message)
+        self.tx_hash = tx_hash
+
+    def __str__(self):
+        return f"{super().__str__()} tx_hash: {self.tx_hash} Node initialization is not completed."
+
+
 class TransactionInvalidError(MessageCodeError):
     message_code = message_code.Response.fail_tx_invalid_unknown
 
@@ -104,7 +115,7 @@ class TransactionInvalidError(MessageCodeError):
         return f"{super().__str__()} tx_hash: {self.tx_hash}"
 
 
-class TransactionInvalidHashForamtError(TransactionInvalidError):
+class TransactionInvalidHashFormatError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_hash_format
 
 
@@ -192,7 +203,7 @@ class TransactionInvalidOutOfTimeBound(TransactionInvalidError):
         return f"{super().__str__()} tx_timestamp: {self.tx_timestamp} cur_timestamp: {self.cur_timestamp}"
 
 
-class TransactionInvalidNoNidError(TransactionInvalidError):
+class TransactionInvalidNidError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_wrong_nid
 
     def __init__(self, tx_hash, nid, expected_nid, message=''):
