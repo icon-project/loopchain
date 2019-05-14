@@ -89,9 +89,6 @@ class PeerService:
         self.__outer_service: PeerOuterService = None
         self.__channel_services = {}
 
-        self.__reset_voter_in_progress = False
-        self.__json_conf_path = None
-
         self.__node_keys: dict = {}
 
         ObjectManager().peer_service = self
@@ -111,10 +108,6 @@ class PeerService:
     @property
     def rest_target(self):
         return self.__rest_target
-
-    @property
-    def json_conf_path(self):
-        return self.__json_conf_path
 
     @property
     def channel_infos(self):
