@@ -18,17 +18,17 @@ import logging
 import shutil
 import threading
 import traceback
-from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
+from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
+    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
+    ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -270,11 +270,6 @@ class BlockManager:
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
 
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
-
-        # TODO set below variable with right result.
-        check_unconfirmed_block_has_valid_block_info_for_prev_block = True
-        if not check_unconfirmed_block_has_valid_block_info_for_prev_block:
-            raise InvalidUnconfirmedBlock("Unconfirmed block has no valid block info for previous block")
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
@@ -796,17 +791,21 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    def __validate_unconfirmed_block_height(self, unconfirmed_block: Block):
+    def verify_confirm_info(self, unconfirmed_block: Block):
+        # TODO set below variable with right result.
+        check_unconfirmed_block_has_valid_confirm_info_for_prev_block = True
+        if not check_unconfirmed_block_has_valid_confirm_info_for_prev_block:
+            raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
+
         my_height = self.__blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
-            self.__channel_service.state_machine.block_sync()
-            raise BlockchainError(f"trigger block sync in _vote my_height({my_height}), "
-                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidNeedBlockSync(f"trigger block sync in _vote my_height({my_height}), "
+                                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.header.height:
-            raise BlockchainError(f"block is already added my_height({my_height}), "
-                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidAddedBlock(f"block is already added my_height({my_height}), "
+                                               f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
     async def _vote(self, unconfirmed_block: Block):
         exc = None
@@ -837,12 +836,6 @@ class BlockManager:
         util.logger.debug(f"in vote_as_peer "
                           f"height({unconfirmed_block.header.height}) "
                           f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
-
-        try:
-            self.__validate_unconfirmed_block_height(unconfirmed_block)
-        except BlockchainError as e:
-            util.logger.debug(e)
-            return
 
         try:
             self.add_unconfirmed_block(unconfirmed_block)

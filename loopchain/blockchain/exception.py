@@ -41,6 +41,24 @@ class NotEnoughVotes(Exception):
     pass
 
 
+class ConfirmInfoInvalid(Exception):
+    """Unconfirmed block has not valid confirm info for prev block.
+    """
+    pass
+
+
+class ConfirmInfoInvalidNeedBlockSync(Exception):
+    """Unconfirmed block has valid confirm info but it has higher height.
+    """
+    pass
+
+
+class ConfirmInfoInvalidAddedBlock(Exception):
+    """Unconfirmed block has valid confirm info but it has already added height.
+    """
+    pass
+
+
 class InvalidUnconfirmedBlock(Exception):
     """
     """

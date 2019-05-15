@@ -693,11 +693,22 @@ class ChannelInnerTask:
         if last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
             return
-        elif self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
-            util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
-            return
 
-        self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+        try:
+            self._channel_service.block_manager.verify_confirm_info(unconfirmed_block)
+        except ConfirmInfoInvalid:
+            # TODO
+            pass
+        except ConfirmInfoInvalidNeedBlockSync as e:
+            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
+            self._channel_service.state_machine.block_sync()
+        except ConfirmInfoInvalidAddedBlock as e:
+            util.logger.debug(f"ConfirmInfoInvalidAddedBlock {e}")
+        else:
+            if self._channel_service.state_machine.state in ("Vote", "Watch", "LeaderComplain"):
+                self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+            else:
+                util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
