@@ -56,7 +56,6 @@ class ChannelStateMachine(object):
     def __init__(self, channel_service):
         self.__channel_service = channel_service
 
-        self.machine.add_transition('complete_sync', 'BlockSync', 'SubscribeNetwork', after='_complete_sync_on_after')
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'BlockGenerate', conditions=['_is_leader'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Vote')
@@ -81,7 +80,7 @@ class ChannelStateMachine(object):
     def block_sync(self):
         pass
 
-    @statemachine.transition(source='Watch', dest='SubscribeNetwork', after='_do_subscribe_network')
+    @statemachine.transition(source='Watch', dest='SubscribeNetwork')
     def subscribe_network(self):
         pass
 
@@ -92,6 +91,7 @@ class ChannelStateMachine(object):
     def complete_subscribe(self):
         pass
 
+    @statemachine.transition(source='BlockSync', dest='SubscribeNetwork')
     def complete_sync(self):
         pass
 
@@ -126,10 +126,6 @@ class ChannelStateMachine(object):
     def _do_vote(self, unconfirmed_block: Block):
         self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
 
-    def _complete_sync_on_after(self):
-        self.__channel_service.update_sub_services_properties()
-        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
-
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
 
@@ -146,6 +142,9 @@ class ChannelStateMachine(object):
     def _subscribe_network_on_enter(self, *args, **kwargs):
         self.__channel_service.start_subscribe_timer()
         self.__channel_service.start_shutdown_timer()
+
+        self.__channel_service.update_sub_services_properties()
+        self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
     def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
