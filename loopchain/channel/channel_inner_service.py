@@ -701,7 +701,12 @@ class ChannelInnerTask:
             pass
         except ConfirmInfoInvalidNeedBlockSync as e:
             util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
-            self._channel_service.state_machine.block_sync()
+            block_manager = self._channel_service.block_manager
+            if self._channel_service.state_machine.state == "BlockGenerate" and (
+                    block_manager.consensus_algorithm and block_manager.consensus_algorithm.is_running):
+                block_manager.consensus_algorithm.stop()
+            else:
+                self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
             util.logger.debug(f"ConfirmInfoInvalidAddedBlock {e}")
         else:

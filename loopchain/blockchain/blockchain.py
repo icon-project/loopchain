@@ -667,7 +667,7 @@ class BlockChain:
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
-        block_manager: BlockManager = ObjectManager().channel_service.block_manager
+        block_manager: 'BlockManager' = ObjectManager().channel_service.block_manager
         candidate_blocks = block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")

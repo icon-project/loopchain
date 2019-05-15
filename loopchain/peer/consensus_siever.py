@@ -60,6 +60,10 @@ class ConsensusSiever(ConsensusBase):
         if self._loop:
             self.__put_vote(None)
 
+    @property
+    def is_running(self):
+        return self.__block_generation_timer.is_running
+
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
         if self._loop:
             self.__put_vote((vote_block_hash, vote_code, peer_id, group_id))
@@ -176,7 +180,7 @@ class ConsensusSiever(ConsensusBase):
             if await self._wait_for_voting(candidate_block) is None:
                 return
 
-            if self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1) and next_leader.hex_hx() != ChannelProperty().peer_id:
+            if next_leader.hex_hx() != ChannelProperty().peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")

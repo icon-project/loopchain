@@ -31,10 +31,10 @@ class SlotTimer:
         self.__callback = callback
         self.__callback_lock = callback_lock
         self.__loop = loop
-        self.__is_running = False
+        self.is_running = False
 
     def start(self, is_run_at_start=True):
-        self.__is_running = True
+        self.is_running = True
         self.__timer_service.add_timer(
             self.__timer_key,
             Timer(
@@ -58,7 +58,7 @@ class SlotTimer:
                 self.call()
 
     def __add_task(self):
-        if not self.__is_running:
+        if not self.is_running:
             util.logger.warning(f"SlotTimer is not running. slot({self.__slot}) delayed({self.__delayed})")
             return
         self.__loop.create_task(self.__callback())
@@ -76,7 +76,7 @@ class SlotTimer:
         self.__add_task()
 
     def stop(self):
-        self.__is_running = False
+        self.is_running = False
         if self.__timer_key in self.__timer_service.timer_list:
             self.__timer_service.stop_timer(self.__timer_key)
 
