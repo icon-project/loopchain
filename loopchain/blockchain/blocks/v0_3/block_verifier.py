@@ -1,7 +1,9 @@
 from typing import TYPE_CHECKING, List
+from loopchain import configure as conf
 from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier, BlockBuilder
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
-from loopchain.blockchain.types import ExternalAddress, Signature
+from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
+from loopchain.blockchain.types import ExternalAddress
 
 if TYPE_CHECKING:
     from loopchain.blockchain.blocks import Block
@@ -21,8 +23,11 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Leader({header.peer_id}) is not in "
                                      f"Reps({reps})")
             self._handle_exception(exception)
+
+        if header.height > 0:
+            self.verify_leader_votes(block, prev_block, reps)
         if header.height > 1:
-            self.verify_votes(block, reps)
+            self.verify_prev_votes(block, reps)
 
         builder = BlockBuilder.from_new(block, self._tx_versioner)
         builder.reset_cache()
@@ -98,87 +103,42 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Expected({generator.hex_xx()}).")
             self._handle_exception(exception)
 
-    def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
-        super().verify_prev_block(block, prev_block)
-
-        prev_block_header: BlockHeader = prev_block.header
-        block_header: BlockHeader = block.header
-        block_body: BlockBody = block.body
-
-        if block_header.height > 1:
-            if block_body.prev_votes.block_height != prev_block.header.height:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                         f"PrevVoteBlockHeight({block_body.prev_votes.block_height}), "
-                                         f"Expected({prev_block.header.height}).")
-                self._handle_exception(exception)
-
-            if block_body.prev_votes.block_hash != prev_block.header.hash:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                         f"PrevVoteBlockHash({block_body.prev_votes.block_hash}), "
-                                         f"Expected({prev_block.header.hash}).")
-                self._handle_exception(exception)
-
-            if block_body.prev_votes.get_result() is not True:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                         f"PrevVotes {block_body.prev_votes}")
-                self._handle_exception(exception)
-
-        if block_body.leader_votes.old_leader != ExternalAddress.empty():
-            if block_body.leader_votes.get_result() != block.header.peer_id:
+    def verify_leader_votes(self, block: 'Block', prev_block: 'Block',  reps: List[ExternalAddress]):
+        body: BlockBody = block.body
+        if body.leader_votes:
+            any_vote = next(vote for vote in body.leader_votes if vote)
+            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
+                                       block.header.height, any_vote.old_leader, body.leader_votes)
+            if leader_votes.get_result() != block.header.peer_id:
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "
-                                         f"Expected({block_body.leader_votes.get_result()}).")
-                self._handle_exception(exception)
-        else:
-            if prev_block_header.next_leader != block_header.peer_id:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                         f"Leader({block_header.peer_id.hex_xx()}), "
-                                         f"Expected({prev_block_header.next_leader.hex_xx()}).\n "
-                                         f"LeaderVotes({block_body.leader_votes}")
-                self._handle_exception(exception)
-
-    def verify_votes(self, block: 'Block', reps: List[str]):
-        # reps must be changed to prev_reps, not curr_reps
-        body: BlockBody = block.body
-        votes = body.prev_votes
-
-        if list(votes.reps) != reps:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}\n"
-                                     f"PreVotesReps({body.prev_votes.reps}), "
-                                     f"Expected({reps})")
-            self._handle_exception(exception)
-
-        if votes.block_height != block.header.height - 1:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}\n"
-                                     f"PreVotesBlockHeight({body.prev_votes.block_height}), "
-                                     f"Expected({block.header.height - 1})")
-            self._handle_exception(exception)
-        if votes.block_hash != block.header.prev_hash:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}\n"
-                                     f"PreVotesBlockHash({body.prev_votes.block_hash}), "
-                                     f"Expected({block.header.prev_hash})")
-            self._handle_exception(exception)
-
-        try:
-            votes.verify()
-        except Exception as e:
-            # FIXME : votes.verify does not verify all votes when raising an exception.
-            self._handle_exception(e)
-
-        leader_votes = body.leader_votes
-        if leader_votes.old_leader != ExternalAddress.empty():
-            if list(leader_votes.reps) != reps:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}\n"
-                                         f"LeaderVotesReps({leader_votes.reps}), "
-                                         f"Expected({reps})")
-                self._handle_exception(exception)
-            if leader_votes.block_height != block.header.height:
-                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}\n"
-                                         f"LeaderVotesBlockHeight({leader_votes.block_height}), "
-                                         f"Expected({block.header.height})")
+                                         f"Expected({leader_votes.get_result()}).")
                 self._handle_exception(exception)
             try:
                 leader_votes.verify()
             except Exception as e:
                 # FIXME : leader_votes.verify does not verify all votes when raising an exception.
                 self._handle_exception(e)
+        else:
+            prev_block_header: BlockHeader = prev_block.header
+            if prev_block_header.next_leader != block.header.peer_id:
+                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                         f"Leader({block.header.peer_id.hex_xx()}), "
+                                         f"Expected({prev_block_header.next_leader.hex_xx()}).\n "
+                                         f"LeaderVotes({body.leader_votes}")
+                self._handle_exception(exception)
+
+    def verify_prev_votes(self, block: 'Block', reps: List[ExternalAddress]):
+        header: BlockHeader = block.header
+        body: BlockBody = block.body
+
+        prev_votes = BlockVotes(reps, conf.VOTING_RATIO, header.height - 1, header.prev_hash, body.prev_votes)
+        if prev_votes.get_result() is not True:
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"PrevVotes {body.prev_votes}")
+            self._handle_exception(exception)
+        try:
+            prev_votes.verify()
+        except Exception as e:
+            # FIXME : votes.verify does not verify all votes when raising an exception.
+            self._handle_exception(e)

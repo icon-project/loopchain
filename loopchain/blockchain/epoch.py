@@ -202,7 +202,7 @@ class Epoch:
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
         block_builder.prev_votes = prev_votes
         if complain_votes and complain_votes.get_result():
-            block_builder.leader_votes = complain_votes
+            block_builder.leader_votes = complain_votes.votes
         else:
             self.__add_tx_to_block(block_builder)
 

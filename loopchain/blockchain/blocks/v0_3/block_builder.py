@@ -2,12 +2,11 @@ import time
 from functools import reduce
 from operator import or_
 from typing import List
-from loopchain import configure as conf
 from loopchain.blockchain.types import ExternalAddress, Hash32, BloomFilter
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.blocks import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockProver
-from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
+from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 
 
 class BlockBuilder(BaseBlockBuilder):
@@ -20,8 +19,8 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes that must be assigned
         self.reps: List[ExternalAddress] = None
-        self.leader_votes: LeaderVotes = LeaderVotes([], conf.LEADER_COMPLAIN_RATIO, -1, ExternalAddress.empty())
-        self.prev_votes: BlockVotes = None
+        self.leader_votes: List[LeaderVote] = []
+        self.prev_votes: List[BlockVote] = None
         self.next_leader: 'ExternalAddress' = None
 
         # Attributes to be assigned(optional)
@@ -143,7 +142,7 @@ class BlockBuilder(BaseBlockBuilder):
         return self.leader_vote_hash
 
     def _build_leader_vote_hash(self):
-        block_prover = BlockProver((vote.hash() for vote in self.leader_votes.votes),
+        block_prover = BlockProver((vote.hash() if vote else None for vote in self.leader_votes),
                                    BlockProverType.Vote)
         return block_prover.get_proof_root()
 
@@ -158,7 +157,7 @@ class BlockBuilder(BaseBlockBuilder):
         if not self.prev_votes:
             return Hash32.new()
 
-        block_prover = BlockProver((vote.hash() for vote in self.prev_votes.votes),
+        block_prover = BlockProver((vote.hash() if vote else None for vote in self.prev_votes),
                                    BlockProverType.Vote)
         return block_prover.get_proof_root()
 

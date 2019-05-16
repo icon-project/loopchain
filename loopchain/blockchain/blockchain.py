@@ -343,7 +343,7 @@ class BlockChain:
         if confirm_info:
             batch.Put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                json.dumps(confirm_info.serialize()).encode("utf-8")
+                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
             )
 
         self.__confirmed_block_db.Write(batch)
@@ -615,8 +615,8 @@ class BlockChain:
         block_builder.reps = reps
         block_builder.prev_hash = Hash32.new()
         block_builder.signer = ObjectManager().channel_service.peer_auth
-        block_builder.prev_votes = BlockVotes([], conf.VOTING_RATIO, -1, Hash32.empty())
-        block_builder.leader_votes = LeaderVotes([], conf.LEADER_COMPLAIN_RATIO, -1, ExternalAddress.empty())
+        block_builder.prev_votes = []
+        block_builder.leader_votes = []
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)

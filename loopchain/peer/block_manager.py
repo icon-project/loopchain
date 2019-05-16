@@ -32,7 +32,7 @@ from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
     ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
@@ -270,9 +270,19 @@ class BlockManager:
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
+        reps = self.__channel_service.get_rep_ids()
+
+        if unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block:
+            need_to_confirm = True
+        elif unconfirmed_block.header.version == "0.3":
+            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
+                                       unconfirmed_block.header.height, None, unconfirmed_block.body.leader_votes)
+            need_to_confirm = leader_votes.get_result() is None
+        else:
+            need_to_confirm = False
+
         try:
-            if (unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block) or \
-               (unconfirmed_block.header.version == "0.3" and unconfirmed_block.body.leader_votes.get_result() is None):
+            if need_to_confirm:
                 self.confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
@@ -371,7 +381,7 @@ class BlockManager:
         votes_dumped = response.confirm_info
         if votes_dumped:
             votes_serialized = json.loads(votes_dumped)
-            votes = BlockVotes.deserialize(votes_serialized, conf.VOTING_RATIO)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
         else:
             votes = None
 
@@ -399,7 +409,7 @@ class BlockManager:
         votes_dumped = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
         if votes_dumped:
             votes_serialized = json.loads(votes_dumped)
-            votes = BlockVotes.deserialize(votes_serialized, conf.VOTING_RATIO)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
         else:
             votes = None
         return block, json.loads(max_height_result.text)['block_height'], -1, votes, message_code.Response.success

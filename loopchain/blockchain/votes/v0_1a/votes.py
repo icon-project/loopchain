@@ -38,20 +38,17 @@ class BlockVotes(BaseVotes[BlockVote]):
                                f"{vote}")
         super().verify_vote(vote)
 
-    def empty_vote(self, rep: ExternalAddress):
-        return self.VoteType.empty(rep, self.block_height)
-
     def is_completed(self):
         return self.get_result() is not None
 
     def get_result(self):
         true_vote_count = sum(1 for vote in self.votes
-                              if not self.is_empty_vote(vote) and vote.block_hash == self.block_hash)
+                              if vote and vote.block_hash == self.block_hash)
         if true_vote_count >= self.quorum:
             return True
 
         false_vote_count = sum(1 for vote in self.votes
-                               if not self.is_empty_vote(vote) and vote.block_hash == Hash32.empty())
+                               if vote and vote.block_hash == Hash32.empty())
         if false_vote_count >= len(self.reps) - self.quorum + 1:
             return False
         return None
@@ -75,20 +72,6 @@ class BlockVotes(BaseVotes[BlockVote]):
             f"block_height={self.block_height!r}, block_hash={self.block_hash!r}, votes={self.votes!r})"
         )
 
-    # noinspection PyMethodOverriding
-    @classmethod
-    def deserialize(cls, votes_data: List[Dict], voting_ratio: float):
-        if votes_data:
-            votes = [BlockVote.deserialize(vote_data) for vote_data in votes_data]
-            reps = [vote.rep for vote in votes]
-            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].block_hash)
-            for vote in votes:
-                index = reps.index(vote.rep)
-                votes_instance.votes[index] = vote
-            return votes_instance
-        else:
-            return cls([], voting_ratio, -1, Hash32.empty())
-
 
 class LeaderVotes(BaseVotes[LeaderVote]):
     VoteType = LeaderVote
@@ -109,9 +92,6 @@ class LeaderVotes(BaseVotes[LeaderVote]):
                                f"{vote}")
         super().verify_vote(vote)
 
-    def empty_vote(self, rep: ExternalAddress):
-        return self.VoteType.empty(rep, self.block_height, self.old_leader)
-
     def is_completed(self):
         majority_pair = self.get_majority()
         if majority_pair:
@@ -119,7 +99,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
             if majority_count >= self.quorum:
                 return True
 
-            empty_count = sum(1 for vote in self.votes if self.is_empty_vote(vote))
+            empty_count = sum(1 for vote in self.votes if not vote)
             if majority_count + empty_count < self.quorum:
                 # It determines the majority of this votes cannot reach the quorum
                 return True
