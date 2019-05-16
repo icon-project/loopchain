@@ -15,8 +15,8 @@
 import math
 from abc import ABC, abstractmethod
 from collections import Counter
-from typing import Iterable, List, Generic, TypeVar
-from loopchain.blockchain.types import ExternalAddress, Signature
+from typing import Iterable, List, Generic, TypeVar, Optional
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.votes import Vote
 
 TVote = TypeVar("TVote", bound=Vote)
@@ -29,7 +29,7 @@ class Votes(ABC, Generic[TVote]):
         super().__init__()
         self.reps = tuple(reps)
         if votes is None:
-            self.votes: List[TVote] = [self.empty_vote(rep) for rep in self.reps]
+            self.votes: List[Optional[TVote]] = [None] * len(self.reps)
         else:
             self.votes = votes
         self.voting_ratio = voting_ratio
@@ -46,7 +46,7 @@ class Votes(ABC, Generic[TVote]):
 
     def verify(self):
         for rep, vote in zip(self.reps, self.votes):
-            if self.is_empty_vote(vote):
+            if not vote:
                 continue
             if rep != vote.rep:
                 raise RuntimeError(f"Incorrect Rep : {rep}, {vote.rep}")
@@ -61,19 +61,12 @@ class Votes(ABC, Generic[TVote]):
         index = self.reps.index(vote.rep)
 
         # FIXME Leave the evidence, Duplicate voting
-        if self.votes[index] != self.empty_vote(vote.rep):
+        if self.votes[index]:
             if self.votes[index].result() == vote.result():
                 # It should be checked last.
                 raise VoteSafeDuplicateError
             else:
                 raise VoteDuplicateError(f"Duplicate voting. {self.votes[index]}, {vote}")
-
-    @abstractmethod
-    def empty_vote(self, rep: ExternalAddress):
-        raise NotImplementedError
-
-    def is_empty_vote(self, vote: Vote):
-        return vote.signature == Signature.empty()
 
     @abstractmethod
     def is_completed(self):
@@ -84,7 +77,7 @@ class Votes(ABC, Generic[TVote]):
         raise NotImplementedError
 
     def get_majority(self):
-        counter = Counter(vote.result() for vote in self.votes if not self.is_empty_vote(vote))
+        counter = Counter(vote.result() for vote in self.votes if vote)
         majorities = counter.most_common(1)
         return majorities[0] if majorities else None
 
@@ -93,7 +86,7 @@ class Votes(ABC, Generic[TVote]):
             return ' ' * (length - len(str(left_str)))
 
         length = 8
-        counter = Counter(vote.result() for vote in self.votes if not self.is_empty_vote(vote))
+        counter = Counter(vote.result() for vote in self.votes if vote)
         for k, v in counter.items():
             length = max(length, len(str(k)))
         length += 1
@@ -102,14 +95,11 @@ class Votes(ABC, Generic[TVote]):
         for k, v in counter.items():
             msg += f"{k} {_fill_space(k)}: {v}/{len(self.reps)}\n"
 
-        empty_count = sum(1 for vote in self.votes if self.is_empty_vote(vote))
+        empty_count = sum(1 for vote in self.votes if not vote)
         msg += f"Empty {_fill_space('Empty')}: {empty_count}/{len(self.reps)}\n"
         msg += f"Result {_fill_space('Result')}: {self.get_result()}\n"
         msg += f"Quorum {_fill_space('Quorum')}: {self.quorum}\n"
         return msg
-
-    def serialize(self) -> list:
-        return [vote.serialize() for vote in self.votes]
 
     def __repr__(self):
         return \
@@ -125,8 +115,13 @@ class Votes(ABC, Generic[TVote]):
             self.quorum == other.quorum
 
     @classmethod
-    def deserialize(cls, votes_data: list, voting_ratio: float, **kwargs):
-        raise NotImplementedError
+    def serialize_votes(cls, votes: List[TVote]) -> list:
+        return [vote.serialize() if vote else None for vote in votes]
+
+    @classmethod
+    def deserialize_votes(cls, votes_data: list):
+        return [cls.VoteType.deserialize(vote_data) if vote_data is not None else None
+                for vote_data in votes_data]
 
 
 class VoteSafeDuplicateError(Exception):

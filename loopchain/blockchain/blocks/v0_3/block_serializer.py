@@ -1,6 +1,5 @@
 from collections import OrderedDict
 
-from loopchain import configure as conf
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
 from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
@@ -35,8 +34,8 @@ class BlockSerializer(BaseBlockSerializer):
             "bloomFilter": header.bloom_filter.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
-            "leaderVotes": body.leader_votes.serialize(),
-            "prevVotes": body.prev_votes.serialize(),
+            "leaderVotes": LeaderVotes.serialize_votes(body.leader_votes),
+            "prevVotes": BlockVotes.serialize_votes(body.prev_votes),
             "hash": header.hash.hex_0x(),
             "height": hex(header.height),
             "leader": header.peer_id.hex_hx(),
@@ -108,8 +107,8 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        leader_votes = LeaderVotes.deserialize(json_data["leaderVotes"], conf.LEADER_COMPLAIN_RATIO)
-        prev_votes = BlockVotes.deserialize(json_data["prevVotes"], conf.VOTING_RATIO)
+        leader_votes = LeaderVotes.deserialize_votes(json_data["leaderVotes"])
+        prev_votes = BlockVotes.deserialize_votes(json_data["prevVotes"])
 
         return {
             "transactions": transactions,
