@@ -15,14 +15,14 @@ class BlockHeader(BaseBlockHeader):
     state_hash: Hash32
     receipts_hash: Hash32
     reps_hash: Hash32
-    leader_vote_hash: Hash32
+    leader_votes_hash: Hash32
     prev_vote_hash: Hash32
 
     version = "0.3"
 
     @property
     def complained(self):
-        return self.leader_vote_hash != Hash32.empty()
+        return self.leader_votes_hash != Hash32.empty()
 
 
 @dataclass(frozen=True)
