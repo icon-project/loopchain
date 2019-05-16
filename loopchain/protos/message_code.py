@@ -73,6 +73,7 @@ class Response:
     fail_wrong_block_height = -17
     fail_no_permission = -18
     fail_out_of_tps_limit = -19
+    fail_connection_closed = -20
     fail_tx_invalid_unknown = -100
     fail_tx_invalid_hash_format = -101
     fail_tx_invalid_hash_generation = -102
