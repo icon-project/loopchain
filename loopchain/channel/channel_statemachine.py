@@ -52,6 +52,7 @@ class ChannelStateMachine(object):
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
+    service_available_states = ["BlockGenerate", "Vote", "LeaderComplain", "Watch"]
 
     def __init__(self, channel_service):
         self.__channel_service = channel_service

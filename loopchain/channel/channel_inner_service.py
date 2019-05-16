@@ -561,6 +561,7 @@ class ChannelInnerTask:
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
+        status_data["service_available"]: bool = status_data["state"] in self._channel_service.state_machine.service_available_states
         status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
