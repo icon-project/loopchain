@@ -31,7 +31,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.transactions_hash: 'Hash32' = None
         self.receipts_hash: 'Hash32' = None
         self.reps_hash: 'Hash32' = None
-        self.leader_vote_hash: 'Hash32' = None
+        self.leader_votes_hash: 'Hash32' = None
         self.prev_vote_hash: 'Hash32' = None
         self.bloom_filter: 'BloomFilter' = None
         self._timestamp: int = None
@@ -57,7 +57,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.transactions_hash = None
         self.receipts_hash = None
         self.reps_hash = None
-        self.leader_vote_hash = None
+        self.leader_votes_hash = None
         self.prev_vote_hash = None
         self.bloom_filter = None
         self._timestamp = None
@@ -83,7 +83,7 @@ class BlockBuilder(BaseBlockBuilder):
             "state_hash": self.state_hash,
             "receipts_hash": self.receipts_hash,
             "reps_hash": self.reps_hash,
-            "leader_vote_hash": self.leader_vote_hash,
+            "leader_votes_hash": self.leader_votes_hash,
             "prev_vote_hash": self.prev_vote_hash,
             "bloom_filter": self.bloom_filter,
         }
@@ -134,14 +134,14 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver(self.reps, BlockProverType.Rep)
         return block_prover.get_proof_root()
 
-    def build_leader_vote_hash(self):
-        if self.leader_vote_hash is not None:
-            return self.leader_vote_hash
+    def build_leader_votes_hash(self):
+        if self.leader_votes_hash is not None:
+            return self.leader_votes_hash
 
-        self.leader_vote_hash = self._build_leader_vote_hash()
-        return self.leader_vote_hash
+        self.leader_votes_hash = self._build_leader_votes_hash()
+        return self.leader_votes_hash
 
-    def _build_leader_vote_hash(self):
+    def _build_leader_votes_hash(self):
         block_prover = BlockProver((vote.hash() if vote else None for vote in self.leader_votes),
                                    BlockProverType.Vote)
         return block_prover.get_proof_root()
@@ -186,7 +186,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.build_transactions_hash()
         self.build_receipts_hash()
         self.build_reps_hash()
-        self.build_leader_vote_hash()
+        self.build_leader_votes_hash()
         self.build_prev_vote_hash()
         self.build_bloom_filter()
         self.hash = self._build_hash()
@@ -202,7 +202,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.prev_hash,
             self.transactions_hash,
             self.reps_hash,
-            self.leader_vote_hash,
+            self.leader_votes_hash,
             self.prev_vote_hash,
             self.bloom_filter,
             self.height,
@@ -222,7 +222,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.state_hash = header.state_hash
         self.receipts_hash = header.receipts_hash
         self.reps_hash = header.reps_hash
-        self.leader_vote_hash = header.leader_vote_hash
+        self.leader_votes_hash = header.leader_votes_hash
         self.prev_vote_hash = header.prev_vote_hash
         self.bloom_filter = header.bloom_filter
         self.fixed_timestamp = header.timestamp
