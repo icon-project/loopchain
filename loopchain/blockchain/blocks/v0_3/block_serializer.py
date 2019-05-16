@@ -30,7 +30,7 @@ class BlockSerializer(BaseBlockSerializer):
             "receiptsHash": header.receipts_hash.hex_0x(),
             "repsHash": header.reps_hash.hex_0x(),
             "leaderVotesHash": header.leader_votes_hash.hex_0x(),
-            "prevVoteHash": header.prev_vote_hash.hex_0x(),
+            "prevVotesHash": header.prev_votes_hash.hex_0x(),
             "bloomFilter": header.bloom_filter.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
@@ -73,8 +73,8 @@ class BlockSerializer(BaseBlockSerializer):
         leader_votes_hash = json_data["leaderVotesHash"]
         leader_votes_hash = Hash32.fromhex(leader_votes_hash)
 
-        prev_vote_hash = json_data["prevVoteHash"]
-        prev_vote_hash = Hash32.fromhex(prev_vote_hash)
+        prev_votes_hash = json_data["prevVotesHash"]
+        prev_votes_hash = Hash32.fromhex(prev_votes_hash)
 
         height = json_data["height"]
         height = int(height, 16)
@@ -95,7 +95,7 @@ class BlockSerializer(BaseBlockSerializer):
             "state_hash": state_hash,
             "reps_hash": reps_hash,
             "leader_votes_hash": leader_votes_hash,
-            "prev_vote_hash": prev_vote_hash,
+            "prev_votes_hash": prev_votes_hash,
             "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"])
         }
 

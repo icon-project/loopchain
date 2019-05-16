@@ -16,7 +16,7 @@ class BlockHeader(BaseBlockHeader):
     receipts_hash: Hash32
     reps_hash: Hash32
     leader_votes_hash: Hash32
-    prev_vote_hash: Hash32
+    prev_votes_hash: Hash32
 
     version = "0.3"
 
