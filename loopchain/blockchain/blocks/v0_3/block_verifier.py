@@ -70,11 +70,11 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Expected({builder.transactions_hash.hex()}).")
             self._handle_exception(exception)
 
-        builder.build_rep_hash()
-        if header.rep_hash != builder.rep_hash:
+        builder.build_reps_hash()
+        if header.reps_hash != builder.reps_hash:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"RepRootHash({header.rep_hash.hex()}), "
-                                     f"Expected({builder.rep_hash.hex()}).")
+                                     f"RepRootHash({header.reps_hash.hex()}), "
+                                     f"Expected({builder.reps_hash.hex()}).")
             self._handle_exception(exception)
 
         builder.build_prev_vote_hash()
