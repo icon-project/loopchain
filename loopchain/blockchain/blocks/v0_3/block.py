@@ -14,7 +14,7 @@ class BlockHeader(BaseBlockHeader):
     transactions_hash: Hash32
     state_hash: Hash32
     receipts_hash: Hash32
-    rep_hash: Hash32
+    reps_hash: Hash32
     leader_vote_hash: Hash32
     prev_vote_hash: Hash32
 

@@ -30,7 +30,7 @@ class BlockBuilder(BaseBlockBuilder):
         # Attributes to be generated
         self.transactions_hash: 'Hash32' = None
         self.receipts_hash: 'Hash32' = None
-        self.rep_hash: 'Hash32' = None
+        self.reps_hash: 'Hash32' = None
         self.leader_vote_hash: 'Hash32' = None
         self.prev_vote_hash: 'Hash32' = None
         self.bloom_filter: 'BloomFilter' = None
@@ -56,7 +56,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         self.transactions_hash = None
         self.receipts_hash = None
-        self.rep_hash = None
+        self.reps_hash = None
         self.leader_vote_hash = None
         self.prev_vote_hash = None
         self.bloom_filter = None
@@ -82,7 +82,7 @@ class BlockBuilder(BaseBlockBuilder):
             "transactions_hash": self.transactions_hash,
             "state_hash": self.state_hash,
             "receipts_hash": self.receipts_hash,
-            "rep_hash": self.rep_hash,
+            "reps_hash": self.reps_hash,
             "leader_vote_hash": self.leader_vote_hash,
             "prev_vote_hash": self.prev_vote_hash,
             "bloom_filter": self.bloom_filter,
@@ -123,14 +123,14 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver(self.receipts, BlockProverType.Receipt)
         return block_prover.get_proof_root()
 
-    def build_rep_hash(self):
-        if self.rep_hash is not None:
-            return self.rep_hash
+    def build_reps_hash(self):
+        if self.reps_hash is not None:
+            return self.reps_hash
 
-        self.rep_hash = self._build_rep_hash()
-        return self.rep_hash
+        self.reps_hash = self._build_reps_hash()
+        return self.reps_hash
 
-    def _build_rep_hash(self):
+    def _build_reps_hash(self):
         block_prover = BlockProver(self.reps, BlockProverType.Rep)
         return block_prover.get_proof_root()
 
@@ -185,7 +185,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         self.build_transactions_hash()
         self.build_receipts_hash()
-        self.build_rep_hash()
+        self.build_reps_hash()
         self.build_leader_vote_hash()
         self.build_prev_vote_hash()
         self.build_bloom_filter()
@@ -201,7 +201,7 @@ class BlockBuilder(BaseBlockBuilder):
         leaves = (
             self.prev_hash,
             self.transactions_hash,
-            self.rep_hash,
+            self.reps_hash,
             self.leader_vote_hash,
             self.prev_vote_hash,
             self.bloom_filter,
@@ -221,7 +221,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.transactions_hash = header.transactions_hash
         self.state_hash = header.state_hash
         self.receipts_hash = header.receipts_hash
-        self.rep_hash = header.rep_hash
+        self.reps_hash = header.reps_hash
         self.leader_vote_hash = header.leader_vote_hash
         self.prev_vote_hash = header.prev_vote_hash
         self.bloom_filter = header.bloom_filter
