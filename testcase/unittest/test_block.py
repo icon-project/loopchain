@@ -277,7 +277,7 @@ class TestBlock(unittest.TestCase):
 
         block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
         tx_proof = block_prover.get_proof(tx_index)
-        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_hash, tx_proof)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transactions_hash, tx_proof)
 
         block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
         receipt_proof = block_prover.get_proof(tx_index)

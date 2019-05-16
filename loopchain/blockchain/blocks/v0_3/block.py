@@ -11,7 +11,7 @@ class BlockHeader(BaseBlockHeader):
     next_leader: ExternalAddress
 
     bloom_filter: BloomFilter
-    transaction_hash: Hash32
+    transactions_hash: Hash32
     state_hash: Hash32
     receipt_hash: Hash32
     rep_hash: Hash32

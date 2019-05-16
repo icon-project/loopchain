@@ -822,7 +822,7 @@ class BlockChain:
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
 
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
-        return block_prover.prove(tx_hash, block.header.transaction_hash, proof)
+        return block_prover.prove(tx_hash, block.header.transactions_hash, proof)
 
     def get_receipt_proof(self, tx_hash: Hash32):
         try:
