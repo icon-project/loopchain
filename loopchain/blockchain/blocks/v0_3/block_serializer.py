@@ -31,7 +31,7 @@ class BlockSerializer(BaseBlockSerializer):
             "repsHash": header.reps_hash.hex_0x(),
             "leaderVotesHash": header.leader_votes_hash.hex_0x(),
             "prevVotesHash": header.prev_votes_hash.hex_0x(),
-            "bloomFilter": header.bloom_filter.hex_0x(),
+            "logsBloom": header.logs_bloom.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
             "leaderVotes": LeaderVotes.serialize_votes(body.leader_votes),
@@ -96,7 +96,7 @@ class BlockSerializer(BaseBlockSerializer):
             "reps_hash": reps_hash,
             "leader_votes_hash": leader_votes_hash,
             "prev_votes_hash": prev_votes_hash,
-            "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"])
+            "logs_bloom": BloomFilter.fromhex(json_data["logsBloom"])
         }
 
     def _deserialize_body_data(self, json_data: dict):

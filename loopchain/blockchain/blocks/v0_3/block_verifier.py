@@ -56,11 +56,11 @@ class BlockVerifier(BaseBlockVerifier):
                                          f"Expected({builder.receipts_hash.hex()}).")
                 self._handle_exception(exception)
 
-            builder.build_bloom_filter()
-            if header.bloom_filter != builder.bloom_filter:
+            builder.build_logs_bloom()
+            if header.logs_bloom != builder.logs_bloom:
                 exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"ReceiptRootHash({header.bloom_filter.hex()}), "
-                                         f"Expected({builder.bloom_filter.hex()}).")
+                                         f"LogsBloom({header.logs_bloom.hex()}), "
+                                         f"Expected({builder.logs_bloom.hex()}).")
                 self._handle_exception(exception)
 
         builder.build_transactions_hash()

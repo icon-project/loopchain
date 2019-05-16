@@ -33,7 +33,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.reps_hash: 'Hash32' = None
         self.leader_votes_hash: 'Hash32' = None
         self.prev_votes_hash: 'Hash32' = None
-        self.bloom_filter: 'BloomFilter' = None
+        self.logs_bloom: 'BloomFilter' = None
         self._timestamp: int = None
         self._receipts: list = None
 
@@ -59,7 +59,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.reps_hash = None
         self.leader_votes_hash = None
         self.prev_votes_hash = None
-        self.bloom_filter = None
+        self.logs_bloom = None
         self._timestamp = None
 
     def build(self):
@@ -85,7 +85,7 @@ class BlockBuilder(BaseBlockBuilder):
             "reps_hash": self.reps_hash,
             "leader_votes_hash": self.leader_votes_hash,
             "prev_votes_hash": self.prev_votes_hash,
-            "bloom_filter": self.bloom_filter,
+            "logs_bloom": self.logs_bloom,
         }
 
     def build_block_body_data(self) -> dict:
@@ -161,20 +161,20 @@ class BlockBuilder(BaseBlockBuilder):
                                    BlockProverType.Vote)
         return block_prover.get_proof_root()
 
-    def build_bloom_filter(self):
-        if self.bloom_filter is not None:
-            return self.bloom_filter
+    def build_logs_bloom(self):
+        if self.logs_bloom is not None:
+            return self.logs_bloom
 
-        self.bloom_filter = self._build_bloom_filter()
-        return self.bloom_filter
+        self.logs_bloom = self._build_logs_bloom()
+        return self.logs_bloom
 
-    def _build_bloom_filter(self):
+    def _build_logs_bloom(self):
         if not self.receipts:
             return BloomFilter.new()
 
-        bloom_filters = (BloomFilter.fromhex(receipt["logsBloom"])
+        logs_blooms = (BloomFilter.fromhex(receipt["logsBloom"])
                          for receipt in self.receipts if "logsBloom" in receipt)
-        return BloomFilter(reduce(or_, bloom_filters, BloomFilter.new()))
+        return BloomFilter(reduce(or_, logs_blooms, BloomFilter.new()))
 
     def build_hash(self):
         if self.hash is not None:
@@ -188,7 +188,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.build_reps_hash()
         self.build_leader_votes_hash()
         self.build_prev_votes_hash()
-        self.build_bloom_filter()
+        self.build_logs_bloom()
         self.hash = self._build_hash()
         return self.hash
 
@@ -204,7 +204,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.reps_hash,
             self.leader_votes_hash,
             self.prev_votes_hash,
-            self.bloom_filter,
+            self.logs_bloom,
             self.height,
             self._timestamp,
             self.peer_id,
@@ -224,7 +224,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.reps_hash = header.reps_hash
         self.leader_votes_hash = header.leader_votes_hash
         self.prev_votes_hash = header.prev_votes_hash
-        self.bloom_filter = header.bloom_filter
+        self.logs_bloom = header.logs_bloom
         self.fixed_timestamp = header.timestamp
         self._timestamp = header.timestamp
 

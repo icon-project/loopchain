@@ -10,7 +10,7 @@ from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 class BlockHeader(BaseBlockHeader):
     next_leader: ExternalAddress
 
-    bloom_filter: BloomFilter
+    logs_bloom: BloomFilter
     transactions_hash: Hash32
     state_hash: Hash32
     receipts_hash: Hash32
