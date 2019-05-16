@@ -449,3 +449,8 @@ CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testne
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
 TIMEOUT_FOR_LEADER_COMPLAIN = 60
 MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
+
+####################
+# QOS ####
+####################
+TPS_LIMIT_PER_SEC = 1000
