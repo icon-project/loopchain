@@ -25,7 +25,7 @@ class BlockSerializer(BaseBlockSerializer):
         return {
             "version": header.version,
             "prevHash": header.prev_hash.hex_0x(),
-            "transactionHash": header.transaction_hash.hex_0x(),
+            "transactionsHash": header.transactions_hash.hex_0x(),
             "stateHash": header.state_hash.hex_0x(),
             "receiptHash": header.receipt_hash.hex_0x(),
             "repHash": header.rep_hash.hex_0x(),
@@ -58,8 +58,8 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("nextLeader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
-        transaction_hash = json_data["transactionHash"]
-        transaction_hash = Hash32.fromhex(transaction_hash)
+        transactions_hash = json_data["transactionsHash"]
+        transactions_hash = Hash32.fromhex(transactions_hash)
 
         receipt_hash = json_data["receiptHash"]
         receipt_hash = Hash32.fromhex(receipt_hash)
@@ -90,7 +90,7 @@ class BlockSerializer(BaseBlockSerializer):
             "peer_id": peer_id,
             "signature": signature,
             "next_leader": next_leader,
-            "transaction_hash": transaction_hash,
+            "transactions_hash": transactions_hash,
             "receipt_hash": receipt_hash,
             "state_hash": state_hash,
             "rep_hash": rep_hash,

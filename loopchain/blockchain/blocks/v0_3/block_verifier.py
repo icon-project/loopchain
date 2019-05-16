@@ -63,11 +63,11 @@ class BlockVerifier(BaseBlockVerifier):
                                          f"Expected({builder.bloom_filter.hex()}).")
                 self._handle_exception(exception)
 
-        builder.build_transaction_hash()
-        if header.transaction_hash != builder.transaction_hash:
+        builder.build_transactions_hash()
+        if header.transactions_hash != builder.transactions_hash:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"TransactionRootHash({header.transaction_hash.hex()}), "
-                                     f"Expected({builder.transaction_hash.hex()}).")
+                                     f"TransactionsRootHash({header.transactions_hash.hex()}), "
+                                     f"Expected({builder.transactions_hash.hex()}).")
             self._handle_exception(exception)
 
         builder.build_rep_hash()
