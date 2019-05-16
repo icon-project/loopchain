@@ -13,7 +13,7 @@ class BlockHeader(BaseBlockHeader):
     bloom_filter: BloomFilter
     transactions_hash: Hash32
     state_hash: Hash32
-    receipt_hash: Hash32
+    receipts_hash: Hash32
     rep_hash: Hash32
     leader_vote_hash: Hash32
     prev_vote_hash: Hash32
@@ -31,4 +31,4 @@ class BlockBody(BaseBlockBody):
     prev_votes: List[BlockVote]
 
 
-receipt_hash_generator = build_hash_generator(1, "icx_receipt")
+receipts_hash_generator = build_hash_generator(1, "icx_receipt")

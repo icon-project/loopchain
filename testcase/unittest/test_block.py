@@ -280,8 +280,8 @@ class TestBlock(unittest.TestCase):
 
         block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
         receipt_proof = block_prover.get_proof(tx_index)
-        receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
-        assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
+        receipts_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
+        assert block_prover.prove(receipts_hash, block.header.receipts_hash, receipt_proof)
 
     def test_valid_timestamp(self):
         """Test for timestamp buffer in block verifier"""

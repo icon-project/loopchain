@@ -49,11 +49,11 @@ class BlockVerifier(BaseBlockVerifier):
             builder.state_hash = new_block.header.state_hash
 
             builder.receipts = invoke_result
-            builder.build_receipt_hash()
-            if header.receipt_hash != builder.receipt_hash:
+            builder.build_receipts_hash()
+            if header.receipts_hash != builder.receipts_hash:
                 exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"ReceiptRootHash({header.receipt_hash.hex()}), "
-                                         f"Expected({builder.receipt_hash.hex()}).")
+                                         f"ReceiptRootHash({header.receipts_hash.hex()}), "
+                                         f"Expected({builder.receipts_hash.hex()}).")
                 self._handle_exception(exception)
 
             builder.build_bloom_filter()

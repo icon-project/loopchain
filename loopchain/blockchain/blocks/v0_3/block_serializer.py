@@ -27,7 +27,7 @@ class BlockSerializer(BaseBlockSerializer):
             "prevHash": header.prev_hash.hex_0x(),
             "transactionsHash": header.transactions_hash.hex_0x(),
             "stateHash": header.state_hash.hex_0x(),
-            "receiptHash": header.receipt_hash.hex_0x(),
+            "receiptsHash": header.receipts_hash.hex_0x(),
             "repHash": header.rep_hash.hex_0x(),
             "leaderVoteHash": header.leader_vote_hash.hex_0x(),
             "prevVoteHash": header.prev_vote_hash.hex_0x(),
@@ -61,8 +61,8 @@ class BlockSerializer(BaseBlockSerializer):
         transactions_hash = json_data["transactionsHash"]
         transactions_hash = Hash32.fromhex(transactions_hash)
 
-        receipt_hash = json_data["receiptHash"]
-        receipt_hash = Hash32.fromhex(receipt_hash)
+        receipts_hash = json_data["receiptsHash"]
+        receipts_hash = Hash32.fromhex(receipts_hash)
 
         state_hash = json_data["stateHash"]
         state_hash = Hash32.fromhex(state_hash)
@@ -91,7 +91,7 @@ class BlockSerializer(BaseBlockSerializer):
             "signature": signature,
             "next_leader": next_leader,
             "transactions_hash": transactions_hash,
-            "receipt_hash": receipt_hash,
+            "receipts_hash": receipts_hash,
             "state_hash": state_hash,
             "rep_hash": rep_hash,
             "leader_vote_hash": leader_vote_hash,

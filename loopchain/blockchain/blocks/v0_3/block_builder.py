@@ -29,7 +29,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes to be generated
         self.transactions_hash: 'Hash32' = None
-        self.receipt_hash: 'Hash32' = None
+        self.receipts_hash: 'Hash32' = None
         self.rep_hash: 'Hash32' = None
         self.leader_vote_hash: 'Hash32' = None
         self.prev_vote_hash: 'Hash32' = None
@@ -55,7 +55,7 @@ class BlockBuilder(BaseBlockBuilder):
         super().reset_cache()
 
         self.transactions_hash = None
-        self.receipt_hash = None
+        self.receipts_hash = None
         self.rep_hash = None
         self.leader_vote_hash = None
         self.prev_vote_hash = None
@@ -81,7 +81,7 @@ class BlockBuilder(BaseBlockBuilder):
             "next_leader": self.next_leader,
             "transactions_hash": self.transactions_hash,
             "state_hash": self.state_hash,
-            "receipt_hash": self.receipt_hash,
+            "receipts_hash": self.receipts_hash,
             "rep_hash": self.rep_hash,
             "leader_vote_hash": self.leader_vote_hash,
             "prev_vote_hash": self.prev_vote_hash,
@@ -109,14 +109,14 @@ class BlockBuilder(BaseBlockBuilder):
         block_prover = BlockProver(self.transactions.keys(), BlockProverType.Transaction)
         return block_prover.get_proof_root()
 
-    def build_receipt_hash(self):
-        if self.receipt_hash is not None:
-            return self.receipt_hash
+    def build_receipts_hash(self):
+        if self.receipts_hash is not None:
+            return self.receipts_hash
 
-        self.receipt_hash = self._build_receipt_hash()
-        return self.receipt_hash
+        self.receipts_hash = self._build_receipts_hash()
+        return self.receipts_hash
 
-    def _build_receipt_hash(self):
+    def _build_receipts_hash(self):
         if not self.receipts:
             return Hash32.empty()
 
@@ -184,7 +184,7 @@ class BlockBuilder(BaseBlockBuilder):
             raise RuntimeError
 
         self.build_transactions_hash()
-        self.build_receipt_hash()
+        self.build_receipts_hash()
         self.build_rep_hash()
         self.build_leader_vote_hash()
         self.build_prev_vote_hash()
@@ -220,7 +220,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.next_leader = header.next_leader
         self.transactions_hash = header.transactions_hash
         self.state_hash = header.state_hash
-        self.receipt_hash = header.receipt_hash
+        self.receipts_hash = header.receipts_hash
         self.rep_hash = header.rep_hash
         self.leader_vote_hash = header.leader_vote_hash
         self.prev_vote_hash = header.prev_vote_hash
