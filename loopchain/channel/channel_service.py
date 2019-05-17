@@ -745,15 +745,19 @@ class ChannelService:
         block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
-        block_builder.signature = block.header.signature
-
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
+        if block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+            block_builder.signer = self.peer_auth
+        else:
+            block_builder.signature = block.header.signature
         new_block = block_builder.build()
+
+        self.__block_manager.set_old_block_hash(new_block.header.hash, block.header.hash)
         return new_block, tx_receipts
 
     def score_invoke(self, _block: Block) -> dict or None:
@@ -786,7 +790,6 @@ class ChannelService:
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
-        block_builder.signature = _block.header.signature
 
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
@@ -794,6 +797,10 @@ class ChannelService:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
+        if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+            block_builder.signer = self.peer_auth
+        else:
+            block_builder.signature = _block.header.signature
         new_block = block_builder.build()
 
         self.__block_manager.set_old_block_hash(new_block.header.hash, _block.header.hash)
@@ -810,8 +817,12 @@ class ChannelService:
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")
 
         new_block_hash = block.header.hash
-        old_block_hash = self.__block_manager.get_old_block_hash(new_block_hash)
+        try:
+            old_block_hash = self.__block_manager.get_old_block_hash(new_block_hash)
+        except KeyError:
+            old_block_hash = new_block_hash
 
+        logging.debug(f"Block Hash : {old_block_hash} -> {new_block_hash}")
         request = {
             "blockHeight": block.header.height,
             "oldBlockHash": old_block_hash.hex(),
