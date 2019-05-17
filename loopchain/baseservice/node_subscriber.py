@@ -30,10 +30,13 @@ from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import BlockSerializer, BlockVerifier
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.protos import message_code
 
 config.log_requests = False
 config.log_responses = False
 ws_methods = AsyncMethods()
+CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
+                              message_code.Response.fail_connection_closed}
 
 
 class NodeSubscriber:
@@ -44,6 +47,7 @@ class NodeSubscriber:
         self.__exception = None
         self.__tried_with_old_uri = False
         self.__websocket = None
+        self.__subscribe_event: Event = None
 
         ws_methods.add(self.node_ws_PublishHeartbeat)
         ws_methods.add(self.node_ws_PublishNewBlock)
@@ -61,12 +65,11 @@ class NodeSubscriber:
 
     async def subscribe(self, block_height, event: Event):
         self.__exception = None
+        self.__subscribe_event = event
 
         try:
             # set websocket payload maxsize to 4MB.
             self.__websocket = await websockets.connect(self.__target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK)
-            event.set()
-
             logging.debug(f"Websocket connection is Completed.")
             request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
             await self.__websocket.send(json.dumps(request))
@@ -106,7 +109,11 @@ class NodeSubscriber:
 
     async def node_ws_PublishNewBlock(self, **kwargs):
         if 'error' in kwargs:
-            return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
+            if kwargs.get('code') in CONNECTION_FAIL_CONDITIONS:
+                self.__exception = ConnectionError(kwargs['error'])
+                return
+            else:
+                return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
         block_dict, confirm_info_str = kwargs.get('block'), kwargs.get('confirm_info')
         confirm_info = confirm_info_str.encode("utf-8") if confirm_info_str else None
@@ -141,6 +148,8 @@ class NodeSubscriber:
             _callback(ConnectionError(kwargs['error']))
             return
 
+        if not self.__subscribe_event.is_set():
+            self.__subscribe_event.set()
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
