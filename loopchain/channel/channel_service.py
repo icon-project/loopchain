@@ -756,8 +756,11 @@ class ChannelService:
         else:
             block_builder.signature = block.header.signature
         new_block = block_builder.build()
-
         self.__block_manager.set_old_block_hash(new_block.header.hash, block.header.hash)
+
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
         return new_block, tx_receipts
 
     def score_invoke(self, _block: Block) -> dict or None:
@@ -802,8 +805,11 @@ class ChannelService:
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
-
         self.__block_manager.set_old_block_hash(new_block.header.hash, _block.header.hash)
+
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
         return new_block, tx_receipts
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):

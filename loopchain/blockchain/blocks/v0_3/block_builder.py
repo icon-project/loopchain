@@ -50,6 +50,8 @@ class BlockBuilder(BaseBlockBuilder):
             raise RuntimeError("Transactions and Receipts are not matched.")
 
         self._receipts = [dict(receipts[tx_hash.hex()]) for tx_hash in self.transactions]
+        for receipt in self._receipts:
+            receipt.pop("blockHash", None)
 
     def reset_cache(self):
         super().reset_cache()
