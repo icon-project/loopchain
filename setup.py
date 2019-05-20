@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 with open('requirements.txt') as requirements:
     requires = list(requirements)
 
-version = os.environ.get('VERSION')  # 1.21.5
+version = os.environ.get('VERSION')
 
 if version is None:
     with open(os.path.join('.', 'VERSION')) as version_file:
@@ -27,7 +27,7 @@ setup_options = {
         ],
     },
     'setup_requires': ['pytest-runner'],
-    'tests_requires': ['pytest'],
+    'tests_require': ['pytest'],
     'classifiers': [
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
@@ -35,8 +35,9 @@ setup_options = {
         'Natural Language :: English',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.6.5',
-        'Programming Language :: Python :: 3.7'
+        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3 :: Only'
     ]
 }
 
