@@ -814,7 +814,11 @@ class ChannelService:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
+
         new_block = block_builder.build()
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
         return new_block, tx_receipts
 
     def score_invoke(self, _block: Block) -> dict or None:
@@ -855,7 +859,11 @@ class ChannelService:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
+
         new_block = block_builder.build()
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
         return new_block, tx_receipts
 
     def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
