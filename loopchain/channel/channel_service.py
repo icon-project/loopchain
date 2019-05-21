@@ -553,9 +553,6 @@ class ChannelService:
                 logging.debug(f"This node is not Citizen anymore.")
                 return
 
-            if isinstance(future.exception(), NotImplementedError):
-                asyncio.ensure_future(self.__subscribe_call_by_rest_stub(subscribe_event))
-
             elif isinstance(future.exception(), ConnectionError):
                 logging.warning(f"Waiting for next subscribe request...")
                 if self.__state_machine.state != "SubscribeNetwork":
@@ -570,58 +567,6 @@ class ChannelService:
             event=subscribe_event
         )).add_done_callback(_handle_exception)
         await subscribe_event.wait()
-
-    async def __subscribe_call_by_rest_stub(self, event):
-        if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
-            peer_target = ChannelProperty().rest_target
-        else:
-            peer_target = f"https://{ChannelProperty().rest_target}"
-
-        try:
-            response = await self.__radio_station_stub.call_async(
-                "Subscribe", {
-                    'channel': ChannelProperty().name,
-                    'peer_target': peer_target
-                }
-            )
-
-        except Exception as e:
-            logging.warning(f"Due to Subscription fail to RS peer({ChannelProperty().radio_station_target}), "
-                            f"automatically retrying subscribe call")
-            return
-
-        if response and response['response_code'] == message_code.Response.success:
-            logging.debug(f"Subscription to RS peer({ChannelProperty().radio_station_target}) is successful.")
-            event.set()
-            self.start_check_last_block_rs_timer()
-
-    def __unsubscribe_call_by_rest_stub(self):
-        if conf.REST_SSL_TYPE == conf.SSLAuthType.none:
-            peer_target = ChannelProperty().rest_target
-        else:
-            peer_target = f"https://{ChannelProperty().rest_target}"
-        try:
-            self.__radio_station_stub.call(
-                "Unsubscribe", {
-                    'channel': ChannelProperty().name,
-                    'peer_target': peer_target
-                }
-            )
-        except Exception as e:
-            logging.warning(f"Unsubscribe fail")
-            return
-
-    def __check_last_block_to_rs(self):
-        try:
-            self.__radio_station_stub.call("GetLastBlock")
-        except Exception as e:
-            logging.error(f"failed to check last block to RS peer({ChannelProperty().radio_station_target}), "
-                          f"caused by: {e}")
-            self.__unsubscribe_call_by_rest_stub()
-            self.stop_check_last_block_rs_timer()
-            if self.__state_machine.state != "SubscribeNetwork":
-                logging.error(f"changing state to subscribe network...")
-                self.__state_machine.subscribe_network()
 
     def shutdown_peer(self, **kwargs):
         logging.debug(f"channel_service:shutdown_peer")
@@ -917,14 +862,6 @@ class ChannelService:
 
     def stop_subscribe_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
-
-    def start_check_last_block_rs_timer(self):
-        self.__timer_service.add_timer_convenient(
-            timer_key=TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION,
-            duration=conf.GET_LAST_BLOCK_TIMER, is_repeat=True, callback=self.__check_last_block_to_rs)
-
-    def stop_check_last_block_rs_timer(self):
-        self.__timer_service.stop_timer(TimerService.TIMER_KEY_GET_LAST_BLOCK_KEEP_CITIZEN_SUBSCRIPTION)
 
     def start_shutdown_timer(self):
         error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
