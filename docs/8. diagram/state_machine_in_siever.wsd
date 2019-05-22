@@ -102,8 +102,8 @@ SubscribeNetwork -left[#blue,thickness=2]-> Watch: <color:blue>(if node_type == 
 SubscribeNetwork -right[#purple,thickness=2]-> Vote: <color:purple>(if not leader)\ntrigger::complete_subscribe
 
 ' BlockGenerate
-Vote -down-> BlockGenerate : Recv AnnounceUnConfirmedBlock\ntrigger::turn_to_leader\n(if next leader == self)
-BlockGenerate -up-> Vote : Send AnnounceConfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
+Vote -down-> BlockGenerate : Recv AnnounceUnconfirmedBlock\ntrigger::turn_to_leader\n(if next leader == self)
+BlockGenerate -up-> Vote : Send AnnounceUnconfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
 
 ' Watch
 Watch -right-> EvaluateNetwork: Reconnect to RS Peer\n(after connection error)\ntrigger::subscribe_network

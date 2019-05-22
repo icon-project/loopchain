@@ -700,42 +700,6 @@ class ChannelInnerTask:
         self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task
-    async def announce_confirmed_block(self, serialized_block, commit_state):
-        try:
-            if self._channel_service.state_machine.state != "Watch":
-                return
-            blockchain = self._channel_service.block_manager.get_blockchain()
-            json_block = json.loads(serialized_block)
-
-            block_height = blockchain.block_versioner.get_height(json_block)
-            block_version = blockchain.block_versioner.get_version(block_height)
-            bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
-            confirmed_block = bs.deserialize(json_block)
-
-            block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
-            block_verifier.invoke_func = self._channel_service.score_invoke
-            block_verifier.verify(confirmed_block,
-                                  blockchain.last_block,
-                                  blockchain,
-                                  blockchain.last_block.header.next_leader)
-
-            util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
-                             f"hash({confirmed_block.header.hash.hex()}) "
-                             f"block height({confirmed_block.header.height}), "
-                             f"commit_state({commit_state})")
-
-            if blockchain.block_height < confirmed_block.header.height:
-                self._channel_service.block_manager.add_confirmed_block(confirmed_block)
-            else:
-                logging.debug(f"channel_inner_service:announce_confirmed_block "
-                              f"already synced block height({confirmed_block.header.height})")
-            response_code = message_code.Response.success
-        except Exception as e:
-            logging.error(f"announce confirmed block error : {e}")
-            response_code = message_code.Response.fail
-        return response_code
-
-    @message_queue_task
     def block_sync(self, block_hash, block_height):
         blockchain = self._channel_service.block_manager.get_blockchain()
 

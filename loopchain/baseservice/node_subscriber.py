@@ -23,7 +23,6 @@ import websockets
 from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
-from websockets.exceptions import InvalidStatusCode, InvalidMessage
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -45,7 +44,6 @@ class NodeSubscriber:
         self.__rs_target = rs_target
         self.__target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{self.__rs_target}/api/ws/{channel}"
         self.__exception = None
-        self.__tried_with_old_uri = False
         self.__websocket = None
         self.__subscribe_event: Event = None
 
@@ -74,13 +72,6 @@ class NodeSubscriber:
             request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
             await self.__websocket.send(json.dumps(request))
             await self.__subscribe_loop(self.__websocket)
-        except (InvalidStatusCode, InvalidMessage) as e:
-            if not self.__tried_with_old_uri:
-                await self.try_subscribe_to_old_uri(block_height, event)
-                return
-            logging.warning(f"websocket subscribe {type(e)} exception, caused by: {e}\n"
-                            f"This target({self.__rs_target}) may not support websocket yet.")
-            raise NotImplementedError
         except Exception as e:
             traceback.print_exc()
             logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
@@ -100,12 +91,6 @@ class NodeSubscriber:
             else:
                 response_dict = json.loads(response)
                 await ws_methods.dispatch(response_dict)
-
-    async def try_subscribe_to_old_uri(self, block_height, event: Event):
-        self.__target_uri = self.__target_uri.replace('/ws', '/node')
-        self.__tried_with_old_uri = True
-        logging.info(f"try websocket again with old uri... old uri: {self.__target_uri}")
-        await self.subscribe(block_height, event)
 
     async def node_ws_PublishNewBlock(self, **kwargs):
         if 'error' in kwargs:

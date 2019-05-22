@@ -397,7 +397,9 @@ class BlockManager:
         block_version = self.get_blockchain().block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        confirm_info = get_block_result.get('confirm_info', '').encode('utf-8')
+        confirm_info = get_block_result.get('confirm_info', '')
+        if isinstance(confirm_info, str):
+            confirm_info = confirm_info.encode('utf-8')
 
         return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
 
