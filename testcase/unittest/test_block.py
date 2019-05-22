@@ -243,8 +243,9 @@ class TestBlock(unittest.TestCase):
                 "tx_dumped": tx_serializer.to_full_data(tx)
             }
 
-        block_builder.peer_private_key = private_auth.private_key
-        block_builder.height = 0
+        block_builder.signer = private_auth
+        block_builder.height = 3
+        block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
