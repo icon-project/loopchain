@@ -12,13 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
+
 import json
-import leveldb
 import pickle
 import threading
 import zlib
 from enum import Enum
+from typing import TYPE_CHECKING
 from typing import Union, List
+
+import leveldb
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -30,6 +33,9 @@ from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.utils.message_queue import StubCollection
+
+if TYPE_CHECKING:
+    from loopchain.peer import BlockManager
 
 
 class NID(Enum):
@@ -661,7 +667,8 @@ class BlockChain:
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
-        candidate_blocks = ObjectManager().channel_service.block_manager.candidate_blocks
+        block_manager: 'BlockManager' = ObjectManager().channel_service.block_manager
+        candidate_blocks = block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
@@ -678,7 +685,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if current_block.header.complained:
+                    if current_block.header.complained and block_manager.epoch.complained_result:
                         util.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
                     return None

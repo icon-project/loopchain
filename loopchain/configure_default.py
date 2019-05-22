@@ -145,9 +145,9 @@ class ConsensusAlgorithm(IntEnum):
     lft = 3
 
 
-# 블록 생성 간격, tx 가 없을 경우 다음 간격까지 건너 뛴다.
 INTERVAL_BLOCKGENERATION = 2
 INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK = INTERVAL_BLOCKGENERATION
+MAX_MADE_BLOCK_COUNT = 10
 WAIT_SECONDS_FOR_VOTE = 0.2
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
@@ -429,7 +429,13 @@ SLEEP_SECONDS_FOR_INIT_COMMON_PROCESS = 0.5
 
 
 ####################
-# LFT ####
+# There are two strategy for block generation in loopchain.
+# ALLOW_MAKE_EMPTY_BLOCK = False
+# One is treat tx immediately and make Block also.
+# But if there is no tx, loopchain is wait tx without repeated empty block generation.
+# ALLOW_MAKE_EMPTY_BLOCK = True
+# Another is make Block repeat whether tx is or not.
+# This Option can effect that strategy.
 ####################
 ALLOW_MAKE_EMPTY_BLOCK = True
 
