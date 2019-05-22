@@ -31,18 +31,20 @@ class SignVerifier:
         self.address: str = None
 
     def verify_address(self, pubkey: bytes):
-        return self.address_from_pubkey(pubkey) == self.address
+        new_address = self.address_from_pubkey(pubkey)
+        if new_address != self.address:
+            raise RuntimeError(f"Address is not valid."
+                               f"Address({new_address}), "
+                               f"Expected({self.address}")
 
     def verify_data(self, origin_data: bytes, signature: bytes):
-        return self.verify_signature(origin_data, signature, False)
+        self.verify_signature(origin_data, signature, False)
 
     def verify_hash(self, origin_data, signature):
-        return self.verify_signature(origin_data, signature, True)
+        self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
         try:
-            if is_hash:
-                origin_data = binascii.unhexlify(origin_data)
             origin_signature, recover_code = signature[:-1], signature[-1]
             recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
             pub = self._pri.ecdsa_recover(origin_data,
@@ -51,9 +53,9 @@ class SignVerifier:
                                           digest=hashlib.sha3_256)
             extract_pub = PublicKey(pub).serialize(compressed=False)
             return self.verify_address(extract_pub)
-        except Exception:
-            logging.debug(f"signature verify fail : {origin_data} {signature}")
-            return False
+        except Exception as e:
+            raise RuntimeError(f"signature verification fail : {origin_data} {signature}\n"
+                               f"{e}")
 
     @classmethod
     def address_from_pubkey(cls, pubkey: bytes):
@@ -211,7 +213,9 @@ class Signer(SignVerifier):
 
         # verify
         sign = auth.sign_data(b'TEST')
-        if auth.verify_data(b'TEST', sign) is False:
+        try:
+            auth.verify_data(b'TEST', sign)
+        except:
             raise ValueError("Invalid Signature(Peer Certificate load test)")
         return auth
 
