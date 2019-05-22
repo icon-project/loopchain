@@ -90,8 +90,23 @@ class SignVerifier:
 
     @classmethod
     def from_pubkey_file(cls, pubkey_file: str):
-        with open(pubkey_file, "rb") as der:
-            pubkey = der.read()
+        with open(pubkey_file, "rb") as file:
+            public_bytes = file.read()
+        if pubkey_file.endswith('.der'):
+            temp_public = serialization.load_der_public_key(public_bytes, default_backend())
+            encoding = serialization.Encoding.DER
+        elif pubkey_file.endswith('.pem'):
+            temp_public = serialization.load_pem_public_key(public_bytes, default_backend())
+            encoding = serialization.Encoding.PEM
+        else:
+            raise RuntimeError(f"Not supported file {pubkey_file}")
+
+        temp_public = temp_public.public_bytes(
+            encoding=encoding,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+        key_info = keys.PublicKeyInfo.load(temp_public)
+        pubkey = key_info['public_key'].native
         return cls.from_pubkey(pubkey)
 
     @classmethod
