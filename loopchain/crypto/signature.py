@@ -94,15 +94,13 @@ class SignVerifier:
             public_bytes = file.read()
         if pubkey_file.endswith('.der'):
             temp_public = serialization.load_der_public_key(public_bytes, default_backend())
-            encoding = serialization.Encoding.DER
         elif pubkey_file.endswith('.pem'):
             temp_public = serialization.load_pem_public_key(public_bytes, default_backend())
-            encoding = serialization.Encoding.PEM
         else:
             raise RuntimeError(f"Not supported file {pubkey_file}")
 
         temp_public = temp_public.public_bytes(
-            encoding=encoding,
+            encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
         )
         key_info = keys.PublicKeyInfo.load(temp_public)
@@ -128,21 +126,23 @@ class SignVerifier:
                         .load_der_private_key(private_bytes,
                                               password,
                                               default_backend())
-                if prikey_file.endswith('.pem'):
+                elif prikey_file.endswith('.pem'):
                     temp_private = serialization \
                         .load_pem_private_key(private_bytes,
                                               password,
                                               default_backend())
+                else:
+                    raise RuntimeError("Cannot be here.")
             except Exception as e:
                 raise ValueError("Invalid Password(Peer Certificate load test)")
-
-            no_pass_private = temp_private.private_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-            key_info = keys.PrivateKeyInfo.load(no_pass_private)
-            prikey = long_to_bytes(key_info['private_key'].native['private_key'])
+            else:
+                no_pass_private = temp_private.private_bytes(
+                    encoding=serialization.Encoding.DER,
+                    format=serialization.PrivateFormat.PKCS8,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+                key_info = keys.PrivateKeyInfo.load(no_pass_private)
+                prikey = long_to_bytes(key_info['private_key'].native['private_key'])
         else:
             from tbears.libs.icx_signer import key_from_key_store
             prikey = key_from_key_store(prikey_file, password)
