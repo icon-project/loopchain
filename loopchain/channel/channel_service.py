@@ -22,16 +22,16 @@ import traceback
 
 from earlgrey import MessageQueueService
 
-from loopchain import utils
 from loopchain import configure as conf
-from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.blockchain import Epoch
-from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
-from loopchain.blockchain.blocks import Block, BlockBuilder
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.blockchain import Epoch
+from loopchain.blockchain.blocks import Block, BlockBuilder
+from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -434,7 +434,44 @@ class ChannelService:
 
         return score_info
 
+    def _load_preps_from_iiss(self):
+        self.__peer_manager.reset_peers(check_status=False)
+
+        utils.logger.notice(f"__get_channel_infos Try load channels via icon-service...")
+
+        request = {
+            "method": "ise_getPReps"
+        }
+
+        request = convert_params(request, ParamType.call)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = stub.sync_task().call(request)
+        response_to_json_query(response)
+
+        utils.logger.notice(f"from icon service channels is {response}")
+
+        response_temp = dict()
+        response_temp["result"] = {}
+        response_temp["result"]["blockHeight"] = 0
+        response_temp["result"]["preps"] = []
+        response_temp["result"]["preps"].append(
+            {"id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe", "publickey": "2", "target": "10.241.0.109:7100"})
+        response_temp["result"]["preps"].append(
+            {"id": "hx9f049228bade72bc0a3490061b824f16bbb74589", "publickey": "4", "target": "10.241.0.109:7200"})
+
+        utils.logger.notice(f"from icon service channels is {utils.pretty_json(json.dumps(response_temp))}")
+
+        for order, rep_info in enumerate(response_temp["result"]["preps"]):
+            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            self.__peer_manager.add_peer(peer_info)
+            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, rep_info["target"])
+        self.show_peers()
+
+        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+
     async def __load_peers_from_file(self):
+        # self._load_preps_from_iiss()
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)
@@ -629,9 +666,9 @@ class ChannelService:
             self.block_manager.rebuild_block()
 
     def show_peers(self):
-        logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
+        utils.logger.notice(f"peer_service:show_peers ({ChannelProperty().name}): ")
         for peer in self.peer_manager.get_IP_of_peers_in_group():
-            logging.debug("peer_target: " + peer)
+            utils.logger.notice("peer_target: " + peer)
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
@@ -667,6 +704,8 @@ class ChannelService:
         else:
             self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
         logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
+
+        self._load_preps_from_iiss()
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")

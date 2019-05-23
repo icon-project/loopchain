@@ -613,21 +613,24 @@ class PeerManager:
 
         logging.info(f"non response peer list : {nonresponse_peer_list}")
 
-    def reset_peers(self, group_id, reset_action):
+    def reset_peers(self, group_id=None, reset_action=None, check_status=True):
         if group_id is None:
             for search_group in list(self.peer_list.keys()):
-                self.__reset_peers_in_group(search_group, reset_action)
+                self.__reset_peers_in_group(search_group, reset_action, check_status)
         else:
-            self.__reset_peers_in_group(group_id, reset_action)
+            self.__reset_peers_in_group(group_id, reset_action, check_status)
 
-    def __reset_peers_in_group(self, group_id, reset_action):
+    def __reset_peers_in_group(self, group_id, reset_action, check_status=True):
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
         for peer_id in list(self.peer_list[group_id]):
             peer_each = self.peer_list[group_id][peer_id]
             stub_manager = self.get_peer_stub_manager(peer_each, group_id)
             try:
-                stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
-                                  is_stub_reuse=True)
+                if check_status:
+                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
+                                      is_stub_reuse=True)
+                else:
+                    raise Exception
             except Exception as e:
                 logging.warning("gRPC Exception: " + str(e))
                 logging.debug("remove this peer(target): " + str(peer_each.target))
@@ -636,7 +639,7 @@ class PeerManager:
                 if reset_action is not None:
                     reset_action(peer_each.peer_id, peer_each.target)
 
-        if len(self.peer_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
+        if group_id in self.peer_list and len(self.peer_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
             del self.peer_list[group_id]
             del self.peer_object_list[group_id]
 
