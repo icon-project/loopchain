@@ -109,8 +109,8 @@ class TestSignature(unittest.TestCase):
         signer_der = Signer.from_prikey_file(self.private_der_path, b"TEST")
         signer_pem = Signer.from_prikey_file(self.private_pem_path, b"TEST")
 
-        self.assertEquals(signer_bytes.private_key.private_key, signer_der.private_key.private_key)
-        self.assertEquals(signer_bytes.private_key.private_key, signer_pem.private_key.private_key)
+        self.assertEquals(signer_bytes._private_key.private_key, signer_der._private_key.private_key)
+        self.assertEquals(signer_bytes._private_key.private_key, signer_pem._private_key.private_key)
 
     def test_signer_sign_verifier_address_equal(self):
         signer_private_key_bytes = Signer.from_prikey(self.private_key_bytes)
