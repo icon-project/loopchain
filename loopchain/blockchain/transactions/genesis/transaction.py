@@ -5,7 +5,7 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 if TYPE_CHECKING:
-    from loopchain.blockchain.types import Signature
+    from loopchain.blockchain.types import Signature, ExternalAddress
 
 
 @dataclass(frozen=True)
@@ -23,6 +23,10 @@ class Transaction(BaseTransition):
         object.__setattr__(self, "nid", nid)
         object.__setattr__(self, "accounts", tuple(accounts))
         object.__setattr__(self, "message", message)
+
+    @property
+    def signer(self) -> 'ExternalAddress':
+        raise NotImplementedError
 
 
 class NTxHash(Enum):

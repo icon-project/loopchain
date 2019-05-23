@@ -1,7 +1,8 @@
 import json
+from abc import abstractmethod, ABC
 from dataclasses import dataclass, _FIELD, _FIELDS
 from typing import TYPE_CHECKING
-from loopchain.blockchain.types import Hash32, Signature
+from loopchain.blockchain.types import Hash32, Signature, ExternalAddress
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import TransactionVersioner
@@ -10,7 +11,7 @@ _size_attr_name_ = "_size_attr_"
 
 
 @dataclass(frozen=True)
-class Transaction:
+class Transaction(ABC):
     # TODO wrap `raw_data` to `MappingProxy`
     raw_data: dict
 
@@ -19,6 +20,11 @@ class Transaction:
     timestamp: int
 
     version = ''
+
+    @property
+    @abstractmethod
+    def signer(self) -> 'ExternalAddress':
+        raise NotImplementedError
 
     def __str__(self):
         fields = getattr(self, _FIELDS, None)
@@ -39,3 +45,7 @@ class Transaction:
             object.__setattr__(self, _size_attr_name_, len(tx_serialized))
 
         return getattr(self, _size_attr_name_)
+
+    def is_signed(self):
+        return self.signature is not None
+

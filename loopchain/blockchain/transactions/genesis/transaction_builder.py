@@ -22,12 +22,14 @@ class TransactionBuilder(BaseTransactionBuilder):
         super().reset_cache()
         self.nid_generated = None
 
-    def build(self):
+    def build(self, is_signing=True):
         self.build_origin_data()
         self.build_hash()
         self.build_nid()
+        if is_signing:
+            self.sign()
 
-        self.build_raw_data()
+        self.build_raw_data(is_signing)
         return Transaction(
             raw_data=self.raw_data,
             hash=self.hash,
@@ -48,8 +50,10 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.origin_data = origin_data
         return self.origin_data
 
-    def build_raw_data(self):
+    def build_raw_data(self, is_signing=True):
         self.raw_data = dict(self.origin_data)
+        if is_signing:
+            self.raw_data["signature"] = self.signature.to_base64str()
         return self.raw_data
 
     def build_nid(self):
@@ -71,5 +75,5 @@ class TransactionBuilder(BaseTransactionBuilder):
 
         return NID.unknown.value
 
-    def _sign(self):
-        return None
+    def sign_transaction(self, tx: 'Transaction'):
+        raise NotImplementedError

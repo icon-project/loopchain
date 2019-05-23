@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class TransactionVerifier(ABC):
     _hash_salt = None
+    _allow_unsigned = False
 
     def __init__(self, hash_generator_version: int, raise_exceptions=True):
         self.exceptions = []
@@ -47,7 +48,10 @@ class TransactionVerifier(ABC):
             self._handle_exceptions(exception)
 
     def verify_signature(self, tx: 'Transaction'):
-        sign_verifier = SignVerifier.from_address(tx.from_address.hex_xx())
+        if self._allow_unsigned and not tx.is_signed():
+            return
+
+        sign_verifier = SignVerifier.from_address(tx.signer.hex_xx())
         try:
             sign_verifier.verify_hash(tx.hash, tx.signature)
         except Exception as e:

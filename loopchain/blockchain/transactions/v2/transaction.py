@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from typing import Mapping, Union
-from loopchain.blockchain.types import Address, MalformedStr, Hash32, Signature
+from loopchain.blockchain.types import Address, MalformedStr, Hash32, Signature, ExternalAddress
 from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 
 @dataclass(frozen=True)
 class Transaction(BaseTransition):
-    from_address: Address
-    to_address: Address
+    from_address: ExternalAddress
+    to_address: ExternalAddress
     value: Union[int, MalformedStr]
     fee: Union[int, MalformedStr]
     nonce: Union[int, MalformedStr]
@@ -29,6 +29,10 @@ class Transaction(BaseTransition):
         object.__setattr__(self, "nonce", nonce)
 
         object.__setattr__(self, "extra", dict(extra))
+
+    @property
+    def signer(self) -> 'ExternalAddress':
+        return self.from_address
 
 
 HASH_SALT = "icx_sendTransaction"
