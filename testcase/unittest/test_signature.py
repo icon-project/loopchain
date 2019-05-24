@@ -1,5 +1,6 @@
 import unittest
 import os
+import random
 import tempfile
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
@@ -77,6 +78,18 @@ class TestSignature(unittest.TestCase):
         )
         cls.public_key_bytes = key_info['public_key'].native
 
+        cls.signer_private_key_bytes = Signer.from_prikey(cls.private_key_bytes)
+        cls.signer_private_key_der = Signer.from_prikey_file(cls.private_der_path, b"TEST")
+        cls.signer_private_key_pem = Signer.from_prikey_file(cls.private_pem_path, b"TEST")
+
+        cls.sign_verifier_private_key_bytes = SignVerifier.from_prikey(cls.private_key_bytes)
+        cls.sign_verifier_private_key_der = SignVerifier.from_prikey_file(cls.private_der_path, b"TEST")
+        cls.sign_verifier_private_key_pem = SignVerifier.from_prikey_file(cls.private_pem_path, b"TEST")
+
+        cls.sign_verifier_public_key_bytes = SignVerifier.from_pubkey(cls.public_key_bytes)
+        cls.sign_verifier_public_key_der = SignVerifier.from_pubkey_file(cls.public_der_path)
+        cls.sign_verifier_public_key_pem = SignVerifier.from_pubkey_file(cls.public_pem_path)
+
     @classmethod
     def tearDownClass(cls) -> None:
         cls.temp_dir.cleanup()
@@ -84,57 +97,171 @@ class TestSignature(unittest.TestCase):
     def setUp(self):
         test_util.print_testname(self._testMethodName)
 
-    def test_sign_and_verify_hash(self):
-        signer = Signer.from_prikey(self.private_key_bytes)
-        sign_verifier = SignVerifier.from_pubkey(self.public_key_bytes)
-
+    def test_signer_and_sign_verifier_hash_verification_success_result_equal(self):
         hash_data = os.urandom(32)
-        signature = signer.sign_hash(hash_data)
+        signature = self.signer_private_key_bytes.sign_hash(hash_data)
 
-        signer.verify_hash(hash_data, signature)
-        sign_verifier.verify_hash(hash_data, signature)
+        self.signer_private_key_bytes.verify_hash(hash_data, signature)
+        self.signer_private_key_der.verify_hash(hash_data, signature)
+        self.signer_private_key_pem.verify_hash(hash_data, signature)
 
-    def test_sign_and_verify_data(self):
-        signer = Signer.from_prikey(self.private_key_bytes)
-        sign_verifier = SignVerifier.from_pubkey(self.public_key_bytes)
+        self.sign_verifier_private_key_bytes.verify_hash(hash_data, signature)
+        self.sign_verifier_private_key_der.verify_hash(hash_data, signature)
+        self.sign_verifier_private_key_pem.verify_hash(hash_data, signature)
 
-        data = b"ANYTHING YOU WANT"
-        signature = signer.sign_data(data)
+        self.sign_verifier_public_key_bytes.verify_hash(hash_data, signature)
+        self.sign_verifier_public_key_der.verify_hash(hash_data, signature)
+        self.sign_verifier_public_key_pem.verify_hash(hash_data, signature)
 
-        signer.verify_data(data, signature)
-        sign_verifier.verify_data(data, signature)
+    def test_signer_and_sign_verifier_data_verification_success_result_equal(self):
+        data = os.urandom(random.randrange(1, 1000))
+        signature = self.signer_private_key_bytes.sign_data(data)
 
-    def test_signer_private_key_equal(self):
-        signer_bytes = Signer.from_prikey(self.private_key_bytes)
-        signer_der = Signer.from_prikey_file(self.private_der_path, b"TEST")
-        signer_pem = Signer.from_prikey_file(self.private_pem_path, b"TEST")
+        self.signer_private_key_bytes.verify_data(data, signature)
+        self.signer_private_key_der.verify_data(data, signature)
+        self.signer_private_key_pem.verify_data(data, signature)
 
-        self.assertEquals(signer_bytes._private_key.private_key, signer_der._private_key.private_key)
-        self.assertEquals(signer_bytes._private_key.private_key, signer_pem._private_key.private_key)
+        self.sign_verifier_private_key_bytes.verify_data(data, signature)
+        self.sign_verifier_private_key_der.verify_data(data, signature)
+        self.sign_verifier_private_key_pem.verify_data(data, signature)
 
-    def test_signer_sign_verifier_address_equal(self):
-        signer_private_key_bytes = Signer.from_prikey(self.private_key_bytes)
-        signer_private_key_der = Signer.from_prikey_file(self.private_der_path, b"TEST")
-        signer_private_key_pem = Signer.from_prikey_file(self.private_pem_path, b"TEST")
+        self.sign_verifier_public_key_bytes.verify_data(data, signature)
+        self.sign_verifier_public_key_der.verify_data(data, signature)
+        self.sign_verifier_public_key_pem.verify_data(data, signature)
 
-        self.assertEquals(signer_private_key_bytes.address, signer_private_key_der.address)
-        self.assertEquals(signer_private_key_bytes.address, signer_private_key_pem.address)
+    def test_signer_and_sign_verifier_hash_verification_failure_result_equal(self):
+        hash_data = os.urandom(32)
+        signature = self.signer_private_key_bytes.sign_hash(hash_data)
+        invalid_signature0 = os.urandom(len(signature))
+        invalid_signature1 = os.urandom(random.randrange(1, 1000))
 
-        sign_verifier_private_key_bytes = SignVerifier.from_prikey(self.private_key_bytes)
-        sign_verifier_private_key_der = SignVerifier.from_prikey_file(self.private_der_path, b"TEST")
-        sign_verifier_private_key_pem = SignVerifier.from_prikey_file(self.private_pem_path, b"TEST")
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_bytes.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_bytes.verify_hash(hash_data, invalid_signature1))
 
-        self.assertEquals(sign_verifier_private_key_bytes.address, signer_private_key_bytes.address)
-        self.assertEquals(sign_verifier_private_key_bytes.address, sign_verifier_private_key_der.address)
-        self.assertEquals(sign_verifier_private_key_bytes.address, sign_verifier_private_key_pem.address)
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_der.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_der.verify_hash(hash_data, invalid_signature1))
 
-        sign_verifier_public_key_bytes = SignVerifier.from_pubkey(self.public_key_bytes)
-        sign_verifier_public_key_der = SignVerifier.from_pubkey_file(self.public_der_path)
-        sign_verifier_public_key_pem = SignVerifier.from_pubkey_file(self.public_pem_path)
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_pem.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_pem.verify_hash(hash_data, invalid_signature1))
 
-        self.assertEquals(sign_verifier_public_key_bytes.address, signer_private_key_bytes.address)
-        self.assertEquals(sign_verifier_public_key_bytes.address, sign_verifier_public_key_der.address)
-        self.assertEquals(sign_verifier_public_key_bytes.address, sign_verifier_public_key_pem.address)
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_bytes.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_bytes.verify_hash(hash_data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_der.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_der.verify_hash(hash_data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_pem.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_pem.verify_hash(hash_data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_bytes.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_bytes.verify_hash(hash_data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_der.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_der.verify_hash(hash_data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_pem.verify_hash(hash_data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_pem.verify_hash(hash_data, invalid_signature1))
+
+    def test_signer_and_sign_verifier_data_verification_failure_result_equal(self):
+        data = os.urandom(random.randrange(1, 1000))
+        signature = self.signer_private_key_bytes.sign_data(data)
+        invalid_signature0 = os.urandom(len(signature))
+        invalid_signature1 = os.urandom(random.randrange(1, 1000))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_bytes.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_bytes.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_der.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_der.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_pem.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.signer_private_key_pem.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_bytes.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_bytes.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_der.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_der.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_pem.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_private_key_pem.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_bytes.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_bytes.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_der.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_der.verify_data(data, invalid_signature1))
+
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_pem.verify_data(data, invalid_signature0))
+        self.assertRaises(RuntimeError,
+                          lambda: self.sign_verifier_public_key_pem.verify_data(data, invalid_signature1))
+
+    def test_hash_signatures_equal(self):
+        hash_data = os.urandom(32)
+        self.assertEquals(self.signer_private_key_bytes.sign_hash(hash_data),
+                          self.signer_private_key_der.sign_hash(hash_data))
+        self.assertEquals(self.signer_private_key_bytes.sign_hash(hash_data),
+                          self.signer_private_key_pem.sign_hash(hash_data))
+
+    def test_data_signatures_equal(self):
+        data = os.urandom(random.randint(1, 1000))
+        self.assertEquals(self.signer_private_key_bytes.sign_data(data),
+                          self.signer_private_key_der.sign_data(data))
+        self.assertEquals(self.signer_private_key_bytes.sign_data(data),
+                          self.signer_private_key_pem.sign_data(data))
+
+    def test_signer_private_keys_equal(self):
+        self.assertEquals(self.signer_private_key_bytes._private_key.private_key,
+                          self.signer_private_key_der._private_key.private_key)
+        self.assertEquals(self.signer_private_key_bytes._private_key.private_key,
+                          self.signer_private_key_pem._private_key.private_key)
+
+    def test_signer_sign_verifier_addresses_equal(self):
+        self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_der.address)
+        self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_pem.address)
+
+        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.signer_private_key_bytes.address)
+        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_der.address)
+        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_pem.address)
+
+        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.signer_private_key_bytes.address)
+        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_der.address)
+        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_pem.address)
 
     def test_signer_from_pubkey(self):
         self.assertRaises(TypeError, lambda: Signer.from_pubkey(self.public_key_bytes))
