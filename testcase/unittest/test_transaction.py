@@ -15,217 +15,261 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Transaction Functions"""
-from copy import deepcopy
-import logging
-import time
-import unittest
-import pickle
-import sys
 import os
-
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-
+import random
+import unittest
 import testcase.unittest.test_util as test_util
-from loopchain import configure as conf
+from collections import namedtuple
 from loopchain.utils import loggers
+from loopchain.blockchain.transactions import TransactionBuilder, TransactionVersioner
+from loopchain.blockchain.transactions import TransactionVerifier, TransactionSerializer
+from loopchain.blockchain.exception import TransactionInvalidSignatureError, TransactionInvalidNidError
+from loopchain.blockchain.exception import TransactionInvalidHashError, TransactionDuplicatedHashError
+from loopchain.blockchain.types import ExternalAddress, Signature
+from loopchain.crypto.signature import Signer
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 
 
-@unittest.skip("BVS")
 class TestTransaction(unittest.TestCase):
-
     def setUp(self):
         test_util.print_testname(self._testMethodName)
-        self.__origin_channel_option = deepcopy(conf.CHANNEL_OPTION)
+        self.signer = Signer.from_prikey(os.urandom(32))
+        self.tx_versioner = TransactionVersioner()
+        self.tx_versioner.hash_generator_versions["0x2"] = 0
 
-    def tearDown(self):
-
-        channel0 = conf.LOOPCHAIN_DEFAULT_CHANNEL
-        channel1 = conf.LOOPCHAIN_TEST_CHANNEL
-
-        conf.CHANNEL_OPTION = self.__origin_channel_option
-
-    def test_get_meta_and_put_meta(self):
-        # GIVEN
-        tx = Transaction()
-        tx.put_meta("peer_id", "12345")
-
-        # WHEN
-        meta_data = tx.meta
-        tx.put_meta("peer_id", "ABCDE")
-
-        # THEN
-        logging.debug("tx peer_id(before): " + meta_data["peer_id"])
-        logging.debug("tx peer_id(after): " + tx.meta["peer_id"])
-
-        self.assertNotEqual(meta_data["peer_id"], tx.meta["peer_id"])
-
-    def test_put_data(self):
-        """트랜잭션 생성확인
-        해쉬값의 존재여부
-
-        :return:
-        """
-        tx = Transaction()
-        txhash = tx.put_data("{args:[]}")
-        self.assertNotEqual(txhash, "")
-
-    def test_diff_hash(self):
-        """트랜잭션을 생성하여, 같은 값을 입력 하여도 트랜잭션 HASH는 달라야 함
-        1000건 생성하여 트랜잭션 비교
-
-        :return:
-        """
-        sttime = time.time()
-        tx_list = []
-        test_size = 1000
-        for x in range(test_size):
-            tx1 = Transaction()
-            hashed_value = tx1.put_data("{args:[]}")
-            tx_list.append(hashed_value)
-        self.assertTrue(len(set(tx_list)) == len(tx_list), "중복된 트랜잭션이 있습니다.")
-        logging.debug("test_diff_hash %i times : %f", test_size, time.time() - sttime)
-
-    def test_generate_and_validate_hash(self):
-        """트랜잭션 생성시 만들어진 hash 와 검증시 비교하는 hash 가 동일한지 확인하는 테스트
-
-        :return:
-        """
-        # GIVEN
-        tx = Transaction()
-        tx.init_meta("AAAAA", "BBBBB", "CCCCC", conf.LOOPCHAIN_DEFAULT_CHANNEL, conf.SendTxType.pickle)
-        tx.put_meta("1234", "5678")
-        tx.put_meta("1", "5")
-        tx.put_meta("2", "5")
-        tx.put_meta("3", "5")
-        tx.put_meta("4", "5")
-        txhash1 = tx.put_data("TEST DATA DATA")
-        txtime = tx.get_timestamp()
-
-        tx2 = Transaction()
-        tx2.init_meta("AAAAA", "BBBBB", "CCCCC", conf.LOOPCHAIN_DEFAULT_CHANNEL, conf.SendTxType.pickle)
-        tx2.put_meta("1234", "5678")
-        tx2.put_meta("1", "5")
-        tx2.put_meta("2", "5")
-        tx2.put_meta("3", "5")
-        tx2.put_meta("4", "5")
-        txhash2 = tx2.put_data("TEST DATA DATA", txtime)
-
-        # WHEN
-        txhash1_1 = Transaction.generate_transaction_hash(tx)
-
-        # THEN
-        logging.debug("txhash1: " + str(txhash1))
-        logging.debug("txhash1_1: " + str(txhash1_1))
-        logging.debug("txhash2: " + str(txhash2))
-
-        self.assertEqual(txhash1, txhash2)
-        self.assertEqual(txhash1, txhash1_1)
-        self.assertEqual(txhash2, txhash1_1)
-
-    def test_transaction_performace(self):
-        """트랜잭션의 생성 퍼포먼스 1초에 몇개까지 만들 수 있는지 확인
-        1초에 5000개 이상
-
-        :return:
-        """
-        _sttime = time.time()
-        tx_list = []
-
-        dummy_data = "TEST Transaction Data"
-        put_data = 0
-        while time.time() - _sttime < 1.0:
-            tx1 = Transaction()
-            hashed_value = tx1.put_data("{args:[]}" + (dummy_data + str(put_data)))
-            tx_list.append(hashed_value)
-            put_data += 1
-
-        self.assertTrue(len(set(tx_list)) == len(tx_list), "중복된 트랜잭션이 있습니다.")
-        logging.debug("TX generate %i in a second", len(tx_list))
-
-        self.assertTrue(len(tx_list) > 5000, len(tx_list))
-
-    def test_dump_tx_size(self):
-        # GIVEN
-        tx = Transaction()
-        tx.put_data("TEST")
-        tx.transaction_type = TransactionStatus.confirmed
-
-        tx_only_data = TransactionDataOnly()
-        tx_only_data.data = "TEST"
-
-        # WHEN
-        dump_a = pickle.dumps(tx_only_data)
-        dump_b = pickle.dumps(tx)
-
-        # THEN
-        logging.debug("size of tx_only_data: " + str(sys.getsizeof(dump_a)))
-        logging.debug("size of tx: " + str(sys.getsizeof(dump_b)))
-
-        self.assertLessEqual(sys.getsizeof(dump_a), sys.getsizeof(dump_b) * 1.5)
-
-    def test_signature_validate(self):
-        """GIVEN success tx, invalid public key tx, invalid signature tx,
-        WHEN validate 3 tx
-        THEN only success tx validate return true
-        """
-        # GIVEN
-        # init peer_auth for signautre
-
-        channel =  list(conf.CHANNEL_OPTION)[0]
-        peer_auth = PeerAuthorization(channel=channel)
-
-        # create txs
-        success_tx = test_util.create_basic_tx("aaa", peer_auth)
-
-        # public key and signature property must don't have setter
-        invalid_public_tx = test_util.create_basic_tx("aaa", peer_auth)
-        invalid_public_tx._Transaction__public_key = b'invalid_public'
-
-        invalid_sign_tx = test_util.create_basic_tx("aaa", peer_auth)
-        invalid_sign_tx._Transaction__signature = b'invalid_sign'
-
-        hash_generator = get_tx_hash_generator(channel)
-        tx_validator = TxValidator(channel, conf.CHANNEL_OPTION[channel]["send_tx_type"], hash_generator)
-        # WHEN THEN
-        self.assertTrue(tx_validator.validate(success_tx))
-        logging.debug("start validate invalid public key")
-        self.assertFalse(tx_validator.validate(invalid_public_tx))
-        logging.debug("start validate invalid signature")
-        self.assertFalse(tx_validator.validate(invalid_sign_tx))
-
-    def test_cert_signature(self):
-        """GIVEN conf.TX_CERT_AUTH = True, PeerAuthorization create using cert
-        WHEN create new tx and create signature
-        THEN tx.public_key must be x.509 der cert
-        """
-        channel_name = "cert_channel"
-        conf.CHANNEL_OPTION = {
-            channel_name: {
-                "load_cert": True,
-                "consensus_cert_use": True,
-                "tx_cert_use": True,
-                "key_load_type": conf.KeyLoadType.FILE_LOAD,
-                "private_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_certs/key.pem'),
-                "private_password": None
+    def test_transaction_genesis(self):
+        tb = TransactionBuilder.new("genesis", self.tx_versioner)
+        tb.accounts = [
+            {
+                "name": "test0",
+                "address": ExternalAddress(os.urandom(20)).hex_hx(),
+                "balance": "0x12221231"
             }
+        ]
+        tb.message = "Icon Loop"
+        tx = tb.build(False)
+
+        tv = TransactionVerifier.new("genesis", self.tx_versioner)
+        tv.verify(tx)
+
+        ts = TransactionSerializer.new("genesis", self.tx_versioner)
+        tx_raw_data = ts.to_raw_data(tx)
+
+        self.assertEqual(ts.from_(tx_raw_data), tx)
+
+    def test_transaction_v2(self):
+        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb.fee = 1000000
+        tb.value = 100000
+        tb.signer = self.signer
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nonce = random.randint(0, 100000)
+        tx = tb.build()
+
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv.verify(tx)
+
+        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx_raw_data = ts.to_raw_data(tx)
+
+        self.assertEqual(ts.from_(tx_raw_data), tx)
+
+    def test_transaction_v3(self):
+        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb.step_limit = 1000000
+        tb.value = 100000
+        tb.signer = self.signer
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nid = 3
+        tb.nonce = random.randint(0, 100000)
+        tb.data = "test"
+        tb.data_type = "message"
+        tx = tb.build()
+
+        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv.verify(tx)
+
+        ts = TransactionSerializer.new("0x3", self.tx_versioner)
+        tx_raw_data = ts.to_raw_data(tx)
+
+        self.assertEqual(ts.from_(tx_raw_data), tx)
+
+    def test_transaction_v2_unsigned(self):
+        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb.fee = 1000000
+        tb.value = 100000
+        tb.from_address = ExternalAddress(os.urandom(20))
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nonce = random.randint(0, 100000)
+        tx = tb.build(is_signing=False)
+
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx))
+
+    def test_transaction_v3_unsigned(self):
+        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb.step_limit = 1000000
+        tb.value = 100000
+        tb.from_address = ExternalAddress(os.urandom(20))
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nid = 3
+        tb.nonce = random.randint(0, 100000)
+        tb.data = "test"
+        tb.data_type = "message"
+        tx = tb.build(False)
+
+        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx, nid=3))
+
+    def test_transaction_v2_invalid_hash0(self):
+        # noinspection PyDictCreation
+        tx_dumped = {
+            'from': 'hx48cd6eb32339d5c719dcc0af21e9bc3b67d733e6',
+            'to': 'hx22f72e44141bedd50d1e536455682863d3d8a484',
+            'value': '0x186a0',
+            'fee': '0xf4240',
+            'timestamp': '1558679280067963',
+            'nonce': '1',
+            'tx_hash': '34477b3bc76fa73aad0258ba9fd36f28a3c4b26956c1e5eb92ddda7d98df4e32',  # valid hash
+            'signature': 'W/hW/PAo+ExeSsreD//yJVgNqmnkWKs+m0VUqE11O7Ek82yEINuczLRXtj1k515q8Ep4OLsRPPiPNjDM9vuhsgE='
         }
-        peer_auth = PeerAuthorization(channel_name)
+        tx_dumped['tx_hash'] = os.urandom(32).hex()  # invalid hash
 
-        # WHEN
-        tx = Transaction()
-        tx.put_data('{"a":"b"}')
-        tx.sign_hash(peer_auth)
+        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx = ts.from_(tx_dumped)
 
-        # THEN
-        logging.debug(f"tx public key : {tx.public_key}")
-        self.assertEqual(tx.public_key, peer_auth.tx_cert)
-        # tx.publickey using for load certificate and not raise any error
-        x509.load_der_x509_certificate(tx.public_key, default_backend())
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        self.assertRaises(TransactionInvalidHashError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidHashError, lambda: tv.pre_verify(tx))
 
+    def test_transaction_v2_invalid_hash1(self):
+        # noinspection PyDictCreation
+        tx_dumped = {
+            'from': 'hx48cd6eb32339d5c719dcc0af21e9bc3b67d733e6',
+            'to': 'hx22f72e44141bedd50d1e536455682863d3d8a484',
+            'value': '0x186a0',
+            'fee': '0xf4240',
+            'timestamp': '1558679280067963',
+            'nonce': '1',
+            'tx_hash': '34477b3bc76fa73aad0258ba9fd36f28a3c4b26956c1e5eb92ddda7d98df4e32',
+            'signature': 'W/hW/PAo+ExeSsreD//yJVgNqmnkWKs+m0VUqE11O7Ek82yEINuczLRXtj1k515q8Ep4OLsRPPiPNjDM9vuhsgE='
+        }
+        tx_dumped['value'] = hex(int(random.randrange(1, 100)))  # invalid value
 
-if __name__ == '__main__':
-    unittest.main()
+        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx = ts.from_(tx_dumped)
+
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        self.assertRaises(TransactionInvalidHashError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidHashError, lambda: tv.pre_verify(tx))
+
+    def test_transaction_v2_invalid_signature(self):
+        # noinspection PyDictCreation
+        tx_dumped = {
+            'from': 'hx48cd6eb32339d5c719dcc0af21e9bc3b67d733e6',
+            'to': 'hx22f72e44141bedd50d1e536455682863d3d8a484',
+            'value': '0x186a0',
+            'fee': '0xf4240',
+            'timestamp': '1558679280067963',
+            'nonce': '1',
+            'tx_hash': '34477b3bc76fa73aad0258ba9fd36f28a3c4b26956c1e5eb92ddda7d98df4e32',  # valid hash
+            'signature': 'W/hW/PAo+ExeSsreD//yJVgNqmnkWKs+m0VUqE11O7Ek82yEINuczLRXtj1k515q8Ep4OLsRPPiPNjDM9vuhsgE='
+        }
+        tx_dumped['signature'] = Signature(os.urandom(Signature.size)).to_base64str()  # invalid signature
+
+        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx = ts.from_(tx_dumped)
+
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx))
+
+    def test_transaction_v3_invalid_signature(self):
+        # noinspection PyDictCreation
+        tx_dumped = {
+            'version': '0x3',
+            'from': 'hx48cd6eb32339d5c719dcc0af21e9bc3b67d733e6',
+            'to': 'hxe0a231fa5c80e45f51d7df5f7d127954320df829',
+            'stepLimit': '0xf4240',
+            'timestamp': '0x5899c717f92f8',
+            'nid': '0x3',
+            'value': '0x186a0',
+            'nonce': '0x64',
+            'data': 'test',
+            'dataType': 'message',
+            'signature': 'J84KdBtQR4w1bcBdBGF8g6aNoCXjsY/5T6vGV4RXeMwEvafj9xVRDVjzF+vN1JVYvXrAzjlYPCiiBXBQe6+tRAE='
+        }
+        tx_dumped['signature'] = Signature(os.urandom(Signature.size)).to_base64str()  # invalid signature
+
+        ts = TransactionSerializer.new("0x3", self.tx_versioner)
+        tx = ts.from_(tx_dumped)
+
+        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
+        self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx, nid=3))
+
+    def test_transaction_v3_invalid_nid(self):
+        MockBlockchain = namedtuple("MockBlockchain", "find_nid find_tx_by_key")
+        nids = list(range(0, 1000))
+        random.shuffle(nids)
+
+        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb.step_limit = 1000000
+        tb.value = 100000
+        tb.signer = self.signer
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nid = nids[0]
+        tb.nonce = random.randint(0, 100000)
+        tb.data = "test"
+        tb.data_type = "message"
+        tx = tb.build()
+
+        expected_nid = nids[1]
+        mock_blockchain = MockBlockchain(find_nid=lambda: hex(expected_nid),
+                                         find_tx_by_key=lambda _: False)
+
+        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        self.assertRaises(TransactionInvalidNidError, lambda: tv.verify(tx, mock_blockchain))
+        self.assertRaises(TransactionInvalidNidError, lambda: tv.pre_verify(tx, nid=expected_nid))
+
+    def test_transaction_v2_duplicate_hash(self):
+        MockBlockchain = namedtuple("MockBlockchain", "find_nid find_tx_by_key")
+
+        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb.fee = 1000000
+        tb.value = 100000
+        tb.signer = self.signer
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nonce = random.randint(0, 100000)
+        tx = tb.build()
+
+        mock_blockchain = MockBlockchain(find_nid=lambda: hex(3),
+                                         find_tx_by_key=lambda _: True)
+
+        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        self.assertRaises(TransactionDuplicatedHashError, lambda: tv.verify(tx, mock_blockchain))
+
+    def test_transaction_v3_duplicate_hash(self):
+        MockBlockchain = namedtuple("MockBlockchain", "find_nid find_tx_by_key")
+
+        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb.step_limit = 1000000
+        tb.value = 100000
+        tb.signer = self.signer
+        tb.to_address = ExternalAddress(os.urandom(20))
+        tb.nid = 3
+        tb.nonce = random.randint(0, 100000)
+        tb.data = "test"
+        tb.data_type = "message"
+        tx = tb.build()
+
+        mock_blockchain = MockBlockchain(find_nid=lambda: hex(3),
+                                         find_tx_by_key=lambda _: True)
+
+        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        self.assertRaises(TransactionDuplicatedHashError, lambda: tv.verify(tx, mock_blockchain))
+
