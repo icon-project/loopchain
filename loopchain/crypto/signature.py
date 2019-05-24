@@ -17,12 +17,13 @@ import binascii
 import getpass
 import hashlib
 import logging
-from typing import Union
-
+from typing import Union, Type, TypeVar
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from secp256k1 import Base, ALL_FLAGS, PrivateKey, PublicKey
+
+T = TypeVar('T', bound='SignVerifier')
 
 
 class SignVerifier:
@@ -71,13 +72,13 @@ class SignVerifier:
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
-    def from_address(cls, address: str):
+    def from_address(cls: Type[T], address: str) -> T:
         verifier = SignVerifier()
         verifier.address = address
         return verifier
 
     @classmethod
-    def from_channel(cls, channel: str):
+    def from_channel(cls: Type[T], channel: str) -> T:
         from loopchain import configure as conf
 
         if 'public_path' in conf.CHANNEL_OPTION[channel]:
@@ -89,7 +90,7 @@ class SignVerifier:
         return cls.from_pubkey_file(public_file)
 
     @classmethod
-    def from_pubkey_file(cls, pubkey_file: str):
+    def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
         with open(pubkey_file, "rb") as file:
             public_bytes = file.read()
         if pubkey_file.endswith('.der'):
@@ -108,12 +109,12 @@ class SignVerifier:
         return cls.from_pubkey(pubkey)
 
     @classmethod
-    def from_pubkey(cls, pubkey: bytes):
+    def from_pubkey(cls: Type[T], pubkey: bytes) -> T:
         address = cls.address_from_pubkey(pubkey)
         return cls.from_address(address)
 
     @classmethod
-    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+    def from_prikey_file(cls: Type[T], prikey_file: str, password: Union[str, bytes]) -> T:
         if isinstance(password, str):
             password = password.encode()
 
@@ -149,7 +150,7 @@ class SignVerifier:
         return cls.from_prikey(prikey)
 
     @classmethod
-    def from_prikey(cls, prikey: bytes):
+    def from_prikey(cls: Type[T], prikey: bytes) -> T:
         address = cls.address_from_prikey(prikey)
         return cls.from_address(address)
 
@@ -186,11 +187,11 @@ class Signer(SignVerifier):
         return serialized_sig + bytes((recover_id, ))
 
     @classmethod
-    def from_address(cls, address: str):
+    def from_address(cls: Type[T], address: str) -> T:
         raise TypeError("Cannot create `Signer` from address")
 
     @classmethod
-    def from_channel(cls, channel: str):
+    def from_channel(cls: Type[T], channel: str) -> T:
         from loopchain import configure as conf
 
         if 'private_path' in conf.CHANNEL_OPTION[channel]:
@@ -212,19 +213,19 @@ class Signer(SignVerifier):
         return cls.from_prikey_file(prikey_file, password)
 
     @classmethod
-    def from_pubkey(cls, pubkey: bytes):
+    def from_pubkey(cls: Type[T], pubkey: bytes) -> T:
         raise TypeError("Cannot create `Signer` from pubkey")
 
     @classmethod
-    def from_pubkey_file(cls, pubkey_file: str):
+    def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
         raise TypeError("Cannot create `Signer` from pubkey file")
 
     @classmethod
-    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+    def from_prikey_file(cls: Type[T], prikey_file: str, password: Union[str, bytes]) -> T:
         return super().from_prikey_file(prikey_file, password)
 
     @classmethod
-    def from_prikey(cls, prikey: Union[bytes, PrivateKey]):
+    def from_prikey(cls: Type[T], prikey: Union[bytes, PrivateKey]):
         auth = Signer()
         auth._private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
         auth.address = cls.address_from_prikey(prikey)
