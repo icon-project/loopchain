@@ -17,7 +17,7 @@ class TransactionVerifier(BaseTransactionVerifier):
     def pre_verify(self, tx: 'Transaction', **kwargs):
         nid = kwargs.get('nid')
         if nid != tx.nid:
-            raise TransactionInvalidNidError(tx.hash, tx.nid, nid)
+            raise TransactionInvalidNidError(tx, nid)
         self.verify(tx, None)
 
     def verify(self, tx: 'Transaction', blockchain=None):
@@ -29,6 +29,5 @@ class TransactionVerifier(BaseTransactionVerifier):
         if blockchain:
             nid = blockchain.find_nid()
             if hex(tx.nid) != nid:
-                raise RuntimeError(f"tx({tx})\n"
-                                   f"nid {hex(tx.nid)} != {nid} not match.")
+                raise TransactionInvalidNidError(tx, int(nid, 16))
             self.verify_tx_hash_unique(tx, blockchain)

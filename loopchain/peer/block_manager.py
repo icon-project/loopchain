@@ -26,13 +26,13 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
+from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
-    ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
+from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, TransactionOutOfTimeBound
+from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
@@ -170,10 +170,10 @@ class BlockManager:
 
     def __pre_validate(self, tx: Transaction):
         if tx.hash.hex() in self.__txQueue:
-            raise TransactionInvalidDuplicatedHash(tx.hash.hex())
+            raise TransactionDuplicatedHashError(tx)
 
         if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
-            raise TransactionInvalidOutOfTimeBound(tx.hash.hex(), tx.timestamp, util.get_now_time_stamp())
+            raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
 
     def __pre_validate_pass(self, tx: Transaction):
         pass
@@ -505,13 +505,13 @@ class BlockManager:
                                                        reps=reps)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
-            if isinstance(exc, TransactionInvalidDuplicatedHash):
+            if isinstance(exc, TransactionDuplicatedHashError):
                 need_to_write_tx_info = False
             if isinstance(exc, ScoreInvokeError) and not need_to_write_tx_info:
                 need_to_score_invoke = False
 
         exc = next((exc for exc in block_verifier.exceptions
-                    if not isinstance(exc, TransactionInvalidDuplicatedHash)), None)
+                    if not isinstance(exc, TransactionDuplicatedHashError)), None)
         if exc:
             if isinstance(exc, ScoreInvokeError) and not need_to_score_invoke:
                 pass
