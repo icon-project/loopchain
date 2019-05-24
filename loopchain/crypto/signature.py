@@ -18,10 +18,9 @@ import getpass
 import hashlib
 import logging
 from typing import Union, Type, TypeVar
-from asn1crypto import keys
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from secp256k1 import Base, ALL_FLAGS, PrivateKey, PublicKey
+from secp256k1 import Base, ALL_FLAGS
+from secp256k1 import PrivateKey, PublicKey
+from loopchain.crypto.cert_serializers import DerSerializer, PemSerializer
 
 T = TypeVar('T', bound='SignVerifier')
 
@@ -91,21 +90,12 @@ class SignVerifier:
 
     @classmethod
     def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
-        with open(pubkey_file, "rb") as file:
-            public_bytes = file.read()
         if pubkey_file.endswith('.der'):
-            temp_public = serialization.load_der_public_key(public_bytes, default_backend())
+            pubkey = DerSerializer.deserialize_public_key_file(pubkey_file)
         elif pubkey_file.endswith('.pem'):
-            temp_public = serialization.load_pem_public_key(public_bytes, default_backend())
+            pubkey = PemSerializer.deserialize_public_key_file(pubkey_file)
         else:
             raise RuntimeError(f"Not supported file {pubkey_file}")
-
-        temp_public = temp_public.public_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-        key_info = keys.PublicKeyInfo.load(temp_public)
-        pubkey = key_info['public_key'].native
         return cls.from_pubkey(pubkey)
 
     @classmethod
@@ -118,35 +108,16 @@ class SignVerifier:
         if isinstance(password, str):
             password = password.encode()
 
-        if prikey_file.endswith('.der') or prikey_file.endswith('.pem'):
-            with open(prikey_file, "rb") as file:
-                private_bytes = file.read()
-            try:
-                if prikey_file.endswith('.der'):
-                    temp_private = serialization \
-                        .load_der_private_key(private_bytes,
-                                              password,
-                                              default_backend())
-                elif prikey_file.endswith('.pem'):
-                    temp_private = serialization \
-                        .load_pem_private_key(private_bytes,
-                                              password,
-                                              default_backend())
-                else:
-                    raise RuntimeError("Cannot be here.")
-            except Exception as e:
-                raise ValueError("Invalid Password(Peer Certificate load test)")
+        try:
+            if prikey_file.endswith('.der'):
+                prikey = DerSerializer.deserialize_private_key_file(prikey_file, password)
+            elif prikey_file.endswith('.pem'):
+                prikey = PemSerializer.deserialize_private_key_file(prikey_file, password)
             else:
-                no_pass_private = temp_private.private_bytes(
-                    encoding=serialization.Encoding.DER,
-                    format=serialization.PrivateFormat.PKCS8,
-                    encryption_algorithm=serialization.NoEncryption()
-                )
-                key_info = keys.PrivateKeyInfo.load(no_pass_private)
-                prikey = long_to_bytes(key_info['private_key'].native['private_key'])
-        else:
-            from tbears.libs.icx_signer import key_from_key_store
-            prikey = key_from_key_store(prikey_file, password)
+                from tbears.libs.icx_signer import key_from_key_store
+                prikey = key_from_key_store(prikey_file, password)
+        except Exception as e:
+            raise ValueError("Invalid Password(Peer Certificate load test)")
         return cls.from_prikey(prikey)
 
     @classmethod
