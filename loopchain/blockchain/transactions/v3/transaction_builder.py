@@ -1,6 +1,6 @@
 import time
 from typing import TYPE_CHECKING, Union
-from loopchain.blockchain.types import VarBytes, Signature
+from loopchain.blockchain.types import Signature
 from loopchain.blockchain.transactions import TransactionBuilder as BaseTransactionBuilder
 from loopchain.blockchain.transactions.v3 import Transaction, HASH_SALT
 
@@ -78,10 +78,7 @@ class TransactionBuilder(BaseTransactionBuilder):
             origin_data["nonce"] = hex(self.nonce)
 
         if self.data is not None and self.data_type is not None:
-            if isinstance(self.data, str):
-                origin_data["data"] = VarBytes(self.data.encode('utf-8')).hex_0x()
-            else:
-                origin_data["data"] = self.data
+            origin_data["data"] = self.data
             origin_data["dataType"] = self.data_type
         self.origin_data = origin_data
         return self.origin_data
