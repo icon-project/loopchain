@@ -368,7 +368,7 @@ class PeerManager:
         return leader_peer
 
     def get_next_leader_peer(self, group_id=None, current_leader_peer_id=None, is_only_alive=False):
-        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
+        util.logger.notice(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
             leader_peer = self.get_leader_peer(group_id, is_complain_to_rs=True)
@@ -394,7 +394,7 @@ class PeerManager:
         next_order_position = peer_order_position + 1
         peer_count = len(order_list)
 
-        util.logger.spam(f"peer_manager:__get_next_peer peer_count({peer_count})")
+        util.logger.notice(f"peer_manager:__get_next_peer peer_count({peer_count})")
 
         for i in range(peer_count):
             # Prevent out of range
@@ -427,22 +427,22 @@ class PeerManager:
                     break  # LABEL 1
 
             next_order_position += 1
-            util.logger.spam(f"peer_manager:__get_next_peer next_order_position({next_order_position})")
+            util.logger.notice(f"peer_manager:__get_next_peer next_order_position({next_order_position})")
 
         if next_order_position >= peer_count:
-            util.logger.spam(f"peer_manager:__get_next_peer Fail break at LABEL 1")
+            util.logger.notice(f"peer_manager:__get_next_peer Fail break at LABEL 1")
             next_order_position = 0
 
         try:
             next_peer_id = self.peer_order_list[group_id][order_list[next_order_position]]
-            logging.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
+            util.logger.notice("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
             return self.peer_list[group_id][next_peer_id]
         except (IndexError, KeyError) as e:
             logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
-            util.logger.spam(f"peer_manager:__get_next_peer "
-                             f"\npeer_id({peer.peer_id}), group_id({group_id}), "
-                             f"\npeer_order_list({self.peer_object_list}), "
-                             f"\npeer_list[group_id]({self.peer_list[group_id]})")
+            util.logger.notice(f"peer_manager:__get_next_peer "
+                               f"\npeer_id({peer.peer_id}), group_id({group_id}), "
+                               f"\npeer_order_list({self.peer_object_list}), "
+                               f"\npeer_list[group_id]({self.peer_list[group_id]})")
             return None
 
     def get_next_leader_stub_manager(self, group_id=None):
@@ -614,6 +614,7 @@ class PeerManager:
         logging.info(f"non response peer list : {nonresponse_peer_list}")
 
     def reset_peers(self, group_id=None, reset_action=None, check_status=True):
+        util.logger.notice(f"\n\ndo reset peers....")
         if group_id is None:
             for search_group in list(self.peer_list.keys()):
                 self.__reset_peers_in_group(search_group, reset_action, check_status)
@@ -632,8 +633,7 @@ class PeerManager:
                 else:
                     raise Exception
             except Exception as e:
-                logging.warning("gRPC Exception: " + str(e))
-                logging.debug("remove this peer(target): " + str(peer_each.target))
+                logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
                 self.remove_peer(peer_each.peer_id, group_id)
 
                 if reset_action is not None:
