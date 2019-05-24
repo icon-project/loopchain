@@ -15,8 +15,8 @@
 import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
-from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils
+from loopchain.crypto.signature import SignVerifier
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
@@ -26,7 +26,6 @@ if TYPE_CHECKING:
 
 class BlockVerifier(ABC):
     version = None
-    _ecdsa = PrivateKey()
 
     def __init__(self, tx_versioner: 'TransactionVersioner', raise_exceptions=True):
         self._tx_versioner = tx_versioner
@@ -109,20 +108,13 @@ class BlockVerifier(ABC):
             self._handle_exception(exception)
 
     def verify_signature(self, block: 'Block'):
-        recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
-            block.header.signature.signature(),
-            block.header.signature.recover_id())
-        raw_public_key = self._ecdsa.ecdsa_recover(block.header.hash,
-                                                   recover_sig=recoverable_sig,
-                                                   raw=True,
-                                                   digest=hashlib.sha3_256)
-
-        public_key = PublicKey(raw_public_key, ctx=self._ecdsa.ctx)
-        hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
-        expect_address = hash_pub[-20:]
-        if expect_address != block.header.peer_id:
-            exception = RuntimeError(f"block peer id {block.header.peer_id.hex_xx()}, "
-                                     f"expected {ExternalAddress(expect_address).hex_xx()}")
+        sign_verifier = SignVerifier.from_address(block.header.peer_id.hex_xx())
+        try:
+            sign_verifier.verify_hash(block.header.hash, block.header.signature)
+        except Exception as e:
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Invalid Signature\n"
+                                     f"{e}")
             self._handle_exception(exception)
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):

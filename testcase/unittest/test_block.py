@@ -229,7 +229,7 @@ class TestBlock(unittest.TestCase):
         block_builder = BlockBuilder.new("0.3", tx_versioner)
         for i in range(1000):
             tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-            tx_builder.private_key = private_auth.private_key
+            tx_builder.signer = private_auth
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
             tx_builder.value = random.randint(0, 10000)
@@ -243,8 +243,9 @@ class TestBlock(unittest.TestCase):
                 "tx_dumped": tx_serializer.to_full_data(tx)
             }
 
-        block_builder.peer_private_key = private_auth.private_key
-        block_builder.height = 0
+        block_builder.signer = private_auth
+        block_builder.height = 3
+        block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
