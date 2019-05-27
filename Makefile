@@ -37,9 +37,9 @@ develop: install generate-proto
 
 # pip install packages
 install:
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@IS-492-prep-testnet-support
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@release-1.3
 	$(PIP_INSTALL) tbears
 	$(PIP_INSTALL_REQUIREMENTS)
 
