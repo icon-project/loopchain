@@ -186,6 +186,8 @@ class ConsensusSiever(ConsensusBase):
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
+                if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
+                    ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
