@@ -678,10 +678,10 @@ class ChannelService:
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
             util.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
-        epoch = self.block_manager.epoch
-        if epoch and epoch.leader_id == new_leader_id:
-            util.logger.warning(f"New leader({new_leader_id}) equals current epoch leader({epoch.leader_id})")
-            return
+        # epoch = self.block_manager.epoch
+        # if epoch and epoch.leader_id == new_leader_id:
+        #     util.logger.warning(f"New leader({new_leader_id}) equals current epoch leader({epoch.leader_id})")
+        #     return
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                          f"complained={complained}")
