@@ -12,20 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import ast
 import json
 import multiprocessing as mp
 import re
 import signal
 from asyncio import Condition
+from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Union, Dict, List
 
 from earlgrey import *
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.rest_server.json_rpc import JsonError
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
@@ -34,6 +33,8 @@ from loopchain.blockchain import (Transaction, TransactionSerializer, Transactio
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
+from loopchain.qos.qos_controller import QosController, QosCountControl
+from loopchain.rest_server.json_rpc import JsonError
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -56,6 +57,9 @@ class ChannelTxCreatorInnerTask:
         scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
+        self.__qos_controller = QosController()
+        self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
+
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
             raise TransactionInvalidOutOfTimeBound(tx.hash.hex(), tx.timestamp, util.get_now_time_stamp())
@@ -71,6 +75,10 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        if self.__qos_controller.limit():
+            util.logger.debug(f"Out of TPS limit. tx={kwargs}")
+            return message_code.Response.fail_out_of_tps_limit, None
+
         node_type = self.__properties.get('node_type', None)
         if node_type is None:
             util.logger.warning("Node type has not been set yet.")
@@ -389,8 +397,10 @@ class ChannelInnerTask:
         self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
         # Citizen
+        CitizenInfo = namedtuple("CitizenInfo", "peer_id target connected_time")
+        self._CitizenInfo = CitizenInfo
+        self._citizens: Dict[str, CitizenInfo] = dict()
         self._citizen_condition_new_block: Condition = None
-        self._citizen_set = set()
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
@@ -490,7 +500,7 @@ class ChannelInnerTask:
 
             new_block_height = subscriber_block_height + 1
             new_block = blockchain.find_block_by_height(new_block_height)
-            confirm_info: str = blockchain.find_confirm_info_by_height(new_block_height).decode("utf-8")
+            confirm_info: bytes = blockchain.find_confirm_info_by_height(new_block_height)
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -498,29 +508,38 @@ class ChannelInnerTask:
                 continue
 
             logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
-                          f"target: {self._citizen_set}")
+                          f"target: {self._citizens}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
-    async def register_subscriber(self, peer_id):
-        if len(self._citizen_set) >= conf.SUBSCRIBE_LIMIT:
+    async def register_citizen(self, peer_id, target, connected_time):
+        if len(self._citizens) >= conf.SUBSCRIBE_LIMIT:
             return False
         else:
-            self._citizen_set.add(peer_id)
-            logging.info(f"register new subscriber: {peer_id}")
-            logging.debug(f"remaining all subscribers: {self._citizen_set}")
+            new_citizen = self._CitizenInfo(peer_id, target, connected_time)
+            self._citizens[peer_id] = new_citizen
+            logging.info(f"register new citizen: {new_citizen}")
+            logging.debug(f"remaining all citizens: {self._citizens}")
             return True
 
     @message_queue_task
-    async def unregister_subscriber(self, peer_id):
-        logging.info(f"unregister subscriber: {peer_id}")
-        self._citizen_set.remove(peer_id)
-        logging.debug(f"remaining all subscribers: {self._citizen_set}")
+    async def unregister_citizen(self, peer_id):
+        try:
+            logging.info(f"unregister citizen: {peer_id}")
+            del self._citizens[peer_id]
+            logging.debug(f"remaining all citizens: {self._citizens}")
+        except KeyError as e:
+            logging.warning(f"already unregistered citizen({peer_id})")
 
     @message_queue_task
-    async def is_registered_subscriber(self, peer_id):
-        return peer_id in self._citizen_set
+    async def is_citizen_registered(self, peer_id) -> bool:
+        return peer_id in self._citizens
+
+    @message_queue_task
+    async def get_citizens(self) -> List[Dict[str, str]]:
+        return [{"id": ctz.peer_id, "target": ctz.target, "connected_time": ctz.connected_time}
+                for ctz in self._citizens.values()]
 
     @message_queue_task
     def get_peer_list(self):
@@ -550,6 +569,7 @@ class ChannelInnerTask:
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
+        status_data["service_available"]: bool = status_data["state"] in self._channel_service.state_machine.service_available_states
         status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
@@ -680,42 +700,6 @@ class ChannelInnerTask:
         self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task
-    async def announce_confirmed_block(self, serialized_block, commit_state):
-        try:
-            if self._channel_service.state_machine.state != "Watch":
-                return
-            blockchain = self._channel_service.block_manager.get_blockchain()
-            json_block = json.loads(serialized_block)
-
-            block_height = blockchain.block_versioner.get_height(json_block)
-            block_version = blockchain.block_versioner.get_version(block_height)
-            bs = BlockSerializer.new(block_version, blockchain.tx_versioner)
-            confirmed_block = bs.deserialize(json_block)
-
-            block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
-            block_verifier.invoke_func = self._channel_service.score_invoke
-            block_verifier.verify(confirmed_block,
-                                  blockchain.last_block,
-                                  blockchain,
-                                  blockchain.last_block.header.next_leader)
-
-            util.logger.spam(f"channel_inner_service:announce_confirmed_block\n "
-                             f"hash({confirmed_block.header.hash.hex()}) "
-                             f"block height({confirmed_block.header.height}), "
-                             f"commit_state({commit_state})")
-
-            if blockchain.block_height < confirmed_block.header.height:
-                self._channel_service.block_manager.add_confirmed_block(confirmed_block)
-            else:
-                logging.debug(f"channel_inner_service:announce_confirmed_block "
-                              f"already synced block height({confirmed_block.header.height})")
-            response_code = message_code.Response.success
-        except Exception as e:
-            logging.error(f"announce confirmed block error : {e}")
-            response_code = message_code.Response.fail
-        return response_code
-
-    @message_queue_task
     def block_sync(self, block_hash, block_height):
         blockchain = self._channel_service.block_manager.get_blockchain()
 
@@ -788,7 +772,7 @@ class ChannelInnerTask:
     def vote_unconfirmed_block(self, peer_id, group_id, block_hash: Hash32, vote_code) -> None:
         block_manager = self._channel_service.block_manager
         util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
-                         f"({ChannelProperty().name}) block_hash({block_hash})")
+                         f"({ChannelProperty().name}) block_hash({block_hash.hex()})")
 
         util.logger.debug("Peer vote to : " + block_hash.hex()[:8] + " " + str(vote_code) + f"from {peer_id[:8]}")
 

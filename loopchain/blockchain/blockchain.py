@@ -209,20 +209,20 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
-    def find_confirm_info_by_hash(self, hash) -> bytearray:
-        hash_encoded = hash.hex().encode(encoding='UTF-8')
+    def find_confirm_info_by_hash(self, block_hash) -> bytes:
+        hash_encoded = block_hash.hex().encode(encoding='UTF-8')
 
         try:
-            return self.__confirmed_block_db.Get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
+            return bytes(self.__confirmed_block_db.Get(BlockChain.CONFIRM_INFO_KEY + hash_encoded))
         except KeyError:
-            return bytearray(b"")
+            return bytes()
 
-    def find_confirm_info_by_height(self, height) -> bytearray:
+    def find_confirm_info_by_height(self, height) -> bytes:
         block = self.find_block_by_height(height)
         if block:
-            return self.find_confirm_info_by_hash(block.header.hash)
+            return bytes(self.find_confirm_info_by_hash(block.header.hash))
 
-        return bytearray(b"")
+        return bytes()
 
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.

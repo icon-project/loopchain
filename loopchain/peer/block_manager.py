@@ -397,7 +397,9 @@ class BlockManager:
         block_version = self.get_blockchain().block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        confirm_info = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
+        confirm_info = get_block_result.get('confirm_info', '')
+        if isinstance(confirm_info, str):
+            confirm_info = confirm_info.encode('utf-8')
 
         return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
 
@@ -475,7 +477,7 @@ class BlockManager:
 
     def __add_block_by_sync(self, block_, confirm_info=None):
         logging.debug(f"block_manager.py >> block_height_sync :: "
-                      f"height({block_.header.height})")
+                      f"height({block_.header.height}) confirm_info({confirm_info})")
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
@@ -830,8 +832,7 @@ class BlockManager:
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__channel_service.score_invoke
             reps = self.__channel_service.get_rep_ids()
-            logging.debug(f"last_block.header({self.__blockchain.last_block.header}) "
-                          f"unconfirmed_block.header({unconfirmed_block.header})")
+            logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,

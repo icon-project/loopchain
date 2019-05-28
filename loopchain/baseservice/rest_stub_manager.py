@@ -46,8 +46,6 @@ class RestStubManager:
             self.__version_urls[version] = url
 
         self.__method_versions = {
-            "Subscribe": conf.ApiVersion.node,
-            "Unsubscribe": conf.ApiVersion.node,
             "GetChannelInfos": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
@@ -55,10 +53,8 @@ class RestStubManager:
         }
 
         self.__method_names = {
-            "Subscribe": "node_Subscribe",
-            "Unsubscribe": "node_Unsubscribe",
-            "GetChannelInfos": "node_GetChannelInfos",
-            "GetBlockByHeight": "node_GetBlockByHeight",
+            "GetChannelInfos": "node_getChannelInfos",
+            "GetBlockByHeight": "node_getBlockByHeight",
             "Status": "/status/peer/",
             "GetLastBlock": "icx_getLastBlock"
         }
