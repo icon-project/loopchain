@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, ObjectManager, Timer
+from loopchain.baseservice import TimerService, ObjectManager, Timer, StubManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
@@ -36,7 +36,6 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -351,10 +350,12 @@ class BlockManager:
         :return block, max_block_height, confirm_info, response_code
         """
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
-                block_height=block_height,
-                channel=self.__channel_name
-            ), conf.GRPC_TIMEOUT)
+            response = peer_stub.call(
+                'BlockSync',
+                loopchain_pb2.BlockSyncRequest(block_height=block_height, channel=self.__channel_name),
+                timeout=conf.GRPC_TIMEOUT,
+                is_stub_reuse=True
+            )
             try:
                 block = self.__blockchain.block_loads(response.block)
             except Exception as e:
@@ -685,13 +686,13 @@ class BlockManager:
         for target in target_list:
             if target != peer_target:
                 logging.debug(f"try to target({target})")
-                channel = GRPCHelper().create_client_channel(target)
-                stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+                stub = StubManager(target, loopchain_pb2_grpc.PeerServiceStub)
                 try:
-                    response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                        request="",
-                        channel=self.__channel_name,
-                    ), conf.GRPC_TIMEOUT_SHORT)
+                    response = stub.call(
+                        'GetStatus',
+                        loopchain_pb2.StatusRequest(request="", channel=self.__channel_name, ),
+                        timeout=conf.GRPC_TIMEOUT_SHORT
+                    )
 
                     response.block_height = max(response.block_height, response.unconfirmed_block_height)
 

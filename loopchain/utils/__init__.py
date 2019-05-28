@@ -154,6 +154,9 @@ def get_stub_to_server(target, stub_class, time_out_seconds=None, is_check_statu
             # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
             time.sleep(conf.CONNECTION_RETRY_INTERVAL)
             duration = timeit.default_timer() - start_time
+            if channel is not None:
+                channel.close()
+                channel = None
             stub = None
 
     return stub, channel

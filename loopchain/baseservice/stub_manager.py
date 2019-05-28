@@ -40,10 +40,15 @@ class StubManager:
 
         self.__make_stub(False)
 
+    def __del__(self):
+        self.invalidate_stub()
+
     def __make_stub(self, is_stub_reuse=True):
         if util.datetime_diff_in_mins(self.__stub_update_time) >= conf.STUB_REUSE_TIMEOUT or \
                 not is_stub_reuse or self.__stub is None:
             util.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
+
+            self.invalidate_stub()
 
             self.__stub, self.__channel = util.get_stub_to_server(
                 self.__target, self.__stub_type, is_check_status=False, ssl_auth_type=self.__ssl_auth_type)
@@ -67,6 +72,15 @@ class StubManager:
     def target(self):
         return self.__target
 
+    def invalidate_stub(self):
+        if self.__channel:
+            util.logger.warning(f"Closing... Channel. target={self.__target}, channel={self.__channel}")
+            # Channel.close method doesn't exist prior to grpc version 1.12.0
+            self.__channel.close()
+            util.logger.warning(f"Closed Channel. channel={self.__channel}")
+            self.__channel = None
+        self.__stub = None
+
     def elapsed_last_succeed_time(self):
         return time.monotonic() - self.__last_succeed_time
 
@@ -85,6 +99,7 @@ class StubManager:
             return ret
         except Exception as e:
             logging.warning(f"gRPC call fail method_name({method_name}), message({message}): {e}")
+            self.invalidate_stub()
             if is_raise:
                 raise e
 
@@ -116,6 +131,7 @@ class StubManager:
         except Exception as e:
             logging.warning(f"gRPC call_async fail method_name({method_name}), message({message}): {e}, "
                             f"target({self.__target})")
+            self.invalidate_stub()
 
     def call_in_time(self, method_name, message, time_out_seconds=None, is_stub_reuse=True):
         """Try gRPC call. If it fails try again until time out (seconds)
@@ -128,25 +144,20 @@ class StubManager:
         """
         if time_out_seconds is None:
             time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
-        self.__make_stub(is_stub_reuse)
-
-        stub_method = getattr(self.__stub, method_name)
 
         start_time = timeit.default_timer()
-        duration = timeit.default_timer() - start_time
-
+        duration = 0
         while duration < time_out_seconds:
             try:
-                return stub_method(message, conf.GRPC_TIMEOUT)
+                return self.call(method_name, message,
+                                 timeout=conf.GRPC_TIMEOUT, is_stub_reuse=is_stub_reuse, is_raise=True)
             except Exception as e:
-                # logging.debug(f"retry request_server_in_time({method_name}): {e}")
-                logging.debug("duration(" + str(duration)
-                              + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                              + ") timeout(" + str(time_out_seconds) + ")")
+                logging.debug(f"duration({duration})"
+                              f" interval({conf.CONNECTION_RETRY_INTERVAL})"
+                              f" timeout({time_out_seconds})")
 
             # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
             time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-            self.__make_stub(False)
             duration = timeit.default_timer() - start_time
 
         return None
@@ -165,29 +176,16 @@ class StubManager:
         :return:
         """
         retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-
-        self.__make_stub(is_stub_reuse)
-        stub_method = getattr(self.__stub, method_name)
-
         while retry_times > 0:
             try:
-                return stub_method(message, timeout)
+                return self.call(method_name, message, timeout=timeout, is_stub_reuse=is_stub_reuse, is_raise=True)
             except Exception as e:
                 logging.debug(f"retry request_server_in_times({method_name}): {e}")
 
             time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-            self.__make_stub(False)
             retry_times -= 1
 
         return None
-
-    def check_status(self):
-        try:
-            self.__stub.Request(loopchain_pb2.Message(code=message_code.Request.status), conf.GRPC_TIMEOUT)
-            return True
-        except Exception as e:
-            logging.warning(f"stub_manager:check_status is Fail reason({e})")
-            return False
 
     @staticmethod
     def get_stub_manager_to_server(target, stub_class, time_out_seconds=None,
@@ -201,22 +199,27 @@ class StubManager:
             time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
         stub_manager = StubManager(target, stub_class, ssl_auth_type)
         start_time = timeit.default_timer()
-        duration = timeit.default_timer() - start_time
+        duration = 0
 
         while duration < time_out_seconds:
             try:
-                logging.debug("(stub_manager) get stub to server target: " + str(target))
-                stub_manager.stub.Request(loopchain_pb2.Message(
-                    code=message_code.Request.status,
-                    message="get_stub_manager_to_server"), conf.GRPC_TIMEOUT)
+                logging.debug(f"(stub_manager) get stub to server target: {target}")
+                stub_manager.call(
+                    'Request',
+                    loopchain_pb2.Message(
+                        code=message_code.Request.status,
+                        message="get_stub_manager_to_server"
+                    ),
+                    timeout=conf.GRPC_TIMEOUT,
+                    is_raise=True
+                )
                 return stub_manager
             except Exception as e:
+                logging.warning(f"Connect to Server Error(get_stub_manager_to_server): {e}")
+                logging.debug(f"duration({duration}) interval({conf.CONNECTION_RETRY_INTERVAL})"
+                              f" timeout({time_out_seconds}) timeout({time_out_seconds}")
                 if is_allow_null_stub:
                     return stub_manager
-                logging.warning("Connect to Server Error(get_stub_manager_to_server): " + str(e))
-                logging.debug("duration(" + str(duration)
-                              + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                              + ") timeout(" + str(time_out_seconds) + ")")
                 # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
                 time.sleep(conf.CONNECTION_RETRY_INTERVAL)
                 duration = timeit.default_timer() - start_time

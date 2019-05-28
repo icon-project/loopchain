@@ -13,14 +13,15 @@
 # limitations under the License.
 """gRPC broadcast thread"""
 
-import logging
-import queue
-import threading
-import signal
 import abc
-import time
-import os
+import asyncio
+import logging
 import multiprocessing as mp
+import os
+import queue
+import signal
+import threading
+import time
 from concurrent import futures
 from enum import Enum
 from functools import partial
@@ -28,12 +29,11 @@ from functools import partial
 import grpc
 from grpc._channel import _Rendezvous
 
-from loopchain import configure as conf, utils as util
-from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
-    TimerService, Timer
+from loopchain import configure as conf
+from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, TimerService, Timer
+from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.baseservice.tx_item_helper import TxItem
 from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
-from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
 class PeerThreadStatus(Enum):
@@ -82,6 +82,7 @@ class _Broadcaster:
         self.stored_tx = queue.Queue()
 
         self.__timer_service = TimerService()
+        self.__loop = self.__timer_service.get_event_loop()
 
     @property
     def is_running(self):
@@ -97,11 +98,11 @@ class _Broadcaster:
 
     def handle_command(self, command, params):
         func = self.__handler_map[command]
-        func(params)
+        asyncio.run_coroutine_threadsafe(func(params), self.__loop)
 
     def __keep_grpc_connection(self, result, timeout, stub_manager: StubManager):
         return isinstance(result, _Rendezvous) \
-               and result.code() in (grpc.StatusCode.DEADLINE_EXCEEDED, grpc.StatusCode.UNAVAILABLE) \
+               and result.code() == grpc.StatusCode.DEADLINE_EXCEEDED \
                and stub_manager.elapsed_last_succeed_time() < timeout
 
     def __broadcast_retry_async(self, peer_target, method_name, method_param, retry_times, timeout, stub, result):
@@ -110,30 +111,45 @@ class _Broadcaster:
         if isinstance(result, futures.Future) and not result.exception():
             return
 
-        logging.debug(f"try retry to : peer_target({peer_target})\n")
-        if retry_times > 0:
-            try:
-                stub_manager: StubManager = self.__audience[peer_target]
-                if stub_manager is None:
-                    logging.warning(f"broadcast_thread:__broadcast_retry_async Failed to connect to ({peer_target}).")
-                    return
-                retry_times -= 1
-                is_stub_reuse = stub_manager.stub != stub or self.__keep_grpc_connection(result, timeout, stub_manager)
-                self.__call_async_to_target(peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout)
-            except KeyError as e:
-                logging.debug(f"broadcast_thread:__broadcast_retry_async ({peer_target}) not in audience. ({e})")
+        coro = self.__broadcast_error(peer_target, method_name, method_param, retry_times, timeout, stub, result)
+        asyncio.run_coroutine_threadsafe(coro, self.__loop)
+
+    async def __broadcast_error(self, peer_target, method_name, method_param, retry_times, timeout, stub, result):
+        logging.debug(f"try retry to : peer_target({peer_target}), method={method_name}, retry times={retry_times}\n")
+
+        is_stub_reuse = True
+        try:
+            stub_manager: StubManager = self.__audience[peer_target]
+        except KeyError as e:
+            stub_manager = None
+            logging.debug(f"broadcast_thread:__broadcast_retry_async ({peer_target}) not in audience. ({e})")
         else:
+            if stub_manager is not None:
+                is_stub_reuse = stub_manager.stub != stub or self.__keep_grpc_connection(result, timeout, stub_manager)
+
+        if retry_times > 0:
+            if stub_manager is None:
+                logging.warning(f"broadcast_thread:__broadcast_retry_async Failed to connect to ({peer_target}).")
+                return
+            retry_times -= 1
+            self.__call_async_to_target(peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout)
+        else:
+            if not is_stub_reuse:
+                stub_manager.invalidate_stub()
+
             if isinstance(result, _Rendezvous):
                 exception = result.details()
             elif isinstance(result, futures.Future):
                 exception = result.exception()
 
-            logging.warning(f"__broadcast_run_async fail({result})\n"
-                            f"cause by: {exception}\n"
-                            f"peer_target({peer_target})\n"
-                            f"method_name({method_name})\n"
-                            f"retry_remains({retry_times})\n"
-                            f"timeout({timeout})")
+            logging.warning(
+                f"__broadcast_run_async fail({result})\n"
+                f"cause by: {exception}\n"
+                f"peer_target({peer_target})\n"
+                f"method_name({method_name})\n"
+                f"retry_remains({retry_times})\n"
+                f"timeout({timeout})"
+            )
 
     def __call_async_to_target(self, peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout):
         try:
@@ -203,7 +219,7 @@ class _Broadcaster:
             except KeyError as e:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
-    def __handler_subscribe(self, audience_target):
+    async def __handler_subscribe(self, audience_target):
         logging.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
@@ -214,14 +230,14 @@ class _Broadcaster:
             )
             self.__audience[audience_target] = stub_manager
 
-    def __handler_unsubscribe(self, audience_target):
+    async def __handler_unsubscribe(self, audience_target):
         # logging.debug(f"BroadcastThread received unsubscribe command peer_target({unsubscribe_peer_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:
             logging.warning(f"Already deleted peer: {audience_target}")
 
-    def __handler_broadcast(self, broadcast_param):
+    async def __handler_broadcast(self, broadcast_param):
         # logging.debug("BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
@@ -287,7 +303,7 @@ class _Broadcaster:
         else:
             pass
 
-    def __handler_create_tx(self, create_tx_param):
+    async def __handler_create_tx(self, create_tx_param):
         # logging.debug(f"Broadcast create_tx....")
         try:
             tx_item = TxItem.create_tx_item(create_tx_param, self.__channel)
@@ -299,7 +315,7 @@ class _Broadcaster:
 
         self.__send_tx_in_timer(tx_item)
 
-    def __handler_connect_to_leader(self, connect_to_leader_param):
+    async def __handler_connect_to_leader(self, connect_to_leader_param):
         # logging.debug("(tx thread) try... connect to leader: " + str(connect_to_leader_param))
         self.__thread_variables[self.LEADER_PEER_TARGET_KEY] = connect_to_leader_param
 
@@ -307,7 +323,7 @@ class _Broadcaster:
 
         self.__thread_variables[self.THREAD_VARIABLE_PEER_STATUS] = PeerThreadStatus.normal
 
-    def __handler_connect_to_self_peer(self, connect_param):
+    async def __handler_connect_to_self_peer(self, connect_param):
         # 자신을 생성한 부모 Peer 에 접속하기 위한 stub 을 만든다.
         # pipe 를 통한 return 은 pipe send 와 쌍이 맞지 않은 경우 오류를 발생시킬 수 있다.
         # 안전한 연결을 위하여 부모 프로세스와도 gRPC stub 을 이용하여 통신한다.
