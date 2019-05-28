@@ -13,6 +13,7 @@
 # limitations under the License.
 """A module for managing peer list"""
 
+import hashlib
 import json
 import logging
 import math
@@ -25,7 +26,6 @@ import loopchain_pb2
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 
@@ -125,6 +125,34 @@ class PeerManager:
 
         self.__leader_complain_count = 0
         self.__highest_block_height = -1    # for RS heartbeat
+
+    def peer_ids_hash(self):
+        """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
+        peer_list =
+        :return:
+        """
+        group_id = conf.ALL_GROUP_ID
+
+        order_list = list(self.peer_order_list[group_id].keys())
+        order_list.sort()
+        peer_count = len(order_list)
+        peer_ids = ""
+
+        for i in range(peer_count):
+            peer_order = order_list[i]
+            peer_id = self.peer_order_list[group_id][peer_order]
+            peer_each = self.peer_list[group_id][peer_id]
+
+            util.logger.notice(f"peer_order({peer_order}), peer_id({peer_id}), peer_target({peer_each.target})")
+            peer_ids += peer_id
+
+        return self.get_peer_ids_hash(peer_ids)
+
+    @staticmethod
+    def get_peer_ids_hash(peer_ids):
+        peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
+        util.logger.notice(f"peer ids hash({peer_ids_hash})")
+        return peer_ids_hash
 
     @property
     def peer_object_list(self) -> dict:

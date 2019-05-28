@@ -306,6 +306,8 @@ class ChannelService:
         self._load_peers_from_iiss()
         if self.__peer_manager.get_peer(ChannelProperty().peer_id) and self.state_machine.state == "Watch":
             util.logger.notice(f"Prep({ChannelProperty().peer_id}) test right is enabled.")
+            self.__state_machine.switch_role()
+            return
 
         if height == self.__get_role_switch_block_height():
             self.__state_machine.switch_role()
@@ -453,6 +455,17 @@ class ChannelService:
         response_to_json_query(response)
 
         utils.logger.notice(f"from icon service channels is {response}")
+
+        peer_ids = ''
+        for preps in response_temp["result"]["preps"]:
+            peer_ids += preps['id']
+
+        if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
+            util.logger.notice(f"There is no change in peers.")
+            return
+
+        util.logger.notice(f"Peer manager have to update with new list.")
+        self.__peer_manager.reset_peers(check_status=False)
 
         order = 1
         for rep_info in response["result"]["preps"]:
