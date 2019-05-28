@@ -1,9 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
+from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
 from loopchain.crypto.hashing import build_hash_generator
 from loopchain.crypto.signature import SignVerifier
-from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
-from .. import Hash32, ExternalAddress
+from .. import Hash32
+
 if TYPE_CHECKING:
     from . import Transaction
     from .. import TransactionVersioner

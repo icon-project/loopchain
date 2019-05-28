@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import hashlib
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
+
 from loopchain import utils
 from loopchain.crypto.signature import SignVerifier
 from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier

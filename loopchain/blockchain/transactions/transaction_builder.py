@@ -1,9 +1,8 @@
-import hashlib
-
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from .. import Signature, ExternalAddress, Hash32
+
 from loopchain.crypto.hashing import build_hash_generator
+from .. import Signature, ExternalAddress, Hash32
 
 if TYPE_CHECKING:
     from loopchain.crypto.signature import Signer
