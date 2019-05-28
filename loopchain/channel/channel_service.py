@@ -305,7 +305,7 @@ class ChannelService:
     def reset_network_by_block_height(self, height):
         self._load_peers_from_iiss()
         if self.__peer_manager.get_peer(ChannelProperty().peer_id) and self.state_machine.state == "Watch":
-            util.logger.notice(f"Prep({ChannelProperty().peer_id}) test right is enabled.")
+            utils.logger.notice(f"Prep({ChannelProperty().peer_id}) test right is enabled.")
             self.__state_machine.switch_role()
             return
 
@@ -457,14 +457,14 @@ class ChannelService:
         utils.logger.notice(f"from icon service channels is {response}")
 
         peer_ids = ''
-        for preps in response_temp["result"]["preps"]:
+        for preps in response["result"]["preps"]:
             peer_ids += preps['id']
 
         if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
-            util.logger.notice(f"There is no change in peers.")
+            utils.logger.notice(f"There is no change in peers.")
             return
 
-        util.logger.notice(f"Peer manager have to update with new list.")
+        utils.logger.notice(f"Peer manager have to update with new list.")
         self.__peer_manager.reset_peers(check_status=False)
 
         order = 1
@@ -686,14 +686,14 @@ class ChannelService:
         :param complained:
         :return:
         """
-        util.logger.notice(f"do _load_peers_from_iiss in reset_leader")
+        utils.logger.notice(f"do _load_peers_from_iiss in reset_leader")
         # self._load_peers_from_iiss()
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            util.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
         # epoch = self.block_manager.epoch
         # if epoch and epoch.leader_id == new_leader_id:
-        #     util.logger.warning(f"New leader({new_leader_id}) equals current epoch leader({epoch.leader_id})")
+        #     utils.logger.warning(f"New leader({new_leader_id}) equals current epoch leader({epoch.leader_id})")
         #     return
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
