@@ -250,18 +250,11 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
     def __get_role_switch_block_height(self):
-        # Currently, only one way role switch is supported from Citizen to Rep
-        if ChannelProperty().node_type != conf.NodeType.CitizenNode:
-            return -1
         return self.get_channel_option().get('role_switch_block_height', -1)
 
     def __get_node_type_by_peer_list(self):
-        # FIXME: this is temporary codes. get peer list with IISS API
-        #        IISS peer list include just peer_id and a URL that a server provide peer details
-        channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        for peer_info in channels[ChannelProperty().name]["peers"]:
-            if peer_info['id'] == ChannelProperty().peer_id:
-                return conf.NodeType.CommunityNode
+        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
@@ -287,14 +280,16 @@ class ChannelService:
             utils.logger.debug(f"Currently, Can't select node type without block height. block height={block_height}")
             return
 
+        self._load_peers_from_iiss()
         switch_block_height = self.__get_role_switch_block_height()
-        if switch_block_height < 0 or block_height < switch_block_height:
-            utils.logger.debug(f"Does not need to select node type. role switch block height={switch_block_height}")
-            return
+        if switch_block_height != -1:
+            if block_height < switch_block_height:
+                utils.logger.debug(f"Does not need to select node type. role switch block height={switch_block_height}")
+                return
 
         node_type: conf.NodeType = self.__get_node_type_by_peer_list()
         if node_type == ChannelProperty().node_type:
-            utils.logger.info(f"Node type equals previous note type ({node_type}). force={force}")
+            utils.logger.info(f"Node type equals previous note type ({node_type})")
             return
 
         utils.logger.info(f"Selected node type {node_type}")
