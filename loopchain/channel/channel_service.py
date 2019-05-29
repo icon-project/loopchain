@@ -433,8 +433,7 @@ class ChannelService:
         return score_info
 
     def _load_peers_from_iiss(self):
-        self.__peer_manager.reset_peers(check_status=False)
-        utils.logger.notice(f"__get_channel_infos Try load channels via icon-service...")
+        utils.logger.debug(f"load peers from iiss...")
 
         request = {
             "method": "ise_getPReps"
@@ -445,17 +444,17 @@ class ChannelService:
         response = stub.sync_task().call(request)
         response_to_json_query(response)
 
-        utils.logger.notice(f"from icon service channels is {response}")
+        utils.logger.spam(f"from icon service channels is {response}")
 
         peer_ids = ''
         for preps in response["result"]["preps"]:
             peer_ids += preps['id']
 
         if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
-            utils.logger.notice(f"There is no change in peers.")
+            utils.logger.debug(f"There is no change in peers.")
             return
 
-        utils.logger.notice(f"Peer manager have to update with new list.")
+        utils.logger.debug(f"Peer manager have to update with new list.")
         self.__peer_manager.reset_peers(check_status=False)
 
         order = 1
@@ -665,9 +664,9 @@ class ChannelService:
             self.block_manager.rebuild_block()
 
     def show_peers(self):
-        utils.logger.notice(f"peer_service:show_peers ({ChannelProperty().name}): ")
+        utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
         for peer in self.peer_manager.get_IP_of_peers_in_group():
-            utils.logger.notice("peer_target: " + peer)
+            utils.logger.debug("peer_target: " + peer)
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
@@ -677,15 +676,8 @@ class ChannelService:
         :param complained:
         :return:
         """
-        utils.logger.notice(f"do _load_peers_from_iiss in reset_leader")
-        # self._load_peers_from_iiss()
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
-
-        # epoch = self.block_manager.epoch
-        # if epoch and epoch.leader_id == new_leader_id:
-        #     utils.logger.warning(f"New leader({new_leader_id}) equals current epoch leader({epoch.leader_id})")
-        #     return
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                          f"complained={complained}")

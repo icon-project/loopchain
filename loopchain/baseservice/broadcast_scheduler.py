@@ -204,7 +204,7 @@ class _Broadcaster:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_subscribe(self, audience_target):
-        util.logger.notice("BroadcastThread received subscribe command peer_target: " + str(audience_target))
+        util.logger.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
