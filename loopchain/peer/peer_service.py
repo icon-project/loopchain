@@ -182,12 +182,6 @@ class PeerService:
                 channels = json.loads(response.channel_infos)
             else:
                 channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-
-                if conf.ENABLE_CHANNEL_AUTH:
-                    filtered_channels = {channel: channels[channel] for channel in channels
-                                         for peer in channels[channel]['peers']
-                                         if self.__peer_id == peer['id']}
-                    channels = filtered_channels
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()}

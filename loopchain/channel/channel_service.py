@@ -295,7 +295,7 @@ class ChannelService:
     async def __select_node_type(self):
         if self._is_role_switched():
             new_node_type = self.__get_node_type_by_peer_list()
-            util.logger.info(f"Role switching to new node type: {new_node_type}")
+            utils.logger.info(f"Role switching to new node type: {new_node_type}")
             ChannelProperty().node_type = new_node_type
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
