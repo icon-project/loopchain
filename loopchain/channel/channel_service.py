@@ -273,38 +273,34 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
-    async def __select_node_type(self):
-        # If block height is under zero this node has not synchronized blocks yet.
-        block_height = self.__block_manager.get_blockchain().block_height
-        if block_height < 0:
-            utils.logger.debug(f"Currently, Can't select node type without block height. block height={block_height}")
-            return
+    def _is_role_switched(self) -> bool:
+        current_height = self.__block_manager.get_blockchain().block_height
+        if current_height < 0:
+            utils.logger.debug(f"Need to sync block, current_height({current_height})")
+            return False
 
-        self._load_peers_from_iiss()
         switch_block_height = self.__get_role_switch_block_height()
-        if switch_block_height != -1:
-            if block_height < switch_block_height:
-                utils.logger.debug(f"Does not need to select node type. role switch block height={switch_block_height}")
-                return
+        if switch_block_height != -1 and current_height < switch_block_height:
+            utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
+                              f"current_height({current_height})")
+            return False
 
-        node_type: conf.NodeType = self.__get_node_type_by_peer_list()
-        if node_type == ChannelProperty().node_type:
-            utils.logger.info(f"Node type equals previous note type ({node_type})")
-            return
-
-        utils.logger.info(f"Selected node type {node_type}")
-        ChannelProperty().node_type = node_type
-
-        await StubCollection().peer_stub.async_task().change_node_type(node_type.value)
-
-    def reset_network_by_block_height(self, height):
         self._load_peers_from_iiss()
-        if self.__peer_manager.get_peer(ChannelProperty().peer_id) and self.state_machine.state == "Watch":
-            utils.logger.notice(f"Prep({ChannelProperty().peer_id}) test right is enabled.")
-            self.__state_machine.switch_role()
-            return
+        if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
+            utils.logger.debug(f"By iiss list, maintains the current node type({ChannelProperty().node_type})")
+            return False
 
-        if height == self.__get_role_switch_block_height():
+        return True
+
+    async def __select_node_type(self):
+        if self._is_role_switched():
+            new_node_type = self.__get_node_type_by_peer_list()
+            util.logger.info(f"Role switching to new node type: {new_node_type}")
+            ChannelProperty().node_type = new_node_type
+            await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
+
+    def switch_role(self):
+        if self._is_role_switched():
             self.__state_machine.switch_role()
 
     async def reset_network(self):

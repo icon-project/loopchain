@@ -313,7 +313,7 @@ class BlockChain:
             ObjectManager().channel_service.inner_service.notify_new_block()
             # reset_network_by_block_height is called in critical section by self.__add_block_lock.
             # Other Blocks must not be added until reset_network_by_block_height function finishes.
-            ObjectManager().channel_service.reset_network_by_block_height(self.__last_block.header.height)
+            ObjectManager().channel_service.switch_role()
 
             return True
 
