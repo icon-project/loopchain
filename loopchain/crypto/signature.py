@@ -18,14 +18,16 @@ import getpass
 import hashlib
 import logging
 from typing import Union
+
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from secp256k1 import PrivateKey, PublicKey
+from secp256k1 import Base, ALL_FLAGS, PrivateKey, PublicKey
 
 
 class SignVerifier:
-    _pri = PrivateKey()
+    _base = Base(None, ALL_FLAGS)
+    _pri = PrivateKey(ctx=_base.ctx)
 
     def __init__(self):
         self.address: str = None
@@ -51,7 +53,7 @@ class SignVerifier:
                                           recover_sig=recoverable_sig,
                                           raw=is_hash,
                                           digest=hashlib.sha3_256)
-            extract_pub = PublicKey(pub).serialize(compressed=False)
+            extract_pub = PublicKey(pub, ctx=self._base.ctx).serialize(compressed=False)
             return self.verify_address(extract_pub)
         except Exception as e:
             raise RuntimeError(f"signature verification fail : {origin_data} {signature}\n"
@@ -64,7 +66,7 @@ class SignVerifier:
 
     @classmethod
     def address_from_prikey(cls, prikey: bytes):
-        pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
+        pubkey = PrivateKey(prikey, ctx=cls._base.ctx).pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
@@ -208,7 +210,7 @@ class Signer(SignVerifier):
     @classmethod
     def from_prikey(cls, prikey: bytes):
         auth = Signer()
-        auth.private_key = PrivateKey(prikey)
+        auth.private_key = PrivateKey(prikey, ctx=cls._base.ctx)
         auth.address = cls.address_from_prikey(prikey)
 
         # verify

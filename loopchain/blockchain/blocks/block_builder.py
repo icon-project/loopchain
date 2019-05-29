@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict
-from loopchain.crypto.signature import Signer
 
+from loopchain.crypto.signature import Signer
 from . import Block
 from .. import Hash32, ExternalAddress, Signature
 from ..transactions import Transaction, TransactionVersioner

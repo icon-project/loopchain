@@ -29,7 +29,7 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, BlockVerifier)
+                                  Block, BlockSerializer, Hash32)
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
