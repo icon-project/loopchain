@@ -265,9 +265,8 @@ class ChannelService:
         self.__timer_service.clean()
 
         peer_ids = set()
-        for peer_list in self.__peer_manager.peer_list.values():
-            for peer_id in peer_list.keys():
-                peer_ids.add(peer_id)
+        for peer_id in self.__peer_manager.peer_list.keys():
+            peer_ids.add(peer_id)
         for peer_id in peer_ids:
             self.__peer_manager.remove_peer(peer_id)
 

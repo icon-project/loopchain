@@ -171,8 +171,8 @@ class Peer(HTTPMethodView):
                 if leader_peer is not None:
                     leader_peer_id = leader_peer.peer_id
 
-                for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
-                    peer_each: PeerInfo = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
+                for peer_id in peer_manager.peer_list:
+                    peer_each: PeerInfo = peer_manager.peer_list[peer_id]
                     peer_data = peer_each.serialize()
 
                     if peer_each.peer_id == leader_peer_id:
@@ -209,21 +209,21 @@ class Peer(HTTPMethodView):
 
             if peer_manager.peer_list:
                 async_futures: List[grpc.Future] = []
-                for peer_id in peer_manager.peer_list[conf.ALL_GROUP_ID]:
+                for peer_id in peer_manager.peer_list:
                     async_future = ServerComponents().get_peer_status_async(peer_id, conf.ALL_GROUP_ID, channel)
                     async_futures.append(async_future)
 
                 if async_futures:
                     futures.as_completed(async_futures)
 
-                for async_future, peer_id in zip(async_futures, peer_manager.peer_list[conf.ALL_GROUP_ID]):
+                for async_future, peer_id in zip(async_futures, peer_manager.peer_list):
                     if async_future.exception():
                         logging.warning(f'RequestType({request_type}), exception({async_future.exception()})')
                         continue
 
                     grpc_response = async_future.result()
                     if grpc_response is not None and grpc_response.status != "":
-                        peer_each = peer_manager.peer_list[conf.ALL_GROUP_ID][peer_id]
+                        peer_each = peer_manager.peer_list[peer_id]
                         status_json = json.loads(grpc_response.status)
                         status_json["order"] = peer_each.order
                         all_peer_list.append(status_json)
