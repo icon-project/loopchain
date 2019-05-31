@@ -679,7 +679,7 @@ class BlockManager:
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.epoch = Epoch.new_epoch(leader_peer.peer_id)
-            elif self.epoch.height < my_height:
+            elif self.epoch and self.epoch.height < my_height:
                 self.epoch = Epoch.new_epoch()
 
             self.__channel_service.state_machine.complete_sync()

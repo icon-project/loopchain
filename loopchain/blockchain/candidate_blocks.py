@@ -37,18 +37,13 @@ class CandidateBlock:
 
         """
         if ObjectManager().channel_service:
-            audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
+            reps = ObjectManager().channel_service.get_rep_ids()
         else:
-            audience = {}
-
+            reps = []
+        self.votes = BlockVotes(reps, conf.VOTING_RATIO, block_height, block_hash)
         self.start_time = util.get_time_stamp()  # timestamp
         self.hash = block_hash
         self.height = block_height
-
-        rep_info = sorted(audience.values(), key=lambda peer: peer.order)
-        reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
-        self.votes = BlockVotes(reps, conf.VOTING_RATIO, block_height, block_hash)
-
         self.__block = None
 
     @classmethod
