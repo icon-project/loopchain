@@ -284,7 +284,9 @@ class ChannelService:
                               f"current_height({current_height})")
             return False
 
-        self._load_peers_from_iiss()
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
+
         if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
             utils.logger.debug(f"By iiss list, maintains the current node type({ChannelProperty().node_type})")
             return False
@@ -467,7 +469,6 @@ class ChannelService:
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
     async def __load_peers_from_file(self):
-        # self._load_peers_from_iiss()
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)

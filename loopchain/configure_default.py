@@ -277,7 +277,6 @@ WAIT_GRPC_SERVICE_START = 5  # seconds
 WAIT_SECONDS_FOR_SUB_THREAD_START = 5  # seconds
 SLEEP_SECONDS_FOR_SUB_PROCESS_START = 1  # seconds
 WAIT_SUB_PROCESS_RETRY_TIMES = 5
-PEER_GROUP_ID = ""  # "8d4e8d08-0d2c-11e7-a589-acbc32b0aaa1"  # vote group id
 INTERVAL_SECONDS_PROCESS_MONITORING = 30  # seconds
 PEER_NAME = "no_name"
 IS_BROADCAST_ASYNC = True
@@ -335,6 +334,8 @@ ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel inf
 ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
+LOAD_PEERS_FROM_IISS = False
+
 
 ########
 # MQ ###

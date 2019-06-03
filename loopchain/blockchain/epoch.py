@@ -73,7 +73,7 @@ class Epoch:
         self.new_votes()
 
     def new_votes(self):
-        audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
+        audience = ObjectManager().channel_service.peer_manager.peer_list
         rep_info = sorted(audience.values(), key=lambda peer: peer.order)
         reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
         leader_votes = LeaderVotes(reps,
