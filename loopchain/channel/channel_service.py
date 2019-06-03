@@ -58,7 +58,6 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
-        self.__channel_infos: dict = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -130,10 +129,7 @@ class ChannelService:
         async def _serve():
             await StubCollection().create_peer_stub()
 
-            channel_name = ChannelProperty().name
-            self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
-            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
-
+            results = await StubCollection().peer_stub.async_task().get_channel_info_detail()
             await self.init(**results)
 
             self.__timer_service.start()
@@ -210,7 +206,6 @@ class ChannelService:
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().node_type = conf.NodeType(kwargs.get('node_type'))
-        ChannelProperty().score_package = kwargs.get('score_package')
 
         self.__peer_manager = PeerManager(ChannelProperty().name)
         await self.__init_peer_auth()
@@ -229,7 +224,9 @@ class ChannelService:
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
             else:
-                await self.__load_peers_from_file()
+                self._load_peer_manager()
+        else:
+            self.__init_node_subscriber()
 
     async def evaluate_network(self):
         await self.__select_node_type()
@@ -251,14 +248,6 @@ class ChannelService:
         nid = self.__block_manager.get_blockchain().find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
-    def __get_role_switch_block_height(self):
-        return self.get_channel_option().get('role_switch_block_height', -1)
-
-    def __get_node_type_by_peer_list(self):
-        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            return conf.NodeType.CommunityNode
-        return conf.NodeType.CitizenNode
-
     async def __clean_network(self):
         if self.__node_subscriber is not None:
             await self.__node_subscriber.close()
@@ -274,13 +263,37 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
+    def _load_peer_manager(self):
+        if self._is_genesis_node():
+            peer_info = {
+                'id': ChannelProperty().peer_id,
+                'peer_target': ChannelProperty().peer_target,
+                'order': 1
+            }
+            self.__peer_manager.add_peer(peer_info)
+        else:
+            self._load_peers_from_iiss()
+
+    def __get_node_type_by_peer_list(self):
+        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            return conf.NodeType.CommunityNode
+        return conf.NodeType.CitizenNode
+
+    def _is_genesis_node(self):
+        return ('genesis_data_path' in self.get_channel_option()
+                and self.is_support_node_function(conf.NodeFunction.Vote))
+
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.get_blockchain().block_height
         if current_height < 0:
             utils.logger.debug(f"Need to sync block, current_height({current_height})")
             return False
 
-        switch_block_height = self.__get_role_switch_block_height()
+        if current_height == 0 and self._is_genesis_node():
+            logging.debug(f"It's GenesisNode but not registered yet")
+            return False
+
+        switch_block_height = self.get_channel_option().get('role_switch_block_height', -1)
         if switch_block_height != -1 and current_height < switch_block_height:
             utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
                                f"current_height({current_height})")
@@ -297,7 +310,7 @@ class ChannelService:
     async def __select_node_type(self):
         if self._is_role_switched():
             new_node_type = self.__get_node_type_by_peer_list()
-            utils.logger.info(f"Role switching to new node type: {new_node_type}")
+            utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
@@ -383,8 +396,7 @@ class ChannelService:
     async def __run_score_container(self):
         if conf.RUN_ICON_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
-                            '--channel', ChannelProperty().name,
-                            '--score_package', ChannelProperty().score_package]
+                            '--channel', ChannelProperty().name]
             process_args += command_arguments.get_raw_commands_by_filter(
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
@@ -398,41 +410,6 @@ class ChannelService:
         await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
         await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
         return None
-
-    async def __load_score(self):
-        channel_name = ChannelProperty().name
-        score_package_name = ChannelProperty().score_package
-
-        utils.logger.spam(f"peer_service:__load_score --init--")
-        logging.info("LOAD SCORE AND CONNECT TO SCORE SERVICE!")
-
-        params = dict()
-        params[message_code.MetaParams.ScoreLoad.repository_path] = conf.DEFAULT_SCORE_REPOSITORY_PATH
-        params[message_code.MetaParams.ScoreLoad.score_package] = score_package_name
-        params[message_code.MetaParams.ScoreLoad.base] = conf.DEFAULT_SCORE_BASE
-        params[message_code.MetaParams.ScoreLoad.peer_id] = ChannelProperty().peer_id
-        meta = json.dumps(params)
-        logging.debug(f"load score params : {meta}")
-
-        utils.logger.spam(f"peer_service:__load_score --1--")
-        score_stub = StubCollection().score_stubs[channel_name]
-        response = await score_stub.async_task().score_load(meta)
-
-        logging.debug("try score load on score service: " + str(response))
-        if not response:
-            return None
-
-        if response.code != message_code.Response.success:
-            utils.exit_and_msg("Fail Get Score from Score Server...")
-            return None
-
-        logging.debug("Get Score from Score Server...")
-        score_info = json.loads(response.meta)
-
-        logging.info("LOAD SCORE DONE!")
-        utils.logger.spam(f"peer_service:__load_score --end--")
-
-        return score_info
 
     def _load_peers_from_iiss(self):
         utils.logger.debug(f"load peers from iiss...")
@@ -475,9 +452,6 @@ class ChannelService:
     def get_channel_option(self) -> dict:
         channel_option = conf.CHANNEL_OPTION
         return channel_option[ChannelProperty().name]
-
-    def get_channel_infos(self) -> dict:
-        return self.__channel_infos
 
     def get_rep_ids(self) -> list:
         return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
@@ -705,16 +679,11 @@ class ChannelService:
         if self_peer_object.target == peer_leader.target:
             loggers.get_preset().is_leader = True
             loggers.get_preset().update_logger()
-
             logging.debug("I'm Leader Peer!")
         else:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
-
             logging.debug("I'm general Peer!")
-            # 새 leader 에게 subscribe 하기
-            # await self.subscribe_to_radio_station()
-            # await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
     def genesis_invoke(self, block: Block) -> ('Block', dict):
         method = "icx_sendTransaction"

@@ -148,37 +148,29 @@ class PeerService:
         self.p2p_outer_server.stop(None)
 
     def __get_channel_infos(self):
-        # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.ENABLE_REP_RADIO_STATION:
-                response = self.stub_to_radiostation.call_in_times(
-                    method_name="GetChannelInfos",
-                    message=loopchain_pb2.GetChannelInfosRequest(
-                        peer_id=self.__peer_id,
-                        peer_target=self.__peer_target,
-                        group_id=self.__peer_id),
-                    retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-                    is_stub_reuse=False,
-                    timeout=conf.CONNECTION_TIMEOUT_TO_RS
-                )
-                # util.logger.spam(f"__get_channel_infos:response::{response}")
+        if self.is_support_node_function(conf.NodeFunction.Vote) and conf.ENABLE_REP_RADIO_STATION:
+            response = self.stub_to_radiostation.call_in_times(
+                method_name="GetChannelInfos",
+                message=loopchain_pb2.GetChannelInfosRequest(
+                    peer_id=self.__peer_id,
+                    peer_target=self.__peer_target,
+                    group_id=self.__peer_id),
+                retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
+                is_stub_reuse=False,
+                timeout=conf.CONNECTION_TIMEOUT_TO_RS
+            )
+            # util.logger.spam(f"__get_channel_infos:response::{response}")
 
-                if not response:
-                    return None
-                logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
-                channels = json.loads(response.channel_infos)
-            else:
-                channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        else:
-            response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
-            channels = {channel: value for channel, value in response["channel_infos"].items()}
-
-        return channels
+            if not response:
+                return None
+            logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
+            return json.loads(response.channel_infos)
+        return {channel: dict() for channel in conf.CHANNEL_OPTION}
 
     def __init_port(self, port):
         # service 초기화 작업
         target_ip = utils.get_private_ip()
-        self.__peer_target = utils.get_private_ip() + ":" + str(port)
+        self.__peer_target = f"{target_ip}:{port}"
         self.__peer_port = int(port)
 
         rest_port = int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -321,7 +313,7 @@ class PeerService:
         loop.create_task(_close())
 
     async def serve_channels(self):
-        for i, channel_name in enumerate(self.__channel_infos.keys()):
+        for i, channel_name in enumerate(conf.CHANNEL_OPTION):
             score_port = self.__peer_port + conf.PORT_DIFF_SCORE_CONTAINER + conf.PORT_DIFF_BETWEEN_SCORE_CONTAINER * i
 
             args = ['python3', '-m', 'loopchain', 'channel']
@@ -345,7 +337,7 @@ class PeerService:
     async def ready_tasks(self):
         await StubCollection().create_peer_stub()  # for getting status info
 
-        for channel_name, channel_info in self.__channel_infos.items():
+        for channel_name in conf.CHANNEL_OPTION:
             await StubCollection().create_channel_stub(channel_name)
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
@@ -353,8 +345,6 @@ class PeerService:
 
     def __reset_channel_infos(self):
         self.__channel_infos = self.__get_channel_infos()
-        if not self.__channel_infos:
-            utils.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
 
     async def change_node_type(self, node_type):
         if self.__node_type.value == node_type:

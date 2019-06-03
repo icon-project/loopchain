@@ -319,7 +319,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             logging.info('Peer will stop... by: ' + request.reason)
 
         try:
-            for channel_name in self.peer_service.channel_infos:
+            for channel_name in conf.CHANNEL_OPTION:
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 channel_stub.sync_task().stop()
 
@@ -637,18 +637,3 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub.sync_task().vote_unconfirmed_block(request.vote)
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
-    def GetChannelInfos(self, request: loopchain_pb2.GetChannelInfosRequest, context):
-        """Return channels by peer target
-
-        :param request:
-        :param context:
-        :return:
-        """
-        logging.info(f"peer_outer_service:GetChannelInfos target({request.peer_target}) "
-                     f"channel_infos({ObjectManager().peer_service.channel_infos})")
-
-        return loopchain_pb2.GetChannelInfosReply(
-            response_code=message_code.Response.success,
-            channel_infos=json.dumps(ObjectManager().peer_service.channel_infos)
-        )

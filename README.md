@@ -60,8 +60,6 @@ This command is for setting up:
 $ make all
 
 ...
-Generating python grpc code from proto into >  /Users/jiyun/Desktop/happycoding/workspace/theloop/LoopChain
-python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
 Input your keystore password:  # Password must be at least 8 characters long including alphabet, number, and special character.
 ```
 
@@ -88,7 +86,7 @@ $ make clean
 * delete log / delete DB
 
 ```bash
-$ make clean-db
+$ make clean-log clean-db
 ```
 
 ## License
