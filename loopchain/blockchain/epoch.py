@@ -14,13 +14,17 @@
 """It manages the information needed during consensus to store one block height.
 Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
+
 import logging
 import traceback
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain import Vote, BlockBuilder, Transaction, TransactionStatusInQueue, TransactionVerifier
+from loopchain.blockchain.blocks import BlockBuilder
+from loopchain.blockchain.transactions import Transaction, TransactionVerifier
+from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.vote import Vote
 from loopchain.channel.channel_property import ChannelProperty
 
 
@@ -178,12 +182,10 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
-    def makeup_block(self, complained_result: str):
-        # self._check_unconfirmed_block(
-        last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
-        block_height = last_block.header.height + 1
-        block_version = self.__blockchain.block_versioner.get_version(block_height)
+    def makeup_block(self, prev_block, block_version, complained_result):
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
+        block_builder.fixed_timestamp = max(util.get_time_stamp(), prev_block.header.timestamp + 1)
+
         if not complained_result:
             self.__add_tx_to_block(block_builder)
 

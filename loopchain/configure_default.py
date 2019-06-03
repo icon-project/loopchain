@@ -186,6 +186,7 @@ ALLOW_TIMESTAMP_BOUNDARY_SECOND = 60 * 5
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
 ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
+TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 READ_CACHED_TX_COUNT = True
 

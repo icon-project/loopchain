@@ -82,6 +82,13 @@ class ConsensusSiever(ConsensusBase):
 
         return block_builder.build()
 
+    def __makeup_block(self, complained_result):
+        prev_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
+        block_height = prev_block.header.height + 1
+        block_version = self._blockchain.block_versioner.get_version(block_height)
+
+        return self._block_manager.epoch.makeup_block(prev_block, block_version, complained_result)
+
     async def consensus(self):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
@@ -93,7 +100,8 @@ class ConsensusSiever(ConsensusBase):
             self._vote_queue = asyncio.Queue(loop=self._loop)
 
             complained_result = self._block_manager.epoch.complained_result
-            block_builder = self._block_manager.epoch.makeup_block(complained_result)
+            block_builder = self.__makeup_block(complained_result)
+
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
