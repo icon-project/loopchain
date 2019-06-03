@@ -57,7 +57,6 @@ service PeerService {
     rpc AnnounceNewBlockForVote (NewBlockSend) returns (CommonReply) {}
     rpc AnnounceConfirmedBlock (BlockAnnounce) returns (CommonReply) {}
     rpc AnnounceNewPeer (PeerRequest) returns (CommonReply) {}
-    rpc AnnounceDeletePeer (PeerID) returns (CommonReply) {}
     // Test 검증을 위한 인터페이스
     rpc Echo (CommonRequest) returns (CommonReply) {}
     // Leader 선정을 위한 인터페이스

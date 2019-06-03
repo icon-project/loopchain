@@ -192,7 +192,8 @@ class ChannelService:
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
 
-    async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id, group_id, node_type, score_package):
+    async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id,
+                   group_id_will_removed, node_type, score_package):
         loggers.get_preset().peer_id = peer_id
         loggers.get_preset().update_logger()
 
@@ -201,7 +202,6 @@ class ChannelService:
         ChannelProperty().rest_target = rest_target
         ChannelProperty().radio_station_target = radio_station_target
         ChannelProperty().peer_id = peer_id
-        ChannelProperty().group_id = group_id
         ChannelProperty().node_type = conf.NodeType(node_type)
         ChannelProperty().score_package = score_package
 
@@ -504,7 +504,7 @@ class ChannelService:
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
                 peer_target=ChannelProperty().peer_target,
-                group_id=ChannelProperty().group_id),
+                group_id=ChannelProperty().peer_id),
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
@@ -541,7 +541,7 @@ class ChannelService:
         peer_request = loopchain_pb2.PeerRequest(
             channel=ChannelProperty().name,
             peer_target=ChannelProperty().peer_target,
-            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().peer_id,
             node_type=ChannelProperty().node_type,
             peer_order=peer_object.order
         )
@@ -564,7 +564,7 @@ class ChannelService:
                 loopchain_pb2.PeerRequest(
                     channel=ChannelProperty().name,
                     peer_target=ChannelProperty().peer_target, peer_type=peer_type,
-                    peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+                    peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().peer_id,
                     node_type=ChannelProperty().node_type
                 ),
             )
@@ -677,8 +677,8 @@ class ChannelService:
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
-                         f"complained={complained}")
-        leader_peer = self.peer_manager.get_peer(new_leader_id, None)
+                          f"complained={complained}")
+        leader_peer = self.peer_manager.get_peer(new_leader_id)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
             utils.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
@@ -693,7 +693,7 @@ class ChannelService:
         utils.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        self.peer_manager.set_leader_peer(leader_peer, None)
+        self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.block_manager.epoch.new_round(leader_peer.peer_id)
         else:
@@ -715,7 +715,7 @@ class ChannelService:
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
 
         # complained_leader = self.peer_manager.get_leader_peer()
-        leader_peer = self.peer_manager.get_peer(new_leader_id, None)
+        leader_peer = self.peer_manager.get_peer(new_leader_id)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
@@ -728,7 +728,7 @@ class ChannelService:
         utils.logger.spam(f"channel_service:set_new_leader::leader_target({leader_peer.target})")
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        self.peer_manager.set_leader_peer(leader_peer, None)
+        self.peer_manager.set_leader_peer(leader_peer)
 
         peer_leader = self.peer_manager.get_leader_peer()
 

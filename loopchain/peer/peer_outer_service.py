@@ -628,22 +628,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.CommonReply(response_code=0, message="success")
 
-    def AnnounceDeletePeer(self, request, context):
-        """delete peer by radio station heartbeat, It delete peer info over whole channels.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"AnnounceDeletePeer peer_id({request.peer_id}) group_id({request.group_id})")
-
-        if self.peer_service.peer_id != request.peer_id:
-            channel_stub = StubCollection().channel_stubs[channel]
-            channel_stub.sync_task().delete_peer(request.peer_id, request.group_id)
-
-        return loopchain_pb2.CommonReply(response_code=0, message="success")
-
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 

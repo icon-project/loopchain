@@ -40,7 +40,7 @@ class PeerInnerTask:
 
         return \
             self._peer_service.peer_port, self._peer_service.peer_target, self._peer_service.rest_target, \
-            self._peer_service.radio_station_target, self._peer_service.peer_id, self._peer_service.group_id, \
+            self._peer_service.radio_station_target, self._peer_service.peer_id, "", \
             self._peer_service.node_type.value, channels_info[channel_name]['score_package']
 
     @message_queue_task

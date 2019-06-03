@@ -309,8 +309,6 @@ class NodeType(IntEnum):
 ##################
 # RadioStation ###
 ##################
-ALL_GROUP_ID = "all_group_id"  # "98fad20a-0df1-11e7-bc4b-acbc32b0aaa1"
-TEST_GROUP_ID = "test_group_id"  # "ea8f365c-7fb8-11e6-af03-38c98627c586"
 LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
 # RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
 # LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy

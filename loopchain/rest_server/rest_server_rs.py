@@ -84,7 +84,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
     def get_peer_list(self, channel):
         return self.__stub_to_rs_service.call(
             "GetPeerList",
-            loopchain_pb2.CommonRequest(request="", group_id=conf.ALL_GROUP_ID, channel=channel))
+            loopchain_pb2.CommonRequest(request="", group_id="all_group_id", channel=channel))
 
     def get_leader_peer(self, channel):
         return self.__stub_to_rs_service.call(
@@ -167,7 +167,7 @@ class Peer(HTTPMethodView):
                 leader_peer_id = ""
 
                 # for set peer_type info to peer
-                leader_peer = peer_manager.get_leader_peer(conf.ALL_GROUP_ID, is_peer=False)
+                leader_peer = peer_manager.get_leader_peer(is_peer=False)
                 if leader_peer is not None:
                     leader_peer_id = leader_peer.peer_id
 
@@ -210,7 +210,7 @@ class Peer(HTTPMethodView):
             if peer_manager.peer_list:
                 async_futures: List[grpc.Future] = []
                 for peer_id in peer_manager.peer_list:
-                    async_future = ServerComponents().get_peer_status_async(peer_id, conf.ALL_GROUP_ID, channel)
+                    async_future = ServerComponents().get_peer_status_async(peer_id, "all_group_id", channel)
                     async_futures.append(async_future)
 
                 if async_futures:
