@@ -89,7 +89,7 @@ class PeerManager:
         """
         self.peer_list_data = PeerListData()
         self.__channel_name = channel_name
-        self.__peer_object_list = {}
+        self.peer_object_list = {}
 
         # peer group 은 전체 peer 가 등록된 ALL GROUP 과 개별 group_id 로 구분된 리스트가 존재한다.
         self.__init_peer_group(conf.ALL_GROUP_ID)
@@ -124,14 +124,6 @@ class PeerManager:
         peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
         util.logger.debug(f"peer ids hash({peer_ids_hash})")
         return peer_ids_hash
-
-    @property
-    def peer_object_list(self) -> dict:
-        """
-
-        :return:  group_id: { peer_id:Peer } }
-        """
-        return self.__peer_object_list
 
     @property
     def peer_list(self) -> dict:
@@ -230,8 +222,7 @@ class PeerManager:
 
             self.peer_list[peer_info.peer_id] = peer_info
             self.peer_order_list[peer_info.order] = peer_info.peer_id
-            self.__peer_object_list[peer_info.group_id][peer_info.peer_id] = peer_object
-            self.__peer_object_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer_object
+            self.peer_object_list[peer_info.peer_id] = peer_object
 
         broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
         broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
@@ -318,7 +309,7 @@ class PeerManager:
         search_group = conf.ALL_GROUP_ID
         try:
             leader_id = self.get_leader_id(search_group)
-            leader_object = self.peer_object_list[search_group][leader_id]
+            leader_object = self.peer_object_list[leader_id]
             return leader_object
         except KeyError as e:
             raise e
@@ -434,7 +425,7 @@ class PeerManager:
             logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
             util.logger.spam(f"peer_manager:__get_next_peer "
                              f"\npeer_id({peer.peer_id}), "
-                             f"\npeer_order_list({self.peer_object_list}), "
+                             f"\npeer_object_list({self.peer_object_list}), "
                              f"\npeer_list({self.peer_list})")
             return None
 
@@ -470,14 +461,13 @@ class PeerManager:
         return None, None
 
     def get_leader_stub_manager(self, group_id=None):
-        return self.get_peer_stub_manager(self.get_leader_peer(group_id), group_id)
+        return self.get_peer_stub_manager(self.get_leader_peer(group_id))
 
-    def get_peer_stub_manager(self, peer, group_id=None) -> StubManager:
-        logging.debug(f"get_peer_stub_manager peer_info : {peer.peer_id} {peer.group_id}")
-        if group_id is None:
-            group_id = conf.ALL_GROUP_ID
+    def get_peer_stub_manager(self, peer) -> StubManager:
+        logging.debug(f"get_peer_stub_manager peer_info : {peer.peer_id}")
+
         try:
-            return self.__peer_object_list[group_id][peer.peer_id].stub_manager
+            return self.peer_object_list[peer.peer_id].stub_manager
         except Exception as e:
             logging.debug("try get peer stub except: " + str(e))
             return None
@@ -486,7 +476,7 @@ class PeerManager:
         logging.debug("announce_new_peer")
         for peer_id in list(self.peer_list):
             peer_each = self.peer_list[peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_each, peer_each.group_id)
+            stub_manager = self.get_peer_stub_manager(peer_each)
             try:
                 if peer_each.target != peer_request.peer_target:
                     stub_manager.call("AnnounceNewPeer", peer_request, is_stub_reuse=True)
@@ -506,7 +496,7 @@ class PeerManager:
             group_id = conf.ALL_GROUP_ID
         leader_peer = self.get_leader_peer(group_id=group_id, is_peer=False)
         try:
-            stub_manager = self.get_peer_stub_manager(leader_peer, group_id)
+            stub_manager = self.get_peer_stub_manager(leader_peer)
             response = stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request=""), is_stub_reuse=True)
 
             status_json = json.loads(response.status)
@@ -543,21 +533,16 @@ class PeerManager:
             except Exception as e:
                 logging.warning("gRPC Exception: " + str(e))
 
-        if len(self.peer_object_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
-            del self.peer_object_list[group_id]
-
         return most_height_peer
 
-    def check_peer_status(self, group_id=None):
-        if group_id is None:
-            group_id = conf.ALL_GROUP_ID
+    def check_peer_status(self):
         nonresponse_peer_list = []
         check_leader_peer_count = 0
 
-        for peer_id in list(self.__peer_object_list[group_id]):
+        for peer_id in list(self.peer_object_list):
             peer_info: PeerInfo = self.peer_list[peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_info, group_id)
-            peer_object: PeerObject = self.__peer_object_list[group_id][peer_id]
+            stub_manager = self.get_peer_stub_manager(peer_info)
+            peer_object: PeerObject = self.peer_object_list[peer_id]
 
             try:
                 response = stub_manager.call(
@@ -617,7 +602,7 @@ class PeerManager:
 
             if check_status:
                 try:
-                    stub_manager = self.get_peer_stub_manager(peer_each, group_id)
+                    stub_manager = self.get_peer_stub_manager(peer_each)
                     stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
                                       is_stub_reuse=True)
                 except Exception as e:
@@ -631,19 +616,12 @@ class PeerManager:
                 if reset_action is not None:
                     reset_action(peer_each.peer_id, peer_each.target)
 
-        if len(self.peer_object_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
-            del self.peer_object_list[group_id]
-
     def __init_peer_group(self, group_id):
         logging.debug(f"before init order list {self.peer_order_list}")
 
         if group_id not in self.peer_leader:
             logging.debug("init group peer_leader: " + str(group_id))
             self.peer_leader[group_id] = 0
-
-        if group_id not in self.__peer_object_list.keys():
-            logging.debug("init group __peer_object_list: " + str(group_id))
-            self.__peer_object_list[group_id] = {}
 
     def __make_peer_order(self, peer):
         """소속된 그룹과 상관없이 전체 peer 가 순서에 대한 order 값을 가진다.
@@ -696,15 +674,12 @@ class PeerManager:
             return None
 
     def __clear_group(self, group_id):
-        if group_id in self.__peer_object_list:
-            del self.__peer_object_list[group_id]
         if group_id in self.peer_leader:
             del self.peer_leader[group_id]
 
     def __remove_peer_from_group(self, peer_id, group_id):
         removed_peer = self.peer_list.pop(peer_id, None)
-        if group_id in self.__peer_object_list:
-            self.__peer_object_list[group_id].pop(peer_id, None)
+        self.peer_object_list.pop(peer_id, None)
         if removed_peer:
             self.peer_order_list.pop(removed_peer.order, None)
         self.peer_leader.pop(peer_id, None)
