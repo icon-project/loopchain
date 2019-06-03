@@ -32,7 +32,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa, padding
 from cryptography.x509.oid import NameOID
 
 from loopchain.utils import loggers
-from loopchain.blockchain import Hash32, TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.crypto.hashing import build_hash_generator
 
 import testcase.unittest.test_util as test_util

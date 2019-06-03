@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """A management class for peer and channel list."""
+import json
 from loopchain.blockchain import *
 
 

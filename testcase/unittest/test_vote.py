@@ -21,7 +21,7 @@ import unittest
 import testcase.unittest.test_util as test_util
 from loopchain import configure as conf
 from loopchain.baseservice import PeerManager, PeerInfo
-from loopchain.blockchain import Vote
+from loopchain.blockchain.vote import Vote
 from loopchain.protos import loopchain_pb2
 from loopchain.utils import loggers
 

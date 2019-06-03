@@ -1,10 +1,10 @@
 import json
 from dataclasses import dataclass, _FIELD, _FIELDS
 from typing import TYPE_CHECKING
-from .. import Hash32, Signature
+from loopchain.blockchain.types import Hash32, Signature
 
 if TYPE_CHECKING:
-    from .. import TransactionVersioner
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 _size_attr_name_ = "_size_attr_"
 
@@ -31,7 +31,7 @@ class Transaction:
 
     def size(self, versioner: 'TransactionVersioner'):
         if not hasattr(self, _size_attr_name_):
-            from .. import TransactionSerializer
+            from loopchain.blockchain.transactions import TransactionSerializer
             ts = TransactionSerializer.new(self.version, versioner)
             tx_serialized = ts.to_full_data(self)
             tx_serialized = json.dumps(tx_serialized)

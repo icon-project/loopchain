@@ -26,9 +26,11 @@ import leveldb
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockProver, BlockProverType, BlockVersioner,
-                                  Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
+from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
+from loopchain.blockchain.transactions import Transaction, TransactionBuilder
+from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -36,6 +38,9 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peer import BlockManager
+
+
+__all__ = ("NID", "BlockChain")
 
 
 class NID(Enum):

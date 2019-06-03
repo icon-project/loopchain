@@ -23,13 +23,15 @@ import traceback
 from earlgrey import MessageQueueService
 
 import loopchain.utils as util
-from loopchain import configure as conf, utils
-from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
+from loopchain import configure as conf
+from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch
-from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain import Epoch
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block, BlockBuilder
+from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -643,7 +645,7 @@ class ChannelService:
         if self.peer_manager.get_leader_id(conf.ALL_GROUP_ID) == new_leader_id:
             return
 
-        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
+        util.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                           f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 

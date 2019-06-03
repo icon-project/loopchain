@@ -19,6 +19,7 @@ import unittest
 
 import testcase.unittest.test_util as test_util
 
+from loopchain import configure as conf
 from loopchain.baseservice.timer_service import *
 from loopchain.utils import loggers
 

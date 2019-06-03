@@ -6,7 +6,7 @@ import random
 
 from secp256k1 import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
-from loopchain.blockchain import Hash32, VarBytes
+from loopchain.blockchain.types import Hash32, VarBytes
 from loopchain.crypto.hashing import build_hash_generator
 
 ICX_FACTOR = 10 ** 18
