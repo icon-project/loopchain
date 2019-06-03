@@ -612,7 +612,7 @@ class PeerManager:
 
         return quorum, complain_quorum
 
-    def get_reps(self):
+    def get_reps(self) -> list:
         peer_ids = (self.peer_order_list[peer_order]
                     for peer_order in sorted(self.peer_order_list.keys()))
         peers = (self.peer_list[peer_id] for peer_id in peer_ids)

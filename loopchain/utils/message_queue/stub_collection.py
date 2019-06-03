@@ -42,7 +42,7 @@ class StubCollection(metaclass=SingletonMetaClass):
 
         queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=self.amqp_key)
         self.peer_stub = PeerInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await self.peer_stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        await self.peer_stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         return self.peer_stub
 
     async def create_channel_stub(self, channel_name):
@@ -52,7 +52,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         queue_name = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
             channel_name=channel_name, amqp_key=self.amqp_key)
         stub = ChannelInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.channel_stubs[channel_name] = stub
 
         logging.debug(f"ChannelTasks : {channel_name}, Queue : {queue_name}")
@@ -77,7 +77,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         queue_name = conf.CHANNEL_TX_RECEIVER_QUEUE_NAME_FORMAT.format(
             channel_name=channel_name, amqp_key=self.amqp_key)
         stub = ChannelTxReceiverInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.channel_tx_receiver_stubs[channel_name] = stub
 
         logging.debug(f"ChannelTxReceiverTasks : {channel_name}, Queue : {queue_name}")
@@ -90,7 +90,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         queue_name = conf.SCORE_QUEUE_NAME_FORMAT.format(
             score_package_name=score_package_name, channel_name=channel_name, amqp_key=self.amqp_key)
         stub = ScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.score_stubs[channel_name] = stub
         return stub
 
@@ -102,6 +102,6 @@ class StubCollection(metaclass=SingletonMetaClass):
             channel_name=channel_name, amqp_key=self.amqp_key
         )
         stub = IconScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY)
+        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.icon_score_stubs[channel_name] = stub
         return stub

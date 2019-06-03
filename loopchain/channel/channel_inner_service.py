@@ -199,7 +199,7 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
         service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
         service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
 
-        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPS,
+        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
         logging.info("ChannelTxCreatorInnerService: started")
         service.serve_all()
@@ -298,7 +298,7 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
         service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
         service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
 
-        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPS,
+        service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
         logging.info("ChannelTxReceiverInnerService: started")
         service.serve_all()
