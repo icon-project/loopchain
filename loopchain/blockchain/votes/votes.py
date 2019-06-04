@@ -98,12 +98,13 @@ class Votes(ABC, Generic[TVote]):
         return msg
 
     def __eq__(self, other: 'Votes'):
-        return \
-            type(self) == type(other) and \
-            self.reps == other.reps and \
-            self.votes == other.votes and \
-            self.voting_ratio == other.voting_ratio and \
+        return (
+            type(self) == type(other) and
+            self.reps == other.reps and
+            self.votes == other.votes and
+            self.voting_ratio == other.voting_ratio and
             self.quorum == other.quorum
+        )
 
     @classmethod
     def deserialize(cls, votes_data: list, voting_ratio: float, **kwargs):

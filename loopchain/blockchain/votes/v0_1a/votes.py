@@ -58,10 +58,11 @@ class BlockVotes(BaseVotes[BlockVote]):
         return None
 
     def __eq__(self, other: 'BlockVotes'):
-        return \
-            super().__eq__(other) and \
-            self.block_hash == other.block_hash and \
+        return (
+            super().__eq__(other) and
+            self.block_hash == other.block_hash and
             self.block_height == other.block_height
+        )
 
     def __str__(self):
         msg = super().__str__()
@@ -129,10 +130,11 @@ class LeaderVotes(BaseVotes[LeaderVote]):
         return None
 
     def __eq__(self, other: 'LeaderVotes'):
-        return \
-            super().__eq__(other) and \
-            self.block_height == other.block_height and \
+        return (
+            super().__eq__(other) and
+            self.block_height == other.block_height and
             self.old_leader == other.old_leader
+        )
 
     def __str__(self):
         msg = super().__str__()
