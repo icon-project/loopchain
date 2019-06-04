@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from loopchain.crypto.hashing import build_hash_generator
-from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
-from ... import Hash32, ExternalAddress, BloomFilter
+from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
 
 
 @dataclass(frozen=True)

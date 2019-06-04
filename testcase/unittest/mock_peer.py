@@ -1,6 +1,6 @@
 from loopchain.baseservice import ScoreResponse, PeerInfo, PeerStatus, PeerObject, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import Block
+from loopchain.blockchain.blocks import Block
 from loopchain import configure as conf
 from testcase.unittest import test_util
 

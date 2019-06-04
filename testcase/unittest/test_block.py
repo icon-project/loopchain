@@ -31,9 +31,9 @@ from loopchain.baseservice import ObjectManager
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
-from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
-from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
-from loopchain.blockchain import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
+from loopchain.blockchain.transactions import TransactionBuilder, TransactionSerializer, TransactionVersioner
 
 
 from loopchain.utils import loggers
@@ -229,7 +229,7 @@ class TestBlock(unittest.TestCase):
         block_builder = BlockBuilder.new("0.3", tx_versioner)
         for i in range(1000):
             tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-            tx_builder.private_key = private_auth.private_key
+            tx_builder.signer = private_auth
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
             tx_builder.value = random.randint(0, 10000)
@@ -243,8 +243,9 @@ class TestBlock(unittest.TestCase):
                 "tx_dumped": tx_serializer.to_full_data(tx)
             }
 
-        block_builder.peer_private_key = private_auth.private_key
-        block_builder.height = 0
+        block_builder.signer = private_auth
+        block_builder.height = 3
+        block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
@@ -286,7 +287,7 @@ class TestBlock(unittest.TestCase):
 
             for i in range(1000):
                 tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-                tx_builder.private_key = private_auth.private_key
+                tx_builder.signer = private_auth
                 tx_builder.to_address = ExternalAddress.new()
                 tx_builder.step_limit = random.randint(0, 10000)
                 tx_builder.value = random.randint(0, 10000)
@@ -300,7 +301,7 @@ class TestBlock(unittest.TestCase):
                     "tx_dumped": tx_serializer.to_full_data(tx)
                 }
 
-            block_builder.peer_private_key = private_auth.private_key
+            block_builder.signer = private_auth
             block_builder.prev_hash = prev_hash
             block_builder.height = height
             block_builder.state_hash = Hash32(bytes(Hash32.size))

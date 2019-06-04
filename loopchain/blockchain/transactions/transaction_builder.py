@@ -1,13 +1,11 @@
-import hashlib
-
 from abc import abstractmethod, ABC
 from typing import TYPE_CHECKING
-from .. import Signature, ExternalAddress, Hash32
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.blockchain.types import Signature, ExternalAddress, Hash32
 
 if TYPE_CHECKING:
-    from secp256k1 import PrivateKey
-    from . import Transaction, TransactionVersioner
+    from loopchain.crypto.signature import Signer
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionBuilder(ABC):
@@ -17,7 +15,7 @@ class TransactionBuilder(ABC):
         self._hash_generator = build_hash_generator(hash_generator_version, self._hash_salt)
 
         # Attributes that must be assigned
-        self.private_key: 'PrivateKey' = None
+        self.signer: 'Signer' = None
 
         # Attributes to be generated
         self.from_address: 'ExternalAddress' = None
@@ -48,16 +46,14 @@ class TransactionBuilder(ABC):
         return Hash32(self._hash_generator.generate_hash(self.origin_data))
 
     def build_from_address(self):
-        if self.private_key is None:
-            raise RuntimeError(f"private_key is required.")
+        if self.from_address:
+            return self.from_address
 
-        self.from_address = self._build_from_address()
+        if self.signer is None:
+            raise RuntimeError(f"'signer' or 'from_address' is required.")
+
+        self.from_address = ExternalAddress.fromhex_address(self.signer.address)
         return self.from_address
-
-    def _build_from_address(self):
-        serialized_pub = self.private_key.pubkey.serialize(compressed=False)
-        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return ExternalAddress(hashed_pub[-20:])
 
     @abstractmethod
     def build_raw_data(self) -> dict:
@@ -71,16 +67,8 @@ class TransactionBuilder(ABC):
         if self.hash is None:
             self.build_hash()
 
-        self.signature = self._sign()
+        self.signature = Signature(self.signer.sign_hash(self.hash))
         return self.signature
-
-    def _sign(self):
-        raw_sig = self.private_key.ecdsa_sign_recoverable(msg=self.hash,
-                                                          raw=True,
-                                                          digest=hashlib.sha3_256)
-        serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
-        signature = serialized_sig + bytes((recover_id, ))
-        return Signature(signature)
 
     @classmethod
     def new(cls, version: str, versioner: 'TransactionVersioner'):

@@ -1,13 +1,10 @@
-import hashlib
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Dict
-
-from secp256k1 import PrivateKey
-
-from . import Block
-from .. import Hash32, ExternalAddress, Signature
-from ..transactions import Transaction, TransactionVersioner
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
+from loopchain.blockchain.blocks import Block
+from loopchain.crypto.signature import Signer
 
 
 class BlockBuilder(ABC):
@@ -19,7 +16,7 @@ class BlockBuilder(ABC):
         # Attributes that must be assigned
         self.height: int = None
         self.prev_hash: 'Hash32' = None
-        self.peer_private_key: 'PrivateKey' = None
+        self.signer: 'Signer' = None
 
         self.transactions: Dict['Hash32', 'Transaction'] = OrderedDict()
 
@@ -72,16 +69,11 @@ class BlockBuilder(ABC):
         if self.peer_id is not None:
             return self.peer_id
 
-        if self.peer_private_key is None:
+        if self.signer is None:
             raise RuntimeError
 
-        self.peer_id = self._build_peer_id()
+        self.peer_id = ExternalAddress.fromhex_address(self.signer.address)
         return self.peer_id
-
-    def _build_peer_id(self):
-        serialized_pub = self.peer_private_key.pubkey.serialize(compressed=False)
-        hashed_pub = hashlib.sha3_256(serialized_pub[1:]).digest()
-        return ExternalAddress(hashed_pub[-20:])
 
     def sign(self):
         if self.signature is not None:
@@ -90,16 +82,8 @@ class BlockBuilder(ABC):
         if self.hash is None:
             raise RuntimeError
 
-        self.signature = self._sign()
+        self.signature = Signature(self.signer.sign_hash(self.hash))
         return self.signature
-
-    def _sign(self):
-        raw_sig = self.peer_private_key.ecdsa_sign_recoverable(msg=self.hash,
-                                                               raw=True,
-                                                               digest=hashlib.sha3_256)
-        serialized_sig, recover_id = self.peer_private_key.ecdsa_recoverable_serialize(raw_sig)
-        signature = serialized_sig + bytes((recover_id, ))
-        return Signature(signature)
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner'):

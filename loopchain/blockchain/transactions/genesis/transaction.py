@@ -1,11 +1,11 @@
 from enum import IntEnum, Enum
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Union
-from .. import Transaction as BaseTransition
-from ... import Hash32
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 if TYPE_CHECKING:
-    from ... import Signature
+    from loopchain.blockchain.types import Signature
 
 
 @dataclass(frozen=True)

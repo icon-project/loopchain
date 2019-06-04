@@ -1,18 +1,15 @@
-import hashlib
-
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from secp256k1 import PublicKey, PrivateKey
+from loopchain.crypto.signature import SignVerifier
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.exception import TransactionInvalidDuplicatedHash
-from .. import Hash32, ExternalAddress
+
 if TYPE_CHECKING:
-    from . import Transaction
-    from .. import TransactionVersioner
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionVerifier(ABC):
-    _ecdsa = PrivateKey()
     _hash_salt = None
 
     def __init__(self, hash_generator_version: int, raise_exceptions=True):
@@ -50,21 +47,12 @@ class TransactionVerifier(ABC):
             self._handle_exceptions(exception)
 
     def verify_signature(self, tx: 'Transaction'):
-        recoverable_sig = self._ecdsa.ecdsa_recoverable_deserialize(
-            tx.signature.signature(),
-            tx.signature.recover_id())
-        raw_public_key = self._ecdsa.ecdsa_recover(tx.hash,
-                                                   recover_sig=recoverable_sig,
-                                                   raw=True,
-                                                   digest=hashlib.sha3_256)
-
-        public_key = PublicKey(raw_public_key, ctx=self._ecdsa.ctx)
-        hash_pub = hashlib.sha3_256(public_key.serialize(compressed=False)[1:]).digest()
-        expect_address = hash_pub[-20:]
-        if expect_address != tx.from_address:
-            exception = RuntimeError(f"tx({tx})\n"
-                                     f"from address {tx.from_address.hex_xx()}\n"
-                                     f"expected {ExternalAddress(expect_address).hex_xx()}")
+        sign_verifier = SignVerifier.from_address(tx.from_address.hex_xx())
+        try:
+            sign_verifier.verify_hash(tx.hash, tx.signature)
+        except Exception as e:
+            exception = RuntimeError(f"tx({tx}) invalid signature\n"
+                                     f"{e}")
             self._handle_exceptions(exception)
 
     def _handle_exceptions(self, exception: Exception):

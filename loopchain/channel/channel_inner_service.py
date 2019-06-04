@@ -28,8 +28,9 @@ from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.blockchain import (Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner,
-                                  Block, BlockBuilder, BlockSerializer, blocks, Hash32, BlockVerifier)
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.blocks import Block, BlockSerializer
+from loopchain.blockchain.transactions import Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner
 from loopchain.blockchain.exception import *
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
@@ -693,11 +694,27 @@ class ChannelInnerTask:
         if last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
             return
-        elif self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
-            util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
-            return
 
-        self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+        try:
+            self._channel_service.block_manager.verify_confirm_info(unconfirmed_block)
+        except ConfirmInfoInvalid:
+            # TODO
+            pass
+        except ConfirmInfoInvalidNeedBlockSync as e:
+            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
+            block_manager = self._channel_service.block_manager
+            if self._channel_service.state_machine.state == "BlockGenerate" and (
+                    block_manager.consensus_algorithm and block_manager.consensus_algorithm.is_running):
+                block_manager.consensus_algorithm.stop()
+            else:
+                self._channel_service.state_machine.block_sync()
+        except ConfirmInfoInvalidAddedBlock as e:
+            util.logger.debug(f"ConfirmInfoInvalidAddedBlock {e}")
+        else:
+            if self._channel_service.state_machine.state in ("Vote", "Watch", "LeaderComplain"):
+                self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+            else:
+                util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
@@ -783,13 +800,12 @@ class ChannelInnerTask:
             (False, True)[vote_code == message_code.Response.success_validate_block]
         )
 
-        if self._channel_service.state_machine.state == "BlockGenerate":
-            if block_manager.consensus_algorithm:
-                block_manager.consensus_algorithm.vote(
-                    block_hash,
-                    (False, True)[vote_code == message_code.Response.success_validate_block],
-                    peer_id,
-                    group_id)
+        if self._channel_service.state_machine.state == "BlockGenerate" and block_manager.consensus_algorithm:
+            block_manager.consensus_algorithm.vote(
+                block_hash,
+                (False, True)[vote_code == message_code.Response.success_validate_block],
+                peer_id,
+                group_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id) -> None:

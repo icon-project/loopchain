@@ -27,7 +27,7 @@ from jsonrpcserver.aio import AsyncMethods
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import BlockSerializer, BlockVerifier
+from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
