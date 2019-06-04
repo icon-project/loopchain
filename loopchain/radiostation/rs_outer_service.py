@@ -182,11 +182,8 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         :param context:
         :return:
         """
-        if conf.ENABLE_CHANNEL_AUTH:
-            channel_infos: str = \
-                ObjectManager().rs_service.admin_manager.get_channel_infos_by_peer_target(request.peer_target)
-        else:
-            channel_infos: str = ObjectManager().rs_service.admin_manager.get_all_channel_info()
+        channel_infos: str = \
+            ObjectManager().rs_service.admin_manager.get_channel_infos_by_peer_target(request.peer_target)
         logging.info(f"rs_outer_service:GetChannelInfos target({request.peer_target}) channel_infos({channel_infos})")
 
         return loopchain_pb2.GetChannelInfosReply(
@@ -217,15 +214,14 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                     )
                 )
 
-        if conf.ENABLE_CHANNEL_AUTH:
-            if request.peer_target not in ObjectManager().rs_service.admin_manager.get_peer_list_by_channel(
-                    request.channel):
-                status, reason = message_code.get_response(message_code.Response.fail_invalid_peer_target)
-                return loopchain_pb2.ConnectPeerReply(
-                    status=status,
-                    peer_list=b'',
-                    more_info=reason
-                )
+        if request.peer_target not in ObjectManager().rs_service.admin_manager.get_peer_list_by_channel(
+                request.channel):
+            status, reason = message_code.get_response(message_code.Response.fail_invalid_peer_target)
+            return loopchain_pb2.ConnectPeerReply(
+                status=status,
+                peer_list=b'',
+                more_info=reason
+            )
 
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
         logging.debug(f"ConnectPeer channel_name({channel_name})")

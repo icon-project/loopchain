@@ -224,7 +224,10 @@ class ChannelService:
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
             else:
-                self._load_peer_manager()
+                if conf.ENABLE_CHANNEL_MANAGE_DATA:
+                    await self._load_peers_from_file()
+                else:
+                    self._load_peer_manager()
         else:
             self.__init_node_subscriber()
 
@@ -273,6 +276,14 @@ class ChannelService:
             self.__peer_manager.add_peer(peer_info)
         else:
             self._load_peers_from_iiss()
+
+    async def _load_peers_from_file(self):
+        channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
+        for peer_info in channel_info[ChannelProperty().name]["peers"]:
+            self.__peer_manager.add_peer(peer_info)
+            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info["peer_target"])
+
+        self.show_peers()
 
     def __get_node_type_by_peer_list(self):
         if self.__peer_manager.get_peer(ChannelProperty().peer_id):

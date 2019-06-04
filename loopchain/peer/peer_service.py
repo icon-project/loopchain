@@ -148,24 +148,28 @@ class PeerService:
         self.p2p_outer_server.stop(None)
 
     def __get_channel_infos(self):
-        if self.is_support_node_function(conf.NodeFunction.Vote) and conf.ENABLE_REP_RADIO_STATION:
-            response = self.stub_to_radiostation.call_in_times(
-                method_name="GetChannelInfos",
-                message=loopchain_pb2.GetChannelInfosRequest(
-                    peer_id=self.__peer_id,
-                    peer_target=self.__peer_target,
-                    group_id=self.__peer_id),
-                retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-                is_stub_reuse=False,
-                timeout=conf.CONNECTION_TIMEOUT_TO_RS
-            )
-            # util.logger.spam(f"__get_channel_infos:response::{response}")
-
-            if not response:
-                return None
-            logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
-            return json.loads(response.channel_infos)
-        return {channel: {'score_package': conf.DEFAULT_SCORE_PACKAGE} for channel in conf.CHANNEL_OPTION}
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            if conf.ENABLE_REP_RADIO_STATION:
+                response = self.stub_to_radiostation.call_in_times(
+                    method_name="GetChannelInfos",
+                    message=loopchain_pb2.GetChannelInfosRequest(
+                        peer_id=self.__peer_id,
+                        peer_target=self.__peer_target,
+                        group_id=self.peer_id),
+                    retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
+                    is_stub_reuse=False,
+                    timeout=conf.CONNECTION_TIMEOUT_TO_RS
+                )
+                if not response:
+                    return None
+                logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
+                return json.loads(response.channel_infos)
+            elif conf.ENABLE_CHANNEL_MANAGE_DATA:
+                return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+            else:
+                return {channel: {'score_package': conf.DEFAULT_SCORE_PACKAGE} for channel in conf.CHANNEL_OPTION}
+        else:
+            return {channel: {'score_package': conf.DEFAULT_SCORE_PACKAGE} for channel in conf.CHANNEL_OPTION}
 
     def __init_port(self, port):
         # service 초기화 작업
