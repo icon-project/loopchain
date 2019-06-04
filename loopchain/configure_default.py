@@ -184,11 +184,11 @@ DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_
 TX_LIST_ADDRESS_PREFIX = b'tx_list_by_address_'
 MAX_TX_LIST_SIZE_BY_ADDRESS = 100
 MAX_PRE_VALIDATE_TX_CACHE = 10000
-ALLOW_TIMESTAMP_BOUNDARY_SECOND = 60 * 5
+TIMESTAMP_BOUNDARY_SECOND = 60 * 5
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
-ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
 TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
+TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 INVOKE_RESULT_AGING_SECONDS = 60 * 60
 READ_CACHED_TX_COUNT = True
@@ -288,7 +288,7 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
-ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
+STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
