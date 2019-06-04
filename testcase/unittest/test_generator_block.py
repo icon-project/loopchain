@@ -18,11 +18,13 @@
 
 import leveldb
 import logging
+import os
 import unittest
 
 import testcase.unittest.test_util as test_util
 from loopchain import configure as conf
-from loopchain.blockchain import Block
+from loopchain.blockchain.blocks import Block
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 from testcase.unittest.mock_peer import set_mock
 
@@ -37,7 +39,7 @@ class TestGeneratorBlock(unittest.TestCase):
 
     def setUp(self):
         test_util.print_testname(self._testMethodName)
-        self.peer_auth = test_util.create_default_peer_auth()
+        self.peer_auth = Signer.from_prikey(os.urandom(32))
 
         set_mock(self)
 

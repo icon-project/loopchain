@@ -183,13 +183,13 @@ class Signer(SignVerifier):
             prikey_file = conf.CHANNEL_OPTION[channel]['private_path']
         else:
             prikey_file = conf.PRIVATE_PATH
-        if prikey_file.endswith(".der") or prikey_file.endswith(".pem"):
-            if 'private_password' in conf.CHANNEL_OPTION[channel]:
-                logging.warning(f"This setting(private_password) will be deprecated soon. "
-                                f"Please refer to the key configuration guide.")
-                password = conf.CHANNEL_OPTION[channel]['private_password']
-            else:
-                password = conf.PRIVATE_PASSWORD
+
+        if 'private_password' in conf.CHANNEL_OPTION[channel]:
+            logging.warning(f"This setting(private_password) will be deprecated soon. "
+                            f"Please refer to the key configuration guide.")
+            password = conf.CHANNEL_OPTION[channel]['private_password']
+        elif conf.PRIVATE_PASSWORD:
+            password = conf.PRIVATE_PASSWORD
         else:
             # created the private key file from tbears.
             password = getpass.getpass(f"Input your keystore password for channel({channel}): ")

@@ -247,12 +247,6 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
     return tx_builder.build()
 
 
-def create_default_peer_auth() -> Signer:
-    channel = list(conf.CHANNEL_OPTION)[0]
-    peer_auth = Signer.from_channel(channel)
-    return peer_auth
-
-
 def add_genesis_block():
     tx_info = None
     channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
