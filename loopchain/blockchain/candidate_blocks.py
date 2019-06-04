@@ -97,7 +97,6 @@ class CandidateBlocks:
             else:
                 self.blocks[block.header.hash].block = block
 
-    # height 정보가 있어서 height를 통채로 날려야 할 것 같다
     def remove_block(self, block_hash):
         if self.blocks[block_hash].block:
             prev_block_hash = self.blocks[block_hash].block.header.prev_hash
