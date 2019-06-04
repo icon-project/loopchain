@@ -36,9 +36,7 @@ class PeerInnerTask:
         return self._peer_service.channel_infos
 
     @message_queue_task
-    async def get_channel_info_detail(self, channel_name):
-        channels_info = self._peer_service.channel_infos
-
+    async def get_node_info_detail(self):
         return {
             'peer_port': self._peer_service.peer_port,
             'peer_target': self._peer_service.peer_target,
@@ -46,7 +44,6 @@ class PeerInnerTask:
             'rs_target': self._peer_service.radio_station_target,
             'peer_id': self._peer_service.peer_id,
             'node_type': self._peer_service.node_type.value,
-            'score_package': channels_info[channel_name]['score_package']
         }
 
     @message_queue_task

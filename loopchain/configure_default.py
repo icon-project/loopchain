@@ -204,8 +204,7 @@ class SendTxType(IntEnum):
 DEFAULT_SCORE_HOST = os.getenv('DEFAULT_SCORE_HOST', '')
 DEFAULT_SCORE_BASE = os.getenv('DEFAULT_SCORE_BASE', 'git@'+DEFAULT_SCORE_HOST)
 DEFAULT_SCORE_REPOSITORY_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'score')
-DEFAULT_SCORE_STORAGE_PATH = os.getenv('DEFAULT_SCORE_STORAGE_PATH', os.path.join(DEFAULT_STORAGE_PATH, 'score'))
-DEFAULT_SCORE_PACKAGE = 'loopchain/default'
+DEFAULT_SCORE_PACKAGE = 'score/icx'
 DEFAULT_SCORE_BRANCH_MASTER = 'master'
 DEFAULT_SCORE_BRANCH = os.getenv('DEFAULT_SCORE_BRANCH', DEFAULT_SCORE_BRANCH_MASTER)
 
@@ -222,13 +221,10 @@ SCORE_LOAD_TIMEOUT = GRPC_TIMEOUT * 180  # seconds, Git repository 접속해서 
 # REMOTE PULL PACKAGE FLAG
 REMOTE_PULL_SCORE = False
 INTERVAL_LOAD_SCORE = 1  # seconds
-SCORE_RETRY_TIMES = 3
 SCORE_QUERY_TIMEOUT = 120
 SCORE_INVOKE_TIMEOUT = 60 * 5  # seconds
 SCORE_LOAD_RETRY_TIMES = 3  # times
 SCORE_LOAD_RETRY_INTERVAL = 5.0  # seconds
-SCORE_GIT_LOAD_RETRY_TIMES = 5
-SCORE_GIT_LOAD_SLEEP = 2
 
 RUN_ICON_IN_LAUNCHER = False
 
@@ -248,7 +244,6 @@ REST_ADDITIONAL_TIMEOUT = 30  # seconds
 REST_PROXY_DEFAULT_PORT = 5000
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
-ENABLE_MULTI_CHANNEL_REQUEST = True
 
 
 class ApiVersion(IntEnum):
@@ -320,12 +315,7 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
 ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
-# Peer 의 중복 재접속을 허용한다.
-ALLOW_PEER_RECONNECT = True
-# 토큰 유효시간(분)
-TOKEN_INTERVAL = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
-TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"

@@ -129,7 +129,7 @@ class ChannelService:
         async def _serve():
             await StubCollection().create_peer_stub()
 
-            results = await StubCollection().peer_stub.async_task().get_channel_info_detail()
+            results = await StubCollection().peer_stub.async_task().get_node_info_detail()
             await self.init(**results)
 
             self.__timer_service.start()

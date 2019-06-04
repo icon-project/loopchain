@@ -165,7 +165,7 @@ class PeerService:
                 return None
             logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
             return json.loads(response.channel_infos)
-        return {channel: dict() for channel in conf.CHANNEL_OPTION}
+        return {channel: {'score_package': conf.DEFAULT_SCORE_PACKAGE} for channel in conf.CHANNEL_OPTION}
 
     def __init_port(self, port):
         # service 초기화 작업
