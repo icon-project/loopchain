@@ -275,6 +275,65 @@ class TestBlock(unittest.TestCase):
         receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
         assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
 
+    def test_valid_timestamp(self):
+        """Test for timestamp buffer in block verifier"""
+        def block_maker(timestamp: int, height: int = 0, prev_hash=None):
+            """Make dummy block"""
+            tx_versioner = TransactionVersioner()
+
+            dummy_receipts = {}
+            block_builder = BlockBuilder.new("0.3", tx_versioner)
+
+            for i in range(1000):
+                tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+                tx_builder.private_key = private_auth.private_key
+                tx_builder.to_address = ExternalAddress.new()
+                tx_builder.step_limit = random.randint(0, 10000)
+                tx_builder.value = random.randint(0, 10000)
+                tx_builder.nid = 2
+                tx = tx_builder.build()
+
+                tx_serializer = TransactionSerializer.new(tx.version, tx_versioner)
+                block_builder.transactions[tx.hash] = tx
+                dummy_receipts[tx.hash.hex()] = {
+                    "dummy_receipt": "dummy",
+                    "tx_dumped": tx_serializer.to_full_data(tx)
+                }
+
+            block_builder.peer_private_key = private_auth.private_key
+            block_builder.prev_hash = prev_hash
+            block_builder.height = height
+            block_builder.state_hash = Hash32(bytes(Hash32.size))
+            block_builder.receipts = dummy_receipts
+            block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
+            block_builder.peer_id = ExternalAddress.fromhex(private_auth.address)
+            block_builder.next_leader = ExternalAddress.fromhex(private_auth.address)
+            block_builder.fixed_timestamp = timestamp
+
+            b = block_builder.build()
+            assert b.header.timestamp == timestamp
+
+            return b
+
+        private_auth = test_util.create_default_peer_auth()
+
+        first_block = block_maker(height=0, timestamp=util.get_time_stamp())
+        second_block = block_maker(height=1, timestamp=util.get_time_stamp() + 5, prev_hash=first_block.header.hash)
+        third_block_from_far_future = block_maker(height=2, prev_hash=second_block.header.hash,
+                                                  timestamp=util.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER + 5_000_000)
+
+        block_verifier = BlockVerifier.new("0.3", TransactionVersioner())
+        leader = first_block.header.peer_id
+        reps = [ExternalAddress.fromhex_address(private_auth.address)]
+        print("*---Normal time range")
+        block_verifier.verify(block=second_block, prev_block=first_block,
+                              blockchain=None, generator=leader, reps=reps)
+
+        print("*---Abnormal time range")
+        with self.assertRaises(Exception):
+            block_verifier.verify(block=third_block_from_far_future, prev_block=second_block,
+                                  blockchain=None, generator=leader, reps=reps)
+
 
 if __name__ == '__main__':
     unittest.main()
