@@ -20,10 +20,9 @@ import logging
 import json
 import random
 import sys
-import os
 import unittest
 
-from loopchain import utils as util
+from loopchain import utils
 import testcase.unittest.test_util as test_util
 
 from cli_tools.icx_test.icx_wallet import IcxWallet
@@ -191,8 +190,8 @@ class TestBlock(unittest.TestCase):
         block1.commit_state = {"TEST": "TEST_VALUE1234"}
         block1.generate_block()
         block2.generate_block()
-        util.logger.spam(f"block1 hash({block1.block_hash})")
-        util.logger.spam(f"block1 hash({block2.block_hash})")
+        utils.logger.spam(f"block1 hash({block1.block_hash})")
+        utils.logger.spam(f"block1 hash({block2.block_hash})")
 
         # THEN
         self.assertEqual(block1.block_hash, block2.block_hash)
@@ -253,7 +252,7 @@ class TestBlock(unittest.TestCase):
         block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
-        vote = BlockVote.new(private_auth.private_key, util.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
+        vote = BlockVote.new(private_auth.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
         votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
         votes.add_vote(vote)
         block_builder.prev_votes = votes
