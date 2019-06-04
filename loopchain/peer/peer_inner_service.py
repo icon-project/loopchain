@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import utils as util
@@ -38,10 +39,15 @@ class PeerInnerTask:
     async def get_channel_info_detail(self, channel_name):
         channels_info = self._peer_service.channel_infos
 
-        return \
-            self._peer_service.peer_port, self._peer_service.peer_target, self._peer_service.rest_target, \
-            self._peer_service.radio_station_target, self._peer_service.peer_id, "", \
-            self._peer_service.node_type.value, channels_info[channel_name]['score_package']
+        return {
+            'peer_port': self._peer_service.peer_port,
+            'peer_target': self._peer_service.peer_target,
+            'rest_target': self._peer_service.rest_target,
+            'rs_target': self._peer_service.radio_station_target,
+            'peer_id': self._peer_service.peer_id,
+            'node_type': self._peer_service.node_type.value,
+            'score_package': channels_info[channel_name]['score_package']
+        }
 
     @message_queue_task
     async def get_node_key(self, channel_name) -> bytes:

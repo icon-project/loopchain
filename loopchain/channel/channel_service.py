@@ -134,7 +134,7 @@ class ChannelService:
             self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
             results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
 
-            await self.init(*results)
+            await self.init(**results)
 
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
@@ -194,18 +194,17 @@ class ChannelService:
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
 
-    async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id,
-                   group_id_will_removed, node_type, score_package):
-        loggers.get_preset().peer_id = peer_id
+    async def init(self, **kwargs):
+        loggers.get_preset().peer_id = kwargs.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = peer_port
-        ChannelProperty().peer_target = peer_target
-        ChannelProperty().rest_target = rest_target
-        ChannelProperty().radio_station_target = radio_station_target
-        ChannelProperty().peer_id = peer_id
-        ChannelProperty().node_type = conf.NodeType(node_type)
-        ChannelProperty().score_package = score_package
+        ChannelProperty().peer_port = kwargs.get('peer_port')
+        ChannelProperty().peer_target = kwargs.get('peer_target')
+        ChannelProperty().rest_target = kwargs.get('rest_target')
+        ChannelProperty().radio_station_target = kwargs.get('rs_target')
+        ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().node_type = conf.NodeType(kwargs.get('node_type'))
+        ChannelProperty().score_package = kwargs.get('score_package')
 
         self.__peer_manager = PeerManager(ChannelProperty().name)
         await self.__init_peer_auth()
