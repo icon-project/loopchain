@@ -32,6 +32,7 @@ class BlockBuilder(ABC):
         return sum(tx.size(self._tx_versioner) for tx in self.transactions.values())
 
     def reset_cache(self):
+        # clear generated attributes
         self.block = None
         self.hash = None
         self.signature = None

@@ -23,7 +23,7 @@ class AdminManager:
     def __init__(self, level_db_identity):
         self.__level_db = None
         self.__level_db_path = ""
-        self.__level_db, self.__level_db_path = util.init_level_db(
+        self.__level_db, self.__level_db_path = utils.init_level_db(
             level_db_identity=f"{level_db_identity}_admin",
             allow_rename_path=False
         )
@@ -36,7 +36,7 @@ class AdminManager:
         :param channel_manage_data_path:
         :return:
         """
-        self.__json_data = util.load_json_data(channel_manage_data_path)
+        self.__json_data = utils.load_json_data(channel_manage_data_path)
 
     @property
     def json_data(self) -> dict:

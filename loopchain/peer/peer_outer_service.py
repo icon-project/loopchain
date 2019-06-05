@@ -50,7 +50,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return ObjectManager().peer_service
 
     def __handler_status(self, request, context):
-        util.logger.debug(f"peer_outer_service:handler_status ({request.message})")
+        utils.logger.debug(f"peer_outer_service:handler_status ({request.message})")
 
         if request.message == "get_stub_manager_to_server":
             # this case is check only gRPC available
@@ -76,7 +76,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         meta = json.loads(request.meta) if request.meta else {}
         if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
-            util.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
+            utils.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
 
         status_json = json.dumps(status)
 
@@ -102,14 +102,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
-        util.logger.spam(f"checking for test, code: {request.code}")
-        util.logger.spam(f"checking for test, channel name: {request.channel}")
-        util.logger.spam(f"checking for test, message: {request.message}")
-        util.logger.spam(f"checking for test, meta: {json.loads(request.meta)}")
+        utils.logger.spam(f"checking for test, code: {request.code}")
+        utils.logger.spam(f"checking for test, channel name: {request.channel}")
+        utils.logger.spam(f"checking for test, message: {request.message}")
+        utils.logger.spam(f"checking for test, meta: {json.loads(request.meta)}")
 
         params = json.loads(request.meta)
 
-        util.logger.spam(f"params tx_hash({params['tx_hash']})")
+        utils.logger.spam(f"params tx_hash({params['tx_hash']})")
 
         return loopchain_pb2.Message(code=message_code.Response.success)
 
@@ -126,7 +126,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         query_request = loopchain_pb2.QueryRequest(params=request.meta, channel=request.channel)
         response = self.Query(query_request, context)
-        util.logger.spam(f"peer_outer_service:__handler_get_balance response({response})")
+        utils.logger.spam(f"peer_outer_service:__handler_get_balance response({response})")
 
         return loopchain_pb2.Message(code=response.response_code, meta=response.response)
 
@@ -139,7 +139,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         """
         query_request = loopchain_pb2.QueryRequest(params=request.meta, channel=request.channel)
         response = self.Query(query_request, context)
-        util.logger.spam(f"peer_outer_service:__handler_get_total_supply response({response})")
+        utils.logger.spam(f"peer_outer_service:__handler_get_total_supply response({response})")
 
         return loopchain_pb2.Message(code=response.response_code, meta=response.response)
 
@@ -183,7 +183,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.Message(code=message_code.Response.success)
 
     def Request(self, request, context):
-        # util.logger.debug(f"Peer Service got request({request.code})")
+        # utils.logger.debug(f"Peer Service got request({request.code})")
 
         if request.code in self.__handler_map.keys():
             return self.__handler_map[request.code](request, context)
@@ -192,7 +192,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
-        util.logger.spam(f"status_update channel({channel}) result({future.result()})")
+        utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
         self.__status_cache_update_time[channel] = datetime.datetime.now()
         self.peer_service.status_cache[channel] = future.result()
 
@@ -212,7 +212,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __get_status_from_cache(self, channel: str):
         if channel in self.peer_service.status_cache:
             if channel in self.__status_cache_update_time:
-                if util.datetime_diff_in_mins(
+                if utils.datetime_diff_in_mins(
                         self.__status_cache_update_time[channel]) \
                         > conf.ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
                     return None
@@ -340,16 +340,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        util.logger.notice(f"ComplainLeader "
-                           f"height({request.block_height}) complained_peer({request.complained_leader_id})")
+        utils.logger.notice(f"ComplainLeader {request.complain_vote}")
 
         channel_stub = StubCollection().channel_stubs[channel]
         channel_stub.sync_task().complain_leader(
-            complained_leader_id=request.complained_leader_id,
-            new_leader_id=request.new_leader_id,
-            block_height=request.block_height,
-            peer_id=request.peer_id,
-            group_id=request.group_id
+            vote_dumped=request.complain_vote,
         )
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -380,7 +375,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
 
-        util.logger.spam(f"peer_outer_service:AddTx try validate_dumped_tx_message")
+        utils.logger.spam(f"peer_outer_service:AddTx try validate_dumped_tx_message")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         StubCollection().channel_stubs[channel_name].sync_task().add_tx(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -392,7 +387,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
-        util.logger.spam(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
+        utils.logger.spam(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         StubCollection().channel_tx_receiver_stubs[channel_name].sync_task().add_tx_list(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -528,7 +523,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        util.logger.debug(f"peer_outer_service::AnnounceUnconfirmedBlock channel({channel_name})")
+        utils.logger.debug(f"peer_outer_service::AnnounceUnconfirmedBlock channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         channel_stub.sync_task().announce_unconfirmed_block(request.block)
@@ -578,7 +573,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
             channel_stub.sync_task().add_audience(peer_target=request.peer_target)
-            util.logger.debug(f"peer_outer_service::Subscribe add_audience "
+            utils.logger.debug(f"peer_outer_service::Subscribe add_audience "
                               f"target({request.peer_target}) in channel({request.channel}), "
                               f"order({request.peer_order})")
         else:
@@ -604,7 +599,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
             channel_stub.sync_task().remove_audience(peer_target=request.peer_target)
-            util.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
+            utils.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
                              f"in channel({request.channel})")
         else:
             logging.error(f"This target({request.peer_target}), {request.node_type} failed to unsubscribe.")
@@ -652,14 +647,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash.hex()})")
+        utils.logger.debug(f"VoteUnconfirmedBlock block_hash({request.vote})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        channel_stub.sync_task().vote_unconfirmed_block(
-            peer_id=request.peer_id,
-            group_id=request.group_id,
-            block_hash=request.block_hash,
-            vote_code=request.vote_code)
+        channel_stub.sync_task().vote_unconfirmed_block(request.vote)
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
