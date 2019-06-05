@@ -807,12 +807,7 @@ class ChannelInnerTask:
         vote = LeaderVote.deserialize(vote_serialized)
 
         block_manager = self._channel_service.block_manager
-        block_manager.epoch.add_complain(vote)
-
-        next_new_leader = block_manager.epoch.complain_result()
-        if next_new_leader:
-            self._channel_service.reset_leader(next_new_leader, complained=True)
-            self._channel_service.reset_leader_complain_timer()
+        block_manager.add_complain(vote)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):

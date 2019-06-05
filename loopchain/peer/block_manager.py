@@ -719,19 +719,15 @@ class BlockManager:
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
-    def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
-        if new_leader_id == self.epoch.leader_id:
-            util.logger.info(f"Complained new leader is current leader({new_leader_id})")
-            return
-
-        if self.epoch.height == block_height:
-            self.epoch.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
+    def add_complain(self, vote: LeaderVote):
+        if self.epoch.height == vote.block_height:
+            self.epoch.add_complain(vote)
 
             elected_leader = self.epoch.complain_result()
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
                 self.__channel_service.reset_leader_complain_timer()
-        elif self.epoch.height < block_height:
+        elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
@@ -759,7 +755,7 @@ class BlockManager:
             timestamp=util.get_time_stamp()
         )
         logging.info(f"LeaderVote : \n{leader_vote}")
-        self.epoch.add_complain(leader_vote)
+        self.add_complain(leader_vote)
 
         leader_vote_serialized = leader_vote.serialize()
         leader_vote_dumped = json.dumps(leader_vote_serialized)
