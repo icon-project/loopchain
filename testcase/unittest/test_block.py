@@ -290,7 +290,7 @@ class TestBlock(unittest.TestCase):
             tx_versioner = TransactionVersioner()
 
             dummy_receipts = {}
-            block_builder = BlockBuilder.new("0.3", tx_versioner)
+            block_builder = BlockBuilder.new("0.1a", tx_versioner)
 
             for i in range(1000):
                 tx_builder = TransactionBuilder.new("0x3", tx_versioner)
@@ -325,12 +325,12 @@ class TestBlock(unittest.TestCase):
 
         private_auth = test_util.create_default_peer_auth()
 
-        first_block = block_maker(height=0, timestamp=util.get_time_stamp())
-        second_block = block_maker(height=1, timestamp=util.get_time_stamp() + 5, prev_hash=first_block.header.hash)
+        first_block = block_maker(height=0, timestamp=utils.get_time_stamp())
+        second_block = block_maker(height=1, timestamp=utils.get_time_stamp() + 5, prev_hash=first_block.header.hash)
         third_block_from_far_future = block_maker(height=2, prev_hash=second_block.header.hash,
-                                                  timestamp=util.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER + 5_000_000)
+                                                  timestamp=utils.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER + 5_000_000)
 
-        block_verifier = BlockVerifier.new("0.3", TransactionVersioner())
+        block_verifier = BlockVerifier.new("0.1a", TransactionVersioner())
         leader = first_block.header.peer_id
         reps = [ExternalAddress.fromhex_address(private_auth.address)]
         print("*---Normal time range")
