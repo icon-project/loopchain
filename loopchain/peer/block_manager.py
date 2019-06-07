@@ -379,7 +379,7 @@ class BlockManager:
             raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
         votes_dumped = response.confirm_info
-        if votes_dumped:
+        if isinstance(votes_dumped, list):
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
         else:
@@ -407,7 +407,7 @@ class BlockManager:
         block = block_serializer.deserialize(get_block_result['block'])
 
         votes_dumped = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
-        if votes_dumped:
+        if isinstance(votes_dumped, list):
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
         else:
