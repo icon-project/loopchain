@@ -17,9 +17,8 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 
 import logging
 import traceback
-from loopchain import configure as conf, utils
 from typing import Dict, Optional
-from loopchain import configure as conf, utils as util
+from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
