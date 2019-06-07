@@ -245,7 +245,7 @@ class TestBlock(unittest.TestCase):
             }
 
         block_builder.signer = private_auth
-        block_builder.height = 3
+        block_builder.height = 0
         block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
@@ -255,7 +255,7 @@ class TestBlock(unittest.TestCase):
         vote = BlockVote.new(private_auth.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
         votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
         votes.add_vote(vote)
-        block_builder.prev_votes = votes
+        block_builder.prev_votes = votes.votes
 
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
