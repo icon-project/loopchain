@@ -27,12 +27,12 @@ from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
-from loopchain.blockchain.types import TransactionStatusInQueue
+from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
     ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
@@ -265,14 +265,24 @@ class BlockManager:
 
         :param unconfirmed_block:
         """
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-
+        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}")
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
+        reps = self.__channel_service.get_rep_ids()
+
+        if unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block:
+            need_to_confirm = True
+        elif unconfirmed_block.header.version == "0.3":
+            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
+                                       unconfirmed_block.header.height, None, unconfirmed_block.body.leader_votes)
+            need_to_confirm = leader_votes.get_result() is None
+        else:
+            need_to_confirm = False
+
         try:
-            if unconfirmed_block.body.confirm_prev_block:
+            if need_to_confirm:
                 self.confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
@@ -328,7 +338,7 @@ class BlockManager:
 
     def block_height_sync(self):
         def _print_exception(fut):
-            exc = self.__block_height_future.exception()
+            exc = fut.exception()
             if exc:
                 traceback.print_exception(type(exc), exc, exc.__traceback__)
 
@@ -352,20 +362,33 @@ class BlockManager:
         :return block, max_block_height, confirm_info, response_code
         """
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
-                block_height=block_height,
-                channel=self.__channel_name
-            ), conf.GRPC_TIMEOUT)
-            try:
-                block = self.__blockchain.block_loads(response.block)
-            except Exception as e:
-                traceback.print_exc()
-                raise exception.BlockError(f"Received block is invalid: original exception={e}")
-            return block, response.max_block_height, response.unconfirmed_block_height,\
-                response.confirm_info, response.response_code
+            return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
+
+    def __block_request_by_voter(self, block_height, peer_stub):
+        response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
+            block_height=block_height,
+            channel=self.__channel_name
+        ), conf.GRPC_TIMEOUT)
+        try:
+            block = self.__blockchain.block_loads(response.block)
+        except Exception as e:
+            traceback.print_exc()
+            raise exception.BlockError(f"Received block is invalid: original exception={e}")
+
+        votes_dumped = response.confirm_info
+        if isinstance(votes_dumped, list):
+            votes_serialized = json.loads(votes_dumped)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
+        else:
+            votes = None
+
+        return (
+            block, response.max_block_height, response.unconfirmed_block_height,
+            votes, response.response_code
+        )
 
     def __block_request_by_citizen(self, block_height, rs_rest_stub):
         get_block_result = rs_rest_stub.call(
@@ -382,11 +405,14 @@ class BlockManager:
         block_version = self.get_blockchain().block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        confirm_info = get_block_result.get('confirm_info', '')
-        if isinstance(confirm_info, str):
-            confirm_info = confirm_info.encode('utf-8')
 
-        return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
+        votes_dumped = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
+        if isinstance(votes_dumped, list):
+            votes_serialized = json.loads(votes_dumped)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
+        else:
+            votes = None
+        return block, json.loads(max_height_result.text)['block_height'], -1, votes, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
@@ -669,6 +695,8 @@ class BlockManager:
             response = rest_stub.call("Status")
             height_from_status = int(json.loads(response.text)["block_height"])
             last_height = rest_stub.call("GetLastBlock").get('height')
+            if isinstance(last_height, str):
+                last_height = int(last_height, 16)
             logging.debug(f"last_height: {last_height}, height_from_status: {height_from_status}")
             max_height = max(height_from_status, last_height)
             unconfirmed_block_height = int(
@@ -776,7 +804,7 @@ class BlockManager:
         vote = BlockVote.new(
             rep_pri_key=self.__channel_service.peer_auth.private_key,
             block_height=block.header.height,
-            block_hash=block.header.hash if is_validated else None,
+            block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()
         )
         self.candidate_blocks.add_vote(vote)

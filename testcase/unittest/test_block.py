@@ -245,7 +245,7 @@ class TestBlock(unittest.TestCase):
             }
 
         block_builder.signer = private_auth
-        block_builder.height = 3
+        block_builder.height = 0
         block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
@@ -255,7 +255,7 @@ class TestBlock(unittest.TestCase):
         vote = BlockVote.new(private_auth.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
         votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
         votes.add_vote(vote)
-        block_builder.prev_votes = votes
+        block_builder.prev_votes = votes.votes
 
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
@@ -276,12 +276,12 @@ class TestBlock(unittest.TestCase):
 
         block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
         tx_proof = block_prover.get_proof(tx_index)
-        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_hash, tx_proof)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transactions_hash, tx_proof)
 
         block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
         receipt_proof = block_prover.get_proof(tx_index)
-        receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
-        assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
+        receipts_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
+        assert block_prover.prove(receipts_hash, block.header.receipts_hash, receipt_proof)
 
     def test_valid_timestamp(self):
         """Test for timestamp buffer in block verifier"""

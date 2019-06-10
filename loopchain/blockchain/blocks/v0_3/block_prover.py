@@ -3,7 +3,7 @@ from typing import Union, Iterable
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.merkle import MerkleTree
 from loopchain.blockchain.blocks import BlockProver as BaseBlockProver, BlockProverType
-from loopchain.blockchain.blocks.v0_3 import receipt_hash_generator
+from loopchain.blockchain.blocks.v0_3 import receipts_hash_generator
 
 
 class BlockProver(BaseBlockProver):
@@ -42,7 +42,7 @@ class BlockProver(BaseBlockProver):
         if self.type == BlockProverType.Transaction:
             return None  # Do not need
         if self.type == BlockProverType.Receipt:
-            return receipt_hash_generator
+            return receipts_hash_generator
         if self.type == BlockProverType.Rep:
             return None
         if self.type == BlockProverType.Vote:

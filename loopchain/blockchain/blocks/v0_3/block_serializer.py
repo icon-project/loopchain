@@ -1,6 +1,5 @@
 from collections import OrderedDict
 
-from loopchain import configure as conf
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
 from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
@@ -26,17 +25,17 @@ class BlockSerializer(BaseBlockSerializer):
         return {
             "version": header.version,
             "prevHash": header.prev_hash.hex_0x(),
-            "transactionHash": header.transaction_hash.hex_0x(),
+            "transactionsHash": header.transactions_hash.hex_0x(),
             "stateHash": header.state_hash.hex_0x(),
-            "receiptHash": header.receipt_hash.hex_0x(),
-            "repHash": header.rep_hash.hex_0x(),
-            "leaderVoteHash": header.leader_vote_hash.hex_0x(),
-            "prevVoteHash": header.prev_vote_hash.hex_0x(),
-            "bloomFilter": header.bloom_filter.hex_0x(),
+            "receiptsHash": header.receipts_hash.hex_0x(),
+            "repsHash": header.reps_hash.hex_0x(),
+            "leaderVotesHash": header.leader_votes_hash.hex_0x(),
+            "prevVotesHash": header.prev_votes_hash.hex_0x(),
+            "logsBloom": header.logs_bloom.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
-            "leaderVotes": body.leader_votes.serialize(),
-            "prevVotes": body.prev_votes.serialize(),
+            "leaderVotes": LeaderVotes.serialize_votes(body.leader_votes),
+            "prevVotes": BlockVotes.serialize_votes(body.prev_votes),
             "hash": header.hash.hex_0x(),
             "height": hex(header.height),
             "leader": header.peer_id.hex_hx(),
@@ -59,23 +58,23 @@ class BlockSerializer(BaseBlockSerializer):
         next_leader = json_data.get("nextLeader")
         next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
 
-        transaction_hash = json_data["transactionHash"]
-        transaction_hash = Hash32.fromhex(transaction_hash)
+        transactions_hash = json_data["transactionsHash"]
+        transactions_hash = Hash32.fromhex(transactions_hash)
 
-        receipt_hash = json_data["receiptHash"]
-        receipt_hash = Hash32.fromhex(receipt_hash)
+        receipts_hash = json_data["receiptsHash"]
+        receipts_hash = Hash32.fromhex(receipts_hash)
 
         state_hash = json_data["stateHash"]
         state_hash = Hash32.fromhex(state_hash)
 
-        rep_hash = json_data["repHash"]
-        rep_hash = Hash32.fromhex(rep_hash)
+        reps_hash = json_data["repsHash"]
+        reps_hash = Hash32.fromhex(reps_hash)
 
-        leader_vote_hash = json_data["leaderVoteHash"]
-        leader_vote_hash = Hash32.fromhex(leader_vote_hash)
+        leader_votes_hash = json_data["leaderVotesHash"]
+        leader_votes_hash = Hash32.fromhex(leader_votes_hash)
 
-        prev_vote_hash = json_data["prevVoteHash"]
-        prev_vote_hash = Hash32.fromhex(prev_vote_hash)
+        prev_votes_hash = json_data["prevVotesHash"]
+        prev_votes_hash = Hash32.fromhex(prev_votes_hash)
 
         height = json_data["height"]
         height = int(height, 16)
@@ -91,13 +90,13 @@ class BlockSerializer(BaseBlockSerializer):
             "peer_id": peer_id,
             "signature": signature,
             "next_leader": next_leader,
-            "transaction_hash": transaction_hash,
-            "receipt_hash": receipt_hash,
+            "transactions_hash": transactions_hash,
+            "receipts_hash": receipts_hash,
             "state_hash": state_hash,
-            "rep_hash": rep_hash,
-            "leader_vote_hash": leader_vote_hash,
-            "prev_vote_hash": prev_vote_hash,
-            "bloom_filter": BloomFilter.fromhex(json_data["bloomFilter"])
+            "reps_hash": reps_hash,
+            "leader_votes_hash": leader_votes_hash,
+            "prev_votes_hash": prev_votes_hash,
+            "logs_bloom": BloomFilter.fromhex(json_data["logsBloom"])
         }
 
     def _deserialize_body_data(self, json_data: dict):
@@ -108,8 +107,8 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        leader_votes = LeaderVotes.deserialize(json_data["leaderVotes"], conf.LEADER_COMPLAIN_RATIO)
-        prev_votes = BlockVotes.deserialize(json_data["prevVotes"], conf.VOTING_RATIO)
+        leader_votes = LeaderVotes.deserialize_votes(json_data["leaderVotes"])
+        prev_votes = BlockVotes.deserialize_votes(json_data["prevVotes"])
 
         return {
             "transactions": transactions,

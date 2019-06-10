@@ -23,14 +23,12 @@ class BlockVotes(BaseVotes[BlockVote]):
     VoteType = BlockVote
 
     def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float,
-                 block_height: int, block_hash: Hash32):
+                 block_height: int, block_hash: Hash32, votes: List[BlockVote] = None):
         self.block_height = block_height
         self.block_hash = block_hash
-        super().__init__(reps, voting_ratio)
+        super().__init__(reps, voting_ratio, votes)
 
-    def verify(self, vote: BlockVote):
-        super().verify(vote)
-
+    def verify_vote(self, vote: BlockVote):
         if vote.block_height != self.block_height:
             raise RuntimeError(f"Vote block_height not match. {vote.block_height} != {self.block_height}\n"
                                f"{vote}")
@@ -38,24 +36,28 @@ class BlockVotes(BaseVotes[BlockVote]):
         if vote.block_hash != self.block_hash and vote.block_hash != Hash32.empty():
             raise RuntimeError(f"Vote block_hash not match. {vote.block_hash} != {self.block_hash}\n"
                                f"{vote}")
-
-    def empty_vote(self, rep: ExternalAddress):
-        return self.VoteType.empty(rep, self.block_height)
+        super().verify_vote(vote)
 
     def is_completed(self):
         return self.get_result() is not None
 
     def get_result(self):
         true_vote_count = sum(1 for vote in self.votes
-                              if not self.is_empty_vote(vote) and vote.block_hash == self.block_hash)
+                              if vote and vote.block_hash == self.block_hash)
         if true_vote_count >= self.quorum:
             return True
 
         false_vote_count = sum(1 for vote in self.votes
-                               if not self.is_empty_vote(vote) and vote.block_hash == Hash32.empty())
+                               if vote and vote.block_hash == Hash32.empty())
         if false_vote_count >= len(self.reps) - self.quorum + 1:
             return False
         return None
+
+    def get_summary(self):
+        msg = super().get_summary()
+        msg += f"block height({self.block_height})\n"
+        msg += f"block hash({self.block_hash.hex_0x()})"
+        return msg
 
     def __eq__(self, other: 'BlockVotes'):
         return (
@@ -64,38 +66,23 @@ class BlockVotes(BaseVotes[BlockVote]):
             self.block_height == other.block_height
         )
 
-    def __str__(self):
-        msg = super().__str__()
-        msg += f"block height({self.block_height})\n"
-        msg += f"block hash({self.block_hash.hex_0x()})"
-        return msg
-
-    # noinspection PyMethodOverriding
-    @classmethod
-    def deserialize(cls, votes_data: List[Dict], voting_ratio: float):
-        if votes_data:
-            votes = [BlockVote.deserialize(vote_data) for vote_data in votes_data]
-            reps = [vote.rep for vote in votes]
-            votes_cls = cls(reps, voting_ratio, votes[0].block_height, votes[0].block_hash)
-            for vote in votes:
-                votes_cls.add_vote(vote)
-            return votes_cls
-        else:
-            return cls([], voting_ratio, -1, Hash32.empty())
+    def __repr__(self):
+        return (
+            f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, "
+            f"block_height={self.block_height!r}, block_hash={self.block_hash!r}, votes={self.votes!r})"
+        )
 
 
 class LeaderVotes(BaseVotes[LeaderVote]):
     VoteType = LeaderVote
 
     def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float,
-                 block_height: int, old_leader: ExternalAddress):
+                 block_height: int, old_leader: ExternalAddress, votes: List[LeaderVote] = None):
         self.block_height = block_height
         self.old_leader = old_leader
-        super().__init__(reps, voting_ratio)
+        super().__init__(reps, voting_ratio, votes)
 
-    def verify(self, vote: LeaderVote):
-        super().verify(vote)
-
+    def verify_vote(self, vote: LeaderVote):
         if vote.block_height != self.block_height:
             raise RuntimeError(f"Vote block_height not match. {vote.block_height} != {self.block_height}\n"
                                f"{vote}")
@@ -103,9 +90,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
         if vote.old_leader != self.old_leader:
             raise RuntimeError(f"Vote old_leader not match. {vote.old_leader} != {self.old_leader}\n"
                                f"{vote}")
-
-    def empty_vote(self, rep: ExternalAddress):
-        return self.VoteType.empty(rep, self.block_height, self.old_leader)
+        super().verify_vote(vote)
 
     def is_completed(self):
         majority_pair = self.get_majority()
@@ -114,7 +99,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
             if majority_count >= self.quorum:
                 return True
 
-            empty_count = sum(1 for vote in self.votes if self.is_empty_vote(vote))
+            empty_count = self.votes.count(None)
             if majority_count + empty_count < self.quorum:
                 # It determines the majority of this votes cannot reach the quorum
                 return True
@@ -129,6 +114,12 @@ class LeaderVotes(BaseVotes[LeaderVote]):
                 return majority_value
         return None
 
+    def get_summary(self):
+        msg = super().get_summary()
+        msg += f"block height({self.block_height})\n"
+        msg += f"old leader({self.old_leader.hex_hx()})"
+        return msg
+
     def __eq__(self, other: 'LeaderVotes'):
         return (
             super().__eq__(other) and
@@ -136,21 +127,22 @@ class LeaderVotes(BaseVotes[LeaderVote]):
             self.old_leader == other.old_leader
         )
 
-    def __str__(self):
-        msg = super().__str__()
-        msg += f"block height({self.block_height})\n"
-        msg += f"old leader({self.old_leader.hex_hx()})"
-        return msg
+    def __repr__(self):
+        return (
+            f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, "
+            f"block_height={self.block_height!r}, old_leader={self.old_leader!r}, votes={self.votes!r})"
+        )
 
     # noinspection PyMethodOverriding
     @classmethod
     def deserialize(cls, votes_data: List[Dict], voting_ratio: float):
         if votes_data:
             votes = [LeaderVote.deserialize(vote_data) for vote_data in votes_data]
-            reps = (vote.rep for vote in votes)
-            votes_cls = cls(reps, voting_ratio, votes[0].block_height, votes[0].old_leader)
+            reps = [vote.rep for vote in votes]
+            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].old_leader)
             for vote in votes:
-                votes_cls.add_vote(vote)
-            return votes_cls
+                index = reps.index(vote.rep)
+                votes_instance.votes[index] = vote
+            return votes_instance
         else:
             return cls([], voting_ratio, -1, ExternalAddress.empty())
