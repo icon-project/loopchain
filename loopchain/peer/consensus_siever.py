@@ -96,7 +96,7 @@ class ConsensusSiever(ConsensusBase):
         if not vote_result:
             raise NotEnoughVotes
 
-        self._block_manager.get_blockchain().add_block(block, vote.votes)
+        self._block_manager.get_blockchain().add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
         self._made_block_count += 1
