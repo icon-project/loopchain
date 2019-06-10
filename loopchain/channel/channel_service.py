@@ -756,7 +756,7 @@ class ChannelService:
         else:
             block_builder.signature = block.header.signature
         new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.hash, block.header.hash)
+        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
 
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
@@ -805,7 +805,7 @@ class ChannelService:
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.hash, _block.header.hash)
+        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
@@ -824,7 +824,7 @@ class ChannelService:
 
         new_block_hash = block.header.hash
         try:
-            old_block_hash = self.__block_manager.get_old_block_hash(new_block_hash)
+            old_block_hash = self.__block_manager.get_old_block_hash(block.header.height, new_block_hash)
         except KeyError:
             old_block_hash = new_block_hash
 
@@ -839,7 +839,7 @@ class ChannelService:
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         stub.sync_task().write_precommit_state(request)
 
-        self.__block_manager.pop_old_block_hash(new_block_hash)
+        self.__block_manager.pop_old_block_hashes(block.header.height)
         return True
 
     def score_remove_precommit_state(self, block: Block):
