@@ -99,7 +99,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
             if majority_count >= self.quorum:
                 return True
 
-            empty_count = sum(1 for vote in self.votes if not vote)
+            empty_count = self.votes.count(None)
             if majority_count + empty_count < self.quorum:
                 # It determines the majority of this votes cannot reach the quorum
                 return True
