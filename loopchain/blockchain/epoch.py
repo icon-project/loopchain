@@ -194,7 +194,6 @@ class Epoch:
                 block_tx_size += tx.size(tx_versioner)
 
     def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
-        # self._check_unconfirmed_block(
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
