@@ -212,6 +212,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.height,
             self._timestamp,
             self.peer_id,
+            self.next_leader
         )
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
