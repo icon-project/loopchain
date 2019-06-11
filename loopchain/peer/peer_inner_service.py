@@ -50,8 +50,8 @@ class PeerInnerTask:
         }
 
     @message_queue_task
-    async def get_node_key(self, channel_name) -> bytes:
-        return self._peer_service.node_keys[channel_name]
+    async def get_node_key(self) -> bytes:
+        return self._peer_service.node_key
 
     # FIXME : not used?
     @message_queue_task
