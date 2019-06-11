@@ -19,7 +19,8 @@ import shutil
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING
+from collections import defaultdict
+from typing import TYPE_CHECKING, Dict, DefaultDict
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -78,6 +79,8 @@ class BlockManager:
         self.name = name
         self.__service_status = status_code.Service.online
 
+        # old_block_hashes[height][new_block_hash] = old_block_hash
+        self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
 
     @property
@@ -141,6 +144,15 @@ class BlockManager:
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
+
+    def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
+        self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
+
+    def get_old_block_hash(self,  block_height: int, new_block_hash: Hash32):
+        return self.__old_block_hashes[block_height][new_block_hash]
+
+    def pop_old_block_hashes(self, block_height: int):
+        self.__old_block_hashes.pop(block_height)
 
     def get_total_tx(self):
         """

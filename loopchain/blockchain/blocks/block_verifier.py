@@ -66,7 +66,7 @@ class BlockVerifier(ABC):
 
         self.verify_version(block)
 
-        if block.header.height > 0:
+        if block.header.signature or block.header.height > 0:
             self.verify_signature(block)
 
         if prev_block:

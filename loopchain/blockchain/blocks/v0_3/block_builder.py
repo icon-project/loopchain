@@ -50,6 +50,8 @@ class BlockBuilder(BaseBlockBuilder):
             raise RuntimeError("Transactions and Receipts are not matched.")
 
         self._receipts = [dict(receipts[tx_hash.hex()]) for tx_hash in self.transactions]
+        for receipt in self._receipts:
+            receipt.pop("blockHash", None)
 
     def reset_cache(self):
         super().reset_cache()
@@ -201,6 +203,8 @@ class BlockBuilder(BaseBlockBuilder):
         leaves = (
             self.prev_hash,
             self.transactions_hash,
+            self.receipts_hash,
+            self.state_hash,
             self.reps_hash,
             self.leader_votes_hash,
             self.prev_votes_hash,
@@ -208,6 +212,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.height,
             self._timestamp,
             self.peer_id,
+            self.next_leader
         )
         block_prover = BlockProver(leaves, BlockProverType.Block)
         return block_prover.get_proof_root()
