@@ -1,8 +1,10 @@
+import os
+
+from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, PeerInfo, PeerStatus, PeerObject, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
-from loopchain import configure as conf
-from testcase.unittest import test_util
+from loopchain.crypto.signature import Signer
 
 
 class Mock:
@@ -53,7 +55,7 @@ class PeerManagerMock:
 
 
 def set_mock(test):
-    peer_auth = test_util.create_default_peer_auth()
+    peer_auth = Signer.from_prikey(os.urandom(32))
     test.peer_auth = peer_auth
     peer_service_mock = PeerServiceMock()
     peer_service_mock.peer_manager = PeerManagerMock(peer_auth)

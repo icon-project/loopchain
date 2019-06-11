@@ -18,6 +18,7 @@
 
 import logging
 import json
+import os
 import random
 import sys
 import unittest
@@ -28,6 +29,7 @@ import testcase.unittest.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
+from loopchain.crypto.signature import Signer
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
@@ -49,7 +51,7 @@ class TestBlock(unittest.TestCase):
     def setUp(self):
         conf.Configure().init_configure()
         test_util.print_testname(self._testMethodName)
-        self.peer_auth = test_util.create_default_peer_auth()
+        self.peer_auth = Signer.from_prikey(os.urandom(32))
         set_mock(self)
 
     def tearDown(self):
@@ -223,14 +225,14 @@ class TestBlock(unittest.TestCase):
             tx_validator.refresh_tx_validators()
 
     def test_block_v0_3(self):
-        private_auth = test_util.create_default_peer_auth()
+        test_signer = Signer.from_prikey(os.urandom(32))
         tx_versioner = TransactionVersioner()
 
         dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
         for i in range(5):
             tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-            tx_builder.signer = private_auth
+            tx_builder.signer = test_signer
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
             tx_builder.value = random.randint(0, 10000)
@@ -244,15 +246,15 @@ class TestBlock(unittest.TestCase):
                 "tx_dumped": tx_serializer.to_full_data(tx)
             }
 
-        block_builder.signer = private_auth
+        block_builder.signer = test_signer
         block_builder.height = 0
         block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
-        block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
+        block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
-        vote = BlockVote.new(private_auth.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
+        vote = BlockVote.new(test_signer.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
         votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
         votes.add_vote(vote)
         block_builder.prev_votes = votes.votes
@@ -294,7 +296,7 @@ class TestBlock(unittest.TestCase):
 
             for i in range(1000):
                 tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-                tx_builder.signer = private_auth
+                tx_builder.signer = test_signer
                 tx_builder.to_address = ExternalAddress.new()
                 tx_builder.step_limit = random.randint(0, 10000)
                 tx_builder.value = random.randint(0, 10000)
@@ -308,14 +310,14 @@ class TestBlock(unittest.TestCase):
                     "tx_dumped": tx_serializer.to_full_data(tx)
                 }
 
-            block_builder.signer = private_auth
+            block_builder.signer = test_signer
             block_builder.prev_hash = prev_hash
             block_builder.height = height
             block_builder.state_hash = Hash32(bytes(Hash32.size))
             block_builder.receipts = dummy_receipts
-            block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
-            block_builder.peer_id = ExternalAddress.fromhex(private_auth.address)
-            block_builder.next_leader = ExternalAddress.fromhex(private_auth.address)
+            block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
+            block_builder.peer_id = ExternalAddress.fromhex(test_signer.address)
+            block_builder.next_leader = ExternalAddress.fromhex(test_signer.address)
             block_builder.fixed_timestamp = timestamp
 
             b = block_builder.build()
@@ -323,7 +325,7 @@ class TestBlock(unittest.TestCase):
 
             return b
 
-        private_auth = test_util.create_default_peer_auth()
+        test_signer = Signer.from_prikey(os.urandom(32))
 
         first_block = block_maker(height=0, timestamp=utils.get_time_stamp())
         second_block = block_maker(height=1, timestamp=utils.get_time_stamp() + 5, prev_hash=first_block.header.hash)
@@ -332,7 +334,7 @@ class TestBlock(unittest.TestCase):
 
         block_verifier = BlockVerifier.new("0.1a", TransactionVersioner())
         leader = first_block.header.peer_id
-        reps = [ExternalAddress.fromhex_address(private_auth.address)]
+        reps = [ExternalAddress.fromhex_address(test_signer.address)]
         print("*---Normal time range")
         block_verifier.verify(block=second_block, prev_block=first_block,
                               blockchain=None, generator=leader, reps=reps)

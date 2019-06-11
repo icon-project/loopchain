@@ -547,7 +547,7 @@ class ChannelService:
                 logging.debug(f"This node is not Citizen anymore.")
                 return
 
-            elif isinstance(future.exception(), ConnectionError):
+            if future.exception():
                 logging.warning(f"Waiting for next subscribe request...")
                 if self.__state_machine.state != "SubscribeNetwork":
                     self.__state_machine.subscribe_network()

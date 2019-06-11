@@ -27,9 +27,9 @@ import testcase.unittest.test_util as test_util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, ScoreResponse
 from loopchain.blockchain.blocks import Block
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 from testcase.unittest.mock_peer import set_mock
-
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
@@ -43,7 +43,7 @@ class TestBlockChain(unittest.TestCase):
 
     def setUp(self):
         test_util.print_testname(self._testMethodName)
-        self.peer_auth = test_util.create_default_peer_auth()
+        self.peer_auth = Signer.from_prikey(os.urandom(32))
 
         set_mock(self)
         # BlockChain 을 만듬
