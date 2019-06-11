@@ -751,7 +751,7 @@ class ChannelService:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
-        if block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+        if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = self.peer_auth
         else:
             block_builder.signature = block.header.signature
