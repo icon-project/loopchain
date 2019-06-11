@@ -482,7 +482,8 @@ class ChannelInnerTask:
                 'channel_name': ChannelProperty().name,
                 'data': {'tx_hash': tx.hash.hex()}})
 
-        self._channel_service.start_leader_complain_timer_if_tx_exists()
+        if not conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
     async def hello(self):
@@ -646,7 +647,8 @@ class ChannelInnerTask:
                 'channel_name': ChannelProperty().name,
                 'data': {'tx_hash': tx.tx_hash}})
 
-        self._channel_service.start_leader_complain_timer_if_tx_exists()
+        if not conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
     def get_tx(self, tx_hash):
