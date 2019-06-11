@@ -48,7 +48,7 @@ class StateMachine(object):
                 cls.machine = Machine(model=self, states=cls.states, initial=cls.init_state,
                                       ignore_invalid_triggers=True)
 
-                cls.__init__(cls, *cls_args)
+                cls.__init__(self, *cls_args)
 
                 for attr_name in dir(cls):
                     attr = getattr(cls, attr_name, None)

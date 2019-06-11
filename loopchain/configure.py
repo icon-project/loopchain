@@ -20,6 +20,7 @@ import logging
 import re
 
 import loopchain
+from loopchain.components.singleton import SingletonMetaClass
 from loopchain.configure_default import *
 
 
@@ -31,20 +32,7 @@ class DataType(IntEnum):
     dict = 4
 
 
-class ConfigureMetaClass(type):
-    """특정 클래스에서 metaclass 로 지정하면 해당 클래스는 singleton이 된다.
-    사용예: class ClassOne(metaclass=ConfigureMetaClass):
-    """
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(ConfigureMetaClass, cls).__call__(*args, **kwargs)
-
-        return cls._instances[cls]
-
-
-class Configure(metaclass=ConfigureMetaClass):
+class Configure(metaclass=SingletonMetaClass):
 
     def __init__(self):
         self.__configure_info_list = {}

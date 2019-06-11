@@ -18,17 +18,17 @@ import logging
 import shutil
 import threading
 import traceback
-from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, BlockGenerationScheduler, ObjectManager, Timer
+from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
     TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
+    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
+    ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -68,7 +68,6 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.__block_generation_scheduler = BlockGenerationScheduler(self.__channel_name)
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.name = name
@@ -132,10 +131,6 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    @property
-    def block_generation_scheduler(self):
-        return self.__block_generation_scheduler
-
     def get_level_db(self):
         return self.__level_db
 
@@ -145,15 +140,6 @@ class BlockManager:
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
-
-    async def __create_block_generation_schedule(self):
-        # util.logger.spam(f"__create_block_generation_schedule:: CREATE BLOCK GENERATION SCHEDULE")
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            Schedule = namedtuple("Schedule", "callback kwargs")
-            schedule = Schedule(self.__consensus_algorithm.consensus, {})
-            self.__block_generation_scheduler.add_schedule(schedule)
-        else:
-            await self.__consensus_algorithm.consensus()
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
@@ -252,7 +238,7 @@ class BlockManager:
         self.__channel_service.stop_leader_complain_timer()
 
         # start new epoch
-        if not current_block.header.complained:
+        if not (current_block.header.complained and self.epoch.complained_result):
             self.epoch = Epoch.new_epoch()
 
         # reset leader
@@ -284,11 +270,6 @@ class BlockManager:
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
 
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
-
-        # TODO set below variable with right result.
-        check_unconfirmed_block_has_valid_block_info_for_prev_block = True
-        if not check_unconfirmed_block_has_valid_block_info_for_prev_block:
-            raise InvalidUnconfirmedBlock("Unconfirmed block has no valid block info for previous block")
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
@@ -731,9 +712,6 @@ class BlockManager:
         # for reuse level db when restart channel.
         self.__close_level_db()
 
-        if conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self.__block_generation_scheduler.stop()
-
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
@@ -813,17 +791,21 @@ class BlockManager:
         )
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
 
-    def __validate_unconfirmed_block_height(self, unconfirmed_block: Block):
+    def verify_confirm_info(self, unconfirmed_block: Block):
+        # TODO set below variable with right result.
+        check_unconfirmed_block_has_valid_confirm_info_for_prev_block = True
+        if not check_unconfirmed_block_has_valid_confirm_info_for_prev_block:
+            raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
+
         my_height = self.__blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
-            self.__channel_service.state_machine.block_sync()
-            raise BlockchainError(f"trigger block sync in _vote my_height({my_height}), "
-                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidNeedBlockSync(f"trigger block sync in _vote my_height({my_height}), "
+                                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.header.height:
-            raise BlockchainError(f"block is already added my_height({my_height}), "
-                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidAddedBlock(f"block is already added my_height({my_height}), "
+                                               f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
     async def _vote(self, unconfirmed_block: Block):
         exc = None
@@ -854,12 +836,6 @@ class BlockManager:
         util.logger.debug(f"in vote_as_peer "
                           f"height({unconfirmed_block.header.height}) "
                           f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
-
-        try:
-            self.__validate_unconfirmed_block_height(unconfirmed_block)
-        except BlockchainError as e:
-            util.logger.debug(e)
-            return
 
         try:
             self.add_unconfirmed_block(unconfirmed_block)

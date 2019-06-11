@@ -239,13 +239,6 @@ class ChannelService:
         else:
             await self.subscribe_to_radio_station()
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            if not self.__consensus.is_run():
-                self.__consensus.change_epoch(precommit_block=self.__block_manager.get_blockchain().last_block)
-                self.__consensus.start()
-        elif conf.ALLOW_MAKE_EMPTY_BLOCK:
-            if not self.block_manager.block_generation_scheduler.is_run():
-                self.block_manager.block_generation_scheduler.start()
         self.__state_machine.complete_subscribe()
 
         self.start_leader_complain_timer_if_tx_exists()
@@ -553,7 +546,7 @@ class ChannelService:
                 logging.debug(f"This node is not Citizen anymore.")
                 return
 
-            elif isinstance(future.exception(), ConnectionError):
+            if future.exception():
                 logging.warning(f"Waiting for next subscribe request...")
                 if self.__state_machine.state != "SubscribeNetwork":
                     self.__state_machine.subscribe_network()

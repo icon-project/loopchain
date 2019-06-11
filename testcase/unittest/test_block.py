@@ -18,6 +18,7 @@
 
 import logging
 import json
+import os
 import random
 import sys
 import unittest
@@ -28,6 +29,7 @@ import testcase.unittest.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
+from loopchain.crypto.signature import Signer
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
@@ -48,7 +50,7 @@ class TestBlock(unittest.TestCase):
     def setUp(self):
         conf.Configure().init_configure()
         test_util.print_testname(self._testMethodName)
-        self.peer_auth = test_util.create_default_peer_auth()
+        self.peer_auth = Signer.from_prikey(os.urandom(32))
         set_mock(self)
 
     def tearDown(self):
@@ -222,14 +224,14 @@ class TestBlock(unittest.TestCase):
             tx_validator.refresh_tx_validators()
 
     def test_block_v0_3(self):
-        private_auth = test_util.create_default_peer_auth()
+        test_signer = Signer.from_prikey(os.urandom(32))
         tx_versioner = TransactionVersioner()
 
         dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
         for i in range(1000):
             tx_builder = TransactionBuilder.new("0x3", tx_versioner)
-            tx_builder.private_key = private_auth.private_key
+            tx_builder.signer = test_signer
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
             tx_builder.value = random.randint(0, 10000)
@@ -243,11 +245,12 @@ class TestBlock(unittest.TestCase):
                 "tx_dumped": tx_serializer.to_full_data(tx)
             }
 
-        block_builder.peer_private_key = private_auth.private_key
-        block_builder.height = 0
+        block_builder.signer = test_signer
+        block_builder.height = 3
+        block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
-        block_builder.reps = [ExternalAddress.fromhex_address(private_auth.address)]
+        block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
         block = block_builder.build()

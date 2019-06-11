@@ -18,42 +18,46 @@ import getpass
 import hashlib
 import logging
 from typing import Union
+
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from secp256k1 import PrivateKey, PublicKey
+from secp256k1 import Base, ALL_FLAGS, PrivateKey, PublicKey
 
 
 class SignVerifier:
-    _pri = PrivateKey()
+    _base = Base(None, ALL_FLAGS)
+    _pri = PrivateKey(ctx=_base.ctx)
 
     def __init__(self):
         self.address: str = None
 
     def verify_address(self, pubkey: bytes):
-        return self.address_from_pubkey(pubkey) == self.address
+        new_address = self.address_from_pubkey(pubkey)
+        if new_address != self.address:
+            raise RuntimeError(f"Address is not valid."
+                               f"Address({new_address}), "
+                               f"Expected({self.address}")
 
     def verify_data(self, origin_data: bytes, signature: bytes):
-        return self.verify_signature(origin_data, signature, False)
+        self.verify_signature(origin_data, signature, False)
 
     def verify_hash(self, origin_data, signature):
-        return self.verify_signature(origin_data, signature, True)
+        self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
         try:
-            if is_hash:
-                origin_data = binascii.unhexlify(origin_data)
             origin_signature, recover_code = signature[:-1], signature[-1]
             recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
             pub = self._pri.ecdsa_recover(origin_data,
                                           recover_sig=recoverable_sig,
                                           raw=is_hash,
                                           digest=hashlib.sha3_256)
-            extract_pub = PublicKey(pub).serialize(compressed=False)
+            extract_pub = PublicKey(pub, ctx=self._base.ctx).serialize(compressed=False)
             return self.verify_address(extract_pub)
-        except Exception:
-            logging.debug(f"signature verify fail : {origin_data} {signature}")
-            return False
+        except Exception as e:
+            raise RuntimeError(f"signature verification fail : {origin_data} {signature}\n"
+                               f"{e}")
 
     @classmethod
     def address_from_pubkey(cls, pubkey: bytes):
@@ -62,7 +66,7 @@ class SignVerifier:
 
     @classmethod
     def address_from_prikey(cls, prikey: bytes):
-        pubkey = PrivateKey(prikey).pubkey.serialize(compressed=False)
+        pubkey = PrivateKey(prikey, ctx=cls._base.ctx).pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
@@ -179,13 +183,13 @@ class Signer(SignVerifier):
             prikey_file = conf.CHANNEL_OPTION[channel]['private_path']
         else:
             prikey_file = conf.PRIVATE_PATH
-        if prikey_file.endswith(".der") or prikey_file.endswith(".pem"):
-            if 'private_password' in conf.CHANNEL_OPTION[channel]:
-                logging.warning(f"This setting(private_password) will be deprecated soon. "
-                                f"Please refer to the key configuration guide.")
-                password = conf.CHANNEL_OPTION[channel]['private_password']
-            else:
-                password = conf.PRIVATE_PASSWORD
+
+        if 'private_password' in conf.CHANNEL_OPTION[channel]:
+            logging.warning(f"This setting(private_password) will be deprecated soon. "
+                            f"Please refer to the key configuration guide.")
+            password = conf.CHANNEL_OPTION[channel]['private_password']
+        elif conf.PRIVATE_PASSWORD:
+            password = conf.PRIVATE_PASSWORD
         else:
             # created the private key file from tbears.
             password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
@@ -206,12 +210,14 @@ class Signer(SignVerifier):
     @classmethod
     def from_prikey(cls, prikey: bytes):
         auth = Signer()
-        auth.private_key = PrivateKey(prikey)
+        auth.private_key = PrivateKey(prikey, ctx=cls._base.ctx)
         auth.address = cls.address_from_prikey(prikey)
 
         # verify
         sign = auth.sign_data(b'TEST')
-        if auth.verify_data(b'TEST', sign) is False:
+        try:
+            auth.verify_data(b'TEST', sign)
+        except:
             raise ValueError("Invalid Signature(Peer Certificate load test)")
         return auth
 

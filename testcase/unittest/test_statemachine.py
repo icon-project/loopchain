@@ -103,6 +103,21 @@ class TestStateMachine(unittest.TestCase):
         # THEN
         self.assertEqual(machined_hero.state, "hanging out")
 
+    def test_state_machine_should_support_multiple_instance(self):
+        # GIVEN
+        batman = StateMachinedHero("batman")
+        superman = StateMachinedHero("superman")
+
+        # WHEN
+        batman.wake_up()
+
+        # THEN
+        self.assertEqual(batman.name, "batman")
+        self.assertEqual(superman.name, "superman")
+
+        self.assertEqual(batman.state, "hanging out")
+        self.assertEqual(superman.state, "asleep")
+
 
 class TestTransitions(unittest.TestCase):
 
