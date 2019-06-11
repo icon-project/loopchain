@@ -11,9 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""package for block chain objects"""
-from .blockchain import *
-from .exception import *
-from .score_base import *
-from .candidate_blocks import *
-from .epoch import *
+
+from .vote import BlockVote, LeaderVote
+from .votes import BlockVotes, LeaderVotes

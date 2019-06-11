@@ -1,27 +1,34 @@
 from dataclasses import dataclass
+from typing import List
 from loopchain.crypto.hashing import build_hash_generator
-from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
-from ... import Hash32, ExternalAddress, BloomFilter
+from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
+from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 
 
 @dataclass(frozen=True)
 class BlockHeader(BaseBlockHeader):
-    complained: bool
     next_leader: ExternalAddress
 
-    transaction_hash: Hash32
+    logs_bloom: BloomFilter
+    transactions_hash: Hash32
     state_hash: Hash32
-    receipt_hash: Hash32
-    rep_hash: Hash32
-
-    bloom_filter: BloomFilter
+    receipts_hash: Hash32
+    reps_hash: Hash32
+    leader_votes_hash: Hash32
+    prev_votes_hash: Hash32
 
     version = "0.3"
+
+    @property
+    def complained(self):
+        return self.leader_votes_hash != Hash32.empty()
 
 
 @dataclass(frozen=True)
 class BlockBody(BaseBlockBody):
-    confirm_prev_block: bool
+    leader_votes: List[LeaderVote]
+    prev_votes: List[BlockVote]
 
 
-receipt_hash_generator = build_hash_generator(1, "icx_receipt")
+receipts_hash_generator = build_hash_generator(1, "icx_receipt")

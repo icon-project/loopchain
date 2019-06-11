@@ -15,13 +15,16 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
+from loopchain import configure as conf
 from loopchain import utils
+from loopchain.blockchain.exception import BlockVersionNotMatch
+from loopchain.blockchain.transactions import TransactionVerifier
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
-from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import Block, BlockHeader
-    from .. import TransactionVersioner
+    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockVerifier(ABC):
@@ -54,7 +57,8 @@ class BlockVerifier(ABC):
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
             self._handle_exception(exception)
 
-        if prev_block and not (prev_block.header.timestamp < header.timestamp < utils.get_time_stamp()):
+        valid_max_timestamp = utils.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER
+        if prev_block and not (prev_block.header.timestamp < header.timestamp < valid_max_timestamp):
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
                                      f"prev_block timestamp({prev_block.header.timestamp}), "
                                      f"current timestamp({utils.get_now_time_stamp()}")
@@ -62,7 +66,7 @@ class BlockVerifier(ABC):
 
         self.verify_version(block)
 
-        if block.header.height > 0:
+        if block.header.signature or block.header.height > 0:
             self.verify_signature(block)
 
         if prev_block:

@@ -1,9 +1,9 @@
 import hashlib
 from typing import Union, Iterable
+from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.merkle import MerkleTree
-from . import receipt_hash_generator
-from .. import BlockProver as BaseBlockProver, BlockProverType
-from ... import Hash32
+from loopchain.blockchain.blocks import BlockProver as BaseBlockProver, BlockProverType
+from loopchain.blockchain.blocks.v0_3 import receipts_hash_generator
 
 
 class BlockProver(BaseBlockProver):
@@ -25,7 +25,8 @@ class BlockProver(BaseBlockProver):
     def get_proof_root(self) -> Hash32:
         if not self._merkle_tree.is_ready:
             self.make_tree()
-        return Hash32(self._merkle_tree.get_merkle_root())
+        root = self._merkle_tree.get_merkle_root()
+        return Hash32(root) if root is not None else Hash32.empty()
 
     def prove(self, hash_: Hash32, root_hash: Hash32, proof: list) -> bool:
         return MerkleTree.validate_proof(proof, hash_, root_hash)
@@ -41,13 +42,15 @@ class BlockProver(BaseBlockProver):
         if self.type == BlockProverType.Transaction:
             return None  # Do not need
         if self.type == BlockProverType.Receipt:
-            return receipt_hash_generator
+            return receipts_hash_generator
         if self.type == BlockProverType.Rep:
+            return None
+        if self.type == BlockProverType.Vote:
             return None
 
     def to_hash32(self, value: Union[Hash32, bytes, bytearray, int, bool, dict]):
         if value is None:
-            return Hash32(bytes(32))
+            return Hash32.empty()
         elif isinstance(value, Hash32):
             return value
         elif isinstance(value, (bytes, bytearray)) and len(value) == 32:

@@ -13,6 +13,7 @@
 # limitations under the License.
 """Block chain class with authorized blocks only"""
 
+import leveldb
 import json
 import pickle
 import threading
@@ -20,15 +21,15 @@ import zlib
 from enum import Enum
 from typing import TYPE_CHECKING
 from typing import Union, List
-
-import leveldb
-
-import loopchain.utils as util
+from loopchain import utils
 from loopchain import configure as conf
 from loopchain.baseservice import ScoreResponse, ObjectManager
-from loopchain.blockchain import (Block, BlockBuilder, BlockSerializer, BlockProver, BlockProverType, BlockVersioner,
-                                  Transaction, TransactionBuilder, TransactionSerializer,
-                                  Hash32, ExternalAddress, TransactionVersioner, TransactionStatusInQueue)
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
+from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
+from loopchain.blockchain.transactions import Transaction, TransactionBuilder
+from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.votes.v0_1a import BlockVotes, LeaderVotes
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.channel.channel_property import ChannelProperty
@@ -36,6 +37,9 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peer import BlockManager
+
+
+__all__ = ("NID", "BlockChain")
 
 
 class NID(Enum):
@@ -252,7 +256,7 @@ class BlockChain:
                 return True
 
             peer_id = ChannelProperty().peer_id
-            util.apm_event(peer_id, {
+            utils.apm_event(peer_id, {
                 'event_type': 'TotalTx',
                 'peer_id': peer_id,
                 'peer_name': conf.PEER_NAME,
@@ -296,7 +300,7 @@ class BlockChain:
                 f"CHANNEL : {self.__channel_name}")
             logging.debug(f"ADDED BLOCK HEADER : {block.header}")
 
-            util.apm_event(self.__peer_id, {
+            utils.apm_event(self.__peer_id, {
                 'event_type': 'AddBlock',
                 'peer_id': self.__peer_id,
                 'peer_name': conf.PEER_NAME,
@@ -339,7 +343,7 @@ class BlockChain:
         if confirm_info:
             batch.Put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                b'0x1'
+                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
             )
 
         self.__confirmed_block_db.Write(batch)
@@ -395,7 +399,7 @@ class BlockChain:
                 logging.debug("There is no invoke result height in db.")
         else:
             # score_last_block_height is two or more higher than loopchain_last_block_height.
-            util.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
+            utils.exit_and_msg("Too many different(over 2) of block height between the loopchain and score. "
                               "Peer will be down. : "
                               f"loopchain({next_height})/score({score_last_block_height})")
             return True
@@ -409,8 +413,8 @@ class BlockChain:
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
         block_manager = ObjectManager().channel_service.block_manager
         tx_queue = block_manager.get_tx_queue()
-        # util.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
-        # util.logger.spam(
+        # utils.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
+        # utils.logger.spam(
         #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
 
         for index, tx in enumerate(block.body.transactions.values()):
@@ -431,13 +435,13 @@ class BlockChain:
                 json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
 
             # try:
-            #     util.logger.spam(
+            #     utils.logger.spam(
             #         f"blockchain:__add_tx_to_block_db::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
             # except KeyError as e:
-            #     util.logger.spam(f"__add_tx_to_block_db :: {e}")
+            #     utils.logger.spam(f"__add_tx_to_block_db :: {e}")
 
             tx_queue.pop(tx_hash, None)
-            # util.logger.spam(f"pop tx from queue:{tx_hash}")
+            # utils.logger.spam(f"pop tx from queue:{tx_hash}")
 
             if block.header.height > 0:
                 self.__save_tx_by_address(tx)
@@ -460,14 +464,14 @@ class BlockChain:
         # loop all tx in block
         logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
         tx_queue = ObjectManager().channel_service.block_manager.get_tx_queue()
-        # util.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
+        # utils.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
 
         for tx in precommit_block.body.transactions.values():
             tx_hash = tx.hash.hex()
             if tx_queue.get_item_in_status(TransactionStatusInQueue.normal, TransactionStatusInQueue.normal):
                 try:
                     tx_queue.set_item_status(tx_hash, TransactionStatusInQueue.precommited_to_block)
-                    # util.logger.spam(
+                    # utils.logger.spam(
                     #     f"blockchain:__precommit_tx::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
@@ -605,11 +609,14 @@ class BlockChain:
         block_version = self.block_versioner.get_version(0)
         block_builder = BlockBuilder.new(block_version, self.tx_versioner)
         block_builder.height = 0
-        block_builder.fixed_timestamp = 0
-        block_builder.prev_hash = None
+        block_builder.fixed_timestamp = utils.get_now_time_stamp()
         block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
         block_builder.transactions[tx.hash] = tx
         block_builder.reps = reps
+        block_builder.prev_hash = Hash32.new()
+        block_builder.signer = ObjectManager().channel_service.peer_auth
+        block_builder.prev_votes = []
+        block_builder.leader_votes = []
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
@@ -622,7 +629,7 @@ class BlockChain:
             f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
         if self.__last_block.header.height < precommit_block.header.height:
             self.__precommit_tx(precommit_block)
-            util.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
+            utils.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 
             block_serializer = BlockSerializer.new(precommit_block.header.version, self.tx_versioner)
             block_serialized = block_serializer.serialize(precommit_block)
@@ -630,7 +637,7 @@ class BlockChain:
             block_serialized = block_serialized.encode('utf-8')
             results = self.__confirmed_block_db.Put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
 
-            util.logger.spam(f"result of to write to db ({results})")
+            utils.logger.spam(f"result of to write to db ({results})")
             logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.header.height} , "
                          f"HASH : {precommit_block.header.hash.hex()}, CHANNEL : {self.__channel_name}")
         else:
@@ -648,12 +655,12 @@ class BlockChain:
         :param nid: Network ID
         :return:
         """
-        util.logger.spam(f"blockchain:put_nid ({self.__channel_name}), nid ({nid})")
+        utils.logger.spam(f"blockchain:put_nid ({self.__channel_name}), nid ({nid})")
         if nid is None:
             return
 
         results = self.__confirmed_block_db.Put(BlockChain.NID_KEY, nid.encode(encoding=conf.HASH_KEY_ENCODING))
-        util.logger.spam(f"result of to write to db ({results})")
+        utils.logger.spam(f"result of to write to db ({results})")
 
         return results
 
@@ -663,7 +670,7 @@ class BlockChain:
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
-        # util.logger.debug(f"-------------------confirm_prev_block---current_block is "
+        # utils.logger.debug(f"-------------------confirm_prev_block---current_block is "
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
@@ -686,7 +693,7 @@ class BlockChain:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     if current_block.header.complained and block_manager.epoch.complained_result:
-                        util.logger.debug("reset last_unconfirmed_block by complain block")
+                        utils.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
                     return None
                 else:
@@ -699,9 +706,10 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            # util.logger.debug(f"-------------------confirm_prev_block---before add block,"
+            # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
-            self.add_block(unconfirmed_block, current_block.body.confirm_prev_block)
+            confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
+            self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
@@ -736,12 +744,12 @@ class BlockChain:
         tx_info = None
         nid = NID.unknown.value
         genesis_data_path = conf.CHANNEL_OPTION[self.__channel_name]["genesis_data_path"]
-        util.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
+        utils.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
         try:
             with open(genesis_data_path, encoding="utf-8") as json_file:
                 tx_info = json.load(json_file)["transaction_data"]
                 nid = tx_info["nid"]
-                # util.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
+                # utils.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
 
         except FileNotFoundError as e:
             exit(f"cannot open json file in ({genesis_data_path}): {e}")
@@ -752,7 +760,7 @@ class BlockChain:
         self.put_nid(nid)
         ChannelProperty().nid = nid
 
-        util.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
+        utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__invoke_results[block_hash] = invoke_results
@@ -816,7 +824,7 @@ class BlockChain:
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
 
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
-        return block_prover.prove(tx_hash, block.header.transaction_hash, proof)
+        return block_prover.prove(tx_hash, block.header.transactions_hash, proof)
 
     def get_receipt_proof(self, tx_hash: Hash32):
         try:
@@ -833,8 +841,8 @@ class BlockChain:
 
         tx_results = (self.find_tx_info(tx_hash)["result"] for tx_hash in block.body.transactions)
         block_prover = BlockProver.new(block.header.version, tx_results, BlockProverType.Receipt)
-        receipt_hash = block_prover.to_hash32(tx_result)
-        return block_prover.get_proof(receipt_hash)
+        receipts_hash = block_prover.to_hash32(tx_result)
+        return block_prover.get_proof(receipts_hash)
 
     def prove_receipt(self, tx_hash: Hash32, proof: list):
         try:
@@ -850,5 +858,5 @@ class BlockChain:
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
 
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Receipt)    # Do not need receipts
-        receipt_hash = block_prover.to_hash32(tx_result)
-        return block_prover.prove(receipt_hash, block.header.receipt_hash, proof)
+        receipts_hash = block_prover.to_hash32(tx_result)
+        return block_prover.prove(receipts_hash, block.header.receipts_hash, proof)

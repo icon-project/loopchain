@@ -29,8 +29,10 @@ from sys import platform
 import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
-from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
+from loopchain.baseservice import ObjectManager, StubManager, CommonSubprocess
+from loopchain.blockchain.types import Address
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVersioner
 from loopchain.components import SingletonMetaClass
 from loopchain.peer import PeerService, Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc

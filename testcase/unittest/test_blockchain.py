@@ -31,7 +31,6 @@ from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 from testcase.unittest.mock_peer import set_mock
 
-
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
 

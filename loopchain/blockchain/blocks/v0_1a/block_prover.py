@@ -1,7 +1,7 @@
 from typing import Union
-from . import BlockHeader
-from .. import BlockProver as BaseBlockProver
-from ... import Hash32
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.blocks import BlockProver as BaseBlockProver
+from loopchain.blockchain.blocks.v0_1a import BlockHeader
 
 
 class BlockProver(BaseBlockProver):

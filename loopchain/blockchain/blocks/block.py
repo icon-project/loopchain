@@ -2,8 +2,8 @@ from collections import OrderedDict
 from dataclasses import dataclass, _FIELD, _FIELDS
 from types import MappingProxyType
 from typing import Mapping
-from .. import Hash32, ExternalAddress, Signature
-from ..transactions import Transaction
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
+from loopchain.blockchain.transactions import Transaction
 
 
 @dataclass(frozen=True)

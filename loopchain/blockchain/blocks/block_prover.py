@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Union, Iterable, Optional
-from .. import Hash32
+from loopchain.blockchain.types import Hash32
 
 
 class BlockProver(ABC):
@@ -47,3 +47,4 @@ class BlockProverType(Enum):
     Transaction = auto()
     Receipt = auto()
     Rep = auto()
+    Vote = auto()

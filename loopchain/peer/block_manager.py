@@ -19,16 +19,22 @@ import shutil
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING
+from collections import defaultdict
+from typing import TYPE_CHECKING, Dict, DefaultDict
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import TransactionStatusInQueue, BlockChain, CandidateBlocks, Block, Epoch, Transaction, \
-    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, BlockSerializer, \
-    exception, BlockVerifier, InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
-    ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
+from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, \
+    TransactionInvalidDuplicatedHash, TransactionInvalidOutOfTimeBound, BlockchainError, NID, exception
+from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
+from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
+from loopchain.blockchain.transactions import Transaction
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError, \
+    ConfirmInfoInvalid,  ConfirmInfoInvalidAddedBlock, ConfirmInfoInvalidNeedBlockSync
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -73,6 +79,8 @@ class BlockManager:
         self.name = name
         self.__service_status = status_code.Service.online
 
+        # old_block_hashes[height][new_block_hash] = old_block_hash
+        self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
 
     @property
@@ -87,13 +95,6 @@ class BlockManager:
                    str(1 if self.__channel_service.state_machine.state == "BlockGenerate" else 0)
         else:
             return "Service is offline: " + status_code.get_status_reason(self.__service_status)
-
-    def init_epoch(self):
-        """Call this after peer list update
-
-        :return:
-        """
-        self.epoch = Epoch(self)
 
     def update_service_status(self, status):
         self.__service_status = status
@@ -143,6 +144,15 @@ class BlockManager:
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__blockchain.set_invoke_results(block_hash, invoke_results)
+
+    def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
+        self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
+
+    def get_old_block_hash(self,  block_height: int, new_block_hash: Hash32):
+        return self.__old_block_hashes[block_height][new_block_hash]
+
+    def pop_old_block_hashes(self, block_height: int):
+        self.__old_block_hashes.pop(block_height)
 
     def get_total_tx(self):
         """
@@ -267,14 +277,24 @@ class BlockManager:
 
         :param unconfirmed_block:
         """
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}, {unconfirmed_block.body.confirm_prev_block}")
-
+        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}")
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
 
+        reps = self.__channel_service.get_rep_ids()
+
+        if unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block:
+            need_to_confirm = True
+        elif unconfirmed_block.header.version == "0.3":
+            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
+                                       unconfirmed_block.header.height, None, unconfirmed_block.body.leader_votes)
+            need_to_confirm = leader_votes.get_result() is None
+        else:
+            need_to_confirm = False
+
         try:
-            if unconfirmed_block.body.confirm_prev_block:
+            if need_to_confirm:
                 self.confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
@@ -329,12 +349,18 @@ class BlockManager:
         ChannelProperty().nid = nid
 
     def block_height_sync(self):
+        def _print_exception(fut):
+            exc = fut.exception()
+            if exc:
+                traceback.print_exception(type(exc), exc, exc.__traceback__)
+
         with self.__block_height_sync_lock:
             need_to_sync = (self.__block_height_future is None or self.__block_height_future.done())
 
             if need_to_sync:
                 self.__channel_service.stop_leader_complain_timer()
                 self.__block_height_future = self.__block_height_thread_pool.submit(self.__block_height_sync)
+                self.__block_height_future.add_done_callback(_print_exception)
             else:
                 logging.warning('Tried block_height_sync. But failed. The thread is already running')
 
@@ -348,20 +374,33 @@ class BlockManager:
         :return block, max_block_height, confirm_info, response_code
         """
         if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
-                block_height=block_height,
-                channel=self.__channel_name
-            ), conf.GRPC_TIMEOUT)
-            try:
-                block = self.__blockchain.block_loads(response.block)
-            except Exception as e:
-                traceback.print_exc()
-                raise exception.BlockError(f"Received block is invalid: original exception={e}")
-            return block, response.max_block_height, response.unconfirmed_block_height,\
-                response.confirm_info, response.response_code
+            return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
             return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
+
+    def __block_request_by_voter(self, block_height, peer_stub):
+        response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
+            block_height=block_height,
+            channel=self.__channel_name
+        ), conf.GRPC_TIMEOUT)
+        try:
+            block = self.__blockchain.block_loads(response.block)
+        except Exception as e:
+            traceback.print_exc()
+            raise exception.BlockError(f"Received block is invalid: original exception={e}")
+
+        votes_dumped = response.confirm_info
+        if isinstance(votes_dumped, list):
+            votes_serialized = json.loads(votes_dumped)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
+        else:
+            votes = None
+
+        return (
+            block, response.max_block_height, response.unconfirmed_block_height,
+            votes, response.response_code
+        )
 
     def __block_request_by_citizen(self, block_height, rs_rest_stub):
         get_block_result = rs_rest_stub.call(
@@ -378,11 +417,14 @@ class BlockManager:
         block_version = self.get_blockchain().block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        confirm_info = get_block_result.get('confirm_info', '')
-        if isinstance(confirm_info, str):
-            confirm_info = confirm_info.encode('utf-8')
 
-        return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
+        votes_dumped = get_block_result['confirm_info'] if 'confirm_info' in get_block_result else None
+        if isinstance(votes_dumped, list):
+            votes_serialized = json.loads(votes_dumped)
+            votes = BlockVotes.deserialize_votes(votes_serialized)
+        else:
+            votes = None
+        return block, json.loads(max_height_result.text)['block_height'], -1, votes, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
@@ -637,7 +679,7 @@ class BlockManager:
             if leader_peer:
                 self.__channel_service.peer_manager.set_leader_peer(leader_peer, None)
                 self.epoch = Epoch.new_epoch(leader_peer.peer_id)
-            elif self.epoch.height < my_height:
+            elif self.epoch and self.epoch.height < my_height:
                 self.epoch = Epoch.new_epoch()
 
             self.__channel_service.state_machine.complete_sync()
@@ -665,6 +707,8 @@ class BlockManager:
             response = rest_stub.call("Status")
             height_from_status = int(json.loads(response.text)["block_height"])
             last_height = rest_stub.call("GetLastBlock").get('height')
+            if isinstance(last_height, str):
+                last_height = int(last_height, 16)
             logging.debug(f"last_height: {last_height}, height_from_status: {height_from_status}")
             max_height = max(height_from_status, last_height)
             unconfirmed_block_height = int(
@@ -715,19 +759,15 @@ class BlockManager:
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
 
-    def add_complain(self, complained_leader_id, new_leader_id, block_height, peer_id, group_id):
-        if new_leader_id == self.epoch.leader_id:
-            util.logger.info(f"Complained new leader is current leader({new_leader_id})")
-            return
-
-        if self.epoch.height == block_height:
-            self.epoch.add_complain(complained_leader_id, new_leader_id, block_height, peer_id, group_id)
+    def add_complain(self, vote: LeaderVote):
+        if self.epoch.height == vote.block_height:
+            self.epoch.add_complain(vote)
 
             elected_leader = self.epoch.complain_result()
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
                 self.__channel_service.reset_leader_complain_timer()
-        elif self.epoch.height < block_height:
+        elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
@@ -747,18 +787,21 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
-        self.add_complain(
-            complained_leader_id, new_leader_id, self.epoch.height, self.__peer_id, ChannelProperty().group_id
-        )
-
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complained_leader_id=complained_leader_id,
-            channel=self.channel_name,
-            new_leader_id=new_leader_id,
+        leader_vote = LeaderVote.new(
+            rep_pri_key=self.__channel_service.peer_auth.private_key,
             block_height=self.epoch.height,
-            message="I'm your father.",
-            peer_id=self.__peer_id,
-            group_id=ChannelProperty().group_id
+            old_leader=ExternalAddress.fromhex_address(complained_leader_id),
+            new_leader=ExternalAddress.fromhex_address(new_leader_id),
+            timestamp=util.get_time_stamp()
+        )
+        logging.info(f"LeaderVote : \n{leader_vote}")
+        self.add_complain(leader_vote)
+
+        leader_vote_serialized = leader_vote.serialize()
+        leader_vote_dumped = json.dumps(leader_vote_serialized)
+        request = loopchain_pb2.ComplainLeaderRequest(
+            complain_vote=leader_vote_dumped,
+            channel=self.channel_name
         )
 
         util.logger.debug(f"leader complain "
@@ -767,29 +810,23 @@ class BlockManager:
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
 
-    def vote_unconfirmed_block(self, block_hash, is_validated):
+    def vote_unconfirmed_block(self, block: Block, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
-        if is_validated:
-            vote_code, message = message_code.get_response(message_code.Response.success_validate_block)
-        else:
-            vote_code, message = message_code.get_response(message_code.Response.fail_validate_block)
-
-        block_vote = loopchain_pb2.BlockVote(
-            vote_code=vote_code,
-            channel=self.channel_name,
-            message=message,
-            block_hash=block_hash,
-            peer_id=self.__peer_id,
-            group_id=ChannelProperty().group_id)
-
-        self.candidate_blocks.add_vote(
-            block_hash,
-            ChannelProperty().group_id,
-            ChannelProperty().peer_id,
-            is_validated
+        vote = BlockVote.new(
+            rep_pri_key=self.__channel_service.peer_auth.private_key,
+            block_height=block.header.height,
+            block_hash=block.header.hash if is_validated else Hash32.empty(),
+            timestamp=util.get_time_stamp()
         )
+        self.candidate_blocks.add_vote(vote)
+
+        vote_serialized = vote.serialize()
+        vote_dumped = json.dumps(vote_serialized)
+        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
+
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
+        return vote
 
     def verify_confirm_info(self, unconfirmed_block: Block):
         # TODO set below variable with right result.
@@ -828,7 +865,10 @@ class BlockManager:
             self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            self.vote_unconfirmed_block(unconfirmed_block.header.hash, exc is None)
+            is_validate = exc is None
+            vote = self.vote_unconfirmed_block(unconfirmed_block, is_validate)
+            if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
+                self.consensus_algorithm.vote(vote)
 
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock

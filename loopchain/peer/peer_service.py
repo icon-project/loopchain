@@ -18,12 +18,13 @@ And also has insecure inner service for inner process modules."""
 import multiprocessing
 import signal
 import timeit
+import json
 from functools import partial
 
 import grpc
 
 from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
+from loopchain.baseservice import StubManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
@@ -55,8 +56,8 @@ class PeerService:
         self.is_support_node_function = \
             partial(conf.NodeType.is_support_node_function, node_type=node_type)
 
-        util.logger.spam(f"Your Peer Service runs on debugging MODE!")
-        util.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
+        utils.logger.spam(f"Your Peer Service runs on debugging MODE!")
+        utils.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
 
         self.__node_type = node_type
 
@@ -177,10 +178,10 @@ class PeerService:
 
                 if not response:
                     return None
-                logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
+                logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
                 channels = json.loads(response.channel_infos)
             else:
-                channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+                channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
                 if conf.ENABLE_CHANNEL_AUTH:
                     filtered_channels = {channel: channels[channel] for channel in channels
@@ -195,8 +196,8 @@ class PeerService:
 
     def __init_port(self, port):
         # service 초기화 작업
-        target_ip = util.get_private_ip()
-        self.__peer_target = util.get_private_ip() + ":" + str(port)
+        target_ip = utils.get_private_ip()
+        self.__peer_target = utils.get_private_ip() + ":" + str(port)
         self.__peer_port = int(port)
 
         rest_port = int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -372,11 +373,11 @@ class PeerService:
     def __reset_channel_infos(self):
         self.__channel_infos = self.__get_channel_infos()
         if not self.__channel_infos:
-            util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
+            utils.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
 
     async def change_node_type(self, node_type):
         if self.__node_type.value == node_type:
-            util.logger.warning(f"Does not change node type because new note type equals current node type")
+            utils.logger.warning(f"Does not change node type because new note type equals current node type")
             return
 
         self.__node_type = conf.NodeType(node_type)

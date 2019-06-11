@@ -42,7 +42,7 @@ class SignVerifier:
     def verify_data(self, origin_data: bytes, signature: bytes):
         self.verify_signature(origin_data, signature, False)
 
-    def verify_hash(self, origin_data, signature):
+    def verify_hash(self, origin_data: bytes, signature):
         self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
@@ -65,8 +65,9 @@ class SignVerifier:
         return f"hx{hash_pub[-40:]}"
 
     @classmethod
-    def address_from_prikey(cls, prikey: bytes):
-        pubkey = PrivateKey(prikey, ctx=cls._base.ctx).pubkey.serialize(compressed=False)
+    def address_from_prikey(cls, prikey: Union[bytes, PrivateKey]):
+        prikey = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey)
+        pubkey = prikey.pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
@@ -208,9 +209,9 @@ class Signer(SignVerifier):
         return super().from_prikey_file(prikey_file, password)
 
     @classmethod
-    def from_prikey(cls, prikey: bytes):
+    def from_prikey(cls, prikey: Union[bytes, PrivateKey]):
         auth = Signer()
-        auth.private_key = PrivateKey(prikey, ctx=cls._base.ctx)
+        auth.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
         auth.address = cls.address_from_prikey(prikey)
 
         # verify
