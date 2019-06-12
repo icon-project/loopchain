@@ -346,6 +346,11 @@ class BlockChain:
                 json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
             )
 
+        if block.header.prev_hash:
+            prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
+            prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
+            batch.Delete(prev_block_confirm_info_key)
+
         self.__confirmed_block_db.Write(batch)
 
         return next_total_tx
