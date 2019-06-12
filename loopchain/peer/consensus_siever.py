@@ -142,18 +142,13 @@ class ConsensusSiever(ConsensusBase):
             else:
                 complain_votes = None
 
-            if self._blockchain.last_unconfirmed_block and self._block_manager.epoch.round == 0:
-                last_block = self._blockchain.last_unconfirmed_block
-                prev_votes = self._block_manager.candidate_blocks.get_votes(last_block.header.hash)
-                prev_votes_list = prev_votes.votes
+            last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
+            prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(last_block.header.hash)
+            if prev_votes_dumped:
+                prev_votes_serialized = json.loads(prev_votes_dumped)
+                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
             else:
-                last_block = self._blockchain.last_block
-                prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(last_block.header.hash)
-                if prev_votes_dumped:
-                    prev_votes_serialized = json.loads(prev_votes_dumped)
-                    prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
-                else:
-                    prev_votes_list = []
+                prev_votes_list = []
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, prev_votes_list)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
@@ -205,8 +200,8 @@ class ConsensusSiever(ConsensusBase):
 
             self._blockchain.last_unconfirmed_block = candidate_block
             self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
-            self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._block_manager.candidate_blocks.add_block(candidate_block)
+            self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._blockchain.last_unconfirmed_block = candidate_block
 
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)

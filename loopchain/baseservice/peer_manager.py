@@ -37,9 +37,8 @@ class PeerListData:
         self.peer_order_list: dict = {}  # { order:peer_id }
 
     def serialize(self) -> dict:
-        peer_info_list_serialized = dict()
-        for peer_id, peer_info in self.peer_info_list.items():
-            peer_info_list_serialized[peer_id] = peer_info.serialize()
+        peer_info_list_serialized = {peer_id: peer_info.serialize()
+                                     for peer_id, peer_info in self.peer_info_list.items()}
 
         return {
             'peer_info_list': peer_info_list_serialized,
@@ -49,13 +48,11 @@ class PeerListData:
 
     @staticmethod
     def deserialize(peer_list_data_serialized: dict) -> 'PeerListData':
-        peer_info_list = dict()
-        for peer_id, peer_info_serialized in peer_list_data_serialized['peer_info_list'].items():
-            peer_info_list[peer_id] = PeerInfo.deserialize(peer_info_serialized)
+        peer_info_list = {peer_id: PeerInfo.deserialize(peer_info_serialized)
+                          for peer_id, peer_info_serialized in peer_list_data_serialized['peer_info_list'].items()}
 
-        peer_order_list = dict()
-        for order, peer_id in peer_list_data_serialized['peer_order_list'].items():
-            peer_order_list[int(order)] = peer_id
+        peer_order_list = {int(order): peer_id
+                           for order, peer_id in peer_list_data_serialized['peer_order_list'].items()}
 
         peer_list_data = PeerListData()
         peer_list_data.peer_info_list = peer_info_list
@@ -139,11 +136,7 @@ class PeerManager:
         self.peer_list_data = peer_list_data
 
     def get_peer_by_target(self, peer_target):
-        for peer_id in self.peer_list:
-            peer_each = self.peer_list[peer_id]
-            if peer_each.target == peer_target:
-                return peer_each
-        return None
+        return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
 
     def add_peer(self, peer_info: Union[PeerInfo, dict]):
         """add_peer to peer_manager

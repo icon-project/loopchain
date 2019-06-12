@@ -281,7 +281,7 @@ class ChannelService:
         switch_block_height = self.__get_role_switch_block_height()
         if switch_block_height != -1 and current_height < switch_block_height:
             utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
-                              f"current_height({current_height})")
+                               f"current_height({current_height})")
             return False
 
         if conf.LOAD_PEERS_FROM_IISS:
@@ -465,9 +465,6 @@ class ChannelService:
             order += 1
         self.show_peers()
 
-        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
-
     async def __load_peers_from_file(self):
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
@@ -485,8 +482,8 @@ class ChannelService:
         return self.__channel_infos
 
     def get_rep_ids(self) -> list:
-        return [ExternalAddress.fromhex_address(peer.get('id'), allow_malformed=True)
-                for peer in self.get_channel_infos()['peers']]
+        return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
+                for peer_id in self.__peer_manager.peer_list]
 
     def generate_genesis_block(self):
         blockchain = self.block_manager.get_blockchain()
@@ -683,8 +680,8 @@ class ChannelService:
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
             utils.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
-                                f"last_block.header.height("
-                                f"{self.block_manager.get_blockchain().last_block.header.height})")
+                                 f"last_block.header.height("
+                                 f"{self.block_manager.get_blockchain().last_block.header.height})")
             return
 
         if leader_peer is None:
