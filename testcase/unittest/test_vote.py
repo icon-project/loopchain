@@ -43,7 +43,7 @@ class TestVote(unittest.TestCase):
     def test_block_vote(self):
         signer = self.signers[0]
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+        block_vote = BlockVote.new(signer, 0, 0, block_hash)
         block_vote.verify()
 
         origin = f"icx_vote.blockHash.{block_vote.block_hash.hex_0x()}.blockHeight.{hex(block_vote.block_height)}."
@@ -64,7 +64,7 @@ class TestVote(unittest.TestCase):
             if i == 66:
                 break
 
-            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
@@ -73,7 +73,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.is_completed(), False)
         self.assertEqual(block_votes.get_result(), None)
 
-        block_vote = BlockVote.new(self.signers[99].private_key, 0, 0, block_hash)
+        block_vote = BlockVote.new(self.signers[99], 0, 0, block_hash)
         block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.is_completed(), True)
@@ -86,9 +86,9 @@ class TestVote(unittest.TestCase):
 
         for i, signer in enumerate(self.signers):
             if i % 4 == 0:
-                block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+                block_vote = BlockVote.new(signer, 0, 0, block_hash)
             else:
-                block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+                block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -104,7 +104,7 @@ class TestVote(unittest.TestCase):
             if i == 33:
                 break
 
-            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
@@ -113,7 +113,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.is_completed(), False)
         self.assertEqual(block_votes.get_result(), None)
 
-        block_vote = BlockVote.new(self.signers[99].private_key, 0, 0, Hash32.empty())
+        block_vote = BlockVote.new(self.signers[99], 0, 0, Hash32.empty())
         block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -127,7 +127,7 @@ class TestVote(unittest.TestCase):
 
         signers = list(enumerate(self.signers))
         for i, signer in signers[:25]:
-            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -135,7 +135,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[25:50]:
-            block_vote = BlockVote.new(signer.private_key, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -143,7 +143,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[50:75]:
-            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -151,7 +151,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[75:90]:
-            block_vote = BlockVote.new(signer.private_key, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -163,24 +163,24 @@ class TestVote(unittest.TestCase):
         block_hash = Hash32(os.urandom(Hash32.size))
         block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
 
-        invalid_block_vote = BlockVote.new(self.signers[0].private_key, 0, 1, block_hash)
+        invalid_block_vote = BlockVote.new(self.signers[0], 0, 1, block_hash)
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        invalid_block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, Hash32(os.urandom(32)))
+        invalid_block_vote = BlockVote.new(self.signers[0], 0, 0, Hash32(os.urandom(32)))
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
         invalid_block_vote = BlockVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
                                        block_height=0, block_hash=block_hash)
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, block_hash)
+        block_vote = BlockVote.new(self.signers[0], 0, 0, block_hash)
         block_votes.add_vote(block_vote)
-        duplicate_block_vote = BlockVote.new(self.signers[0].private_key, 0, 0, Hash32.empty())
+        duplicate_block_vote = BlockVote.new(self.signers[0], 0, 0, Hash32.empty())
         self.assertRaises(votes.VoteDuplicateError, block_votes.add_vote, duplicate_block_vote)
 
     def test_leader_vote(self):
         signer = self.signers[0]
-        leader_vote = LeaderVote.new(signer.private_key, 0, 0, self.reps[0], self.reps[1])
+        leader_vote = LeaderVote.new(signer, 0, 0, self.reps[0], self.reps[1])
         leader_vote.verify()
 
         origin = f"icx_vote.blockHeight.{hex(leader_vote.block_height)}."
@@ -214,7 +214,7 @@ class TestVote(unittest.TestCase):
                 new_leader = new_leaders[3]
             else:
                 new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         logging.info(leader_votes)
@@ -232,7 +232,7 @@ class TestVote(unittest.TestCase):
         leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
         for i, (rep, signer) in enumerate(zip(self.reps[:25], self.signers[:25])):
             new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -240,7 +240,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[25:50], self.signers[25:50])):
             new_leader = new_leaders[1]
-            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -248,7 +248,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[50:75], self.signers[50:75])):
             new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -256,7 +256,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[75:90], self.signers[75:90])):
             new_leader = new_leaders[1]
-            leader_vote = LeaderVote.new(signer.private_key, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), True)
@@ -269,19 +269,19 @@ class TestVote(unittest.TestCase):
         new_leader = self.reps[1]
         leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
 
-        invalid_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 1, old_leader, new_leader)
+        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 1, old_leader, new_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
-        invalid_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, new_leader, new_leader)
+        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 0, new_leader, new_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
         invalid_leader_vote = LeaderVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
                                          block_height=0, new_leader=new_leader, old_leader=old_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
-        leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, old_leader, new_leader)
+        leader_vote = LeaderVote.new(self.signers[0], 0, 0, old_leader, new_leader)
         leader_votes.add_vote(leader_vote)
-        duplicate_leader_vote = LeaderVote.new(self.signers[0].private_key, 0, 0, old_leader, self.reps[2])
+        duplicate_leader_vote = LeaderVote.new(self.signers[0], 0, 0, old_leader, self.reps[2])
         self.assertRaises(votes.VoteDuplicateError, leader_votes.add_vote, duplicate_leader_vote)
 
 

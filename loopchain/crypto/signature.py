@@ -129,7 +129,7 @@ class SignVerifier:
 class Signer(SignVerifier):
     def __init__(self):
         super().__init__()
-        self._private_key: PrivateKey = None
+        self.private_key: PrivateKey = None
 
     def sign_data(self, data):
         return self.sign(data, False)
@@ -151,10 +151,10 @@ class Signer(SignVerifier):
             logging.error(f"data must be bytes \n")
             return None
 
-        raw_sig = self._private_key.ecdsa_sign_recoverable(msg=data,
-                                                           raw=is_hash,
-                                                           digest=hashlib.sha3_256)
-        serialized_sig, recover_id = self._private_key.ecdsa_recoverable_serialize(raw_sig)
+        raw_sig = self.private_key.ecdsa_sign_recoverable(msg=data,
+                                                          raw=is_hash,
+                                                          digest=hashlib.sha3_256)
+        serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
         return serialized_sig + bytes((recover_id, ))
 
     @classmethod
@@ -198,7 +198,7 @@ class Signer(SignVerifier):
     @classmethod
     def from_prikey(cls: Type[T], prikey: Union[bytes, PrivateKey]):
         auth = Signer()
-        auth._private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
+        auth.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
         auth.address = cls.address_from_prikey(prikey)
 
         # verify

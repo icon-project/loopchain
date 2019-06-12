@@ -788,7 +788,7 @@ class BlockManager:
             complained_leader_id = ""
 
         leader_vote = LeaderVote.new(
-            rep_pri_key=self.__channel_service.peer_auth.private_key,
+            signer=self.__channel_service.peer_auth,
             block_height=self.epoch.height,
             old_leader=ExternalAddress.fromhex_address(complained_leader_id),
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
@@ -814,7 +814,7 @@ class BlockManager:
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
         vote = BlockVote.new(
-            rep_pri_key=self.__channel_service.peer_auth.private_key,
+            signer=self.__channel_service.peer_auth,
             block_height=block.header.height,
             block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()

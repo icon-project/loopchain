@@ -13,9 +13,9 @@
 # limitations under the License.
 from typing import Union
 from dataclasses import dataclass
-from secp256k1 import PrivateKey
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.blockchain.votes import Vote as BaseVote
+from loopchain.crypto.signature import Signer
 
 
 @dataclass(frozen=True)
@@ -28,9 +28,9 @@ class BlockVote(BaseVote[bool]):
 
     # noinspection PyMethodOverriding
     @classmethod
-    def new(cls, rep_pri_key: PrivateKey, timestamp: int,
+    def new(cls, signer: Signer, timestamp: int,
             block_height: int, block_hash: Union[Hash32, None]) -> 'BlockVote':
-        return super().new(rep_pri_key, timestamp, block_height=block_height, block_hash=block_hash)
+        return super().new(signer, timestamp, block_height=block_height, block_hash=block_hash)
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -69,9 +69,9 @@ class LeaderVote(BaseVote[ExternalAddress]):
 
     # noinspection PyMethodOverriding
     @classmethod
-    def new(cls, rep_pri_key: PrivateKey, timestamp: int,
+    def new(cls, signer: Signer, timestamp: int,
             block_height: int, old_leader: ExternalAddress, new_leader: ExternalAddress) -> 'LeaderVote':
-        return super().new(rep_pri_key, timestamp,
+        return super().new(signer, timestamp,
                            block_height=block_height, old_leader=old_leader, new_leader=new_leader)
 
     # noinspection PyMethodOverriding

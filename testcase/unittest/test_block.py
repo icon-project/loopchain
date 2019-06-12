@@ -254,7 +254,7 @@ class TestBlock(unittest.TestCase):
         block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
-        vote = BlockVote.new(test_signer.private_key, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
+        vote = BlockVote.new(test_signer, utils.get_time_stamp(), block_builder.height - 1, block_builder.prev_hash)
         votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, block_builder.prev_hash)
         votes.add_vote(vote)
         block_builder.prev_votes = votes.votes
