@@ -23,7 +23,7 @@ class Transaction(ABC):
 
     @property
     @abstractmethod
-    def signer(self) -> 'ExternalAddress':
+    def signer_address(self) -> 'ExternalAddress':
         raise NotImplementedError
 
     def __str__(self):

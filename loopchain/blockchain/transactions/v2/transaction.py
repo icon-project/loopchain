@@ -35,7 +35,7 @@ class Transaction(BaseTransition):
         object.__setattr__(self, "extra", extra)
 
     @property
-    def signer(self) -> 'ExternalAddress':
+    def signer_address(self) -> 'ExternalAddress':
         return self.from_address
 
 

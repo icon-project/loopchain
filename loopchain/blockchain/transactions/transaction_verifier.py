@@ -49,7 +49,7 @@ class TransactionVerifier(ABC):
         if self._allow_unsigned and not tx.is_signed():
             return
 
-        sign_verifier = SignVerifier.from_address(tx.signer.hex_xx())
+        sign_verifier = SignVerifier.from_address(tx.signer_address.hex_xx())
         try:
             sign_verifier.verify_hash(tx.hash, tx.signature)
         except Exception as e:

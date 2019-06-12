@@ -25,7 +25,7 @@ class Transaction(BaseTransition):
         object.__setattr__(self, "message", message)
 
     @property
-    def signer(self) -> 'ExternalAddress':
+    def signer_address(self) -> 'ExternalAddress':
         raise NotImplementedError
 
 

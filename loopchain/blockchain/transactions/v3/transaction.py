@@ -18,7 +18,7 @@ class Transaction(BaseTransition):
     version = "0x3"
 
     @property
-    def signer(self) -> 'ExternalAddress':
+    def signer_address(self) -> 'ExternalAddress':
         return self.from_address
 
 

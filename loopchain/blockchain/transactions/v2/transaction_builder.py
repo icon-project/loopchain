@@ -81,8 +81,8 @@ class TransactionBuilder(BaseTransactionBuilder):
         return self.raw_data
 
     def sign_transaction(self, tx: 'Transaction'):
-        if self.signer.address != tx.signer.hex_hx():
-            raise RuntimeError(f"Signer not match. {self.signer.address} != {tx.signer.hex_hx()}")
+        if self.signer.address != tx.signer_address.hex_hx():
+            raise RuntimeError(f"Signer not match. {self.signer.address} != {tx.signer_address.hex_hx()}")
 
         signature = Signature(self.signer.sign_hash(tx.hash))
 
