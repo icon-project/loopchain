@@ -128,7 +128,7 @@ class PeerManager:
 
     def peer_ids_hash(self):
         """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
-        peer_list =
+
         :return:
         """
         group_id = conf.ALL_GROUP_ID
@@ -265,6 +265,9 @@ class PeerManager:
             self.peer_order_list[conf.ALL_GROUP_ID][peer_info.order] = peer_info.peer_id
             self.__peer_object_list[peer_info.group_id][peer_info.peer_id] = peer_object
             self.__peer_object_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer_object
+
+        broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
+        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
 
         return peer_info.order
 

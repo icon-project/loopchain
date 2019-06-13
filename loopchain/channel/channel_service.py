@@ -461,7 +461,6 @@ class ChannelService:
         for rep_info in response["result"]["preps"]:
             peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
             self.__peer_manager.add_peer(peer_info)
-            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, rep_info["target"])
             order += 1
         self.show_peers()
 
@@ -473,7 +472,6 @@ class ChannelService:
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)
-            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info["peer_target"])
         self.show_peers()
 
     def is_support_node_function(self, node_function):
