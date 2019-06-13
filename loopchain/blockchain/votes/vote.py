@@ -15,7 +15,6 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 from dataclasses import dataclass
-from secp256k1 import PrivateKey
 from loopchain.blockchain.types import ExternalAddress, Signature, Hash32
 from loopchain.crypto.hashing import build_hash_generator
 from loopchain.crypto.signature import SignVerifier, Signer
@@ -59,8 +58,7 @@ class Vote(ABC, Generic[TResult]):
 
     @classmethod
     @abstractmethod
-    def new(cls, rep_pri_key: PrivateKey, timestamp: int, **kwargs):
-        signer = Signer.from_prikey(rep_pri_key)
+    def new(cls, signer: Signer, timestamp: int, **kwargs):
         rep_id: ExternalAddress = ExternalAddress.fromhex(signer.address)
 
         hash_ = cls.to_hash(rep_id, timestamp, **kwargs)

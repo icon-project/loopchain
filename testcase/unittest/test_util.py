@@ -241,7 +241,7 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
     :return: transaction
     """
     tx_builder = TransactionBuilder.new("0x3", TransactionVersioner())
-    tx_builder.private_key = peer_auth.private_key
+    tx_builder.private_key = peer_auth._private_key
     tx_builder.to_address = Address("hx3f376559204079671b6a8df481c976e7d51b3c7c")
     tx_builder.value = 1
     tx_builder.step_limit = 100000000
