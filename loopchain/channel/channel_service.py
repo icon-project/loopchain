@@ -22,16 +22,17 @@ import traceback
 
 from earlgrey import MessageQueueService
 
-from loopchain import utils
 from loopchain import configure as conf
-from loopchain.blockchain.transactions import TransactionSerializer
-from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData
+from loopchain import utils
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData, \
+    PeerInfo
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.blockchain import Epoch
-from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
-from loopchain.blockchain.blocks import Block, BlockBuilder
 from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.blockchain import Epoch
+from loopchain.blockchain.blocks import Block, BlockBuilder
+from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -249,18 +250,11 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
     def __get_role_switch_block_height(self):
-        # Currently, only one way role switch is supported from Citizen to Rep
-        if ChannelProperty().node_type != conf.NodeType.CitizenNode:
-            return -1
         return self.get_channel_option().get('role_switch_block_height', -1)
 
     def __get_node_type_by_peer_list(self):
-        # FIXME: this is temporary codes. get peer list with IISS API
-        #        IISS peer list include just peer_id and a URL that a server provide peer details
-        channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        for peer_info in channels[ChannelProperty().name]["peers"]:
-            if peer_info['id'] == ChannelProperty().peer_id:
-                return conf.NodeType.CommunityNode
+        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
@@ -279,30 +273,34 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
-    async def __select_node_type(self):
-        # If block height is under zero this node has not synchronized blocks yet.
-        block_height = self.__block_manager.get_blockchain().block_height
-        if block_height < 0:
-            utils.logger.debug(f"Currently, Can't select node type without block height. block height={block_height}")
-            return
+    def _is_role_switched(self) -> bool:
+        current_height = self.__block_manager.get_blockchain().block_height
+        if current_height < 0:
+            utils.logger.debug(f"Need to sync block, current_height({current_height})")
+            return False
 
         switch_block_height = self.__get_role_switch_block_height()
-        if switch_block_height < 0 or block_height < switch_block_height:
-            utils.logger.debug(f"Does not need to select node type. role switch block height={switch_block_height}")
-            return
+        if switch_block_height != -1 and current_height < switch_block_height:
+            utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
+                              f"current_height({current_height})")
+            return False
 
-        node_type: conf.NodeType = self.__get_node_type_by_peer_list()
-        if node_type == ChannelProperty().node_type:
-            utils.logger.info(f"Node type equals previous note type ({node_type}). force={force}")
-            return
+        self._load_peers_from_iiss()
+        if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
+            utils.logger.debug(f"By iiss list, maintains the current node type({ChannelProperty().node_type})")
+            return False
 
-        utils.logger.info(f"Selected node type {node_type}")
-        ChannelProperty().node_type = node_type
+        return True
 
-        await StubCollection().peer_stub.async_task().change_node_type(node_type.value)
+    async def __select_node_type(self):
+        if self._is_role_switched():
+            new_node_type = self.__get_node_type_by_peer_list()
+            utils.logger.info(f"Role switching to new node type: {new_node_type}")
+            ChannelProperty().node_type = new_node_type
+            await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
-    def reset_network_by_block_height(self, height):
-        if height == self.__get_role_switch_block_height():
+    def switch_role(self):
+        if self._is_role_switched():
             self.__state_machine.switch_role()
 
     async def reset_network(self):
@@ -434,11 +432,46 @@ class ChannelService:
 
         return score_info
 
+    def _load_peers_from_iiss(self):
+        utils.logger.debug(f"load peers from iiss...")
+
+        request = {
+            "method": "ise_getPReps"
+        }
+
+        request = convert_params(request, ParamType.call)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = stub.sync_task().call(request)
+        response_to_json_query(response)
+
+        utils.logger.spam(f"from icon service channels is {response}")
+
+        peer_ids = ''
+        for preps in response["result"]["preps"]:
+            peer_ids += preps['id']
+
+        if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
+            utils.logger.debug(f"There is no change in peers.")
+            return
+
+        utils.logger.debug(f"Peer manager have to update with new list.")
+        self.__peer_manager.reset_peers(check_status=False)
+
+        order = 1
+        for rep_info in response["result"]["preps"]:
+            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            self.__peer_manager.add_peer(peer_info)
+            order += 1
+        self.show_peers()
+
+        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+
     async def __load_peers_from_file(self):
+        # self._load_peers_from_iiss()
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)
-            self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info["peer_target"])
         self.show_peers()
 
     def is_support_node_function(self, node_function):
@@ -629,9 +662,9 @@ class ChannelService:
             self.block_manager.rebuild_block()
 
     def show_peers(self):
-        logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
+        utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
         for peer in self.peer_manager.get_IP_of_peers_in_group():
-            logging.debug("peer_target: " + peer)
+            utils.logger.debug("peer_target: " + peer)
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
@@ -641,8 +674,8 @@ class ChannelService:
         :param complained:
         :return:
         """
-        if self.peer_manager.get_leader_id(conf.ALL_GROUP_ID) == new_leader_id:
-            return
+        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
+            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
                          f"complained={complained}")

@@ -166,6 +166,7 @@ def start_as_score(args):
         "log": {
             "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
         },
+        "iissDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.iiss_{amqp_key}_{channel}",
         "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
         "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
         "channel": channel,

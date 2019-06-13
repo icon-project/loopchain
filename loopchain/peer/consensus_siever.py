@@ -177,6 +177,7 @@ class ConsensusSiever(ConsensusBase):
                         peer_manager = ObjectManager().channel_service.peer_manager
                         next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
                             current_leader_peer_id=ChannelProperty().peer_id).peer_id)
+                        util.logger.spam(f"next_leader in siever({next_leader})")
                     else:
                         util.logger.info(f"This leader already made {self.made_block_count} blocks. "
                                          f"MAX_MADE_BLOCK_COUNT is {conf.MAX_MADE_BLOCK_COUNT} "
@@ -219,6 +220,9 @@ class ConsensusSiever(ConsensusBase):
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
             else:
+                if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
+                    ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
+                    
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()

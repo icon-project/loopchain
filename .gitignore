@@ -222,6 +222,7 @@ gen_docs/docs
 #score/
 score/.database_store/
 .storage
+.iissdb*
 
 deploy/LOOPCHAIN_VERSION
 parser_py.py

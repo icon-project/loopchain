@@ -13,6 +13,7 @@
 # limitations under the License.
 """A module for managing peer list"""
 
+import hashlib
 import json
 import logging
 import math
@@ -25,7 +26,6 @@ import loopchain_pb2
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 
@@ -125,6 +125,34 @@ class PeerManager:
 
         self.__leader_complain_count = 0
         self.__highest_block_height = -1    # for RS heartbeat
+
+    def peer_ids_hash(self):
+        """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
+
+        :return:
+        """
+        group_id = conf.ALL_GROUP_ID
+
+        order_list = list(self.peer_order_list[group_id].keys())
+        order_list.sort()
+        peer_count = len(order_list)
+        peer_ids = ""
+
+        for i in range(peer_count):
+            peer_order = order_list[i]
+            peer_id = self.peer_order_list[group_id][peer_order]
+            peer_each = self.peer_list[group_id][peer_id]
+
+            util.logger.debug(f"peer_order({peer_order}), peer_id({peer_id}), peer_target({peer_each.target})")
+            peer_ids += peer_id
+
+        return self.get_peer_ids_hash(peer_ids)
+
+    @staticmethod
+    def get_peer_ids_hash(peer_ids):
+        peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
+        util.logger.debug(f"peer ids hash({peer_ids_hash})")
+        return peer_ids_hash
 
     @property
     def peer_object_list(self) -> dict:
@@ -237,6 +265,9 @@ class PeerManager:
             self.peer_order_list[conf.ALL_GROUP_ID][peer_info.order] = peer_info.peer_id
             self.__peer_object_list[peer_info.group_id][peer_info.peer_id] = peer_object
             self.__peer_object_list[conf.ALL_GROUP_ID][peer_info.peer_id] = peer_object
+
+        broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
+        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
 
         return peer_info.order
 
@@ -435,7 +466,7 @@ class PeerManager:
 
         try:
             next_peer_id = self.peer_order_list[group_id][order_list[next_order_position]]
-            logging.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
+            util.logger.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
             return self.peer_list[group_id][next_peer_id]
         except (IndexError, KeyError) as e:
             logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
@@ -613,30 +644,37 @@ class PeerManager:
 
         logging.info(f"non response peer list : {nonresponse_peer_list}")
 
-    def reset_peers(self, group_id, reset_action):
+    def reset_peers(self, group_id=None, reset_action=None, check_status=True):
         if group_id is None:
             for search_group in list(self.peer_list.keys()):
-                self.__reset_peers_in_group(search_group, reset_action)
+                self.__reset_peers_in_group(search_group, reset_action, check_status)
         else:
-            self.__reset_peers_in_group(group_id, reset_action)
+            self.__reset_peers_in_group(group_id, reset_action, check_status)
 
-    def __reset_peers_in_group(self, group_id, reset_action):
+    def __reset_peers_in_group(self, group_id, reset_action, check_status=True):
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
         for peer_id in list(self.peer_list[group_id]):
             peer_each = self.peer_list[group_id][peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_each, group_id)
-            try:
-                stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
-                                  is_stub_reuse=True)
-            except Exception as e:
-                logging.warning("gRPC Exception: " + str(e))
-                logging.debug("remove this peer(target): " + str(peer_each.target))
-                self.remove_peer(peer_each.peer_id, group_id)
 
+            do_remove_peer = False
+
+            if check_status:
+                try:
+                    stub_manager = self.get_peer_stub_manager(peer_each, group_id)
+                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
+                                      is_stub_reuse=True)
+                except Exception as e:
+                    logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
+                    do_remove_peer = True
+            else:
+                do_remove_peer = True
+
+            if do_remove_peer:
+                self.remove_peer(peer_each.peer_id, group_id)
                 if reset_action is not None:
                     reset_action(peer_each.peer_id, peer_each.target)
 
-        if len(self.peer_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
+        if group_id in self.peer_list and len(self.peer_list[group_id]) == 0 and group_id != conf.ALL_GROUP_ID:
             del self.peer_list[group_id]
             del self.peer_object_list[group_id]
 
