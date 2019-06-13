@@ -164,17 +164,14 @@ class Signer(SignVerifier):
 
     @classmethod
     def from_prikey(cls: Type[T], prikey: Union[bytes, PrivateKey]):
-        auth = Signer()
-        auth.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
-        auth.address = cls.address_from_prikey(prikey)
+        signer = Signer()
+        signer.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
+        signer.address = cls.address_from_prikey(prikey)
+        return signer
 
-        # verify
-        sign = auth.sign_data(b'TEST')
-        try:
-            auth.verify_data(b'TEST', sign)
-        except:
-            raise ValueError("Invalid Signature(Peer Certificate load test)")
-        return auth
+    @classmethod
+    def new(cls):
+        return cls.from_prikey(PrivateKey())
 
 
 def long_to_bytes(val, endianness='big'):

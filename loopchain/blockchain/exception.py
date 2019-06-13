@@ -19,7 +19,7 @@ from loopchain.protos import message_code
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import Transaction
-    from loopchain.blockchain.types import Hash32, Signature
+    from loopchain.blockchain.types import Hash32
 
 
 class BlockInValidError(Exception):

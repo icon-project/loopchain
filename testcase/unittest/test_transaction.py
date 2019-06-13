@@ -97,10 +97,12 @@ class TestTransaction(unittest.TestCase):
         self.assertEqual(ts.from_(tx_raw_data), tx)
 
     def test_transaction_v2_unsigned(self):
+        signer = Signer.new()
+
         tb = TransactionBuilder.new("0x2", self.tx_versioner)
         tb.fee = 1000000
         tb.value = 100000
-        tb.from_address = ExternalAddress(os.urandom(20))
+        tb.from_address = ExternalAddress.fromhex_address(signer.address)
         tb.to_address = ExternalAddress(os.urandom(20))
         tb.nonce = random.randint(0, 100000)
         tx = tb.build(is_signing=False)
@@ -109,11 +111,18 @@ class TestTransaction(unittest.TestCase):
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx))
 
+        tb.signer = signer
+        signed_tx = tb.sign_transaction(tx)
+        tv.verify(signed_tx)
+        tv.pre_verify(signed_tx)
+
     def test_transaction_v3_unsigned(self):
+        signer = Signer.new()
+
         tb = TransactionBuilder.new("0x3", self.tx_versioner)
         tb.step_limit = 1000000
         tb.value = 100000
-        tb.from_address = ExternalAddress(os.urandom(20))
+        tb.from_address = ExternalAddress.fromhex_address(signer.address)
         tb.to_address = ExternalAddress(os.urandom(20))
         tb.nid = 3
         tb.nonce = random.randint(0, 100000)
@@ -124,6 +133,11 @@ class TestTransaction(unittest.TestCase):
         tv = TransactionVerifier.new("0x3", self.tx_versioner)
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx, nid=3))
+
+        tb.signer = signer
+        signed_tx = tb.sign_transaction(tx)
+        tv.verify(signed_tx)
+        tv.pre_verify(signed_tx, nid=3)
 
     def test_transaction_v2_invalid_hash0(self):
         # noinspection PyDictCreation
