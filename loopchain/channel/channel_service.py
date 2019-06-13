@@ -19,6 +19,8 @@ import logging
 import signal
 import time
 import traceback
+from functools import reduce
+from operator import add
 
 from earlgrey import MessageQueueService
 
@@ -284,16 +286,15 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
-        if conf.LOAD_PEERS_FROM_IISS:
-            self._load_peers_from_iiss()
-
         if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
-            utils.logger.debug(f"By iiss list, maintains the current node type({ChannelProperty().node_type})")
+            utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
         return True
 
     async def __select_node_type(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self._is_role_switched():
             new_node_type = self.__get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type}")
@@ -301,6 +302,8 @@ class ChannelService:
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
     def switch_role(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -447,22 +450,19 @@ class ChannelService:
 
         utils.logger.spam(f"from icon service channels is {response}")
 
-        peer_ids = ''
-        for preps in response["result"]["preps"]:
-            peer_ids += preps['id']
+        peer_ids = (preps["id"] for preps in response["result"]["preps"])
+        peer_ids_appended = reduce(add, peer_ids, '')
 
-        if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
+        if self.__peer_manager.get_peer_ids_hash(peer_ids_appended) == self.__peer_manager.peer_ids_hash():
             utils.logger.debug(f"There is no change in peers.")
             return
 
         utils.logger.debug(f"Peer manager have to update with new list.")
         self.__peer_manager.reset_peers(check_status=False)
 
-        order = 1
-        for rep_info in response["result"]["preps"]:
+        for order, rep_info in enumerate(response["result"]["preps"], 1):
             peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
             self.__peer_manager.add_peer(peer_info)
-            order += 1
         self.show_peers()
 
     async def __load_peers_from_file(self):
