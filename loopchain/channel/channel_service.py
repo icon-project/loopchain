@@ -288,6 +288,8 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
@@ -295,8 +297,6 @@ class ChannelService:
         return True
 
     async def __select_node_type(self):
-        if conf.LOAD_PEERS_FROM_IISS:
-            self._load_peers_from_iiss()
         if self._is_role_switched():
             new_node_type = self.__get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type}")
@@ -304,8 +304,6 @@ class ChannelService:
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
     def switch_role(self):
-        if conf.LOAD_PEERS_FROM_IISS:
-            self._load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

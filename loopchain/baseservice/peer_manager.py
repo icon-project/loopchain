@@ -18,7 +18,6 @@ import json
 import logging
 import math
 import threading
-import traceback
 from typing import Union
 
 import loopchain_pb2
@@ -26,7 +25,7 @@ import loopchain_pb2
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.protos import loopchain_pb2_grpc, message_code
+from loopchain.protos import message_code
 
 
 class PeerListData:
@@ -609,3 +608,9 @@ class PeerManager:
         complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
 
         return quorum, complain_quorum
+
+    def get_reps(self):
+        peer_ids = (self.peer_order_list[peer_order]
+                    for peer_order in sorted(self.peer_order_list.keys()))
+        peers = (self.peer_list[peer_id] for peer_id in peer_ids)
+        return [{"id": peer.peer_id, "target": peer.target} for peer in peers]
