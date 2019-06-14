@@ -195,6 +195,12 @@ class ChannelService:
             logging.info("Cleanup TimerService.")
 
     async def init(self, **kwargs):
+        """Initialize Channel Service
+
+        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type, score_package)
+        within parameters
+        :return: None
+        """
         loggers.get_preset().peer_id = kwargs.get('peer_id')
         loggers.get_preset().update_logger()
 
@@ -645,16 +651,19 @@ class ChannelService:
 
         self.block_manager.set_peer_type(peer_type)
 
+    def _is_genesis_node(self):
+        return ('genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name]
+                and self.is_support_node_function(conf.NodeFunction.Vote))
+
     def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
-
         blockchain.init_blockchain()
-        if blockchain.block_height == -1 \
-                and 'genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name] \
-                and self.is_support_node_function(conf.NodeFunction.Vote):
-            self.generate_genesis_block()
-        elif blockchain.block_height > -1:
+
+        if blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
+        else:
+            if self._is_genesis_node():
+                self.generate_genesis_block()
 
     def show_peers(self):
         utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
