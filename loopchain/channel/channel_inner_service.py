@@ -29,10 +29,11 @@ from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, Broadcas
 from loopchain.baseservice import PeerInfo
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
-from loopchain.blockchain.transactions import Transaction, TransactionSerializer, TransactionVerifier, TransactionVersioner
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
-from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.exception import *
+from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
+                                               TransactionVersioner)
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
@@ -542,6 +543,11 @@ class ChannelInnerTask:
     async def get_citizens(self) -> List[Dict[str, str]]:
         return [{"id": ctz.peer_id, "target": ctz.target, "connected_time": ctz.connected_time}
                 for ctz in self._citizens.values()]
+
+    @message_queue_task
+    async def get_reps(self) -> Dict[str, str]:
+        peer_manager = self._channel_service.peer_manager
+        return peer_manager.get_reps()
 
     @message_queue_task
     def get_peer_list(self):
