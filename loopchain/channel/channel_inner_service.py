@@ -546,7 +546,7 @@ class ChannelInnerTask:
     @message_queue_task
     def get_peer_list(self):
         peer_manager = self._channel_service.peer_manager
-        return str(peer_manager.peer_list[conf.ALL_GROUP_ID]), str(peer_manager.peer_list)
+        return str(peer_manager.peer_list), str(peer_manager.peer_list)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def reset_leader(self, new_leader, block_height=0) -> None:
@@ -584,8 +584,8 @@ class ChannelInnerTask:
         status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
-        status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID])
-        status_data["leader"] = self._channel_service.peer_manager.get_leader_id(conf.ALL_GROUP_ID) or ""
+        status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
+        status_data["leader"] = self._channel_service.peer_manager.get_leader_id() or ""
         status_data["epoch_leader"] = block_manager.epoch.leader_id if block_manager.epoch else ""
 
         return status_data
@@ -781,8 +781,8 @@ class ChannelInnerTask:
             self._channel_service.consensus.set_quorum(quorum=quorum, complain_quorum=complain_quorum)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def delete_peer(self, peer_id, group_id) -> None:
-        self._channel_service.peer_manager.remove_peer(peer_id, group_id)
+    def delete_peer(self, peer_id) -> None:
+        self._channel_service.peer_manager.remove_peer(peer_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:

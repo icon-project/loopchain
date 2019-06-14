@@ -42,11 +42,9 @@ class PeerService:
     channel 관련 instance 는 channel manager 를 통해서 관리한다.
     """
 
-    def __init__(self, group_id=None, radio_station_target=None, node_type=None):
+    def __init__(self, radio_station_target=None, node_type=None):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
-        :param group_id: Peer Group 을 구분하기 위한 ID, None 이면 Single Peer Group 이 된다. (peer_id is group_id)
-        conf.PEER_GROUP_ID 를 사용하면 configure 파일에 저장된 값을 group_id 로 사용하게 된다.
         :param radio_station_ip: RS IP
         :param radio_station_port: RS Port
         :return:
@@ -65,12 +63,7 @@ class PeerService:
         logging.info("Set Radio Station target is " + self.__radio_station_target)
 
         self.__radio_station_stub = None
-
         self.__peer_id = None
-        self.__group_id = group_id
-        if self.__group_id is None and conf.PEER_GROUP_ID != "":
-            self.__group_id = conf.PEER_GROUP_ID
-
         self.p2p_outer_server: grpc.Server = None
         self.__channel_infos = None
 
@@ -148,12 +141,6 @@ class PeerService:
         return self.__peer_id
 
     @property
-    def group_id(self):
-        if self.__group_id is None:
-            self.__group_id = self.__peer_id
-        return self.__group_id
-
-    @property
     def node_keys(self):
         return self.__node_keys
 
@@ -169,7 +156,7 @@ class PeerService:
                     message=loopchain_pb2.GetChannelInfosRequest(
                         peer_id=self.__peer_id,
                         peer_target=self.__peer_target,
-                        group_id=self.group_id),
+                        group_id=self.__peer_id),
                     retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
                     is_stub_reuse=False,
                     timeout=conf.CONNECTION_TIMEOUT_TO_RS

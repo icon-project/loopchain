@@ -19,6 +19,8 @@ import logging
 import signal
 import time
 import traceback
+from functools import reduce
+from operator import add
 
 from earlgrey import MessageQueueService
 
@@ -192,7 +194,8 @@ class ChannelService:
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
 
-    async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id, group_id, node_type, score_package):
+    async def init(self, peer_port, peer_target, rest_target, radio_station_target, peer_id,
+                   group_id_will_removed, node_type, score_package):
         loggers.get_preset().peer_id = peer_id
         loggers.get_preset().update_logger()
 
@@ -201,7 +204,6 @@ class ChannelService:
         ChannelProperty().rest_target = rest_target
         ChannelProperty().radio_station_target = radio_station_target
         ChannelProperty().peer_id = peer_id
-        ChannelProperty().group_id = group_id
         ChannelProperty().node_type = conf.NodeType(node_type)
         ChannelProperty().score_package = score_package
 
@@ -265,9 +267,8 @@ class ChannelService:
         self.__timer_service.clean()
 
         peer_ids = set()
-        for peer_list in self.__peer_manager.peer_list.values():
-            for peer_id in peer_list.keys():
-                peer_ids.add(peer_id)
+        for peer_id in self.__peer_manager.peer_list.keys():
+            peer_ids.add(peer_id)
         for peer_id in peer_ids:
             self.__peer_manager.remove_peer(peer_id)
 
@@ -282,17 +283,18 @@ class ChannelService:
         switch_block_height = self.__get_role_switch_block_height()
         if switch_block_height != -1 and current_height < switch_block_height:
             utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
-                              f"current_height({current_height})")
+                               f"current_height({current_height})")
             return False
 
-        self._load_peers_from_iiss()
         if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
-            utils.logger.debug(f"By iiss list, maintains the current node type({ChannelProperty().node_type})")
+            utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
         return True
 
     async def __select_node_type(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self._is_role_switched():
             new_node_type = self.__get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type}")
@@ -300,6 +302,8 @@ class ChannelService:
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
 
     def switch_role(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -446,29 +450,22 @@ class ChannelService:
 
         utils.logger.spam(f"from icon service channels is {response}")
 
-        peer_ids = ''
-        for preps in response["result"]["preps"]:
-            peer_ids += preps['id']
+        peer_ids = (preps["id"] for preps in response["result"]["preps"])
+        peer_ids_appended = reduce(add, peer_ids, '')
 
-        if self.__peer_manager.get_peer_ids_hash(peer_ids) == self.__peer_manager.peer_ids_hash():
+        if self.__peer_manager.get_peer_ids_hash(peer_ids_appended) == self.__peer_manager.peer_ids_hash():
             utils.logger.debug(f"There is no change in peers.")
             return
 
         utils.logger.debug(f"Peer manager have to update with new list.")
         self.__peer_manager.reset_peers(check_status=False)
 
-        order = 1
-        for rep_info in response["result"]["preps"]:
+        for order, rep_info in enumerate(response["result"]["preps"], 1):
             peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
             self.__peer_manager.add_peer(peer_info)
-            order += 1
         self.show_peers()
 
-        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
-
     async def __load_peers_from_file(self):
-        # self._load_peers_from_iiss()
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)
@@ -485,8 +482,8 @@ class ChannelService:
         return self.__channel_infos
 
     def get_rep_ids(self) -> list:
-        return [ExternalAddress.fromhex_address(peer.get('id'), allow_malformed=True)
-                for peer in self.get_channel_infos()['peers']]
+        return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
+                for peer_id in self.__peer_manager.peer_list]
 
     def generate_genesis_block(self):
         blockchain = self.block_manager.get_blockchain()
@@ -505,7 +502,7 @@ class ChannelService:
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
                 peer_target=ChannelProperty().peer_target,
-                group_id=ChannelProperty().group_id),
+                group_id=ChannelProperty().peer_id),
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)
@@ -542,7 +539,7 @@ class ChannelService:
         peer_request = loopchain_pb2.PeerRequest(
             channel=ChannelProperty().name,
             peer_target=ChannelProperty().peer_target,
-            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().peer_id,
             node_type=ChannelProperty().node_type,
             peer_order=peer_object.order
         )
@@ -565,7 +562,7 @@ class ChannelService:
                 loopchain_pb2.PeerRequest(
                     channel=ChannelProperty().name,
                     peer_target=ChannelProperty().peer_target, peer_type=peer_type,
-                    peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
+                    peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().peer_id,
                     node_type=ChannelProperty().node_type
                 ),
             )
@@ -678,13 +675,13 @@ class ChannelService:
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
         utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
-                         f"complained={complained}")
-        leader_peer = self.peer_manager.get_peer(new_leader_id, None)
+                          f"complained={complained}")
+        leader_peer = self.peer_manager.get_peer(new_leader_id)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
             utils.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
-                                f"last_block.header.height("
-                                f"{self.block_manager.get_blockchain().last_block.header.height})")
+                                 f"last_block.header.height("
+                                 f"{self.block_manager.get_blockchain().last_block.header.height})")
             return
 
         if leader_peer is None:
@@ -694,7 +691,7 @@ class ChannelService:
         utils.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        self.peer_manager.set_leader_peer(leader_peer, None)
+        self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.block_manager.epoch.new_round(leader_peer.peer_id)
         else:
@@ -716,7 +713,7 @@ class ChannelService:
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
 
         # complained_leader = self.peer_manager.get_leader_peer()
-        leader_peer = self.peer_manager.get_peer(new_leader_id, None)
+        leader_peer = self.peer_manager.get_peer(new_leader_id)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
@@ -729,7 +726,7 @@ class ChannelService:
         utils.logger.spam(f"channel_service:set_new_leader::leader_target({leader_peer.target})")
 
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        self.peer_manager.set_leader_peer(leader_peer, None)
+        self.peer_manager.set_leader_peer(leader_peer)
 
         peer_leader = self.peer_manager.get_leader_peer()
 

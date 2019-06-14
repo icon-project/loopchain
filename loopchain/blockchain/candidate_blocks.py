@@ -16,10 +16,10 @@ import logging
 import threading
 import loopchain.utils as util
 
-from typing import Dict
+from typing import Dict, List
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
 from loopchain.blockchain.blocks import Block
 
@@ -36,11 +36,8 @@ class CandidateBlock:
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        if ObjectManager().channel_service:
-            reps = ObjectManager().channel_service.get_rep_ids()
-        else:
-            reps = []
-        self.votes = BlockVotes(reps, conf.VOTING_RATIO, block_height, block_hash)
+        self.votes: BlockVotes = None
+        self.votes_buffer: List[BlockVote] = []
         self.start_time = util.get_time_stamp()  # timestamp
         self.hash = block_hash
         self.height = block_height
@@ -69,6 +66,24 @@ class CandidateBlock:
             logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
+            if ObjectManager().channel_service:
+                reps = ObjectManager().channel_service.get_rep_ids()
+            else:
+                reps = []
+            self.votes = BlockVotes(reps, conf.VOTING_RATIO, self.height, self.hash)
+            for vote in self.votes_buffer:
+                try:
+                    self.votes.add_vote(vote)
+                except:
+                    pass
+            self.votes_buffer.clear()
+
+    def add_vote(self, vote: BlockVote):
+        if self.votes:
+            self.votes.add_vote(vote)
+        else:
+            self.votes_buffer.append(vote)
+
 
 class CandidateBlocks:
     def __init__(self):
@@ -82,11 +97,11 @@ class CandidateBlocks:
                 self.blocks[vote.block_hash] = CandidateBlock.from_hash(vote.block_hash, vote.block_height)
 
         if vote.block_hash != Hash32.empty():
-            self.blocks[vote.block_hash].votes.add_vote(vote)
+            self.blocks[vote.block_hash].add_vote(vote)
         else:
             for block in self.blocks.values():
                 if block.height == vote.block_height:
-                    block.votes.add_vote(vote)
+                    block.add_vote(vote)
 
     def get_votes(self, block_hash):
         return self.blocks[block_hash].votes

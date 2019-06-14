@@ -215,7 +215,7 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        # logging.debug(f"BroadcastThread received unsubscribe command peer_target({unsubscribe_peer_target})")
+        logging.debug(f"BroadcastThread received unsubscribe command peer_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:

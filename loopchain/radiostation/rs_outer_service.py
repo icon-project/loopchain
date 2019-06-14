@@ -53,7 +53,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
         leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
-            channel_name).get_leader_peer(group_id=request.message, is_peer=False)
+            channel_name).get_leader_peer(is_peer=False)
         if leader_peer is not None:
             logging.debug(f"leader_peer ({leader_peer.peer_id})")
             peer_dumped = leader_peer.dump()
@@ -78,7 +78,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
 
         logging.debug("in complain leader (radiostation)")
         leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
-            conf.LOOPCHAIN_DEFAULT_CHANNEL).complain_leader(group_id=request.message)
+            conf.LOOPCHAIN_DEFAULT_CHANNEL).complain_leader()
         if leader_peer is not None:
             logging.warning(f"leader_peer after complain({leader_peer.peer_id})")
             peer_dumped = leader_peer.dump()
@@ -322,7 +322,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         new_leader_peer = ObjectManager().rs_service.channel_manager.get_peer_manager(
-            channel_name).get_peer(request.new_leader_id, None)
+            channel_name).get_peer(request.new_leader_id)
 
         if new_leader_peer is None:
             logging.warning(f"RadioStation Has No live Peer Connection(candidate reason is RS's restart)")
@@ -337,7 +337,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                           f"target({new_leader_peer.target}): " + request.message)
 
             ObjectManager().rs_service.channel_manager.get_peer_manager(
-                channel_name).set_leader_peer(peer=new_leader_peer, group_id=None)
+                channel_name).set_leader_peer(peer=new_leader_peer)
 
             return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 

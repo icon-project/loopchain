@@ -73,7 +73,7 @@ class Epoch:
         self.new_votes()
 
     def new_votes(self):
-        audience = ObjectManager().channel_service.peer_manager.peer_list[conf.ALL_GROUP_ID]
+        audience = ObjectManager().channel_service.peer_manager.peer_list
         rep_info = sorted(audience.values(), key=lambda peer: peer.order)
         reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
         leader_votes = LeaderVotes(reps,
@@ -123,7 +123,7 @@ class Epoch:
         # I want to pop candidate leader with this method but this method can't pop, just get but will be pop
         # self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
 
-        peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list[conf.ALL_GROUP_ID]
+        peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list
         peer_order_len = len(peer_order_list)
         start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
 

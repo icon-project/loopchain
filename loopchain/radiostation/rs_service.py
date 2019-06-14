@@ -81,9 +81,6 @@ class RadioStationService:
         self.__outer_service = OuterService()
         self.__admin_service = AdminService(self.__admin_manager)
 
-        # {group_id:[ {peer_id:IP} ] }로 구성된 dictionary
-        self.peer_groups = {conf.ALL_GROUP_ID: []}
-
         # Peer의 보안을 담당
         self.auth = {}
 

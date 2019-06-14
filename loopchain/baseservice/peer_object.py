@@ -105,7 +105,6 @@ class PeerInfo:
     @staticmethod
     def deserialize(peer_info_serialized: dict) -> 'PeerInfo':
         peer_info = PeerInfo(peer_id=peer_info_serialized['peer_id'],
-                             group_id=peer_info_serialized['group_id'],
                              target=peer_info_serialized['target'],
                              status=peer_info_serialized['status'],
                              order=peer_info_serialized['order'])
