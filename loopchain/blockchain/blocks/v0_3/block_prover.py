@@ -66,6 +66,7 @@ class BlockProver(BaseBlockProver):
             if self.type == BlockProverType.Receipt:
                 value = dict(value)
                 value.pop("failure", None)
+                value.pop("blockHash", None)
 
             hash_generator = self.get_hash_generator()
             value = hash_generator.generate_salted_origin(value)

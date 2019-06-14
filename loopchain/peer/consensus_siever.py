@@ -23,7 +23,7 @@ from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.exception import NotEnoughVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
@@ -143,13 +143,9 @@ class ConsensusSiever(ConsensusBase):
                 complain_votes = None
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-            prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(last_block.header.hash)
-            if prev_votes_dumped:
-                prev_votes_serialized = json.loads(prev_votes_dumped)
-                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
-            else:
-                prev_votes_list = []
-            block_builder = self._block_manager.epoch.makeup_block(complain_votes, prev_votes_list)
+            last_block_votes = self.get_votes(last_block.header.hash)
+
+            block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
@@ -254,6 +250,19 @@ class ConsensusSiever(ConsensusBase):
                                     str(util.diff_in_seconds(candidate_block.header.timestamp)))
                 return None
 
+    def get_votes(self, block_hash: Hash32):
+        try:
+            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
+            prev_votes_list = prev_votes.votes
+        except KeyError:
+            prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
+            if prev_votes_dumped:
+                prev_votes_serialized = json.loads(prev_votes_dumped)
+                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
+            else:
+                prev_votes_list = []
+        return prev_votes_list
+
     @staticmethod
     def __start_broadcast_send_unconfirmed_block_timer(broadcast_func):
         timer_key = TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK
@@ -275,3 +284,4 @@ class ConsensusSiever(ConsensusBase):
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
+
