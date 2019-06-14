@@ -228,12 +228,9 @@ class ChannelService:
             self.__init_node_subscriber()
 
     async def evaluate_network(self):
-        self.__ready_to_height_sync()
-
-        # Do not consider to change peer list by IISS this time.
         await self.__select_node_type()
         await self.__init_network()
-
+        self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -652,7 +649,9 @@ class ChannelService:
         blockchain = self.block_manager.get_blockchain()
 
         blockchain.init_blockchain()
-        if blockchain.block_height == -1 and 'genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name]:
+        if blockchain.block_height == -1 \
+                and 'genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name] \
+                and self.is_support_node_function(conf.NodeFunction.Vote):
             self.generate_genesis_block()
         elif blockchain.block_height > -1:
             self.block_manager.rebuild_block()
