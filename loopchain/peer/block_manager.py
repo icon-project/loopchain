@@ -292,13 +292,7 @@ class BlockManager:
             util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
             return
 
-        my_height = self.__blockchain.last_block.header.height
-        if confirmed_block.header.height == my_height + 1:
-            result = self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
-            if result:
-                return
-
-        self.block_height_sync()
+        self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
@@ -370,19 +364,16 @@ class BlockManager:
                 'height': str(block_height)
             }
         )
-        max_height_result = rs_rest_stub.call("Status")
-
-        if max_height_result.status_code != 200:
-            raise ConnectionError
-
-        block_version = self.get_blockchain().block_versioner.get_version(block_height)
+        last_block = rs_rest_stub.call("GetLastBlock")
+        max_height = self.__blockchain.block_versioner.get_height(last_block)
+        block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
         confirm_info = get_block_result.get('confirm_info', '')
         if isinstance(confirm_info, str):
             confirm_info = confirm_info.encode('utf-8')
 
-        return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
+        return block, max_height, -1, confirm_info, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
@@ -662,14 +653,9 @@ class BlockManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rest_stub = ObjectManager().channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
-            response = rest_stub.call("Status")
-            height_from_status = int(json.loads(response.text)["block_height"])
-            last_height = rest_stub.call("GetLastBlock").get('height')
-            logging.debug(f"last_height: {last_height}, height_from_status: {height_from_status}")
-            max_height = max(height_from_status, last_height)
-            unconfirmed_block_height = int(
-                json.loads(response.text).get("unconfirmed_block_height", -1)
-            )
+            last_block = rest_stub.call("GetLastBlock")
+            max_height = self.__blockchain.block_versioner.get_height(last_block)
+
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
