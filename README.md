@@ -1,47 +1,76 @@
 # Loopchain
 
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
+ 
+ In order to run a loopchain node, you need to install [ICON Service] 
+that runs a smart contract and interacts with loopchain engine, 
+and [ICON RPC Server] that processes HTTP requests from clients. 
+ 
+ For details, refer to the guide below.
 
- In order to run a loopchain node, you need to install [ICON Service](https://github.com/icon-project/icon-service) that runs a smart contract and interacts with loopchain engine, and [ICON RPC Server](https://github.com/icon-project/icon-rpc-server) that processes HTTP requests from clients. For details, refer to the guide below.
+## Table of Contents
 
-## Installation
+* [Getting Started](#getting-started)
+    + [Requirements](#requirements)
+    + [Installation](#installation)
+    + [TearDown](#teardown)
+* [See Also...](#see-also)
+    + [Documentation](#documentation)
+    + [License](#license)
+    
+## Getting Started
 
 ### Requirements
 
-Loopchain development and execution requires following environments.
+ Loopchain development and execution requires following environments.
 
-* OS: MacOS, Linux
-  * Windows are not supported yet.
+1. Python 3.6.5+ **(recommended 3.7.x)**
 
-* Python
-
-  * Python 3.6.5+ or 3.7.x (recommended version)
-
-    **We will support 3.7.x only in future. Please upgrade python version to 3.7.x.**
-
-    Optional) We recommend to create an isolated Python 3 virtual environment with [virtualenv](https://virtualenv.pypa.io/en/stable/).
+    We recommend to create an isolated Python 3 virtual environment with [virtualenv].
 
     ```bash
     $ virtualenv -p python3 venv
     $ source venv/bin/activate
     ```
 
-* Third party tools
-
-    ```
-    automake pkg-config libtool leveldb rabbitmq openssl
-    ```
-
-    If you're using package manager, you can install all of them through your package manager.
-
-    MacOS, for example)
+    > **_NOTE:_** We will support 3.7.x only in the future. Please upgrade python version to 3.7.x
     
-    ```bash
-    $ brew install automake pkg-config libtool leveldb rabbitmq openssl
-    $ brew services start rabbitmq
-    ```
+2. **RabbitMQ 3.7+**
 
-* Check all requirements are installed and started properly
+    Loopchain requires RabbitMQ.
+
+    For the reliable installation, please visit: [Downloading and Installing RabbitMQ]
+
+3. Other Dependencies
+
+    - **MacOS**
+    
+        ```bash
+        $ brew install automake pkg-config libtool leveldb openssl
+        ```
+
+    - **Ubuntu**
+
+        ```bash
+        $ sudo apt update
+        $ sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev \
+          libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev \
+          xz-utils tk-dev libffi-dev liblzma-dev automake libtool lsof
+        ```
+
+        **_NOTE_**: If you are using ubuntu 18.04, you need to install additional library `libsecp256k1-dev`
+
+    - **CentOS**
+
+        ```bash
+        $ sudo yum update
+        $ sudo yum install -y git zlib-devel bzip2 bzip2-devel readline-devel sqlite sqlite-devel openssl-devel \
+          xz xz-devel libffi-devel gcc gcc-c++ automake libtool lsof
+        ```
+
+### Installation
+
+1. Check all requirements properly installed
 
     ```bash
     $ make requirements
@@ -49,48 +78,63 @@ Loopchain development and execution requires following environments.
 
     If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
-### Install necessary packages & Setup
+2. Proceed installation
 
-This command is for setting up:
-* pip install all necessary packages.
-* generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
-* generates a keystore file. **Please be careful not to forget the password since you will need it to run Citizen Node later.**
+    ```bash
+    $ make all
+    ```
 
-```bash
-$ make all
+    This command is for setting up:
 
-...
-Generating python grpc code from proto into >  /Users/jiyun/Desktop/happycoding/workspace/theloop/LoopChain
-python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
-Input your keystore password:  # Password must be at least 8 characters long including alphabet, number, and special character.
-```
+    * packages: installs all necessary python packages.
+    * gRPC proto: generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
+    * keystore: generates a keystore file.
+    
+    > **_NOTE_**: Password must be at least 8 characters long including alphabet, number, and special character.  
+    > Please be careful not to forget the password since you will need it to run the Citizen Node.
 
-> For more command options, you can check here:
+3. Run Citizen
 
-```bash
-$ make help
-```
+    * [Run Citizen Node on ICON Testnet network]
+    * [Run Citizen Node on ICON Mainnet network]
 
-## Run Citizen Node on ICON network
+### TearDown
 
-* [Run Citizen Node on ICON Testnet network](docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network)
-* [Run Citizen Node on ICON Mainnet network](docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-mainnet-network)
+* Clear RabbitMQ processes & pycache & build
+
+    ```bash
+    $ make clean
+    ```
+
+* Delete log / delete DB
+
+    ```bash
+    $ make clean-log clean-db
+    ```
+
+> **_NOTE_**: For more command options, `$ make help`
 
 
-#### Clean Up
+## See Also...
 
-* clear rabbitMQ processes & pycache & build
+### Documentation
 
-```bash
-$ make clean
-```
+* Please visit [ICON Developers Portal]
 
-* delete log / delete DB
+### License
 
-```bash
-$ make clean-db
-```
+* This project follows the [Apache 2.0 License].
 
-## License
+<!--Dependencies-->
+[ICON Service]: https://github.com/icon-project/icon-service
+[ICON RPC Server]: https://github.com/icon-project/icon-rpc-server
+[virtualenv]: https://virtualenv.pypa.io/en/stable/
+[Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
 
-This project follows the Apache 2.0 License. Please refer to [LICENSE](https://www.apache.org/licenses/LICENSE-2.0) for details.
+<!--Relative links-->
+[Run Citizen Node on ICON Testnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network
+[Run Citizen Node on ICON Mainnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-mainnet-network
+
+<!--Web pages-->
+[ICON Developers Portal]: https://www.icondev.io/
+[Apache 2.0 License]: https://www.apache.org/licenses/LICENSE-2.0
