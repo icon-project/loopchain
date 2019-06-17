@@ -40,7 +40,7 @@ class ChannelStateMachine(object):
                     on_enter='_blocksync_on_enter', on_exit='_blocksync_on_exit'),
               State(name='SubscribeNetwork', ignore_invalid_triggers=True,
                     on_enter='_subscribe_network_on_enter', on_exit='_subscribe_network_on_exit'),
-              'Watch',
+              State(name='Watch', ignore_invalid_triggers=True),
               State(name='Vote', ignore_invalid_triggers=True,
                     on_enter='_vote_on_enter', on_exit='_vote_on_exit'),
               State(name='BlockGenerate', ignore_invalid_triggers=True,
@@ -75,7 +75,7 @@ class ChannelStateMachine(object):
     def evaluate_network(self):
         pass
 
-    @statemachine.transition(source=('EvaluateNetwork', 'Vote', 'BlockSync', 'BlockGenerate'),
+    @statemachine.transition(source=('EvaluateNetwork', 'Watch', 'Vote', 'BlockSync', 'BlockGenerate'),
                              dest='BlockSync',
                              after='_do_block_sync')
     def block_sync(self):

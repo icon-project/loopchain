@@ -516,6 +516,9 @@ class ChannelInnerTask:
     async def register_citizen(self, peer_id, target, connected_time):
         if len(self._citizens) >= conf.SUBSCRIBE_LIMIT:
             return False
+        elif peer_id in self._citizens:
+            logging.warning(f"Already registered citizen({peer_id})")
+            return False
         else:
             new_citizen = self._CitizenInfo(peer_id, target, connected_time)
             self._citizens[peer_id] = new_citizen
@@ -569,7 +572,8 @@ class ChannelInnerTask:
 
         status_data["status"] = block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
-        status_data["service_available"]: bool = status_data["state"] in self._channel_service.state_machine.service_available_states
+        status_data["service_available"]: bool = (status_data["state"] in
+                                                  self._channel_service.state_machine.service_available_states)
         status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)

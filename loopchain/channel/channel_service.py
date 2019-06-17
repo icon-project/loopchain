@@ -28,7 +28,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, PeerListData, PeerStatus, TimerService
-from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch
+from loopchain.blockchain import Block, BlockBuilder, TransactionSerializer, Hash32, Epoch, AnnounceNewBlockError
 from loopchain.blockchain import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -221,8 +221,6 @@ class ChannelService:
                 self.connect_to_radio_station()
             else:
                 await self.__load_peers_from_file()
-        else:
-            self.__init_node_subscriber()
 
     async def evaluate_network(self):
         self.__ready_to_height_sync()
@@ -237,7 +235,8 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await self.set_peer_type_in_channel()
         else:
-            await self.subscribe_to_radio_station()
+            self.__init_node_subscriber()
+            await self.subscribe_to_parent()
 
         self.__state_machine.complete_subscribe()
 
@@ -503,47 +502,16 @@ class ChannelService:
                 if each_peer.status == PeerStatus.connected:
                     self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
 
-    def __subscribe_to_peer_list(self):
-        peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        peer_request = loopchain_pb2.PeerRequest(
-            channel=ChannelProperty().name,
-            peer_target=ChannelProperty().peer_target,
-            peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
-            node_type=ChannelProperty().node_type,
-            peer_order=peer_object.order
-        )
-        self.__broadcast_scheduler.schedule_broadcast("Subscribe", peer_request)
-
-    async def subscribe_to_radio_station(self):
-        await self.__subscribe_call_to_stub(self.__radio_station_stub, loopchain_pb2.PEER)
-
-    async def subscribe_to_peer(self, peer_id, peer_type):
-        peer = self.peer_manager.get_peer(peer_id)
-        peer_stub = self.peer_manager.get_peer_stub_manager(peer)
-
-        await self.__subscribe_call_to_stub(peer_stub, peer_type)
-        self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_stub.target)
-
-    async def __subscribe_call_to_stub(self, peer_stub, peer_type):
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            await peer_stub.call_async(
-                "Subscribe",
-                loopchain_pb2.PeerRequest(
-                    channel=ChannelProperty().name,
-                    peer_target=ChannelProperty().peer_target, peer_type=peer_type,
-                    peer_id=ChannelProperty().peer_id, group_id=ChannelProperty().group_id,
-                    node_type=ChannelProperty().node_type
-                ),
-            )
-        else:
-            await self.__subscribe_call_from_citizen()
-
-    async def __subscribe_call_from_citizen(self):
+    async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
             logging.debug(f"error: {type(future.exception())}, {str(future.exception())}")
 
             if ChannelProperty().node_type != conf.NodeType.CitizenNode:
                 logging.debug(f"This node is not Citizen anymore.")
+                return
+
+            if isinstance(future.exception(), AnnounceNewBlockError):
+                self.__state_machine.block_sync()
                 return
 
             if future.exception():
