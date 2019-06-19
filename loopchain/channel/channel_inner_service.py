@@ -489,7 +489,7 @@ class ChannelInnerTask:
         return 'channel_hello'
 
     @message_queue_task
-    async def announce_new_block(self, subscriber_block_height: int):
+    async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):
         blockchain = self._channel_service.block_manager.get_blockchain()
 
         while True:
@@ -507,8 +507,7 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
-            logging.debug(f"announce_new_block: height({new_block.header.height}), hash({new_block.header.hash}), "
-                          f"target: {self._citizens}")
+            logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
             bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
