@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from jsonrpcclient import HTTPClient, Request
+from jsonrpcclient.exceptions import ParseResponseError
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -77,12 +78,18 @@ class RestStubManager:
                     request = Request(method_name, message)
                 else:
                     request = Request(method_name)
-                response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
+
+                try:
+                    response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                except ParseResponseError as e:
+                    raise ConnectionError(str(e))
+                except Exception:
+                    raise
             util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
             return response
 
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method_name}), caused by : {e}")
+            logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
             raise e
 
     def call_async(self, method_name, message=None, call_back=None, timeout=None, is_stub_reuse=True):

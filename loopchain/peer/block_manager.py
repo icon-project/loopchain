@@ -411,7 +411,6 @@ class BlockManager:
                 Timer(
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
-                    is_repeat=True,
                     callback=self.block_height_sync
                 )
             )
@@ -591,19 +590,19 @@ class BlockManager:
 
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
-
-        if self.__blockchain.last_unconfirmed_block is not None:
-            self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
-        self.__blockchain.last_unconfirmed_block = None
-
-        my_height = self.__current_block_height()
-        logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
-
-        # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
-
         try:
+            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+
+            if self.__blockchain.last_unconfirmed_block is not None:
+                self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
+            self.__blockchain.last_unconfirmed_block = None
+
+            my_height = self.__current_block_height()
+            logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
+
+            # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
+            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
+
             if peer_stubs:
                 my_height, max_height = self.__block_request_to_peers_in_sync(peer_stubs,
                                                                               my_height,
