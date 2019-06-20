@@ -852,4 +852,4 @@ class BlockManager:
         else:
             await self._vote(unconfirmed_block)
 
-        self.__channel_service.start_leader_complain_timer_if_tx_exists()
+        self.__channel_service.turn_on_leader_complain_timer()

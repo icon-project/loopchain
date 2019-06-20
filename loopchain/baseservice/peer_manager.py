@@ -25,7 +25,6 @@ import loopchain_pb2
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 

@@ -209,7 +209,7 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-        self.block_manager.init_epoch()
+        self.__block_manager.init_epoch()
 
     async def __init_network(self):
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
@@ -240,11 +240,10 @@ class ChannelService:
             await self.subscribe_to_radio_station()
 
         self.__state_machine.complete_subscribe()
-
-        self.start_leader_complain_timer_if_tx_exists()
+        self.turn_on_leader_complain_timer()
 
     def update_sub_services_properties(self):
-        nid = self.block_manager.get_blockchain().find_nid()
+        nid = self.__block_manager.get_blockchain().find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
     def __get_role_switch_block_height(self):
@@ -292,7 +291,7 @@ class ChannelService:
 
         node_type: conf.NodeType = self.__get_node_type_by_peer_list()
         if node_type == ChannelProperty().node_type:
-            util.logger.info(f"Node type equals previous note type ({node_type}). force={force}")
+            util.logger.info(f"Node type equals previous note type ({node_type}). force={None}")
             return
 
         util.logger.info(f"Selected node type {node_type}")
@@ -455,7 +454,7 @@ class ChannelService:
                 for peer in self.get_channel_infos()['peers']]
 
     def generate_genesis_block(self):
-        blockchain = self.block_manager.get_blockchain()
+        blockchain = self.__block_manager.get_blockchain()
         if blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
@@ -556,7 +555,7 @@ class ChannelService:
 
         # try websocket connection, and handle exception in callback
         asyncio.ensure_future(self.__node_subscriber.subscribe(
-            block_height=self.block_manager.get_blockchain().block_height,
+            block_height=self.__block_manager.get_blockchain().block_height,
             event=subscribe_event
         )).add_done_callback(_handle_exception)
         await subscribe_event.wait()
@@ -589,7 +588,7 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        blockchain = self.block_manager.get_blockchain()
+        blockchain = self.__block_manager.get_blockchain()
         last_block = blockchain.last_unconfirmed_block or blockchain.last_block
 
         leader_id = None
@@ -616,16 +615,16 @@ class ChannelService:
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
             self.consensus.leader_id = leader_id
 
-        self.block_manager.set_peer_type(peer_type)
+        self.__block_manager.set_peer_type(peer_type)
 
     def __ready_to_height_sync(self):
-        blockchain = self.block_manager.get_blockchain()
+        blockchain = self.__block_manager.get_blockchain()
 
         blockchain.init_blockchain()
         if blockchain.block_height == -1 and 'genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name]:
             self.generate_genesis_block()
         elif blockchain.block_height > -1:
-            self.block_manager.rebuild_block()
+            self.__block_manager.rebuild_block()
 
     def show_peers(self):
         logging.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
@@ -647,10 +646,10 @@ class ChannelService:
                           f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 
-        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
+        if block_height > 0 and block_height != self.__block_manager.get_blockchain().last_block.header.height + 1:
             util.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
                                 f"last_block.header.height("
-                                f"{self.block_manager.get_blockchain().last_block.header.height})")
+                                f"{self.__block_manager.get_blockchain().last_block.header.height})")
             return
 
         if leader_peer is None:
@@ -662,10 +661,10 @@ class ChannelService:
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer, None)
         if complained:
-            self.block_manager.epoch.new_round(leader_peer.peer_id)
+            self.__block_manager.epoch.new_round(leader_peer.peer_id)
         else:
-            self.block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
-        logging.info(f"Epoch height({self.block_manager.epoch.height}), leader ({self.block_manager.epoch.leader_id})")
+            self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        logging.info(f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             logging.debug("Set Peer Type Leader!")
@@ -676,7 +675,7 @@ class ChannelService:
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
 
-        self.block_manager.set_peer_type(peer_type)
+        self.__block_manager.set_peer_type(peer_type)
 
     def set_new_leader(self, new_leader_id, block_height=0):
         logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
@@ -684,7 +683,7 @@ class ChannelService:
         # complained_leader = self.peer_manager.get_leader_peer()
         leader_peer = self.peer_manager.get_peer(new_leader_id, None)
 
-        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.height + 1:
+        if block_height > 0 and block_height != self.__block_manager.get_blockchain().last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
             return
 
@@ -717,7 +716,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, self.__block_manager.get_blockchain().tx_versioner)
             transaction = {
                 "method": method,
                 "params": {
@@ -741,7 +740,7 @@ class ChannelService:
         response_to_json_query(response)
 
         tx_receipts = response["txResults"]
-        block_builder = BlockBuilder.from_new(block, self.block_manager.get_blockchain().tx_versioner)
+        block_builder = BlockBuilder.from_new(block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
         block_builder.signature = block.header.signature
@@ -759,7 +758,7 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in _block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, self.block_manager.get_blockchain().tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, self.__block_manager.get_blockchain().tx_versioner)
 
             transaction = {
                 "method": method,
@@ -822,23 +821,36 @@ class ChannelService:
         stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 
+    def turn_on_leader_complain_timer(self):
+        """Turn on a leader complaint timer by the configuration name of `ALLOW_MAKE_EMPTY_BLOCK`.
+        """
+        if conf.ALLOW_MAKE_EMPTY_BLOCK:
+            self.reset_leader_complain_timer()
+        else:
+            self.start_leader_complain_timer_if_tx_exists()
+
     def reset_leader_complain_timer(self):
+        utils.logger.spam(f"reset_leader_complain_timer in channel service. ("
+                          f"{self.__block_manager.epoch.round}/{self.__block_manager.epoch.complain_duration})")
+
         if self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN):
+            utils.logger.spam(f"Try to stop leader complaint timer for reset.")
             self.stop_leader_complain_timer()
 
         self.start_leader_complain_timer()
 
     def start_leader_complain_timer_if_tx_exists(self):
-        if not self.block_manager.get_tx_queue().is_empty_in_status(TransactionStatusInQueue.normal):
+        if not self.__block_manager.get_tx_queue().is_empty_in_status(TransactionStatusInQueue.normal):
             util.logger.debug("Start leader complain timer because unconfirmed tx exists.")
             self.start_leader_complain_timer()
 
     def start_leader_complain_timer(self, duration=None):
         if not duration:
-            duration = self.block_manager.epoch.complain_duration
+            duration = self.__block_manager.epoch.complain_duration
 
         # util.logger.spam(
-        #     f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
+        #     f"start_leader_complain_timer in channel service. ({self.__block_manager.epoch.round}/{duration})")
+
         if self.state_machine.state not in ("BlockGenerate", "BlockSync", "Watch"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
