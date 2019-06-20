@@ -727,6 +727,11 @@ class BlockManager:
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
                 self.__channel_service.reset_leader_complain_timer()
+            elif elected_leader is False:
+                util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
+                # In this case, a new leader can't be elected by the consensus of leader complaint.
+                # That's why the leader of current `round` is set to the next `round` again.
+                self.epoch.new_round(self.epoch.leader_id)
         elif self.epoch.height < block_height:
             self.__channel_service.state_machine.block_sync()
 
