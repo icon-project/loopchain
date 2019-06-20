@@ -589,29 +589,36 @@ class BlockManager:
         return my_height, max_height
 
     def __block_height_sync(self):
+        def _handle_exception(e):
+            logging.warning(f"exception during block_height_sync :: {type(e)}, {e}")
+            traceback.print_exc()
+            self.__start_block_height_sync_timer()
+
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+        except ConnectionError as exc:
+            _handle_exception(exc)
+            return False
 
-            if self.__blockchain.last_unconfirmed_block is not None:
-                self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
-            self.__blockchain.last_unconfirmed_block = None
+        if self.__blockchain.last_unconfirmed_block is not None:
+            self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
+        self.__blockchain.last_unconfirmed_block = None
 
-            my_height = self.__current_block_height()
-            logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
+        my_height = self.__current_block_height()
+        logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
-            # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
+        # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
+        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
 
+        try:
             if peer_stubs:
                 my_height, max_height = self.__block_request_to_peers_in_sync(peer_stubs,
                                                                               my_height,
                                                                               unconfirmed_block_height,
                                                                               max_height)
-        except Exception as e:
-            logging.warning(f"block_manager.py >>> block_height_sync :: {e}")
-            traceback.print_exc()
-            self.__start_block_height_sync_timer()
+        except Exception as exc:
+            _handle_exception(exc)
             return False
 
         curr_state = self.__channel_service.state_machine.state
