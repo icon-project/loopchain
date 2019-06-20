@@ -13,13 +13,11 @@
 # limitations under the License.
 """A stub wrapper for REST call.
 This object has same interface with gRPC stub manager"""
-
 import logging
-import requests
-
 from concurrent.futures import ThreadPoolExecutor
-from jsonrpcclient.exceptions import ReceivedErrorResponse
-from jsonrpcclient.http_client import HTTPClient
+
+import requests
+from jsonrpcclient import HTTPClient, Request
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -28,62 +26,71 @@ from loopchain import configure as conf
 class RestStubManager:
     def __init__(self, target, channel=None, for_rs_target=True):
         util.logger.spam(f"RestStubManager:init target({target})")
-        if channel is None:
-            channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
-
-        self.__channel_name = channel
-        self.target = target
-
-        self.__version_urls = {}
+        self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
+        self._version_urls = {}
+        self._http_clients = {}
         for version in conf.ApiVersion:
             if 'https://' in target:
-                url = util.normalize_request_url(target, version, channel)
+                url = util.normalize_request_url(target, version, self._channel_name)
             elif for_rs_target:
                 url = util.normalize_request_url(
-                    f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version, channel)
+                    f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version, self._channel_name)
             else:
-                url = util.normalize_request_url(f"http://{target}", version, channel)
-            self.__version_urls[version] = url
+                url = util.normalize_request_url(f"http://{target}", version, self._channel_name)
+            self._version_urls[version] = url
+            if version != conf.ApiVersion.v1:
+                self._http_clients[url] = HTTPClient(url)
 
-        self.__method_versions = {
+        self._method_versions = {
             "GetChannelInfos": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
             "GetLastBlock": conf.ApiVersion.v3
         }
 
-        self.__method_names = {
+        self._method_names = {
             "GetChannelInfos": "node_getChannelInfos",
             "GetBlockByHeight": "node_getBlockByHeight",
             "Status": "/status/peer/",
             "GetLastBlock": "icx_getLastBlock"
         }
 
-        self.__executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
 
-    def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False):
+    def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False) -> dict:
         try:
-            version = self.__method_versions[method_name]
-            url = self.__version_urls[version]
-            method_name = self.__method_names[method_name]
+            version = self._method_versions[method_name]
+            url = self._version_urls[version]
+            method_name = self._method_names[method_name]
 
             if version == conf.ApiVersion.v1:
                 url += method_name
-                response = requests.get(url, params={'channel': self.__channel_name})
+                response = requests.get(url=url,
+                                        params={'channel': self._channel_name},
+                                        timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                if response.status_code != 200:
+                    raise ConnectionError
+                response = response.json()
             else:
-                client = HTTPClient(url)
-                client.session.verify = conf.REST_SSL_VERIFY
-                response = client.request(method_name, message) if message else client.request(method_name)
-            util.logger.spam(f"RestStubManager:call complete request_url({url}), "
-                             f"method_name({method_name})")
+                # using jsonRPC client request.
+                if message:
+                    request = Request(method_name, message)
+                else:
+                    request = Request(method_name)
+
+                try:
+                    response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                except Exception as e:
+                    raise ConnectionError(e)
+            util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
             return response
 
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method_name}), caused by : {e}")
+            logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
             raise e
 
     def call_async(self, method_name, message=None, call_back=None, timeout=None, is_stub_reuse=True):
-        future = self.__executor.submit(self.call, method_name, message, timeout, is_stub_reuse)
+        future = self._executor.submit(self.call, method_name, message, timeout, is_stub_reuse)
         if call_back:
             future.add_done_callback(call_back)
         return future
@@ -99,4 +106,3 @@ class RestStubManager:
                 exception = e
 
         raise exception
-
