@@ -40,12 +40,6 @@ class Request:
 
 
 class MetaParams:
-    class ScoreLoad:
-        repository_path = "repository_path"
-        score_package = "score_package"
-        base = "base"
-        peer_id = "peer_id"
-
     class ScoreInfo:
         score_id = "score_id"
         score_version = "score_version"

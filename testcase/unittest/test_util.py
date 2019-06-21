@@ -29,39 +29,19 @@ from sys import platform
 import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, StubManager, CommonSubprocess
-from loopchain.blockchain.types import Address
+from loopchain.baseservice import StubManager, CommonSubprocess
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVersioner
+from loopchain.blockchain.types import Address
 from loopchain.components import SingletonMetaClass
-from loopchain.peer import PeerService, Signer
+from loopchain.peer import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
-
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
-
-
-def run_peer_server(port, rs_port=None, group_id=None, score=None, event_for_init=None):
-    if rs_port is None:
-        rs_port = conf.PORT_RADIOSTATION
-    radio_station_target = f"{conf.IP_RADIOSTATION}:{rs_port}"
-    ObjectManager().peer_service = PeerService(group_id, radio_station_target)
-
-    if score is not None:
-        ObjectManager().peer_service.set_chain_code(score)
-
-    conf.DEFAULT_SCORE_REPOSITORY_PATH = \
-        os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'test_score_repository')
-    try:
-        ObjectManager().peer_service.serve(port, conf.DEFAULT_SCORE_PACKAGE, event_for_init=event_for_init)
-    except FileNotFoundError:
-        logging.debug("Score Load Fail")
-    except TimeoutError as e:
-        logging.exception(e)
 
 
 def run_radio_station(port, event_for_init: multiprocessing.Event=None):
