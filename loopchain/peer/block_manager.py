@@ -485,20 +485,23 @@ class BlockManager:
                                       self.blockchain.last_block,
                                       self.blockchain,
                                       reps_getter=reps_getter)
-        need_to_write_tx_info, need_to_score_invoke = True, True
+
+        tx_duplicated_exceptions = []
+        score_invoke_exceptions = []
+        other_exceptions = []
+
         for exc in block_verifier.exceptions:
             if isinstance(exc, TransactionDuplicatedHashError):
-                need_to_write_tx_info = False
-            if isinstance(exc, ScoreInvokeError) and not need_to_write_tx_info:
-                need_to_score_invoke = False
-
-        exc = next((exc for exc in block_verifier.exceptions
-                    if not isinstance(exc, TransactionDuplicatedHashError)), None)
-        if exc:
-            if isinstance(exc, ScoreInvokeError) and not need_to_score_invoke:
-                pass
+                tx_duplicated_exceptions.append(exc)
+            elif isinstance(exc, ScoreInvokeError):
+                score_invoke_exceptions.append(exc)
             else:
-                raise exc
+                other_exceptions.append(exc)
+
+        if other_exceptions:
+            raise other_exceptions[0]
+        if score_invoke_exceptions and not tx_duplicated_exceptions:
+            raise score_invoke_exceptions[0]
 
         if parse_version(block_.header.version) >= parse_version("0.3"):
             reps = reps_getter(block_.header.reps_hash)
@@ -512,6 +515,9 @@ class BlockManager:
                 confirm_info
             )
             votes.verify()
+
+        need_to_write_tx_info = not tx_duplicated_exceptions
+        need_to_score_invoke = not score_invoke_exceptions
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
