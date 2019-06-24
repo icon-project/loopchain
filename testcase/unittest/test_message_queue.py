@@ -114,7 +114,7 @@ class TestMessageQueue(unittest.TestCase):
     def test_peer_task(self):
         route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
 
-        service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+        service = PeerInnerService(conf.AMQP_TARGET, route_key)
         service._callback_connection_lost_callback = lambda conn: None
 
         stub = PeerInnerStub(conf.AMQP_TARGET, route_key)
@@ -128,7 +128,7 @@ class TestMessageQueue(unittest.TestCase):
                 result = await stub.async_task().hello()
                 self.assertEqual(result, 'peer_hello')
 
-                bad_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+                bad_service = PeerInnerService(conf.AMQP_TARGET, route_key)
                 with self.assertRaises(ChannelClosed):
                     await bad_service.connect()
 
@@ -175,7 +175,7 @@ class TestMessageQueue(unittest.TestCase):
     def test_stub_collection(self):
         async def _run():
             route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
-            peer_inner_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
+            peer_inner_service = PeerInnerService(conf.AMQP_TARGET, route_key)
             peer_inner_service._callback_connection_lost_callback = lambda conn: None
             await peer_inner_service.connect()
 

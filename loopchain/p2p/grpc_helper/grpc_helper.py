@@ -44,6 +44,7 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         target_host = f'[::]:{port}'
         self.add_server_port(outer_server, target_host)
         logging.debug(f"outer target host = {target_host}")
+        outer_server.start()
 
         return outer_server
 
@@ -54,6 +55,7 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         target_host = conf.INNER_SERVER_BIND_IP + ':' + inner_service_port
         self.add_server_port(inner_server, target_host, conf.SSLAuthType.none)
         logging.debug(f"inner target host = {target_host}")
+        inner_server.start()
 
         return inner_server
 
@@ -76,7 +78,6 @@ class GRPCHelper(metaclass=SingletonMetaClass):
 
         connector: GRPCConnector = self.__connectors[ssl_auth_type]
         connector.add_server_port(self.__keys, server, host, ssl_auth_type)
-        server.start()
 
         logging.info(f"Server now listen: {host}, secure level : {str(ssl_auth_type)}")
 

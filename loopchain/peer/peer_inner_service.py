@@ -1,19 +1,19 @@
 """peer inner service"""
 
-from typing import TYPE_CHECKING
-
 from earlgrey import *
 
 from loopchain import utils as util
+from loopchain.peer.state_borg import PeerState
 from loopchain.utils.message_queue import StubCollection
-
-if TYPE_CHECKING:
-    from loopchain.peer import PeerService
 
 
 class PeerInnerTask:
+    """ FIXME : replace
     def __init__(self, peer_service: 'PeerService'):
         self._peer_service = peer_service
+    """
+    def __init__(self):
+        self._peer_state = PeerState()
 
     @message_queue_task
     async def hello(self):
@@ -21,20 +21,20 @@ class PeerInnerTask:
 
     @message_queue_task
     async def get_channel_infos(self):
-        return self._peer_service.channel_infos
+        return self._peer_state.channel_infos
 
     @message_queue_task
     async def get_node_info_detail(self):
         return {
-            'peer_port': self._peer_service.peer_port,
-            'peer_target': self._peer_service.peer_target,
-            'rest_target': self._peer_service.rest_target,
-            'peer_id': self._peer_service.peer_id
+            'peer_port': self._peer_state.peer_port,
+            'peer_target': self._peer_state.peer_target,
+            'rest_target': self._peer_state.rest_target,
+            'peer_id': self._peer_state.peer_id,
         }
 
     @message_queue_task
     async def get_node_key(self) -> bytes:
-        return self._peer_service.node_key
+        return self._peer_state.node_key
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def stop(self, message):

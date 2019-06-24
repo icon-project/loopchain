@@ -64,8 +64,7 @@ class BroadcastHandler:
         method_param = param[1]
         target = param[2]
 
-        self.__broadcaster.call_async_to_target(target, method_name, method_param,
-                                                True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
+        self.__broadcaster.call_async_to_target(target, method_name, method_param)
 
     def __add_audience(self, audience_target):
         utils.logger.debug(f"audience_target({audience_target})")

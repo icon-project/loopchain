@@ -1,23 +1,11 @@
-# Copyright 2019 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """ p2p service """
+
 import logging
 from enum import IntEnum
 from typing import Dict
 
 from loopchain import configure as conf
+from loopchain.p2p.bridge import PeerBridgeBase
 from loopchain.p2p.grpc_helper import GRPCHelper
 from loopchain.p2p.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.p2p.server import P2PServer
@@ -45,11 +33,12 @@ class P2PService:
     """P2P network service is to control P2PServer and P2PClient
     """
 
-    def __init__(self, peer_port: int = None):
+    def __init__(self, peer_port: int = None, peer_bridge: PeerBridgeBase = None):
         """
         :param peer_port: peer port number
         """
         self._peer_port: int = peer_port
+        self._peer_bridge = peer_bridge
 
         # client for p2p networking (like stub_manager?)
         # TODO : change StubManager to P2PClient
@@ -102,7 +91,9 @@ class P2PService:
         """
         if not self._server:
             # TODO : distinguish server_class for grpc or zeromq
-            self._server = P2PServer(peer_port=self._peer_port, server_class=P2PServerClass)
+            self._server = P2PServer(peer_port=self._peer_port,
+                                     peer_bridge=self._peer_bridge,
+                                     server_class=P2PServerClass)
 
         self._server.start()
 
@@ -112,27 +103,6 @@ class P2PService:
         :return:
         """
         self._server.stop()
-
-    def call_and_retry(self, stub_to_radiostation, peer_id, peer_target):
-        """ call and retry while timeout
-        TODO : refactoring method name
-
-        :param stub_to_radiostation:
-        :param peer_id:
-        :param peer_target:
-        :return:
-        """
-        response = stub_to_radiostation.call_in_times(
-            method_name="GetChannelInfos",
-            message=loopchain_pb2.GetChannelInfosRequest(
-                peer_id=peer_id,
-                peer_target=peer_target,
-                group_id=peer_id),
-            retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-            is_stub_reuse=False,
-            timeout=conf.CONNECTION_TIMEOUT_TO_RS
-        )
-        return response
 
     @staticmethod
     def get_peer_service_stub(target) -> loopchain_pb2_grpc.PeerServiceStub:

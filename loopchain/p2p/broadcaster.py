@@ -202,6 +202,14 @@ class Broadcaster:
             peer_targets.remove(self.__self_target)
         return peer_targets
 
+    def call_async_to_target(self, target, method_name, method_param):
+        kwargs = {
+            "is_stub_reuse": True,
+            "retry_times": 0,
+            "timeout": conf.GRPC_TIMEOUT_BROADCAST_RETRY
+        }
+        self.__call_async_to_target(target, method_name, method_param, **kwargs)
+
     def broadcast(self, broadcast_method_name, broadcast_method_param, kwargs=None):
         if kwargs is None:
             kwargs = {}
