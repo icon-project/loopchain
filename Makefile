@@ -33,15 +33,20 @@ requirements:
 all: install generate
 
 # pip install packages & generate-proto
-develop: install generate-proto
+develop: install-dev generate-proto
 
 # pip install packages
-install:
+requires:
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@master
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
 	$(PIP_INSTALL) tbears
+
+install: requires
 	$(PIP_INSTALL_REQUIREMENTS)
+
+install-dev: requires
+	$(PIP_INSTALL_REQUIREMENTS)[tests]
 
 # Generate python gRPC proto and generate a key
 generate: generate-proto generate-key
@@ -68,7 +73,7 @@ test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
 # Clean all - clean-process clean-mq clean-pyc clean-db clean-log
-clean: clean-process clean-mq clean-pyc clean-db clean-log check
+clean: clean-process clean-mq clean-pyc clean-db clean-log clean-test check
 
 clean-process:
 	@pkill -f loop || true
@@ -99,6 +104,12 @@ clean-db:
 clean-log:
 	@echo "Cleaning up logs..."
 	@rm -rf log/
+
+clean-test:
+	@echo "Cleaning up test related cache..."
+	@rm -rf .hypothesis/
+	@rm -rf .xprocess/
+	@rm -rf .pytest_cache/
 
 # build
 build: clean-build
