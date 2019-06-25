@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from .. import BlockVersionNotMatch
-from ..blocks import Block
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import BlockVersionNotMatch
 
 if TYPE_CHECKING:
-    from .. import TransactionVersioner
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockSerializer(ABC):
@@ -19,7 +19,6 @@ class BlockSerializer(ABC):
         if block.header.version != self.version:
             raise BlockVersionNotMatch(block.header.version, self.version,
                                        "The block of this version cannot be serialized by the serializer.")
-
         return self._serialize(block)
 
     @abstractmethod

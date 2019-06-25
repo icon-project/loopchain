@@ -1,5 +1,6 @@
-from . import Transaction, NTxHash, NID, HASH_SALT, Hash32
-from .. import TransactionSerializer as BaseTransactionSerializer
+from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.transactions import TransactionSerializer as BaseTransactionSerializer
+from loopchain.blockchain.transactions.genesis import Transaction, NID, NTxHash, HASH_SALT
 
 
 class TransactionSerializer(BaseTransactionSerializer):

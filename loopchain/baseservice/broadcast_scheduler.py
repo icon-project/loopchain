@@ -31,8 +31,8 @@ from grpc._channel import _Rendezvous
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
     TimerService, Timer
-from loopchain.baseservice.tx_item_helper import *
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.baseservice.tx_item_helper import TxItem
+from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
@@ -204,7 +204,7 @@ class _Broadcaster:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_subscribe(self, audience_target):
-        logging.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
+        util.logger.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -215,7 +215,7 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        # logging.debug(f"BroadcastThread received unsubscribe command peer_target({unsubscribe_peer_target})")
+        logging.debug(f"BroadcastThread received unsubscribe command peer_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:

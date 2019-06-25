@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Union
-from .. import Transaction as BaseTransition
-from ... import Address
+from loopchain.blockchain.types import Address
+from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 
 @dataclass(frozen=True)

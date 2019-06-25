@@ -21,7 +21,7 @@ import os
 import time
 from urllib.parse import urlparse, ParseResult
 
-import loopchain.utils as util
+from loopchain import utils
 from loopchain import configure as conf
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
@@ -88,8 +88,8 @@ def main(argv):
 
 def check_port_available(port):
     # Check Port is Using
-    if util.check_port_using(int(port)):
-        util.exit_and_msg(f"not available port({port})")
+    if utils.check_port_using(int(port)):
+        utils.exit_and_msg(f"not available port({port})")
 
 
 def start_as_channel(args):
@@ -166,6 +166,7 @@ def start_as_score(args):
         "log": {
             "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
         },
+        "iissDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.iiss_{amqp_key}_{channel}",
         "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
         "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
         "channel": channel,
@@ -197,7 +198,7 @@ def start_as_rs(args):
         try:
             seed = int(seed)
         except ValueError as e:
-            util.exit_and_msg(f"seed or s opt must be int \n"
+            utils.exit_and_msg(f"seed or s opt must be int \n"
                               f"input value : {seed}")
 
     RadioStationService(conf.IP_RADIOSTATION, cert, pw, seed).serve(port)
@@ -240,7 +241,7 @@ def start_as_peer(args, node_type=None):
 
     if conf.CHANNEL_BUILTIN:
         if not amqp_key or amqp_key == conf.AMQP_KEY_DEFAULT:
-            amqp_key = f"{util.get_private_ip()}:{port}"
+            amqp_key = f"{utils.get_private_ip()}:{port}"
             command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
     check_port_available(int(port))
@@ -248,7 +249,7 @@ def start_as_peer(args, node_type=None):
     if node_type is None:
         node_type = conf.NodeType.CommunityNode
     elif node_type == conf.NodeType.CitizenNode and not args.radio_station_target:
-        util.exit_and_msg(f"citizen node needs subscribing peer target input")
+        utils.exit_and_msg(f"citizen node needs subscribing peer target input")
 
     if args.radio_station_target:
         try:
@@ -266,7 +267,7 @@ def start_as_peer(args, node_type=None):
             radio_station_target = parse_result.netloc
 
         except Exception as e:
-            util.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
+            utils.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
                               f"[IP Address of Radio Station]:[PORT number of Radio Station], "
                               f"or just [IP Address of Radio Station] format. error({e})")
 

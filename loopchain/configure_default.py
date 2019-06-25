@@ -186,6 +186,7 @@ ALLOW_TIMESTAMP_BOUNDARY_SECOND = 60 * 5
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
 ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
+TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 READ_CACHED_TX_COUNT = True
 
@@ -276,7 +277,6 @@ WAIT_GRPC_SERVICE_START = 5  # seconds
 WAIT_SECONDS_FOR_SUB_THREAD_START = 5  # seconds
 SLEEP_SECONDS_FOR_SUB_PROCESS_START = 1  # seconds
 WAIT_SUB_PROCESS_RETRY_TIMES = 5
-PEER_GROUP_ID = ""  # "8d4e8d08-0d2c-11e7-a589-acbc32b0aaa1"  # vote group id
 INTERVAL_SECONDS_PROCESS_MONITORING = 30  # seconds
 PEER_NAME = "no_name"
 IS_BROADCAST_ASYNC = True
@@ -308,8 +308,6 @@ class NodeType(IntEnum):
 ##################
 # RadioStation ###
 ##################
-ALL_GROUP_ID = "all_group_id"  # "98fad20a-0df1-11e7-bc4b-acbc32b0aaa1"
-TEST_GROUP_ID = "test_group_id"  # "ea8f365c-7fb8-11e6-af03-38c98627c586"
 LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
 # RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
 # LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy
@@ -336,6 +334,8 @@ ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel inf
 ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
+LOAD_PEERS_FROM_IISS = False
+
 
 ########
 # MQ ###

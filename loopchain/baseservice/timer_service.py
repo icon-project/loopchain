@@ -13,10 +13,13 @@
 # limitations under the License.
 """loopchain timer service."""
 import asyncio
+import logging
+import threading
 import time
-
+import traceback
+from enum import Enum
+from loopchain import utils as util
 from loopchain.baseservice import CommonThread
-from loopchain.blockchain import *
 
 
 class OffType(Enum):
@@ -75,9 +78,25 @@ class Timer:
         if off_type is OffType.time_out:
             logging.debug(f'timer({self.target}) is turned off by timeout')
             if asyncio.iscoroutinefunction(self.__callback):
-                asyncio.get_event_loop().create_task(self.__callback(**self.__kwargs))
+                self.try_coroutine()
             else:
-                self.__callback(**self.__kwargs)
+                self.try_func()
+
+    def try_func(self):
+        try:
+            self.__callback(**self.__kwargs)
+        except:
+            traceback.print_exc()
+            raise
+
+    def try_coroutine(self):
+        async def _try_coroutine():
+            try:
+                await self.__callback(**self.__kwargs)
+            except:
+                traceback.print_exc()
+                raise
+        asyncio.get_event_loop().create_task(_try_coroutine())
 
     def __repr__(self):
         return f"{self.__callback}, {self.remain_time()}"

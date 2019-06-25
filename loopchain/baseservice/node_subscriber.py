@@ -27,7 +27,9 @@ from jsonrpcserver.aio import AsyncMethods
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import BlockSerializer, BlockVerifier, AnnounceNewBlockError
+from loopchain.blockchain import AnnounceNewBlockError
+from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
+from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
@@ -101,8 +103,12 @@ class NodeSubscriber:
             else:
                 return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
-        block_dict, confirm_info_str = kwargs.get('block'), kwargs.get('confirm_info')
-        confirm_info = confirm_info_str.encode("utf-8") if confirm_info_str else None
+        block_dict, confirm_info = kwargs.get('block'), kwargs.get('confirm_info')
+        if confirm_info:
+            votes_serialized = json.loads(confirm_info)
+            vote = BlockVotes.deserialize_votes(votes_serialized)
+        else:
+            vote = None
         blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
 
         new_block_height = blockchain.block_versioner.get_height(block_dict)
@@ -126,7 +132,7 @@ class NodeSubscriber:
                 logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
                               f"hash({confirmed_block.header.hash.hex()}), confirm_info({confirm_info})")
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
-                                                                                  confirm_info=confirm_info)
+                                                                                  confirm_info=vote)
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):

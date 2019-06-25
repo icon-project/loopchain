@@ -1,7 +1,9 @@
 import base64
 from abc import ABCMeta
 from enum import Enum
-from typing import Union
+from typing import Union, Type, TypeVar
+
+T = TypeVar('T', bound='Bytes')
 
 
 class Bytes(bytes):
@@ -24,7 +26,7 @@ class Bytes(bytes):
         return type_name + "(" + self.hex_xx() + ")"
 
     @classmethod
-    def new(cls):
+    def new(cls: Type[T]) -> T:
         """
         create sized value.
         :return:
@@ -41,7 +43,7 @@ class Bytes(bytes):
         return self.hex()
 
     @classmethod
-    def fromhex(cls, value: str, ignore_prefix=False, allow_malformed=False):
+    def fromhex(cls: Type[T], value: str, ignore_prefix=False, allow_malformed=False) -> Union[T, 'MalformedStr']:
         if isinstance(cls, Address):
             raise TypeError("Address.fromhex() cannot be used. Because Address is ABC.")
 
@@ -81,7 +83,9 @@ class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
     @classmethod
-    def fromhex_address(cls, value: str, allow_malformed=False):
+    def fromhex_address(cls,
+                        value: str,
+                        allow_malformed=False) -> Union['ExternalAddress', 'ContractAddress', 'MalformedStr']:
         try:
             prefix, contents = value[:2], value[2:]
 

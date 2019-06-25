@@ -33,26 +33,11 @@ class AdminService(loopchain_pb2_grpc.RadioStationServicer):
         self.__handler_map = {
             message_code.Request.status: self.__handler_status,
             message_code.Request.rs_send_channel_manage_info_to_rs: self.__handler_rs_send_channel_manage_info_to_rs,
-            message_code.Request.rs_restart_channel: self.__handler_restart_channel,
-            message_code.Request.rs_delete_peer: self.__handler_delete_peer
+            message_code.Request.rs_restart_channel: self.__handler_restart_channel
         }
 
     def __handler_status(self, request: loopchain_pb2.Message, context):
         util.logger.spam(f"rs_admin_service:__handler_status ({request.message})")
-        return loopchain_pb2.Message(code=message_code.Response.success)
-
-    def __handler_delete_peer(self, request, context):
-        util.logger.spam(f"rs_admin_service:__handler_delete_peer target({request.message})")
-        self.__admin_manager.save_channel_manage_data(json.loads(request.meta))
-
-        peer_target = request.message
-        channel_manager_data = json.loads(request.meta)
-        channel_manager = ObjectManager().rs_service.channel_manager
-        for channel in channel_manager_data:
-            util.logger.spam(f"rs_admin_service:__handler_delete_peer channel({channel})")
-            channel_manager.get_peer_manager(channel).\
-                remove_peer_by_target(channel_manager, peer_target)
-
         return loopchain_pb2.Message(code=message_code.Response.success)
 
     def __handler_rs_send_channel_manage_info_to_rs(self, request, context):

@@ -18,12 +18,13 @@ And also has insecure inner service for inner process modules."""
 import multiprocessing
 import signal
 import timeit
+import json
 from functools import partial
 
 import grpc
 
 from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
+from loopchain.baseservice import StubManager, RestStubManager
 from loopchain.blockchain import *
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
@@ -41,11 +42,9 @@ class PeerService:
     channel 관련 instance 는 channel manager 를 통해서 관리한다.
     """
 
-    def __init__(self, group_id=None, radio_station_target=None, node_type=None):
+    def __init__(self, radio_station_target=None, node_type=None):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
-        :param group_id: Peer Group 을 구분하기 위한 ID, None 이면 Single Peer Group 이 된다. (peer_id is group_id)
-        conf.PEER_GROUP_ID 를 사용하면 configure 파일에 저장된 값을 group_id 로 사용하게 된다.
         :param radio_station_ip: RS IP
         :param radio_station_port: RS Port
         :return:
@@ -55,8 +54,8 @@ class PeerService:
         self.is_support_node_function = \
             partial(conf.NodeType.is_support_node_function, node_type=node_type)
 
-        util.logger.spam(f"Your Peer Service runs on debugging MODE!")
-        util.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
+        utils.logger.spam(f"Your Peer Service runs on debugging MODE!")
+        utils.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
 
         self.__node_type = node_type
 
@@ -64,12 +63,7 @@ class PeerService:
         logging.info("Set Radio Station target is " + self.__radio_station_target)
 
         self.__radio_station_stub = None
-
         self.__peer_id = None
-        self.__group_id = group_id
-        if self.__group_id is None and conf.PEER_GROUP_ID != "":
-            self.__group_id = conf.PEER_GROUP_ID
-
         self.p2p_outer_server: grpc.Server = None
         self.__channel_infos = None
 
@@ -147,12 +141,6 @@ class PeerService:
         return self.__peer_id
 
     @property
-    def group_id(self):
-        if self.__group_id is None:
-            self.__group_id = self.__peer_id
-        return self.__group_id
-
-    @property
     def node_keys(self):
         return self.__node_keys
 
@@ -168,7 +156,7 @@ class PeerService:
                     message=loopchain_pb2.GetChannelInfosRequest(
                         peer_id=self.__peer_id,
                         peer_target=self.__peer_target,
-                        group_id=self.group_id),
+                        group_id=self.__peer_id),
                     retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
                     is_stub_reuse=False,
                     timeout=conf.CONNECTION_TIMEOUT_TO_RS
@@ -177,16 +165,10 @@ class PeerService:
 
                 if not response:
                     return None
-                logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
+                logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
                 channels = json.loads(response.channel_infos)
             else:
-                channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-
-                if conf.ENABLE_CHANNEL_AUTH:
-                    filtered_channels = {channel: channels[channel] for channel in channels
-                                         for peer in channels[channel]['peers']
-                                         if self.__peer_id == peer['id']}
-                    channels = filtered_channels
+                channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         else:
             response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
             channels = {channel: value for channel, value in response["channel_infos"].items()}
@@ -195,8 +177,8 @@ class PeerService:
 
     def __init_port(self, port):
         # service 초기화 작업
-        target_ip = util.get_private_ip()
-        self.__peer_target = util.get_private_ip() + ":" + str(port)
+        target_ip = utils.get_private_ip()
+        self.__peer_target = utils.get_private_ip() + ":" + str(port)
         self.__peer_port = int(port)
 
         rest_port = int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -372,11 +354,11 @@ class PeerService:
     def __reset_channel_infos(self):
         self.__channel_infos = self.__get_channel_infos()
         if not self.__channel_infos:
-            util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
+            utils.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
 
     async def change_node_type(self, node_type):
         if self.__node_type.value == node_type:
-            util.logger.warning(f"Does not change node type because new note type equals current node type")
+            utils.logger.warning(f"Does not change node type because new note type equals current node type")
             return
 
         self.__node_type = conf.NodeType(node_type)

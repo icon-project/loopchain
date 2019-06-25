@@ -1,7 +1,8 @@
 from collections import OrderedDict
-from . import BlockHeader, BlockBody
-from .. import Block, BlockSerializer as BaseBlockSerializer
-from ... import ExternalAddress, Signature, Hash32, TransactionSerializer
+from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain.blockchain.types import ExternalAddress, Signature, Hash32
+from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
+from loopchain.blockchain.blocks.v0_1a import BlockHeader, BlockBody
 
 
 class BlockSerializer(BaseBlockSerializer):

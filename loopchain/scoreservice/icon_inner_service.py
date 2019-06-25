@@ -34,6 +34,10 @@ class IconScoreInnerTask:
         pass
 
     @message_queue_task
+    async def call(self, request: dict) -> dict:
+        pass
+
+    @message_queue_task
     async def write_precommit_state(self, request: dict) -> dict:
         pass
 

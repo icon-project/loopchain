@@ -57,7 +57,6 @@ service PeerService {
     rpc AnnounceNewBlockForVote (NewBlockSend) returns (CommonReply) {}
     rpc AnnounceConfirmedBlock (BlockAnnounce) returns (CommonReply) {}
     rpc AnnounceNewPeer (PeerRequest) returns (CommonReply) {}
-    rpc AnnounceDeletePeer (PeerID) returns (CommonReply) {}
     // Test 검증을 위한 인터페이스
     rpc Echo (CommonRequest) returns (CommonReply) {}
     // Leader 선정을 위한 인터페이스
@@ -128,13 +127,8 @@ message Message {
 
 // Leader 선정을 위한 인터페이스 Mesages
 message ComplainLeaderRequest {
-    required string complained_leader_id = 1;
+    required string complain_vote = 1;
     optional string channel = 2;
-    required string new_leader_id = 3;
-    required int32 block_height = 4;
-    required string message = 5;
-    required string peer_id = 6;
-    required string group_id = 7;
 }
 
 
@@ -276,19 +270,13 @@ message BlockReply {
 }
 
 message BlockVote {
-    required int32 vote_code = 1;  // has same values of response_code
+    required string vote = 1;  // has same values of response_code
     optional string channel = 2; // channel ID for multichain network
-    required string message = 3;
-    required bytes block_hash = 4;
-    required string peer_id = 5;
-    required string group_id = 6;
 }
 
 message Vote {
-    required int32 vote_code = 1;
-    required string vote_data = 2;
-    optional string channel = 3; // channel ID for multichain network
-    required string peer_id = 4;
+    required string vote_data = 1;
+    optional string channel = 2; // channel ID for multichain network
 }
 
 //[Peer&BlockGenerator] for announce confirmed Block
