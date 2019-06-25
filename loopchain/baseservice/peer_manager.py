@@ -212,7 +212,7 @@ class PeerManager:
         except KeyError as e:
             logging.exception(f"peer_manager:get_leader_peer exception({e})")
 
-            if is_peer and ObjectManager().peer_service.is_support_node_function(conf.NodeFunction.Vote):
+            if is_peer and ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
                 util.exit_and_msg(f"Fail to find a leader of this network.... {e}")
 
         return None
@@ -222,6 +222,9 @@ class PeerManager:
 
         :return: leader peer_id
         """
+        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            return None
+
         leader_peer_order = self.peer_list_data.peer_leader
         logging.debug(f"peer_manager:get_leader_id leader peer order {leader_peer_order}")
         # util.logger.spam(f"peer_manager:get_leader_id peer_order_list({self.peer_order_list})")
@@ -511,7 +514,7 @@ class PeerManager:
                 logging.debug(self.get_peers_for_debug())
                 return None
             else:
-                logging.info(f"This node({peer_id}) will run as {conf.NodeType.CitizenNode.name}")
+                logging.debug(f"This node({peer_id}) will run as {conf.NodeType.CitizenNode.name}")
                 return None
         except IndexError:
             logging.warning(f"there is no peer by id({str(peer_id)})")
