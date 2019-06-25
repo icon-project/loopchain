@@ -86,7 +86,7 @@ class Epoch:
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
         if complained and leader_id == ChannelProperty().peer_id:
-            self.complained_result = self.complain_result()
+            self.complained_result = complained
         else:
             self.complained_result = None
 
