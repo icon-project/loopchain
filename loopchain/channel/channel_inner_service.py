@@ -77,11 +77,15 @@ class ChannelTxCreatorInnerTask:
         self.__properties.update(properties)
 
     @message_queue_task
-    async def create_icx_tx(self, kwargs: dict):
+    async def is_limited(self, kwargs: dict):
         if self.__qos_controller.limit():
             util.logger.debug(f"Out of TPS limit. tx={kwargs}")
-            return message_code.Response.fail_out_of_tps_limit, None
+            return message_code.Response.fail_out_of_tps_limit
+        else:
+            return message_code.Response.success
 
+    @message_queue_task
+    async def create_icx_tx(self, kwargs: dict):
         node_type = self.__properties.get('node_type', None)
         if node_type is None:
             util.logger.warning("Node type has not been set yet.")
