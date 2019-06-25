@@ -292,13 +292,7 @@ class BlockManager:
             util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
             return
 
-        my_height = self.__blockchain.last_block.header.height
-        if confirmed_block.header.height == my_height + 1:
-            result = self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
-            if result:
-                return
-
-        self.block_height_sync()
+        self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
@@ -370,19 +364,16 @@ class BlockManager:
                 'height': str(block_height)
             }
         )
-        max_height_result = rs_rest_stub.call("Status")
-
-        if max_height_result.status_code != 200:
-            raise ConnectionError
-
-        block_version = self.get_blockchain().block_versioner.get_version(block_height)
+        last_block = rs_rest_stub.call("GetLastBlock")
+        max_height = self.__blockchain.block_versioner.get_height(last_block)
+        block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
         confirm_info = get_block_result.get('confirm_info', '')
         if isinstance(confirm_info, str):
             confirm_info = confirm_info.encode('utf-8')
 
-        return block, json.loads(max_height_result.text)['block_height'], -1, confirm_info, message_code.Response.success
+        return block, max_height, -1, confirm_info, message_code.Response.success
 
     def __precommit_block_request(self, peer_stub, last_block_height):
         """request precommit block by gRPC
@@ -420,7 +411,6 @@ class BlockManager:
                 Timer(
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
-                    is_repeat=True,
                     callback=self.block_height_sync
                 )
             )
@@ -599,8 +589,17 @@ class BlockManager:
         return my_height, max_height
 
     def __block_height_sync(self):
+        def _handle_exception(e):
+            logging.warning(f"exception during block_height_sync :: {type(e)}, {e}")
+            traceback.print_exc()
+            self.__start_block_height_sync_timer()
+
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+        try:
+            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+        except ConnectionError as exc:
+            _handle_exception(exc)
+            return False
 
         if self.__blockchain.last_unconfirmed_block is not None:
             self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
@@ -618,10 +617,8 @@ class BlockManager:
                                                                               my_height,
                                                                               unconfirmed_block_height,
                                                                               max_height)
-        except Exception as e:
-            logging.warning(f"block_manager.py >>> block_height_sync :: {e}")
-            traceback.print_exc()
-            self.__start_block_height_sync_timer()
+        except Exception as exc:
+            _handle_exception(exc)
             return False
 
         curr_state = self.__channel_service.state_machine.state
@@ -662,14 +659,9 @@ class BlockManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rest_stub = ObjectManager().channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
-            response = rest_stub.call("Status")
-            height_from_status = int(json.loads(response.text)["block_height"])
-            last_height = rest_stub.call("GetLastBlock").get('height')
-            logging.debug(f"last_height: {last_height}, height_from_status: {height_from_status}")
-            max_height = max(height_from_status, last_height)
-            unconfirmed_block_height = int(
-                json.loads(response.text).get("unconfirmed_block_height", -1)
-            )
+            last_block = rest_stub.call("GetLastBlock")
+            max_height = self.__blockchain.block_versioner.get_height(last_block)
+
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
@@ -727,6 +719,11 @@ class BlockManager:
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
                 self.__channel_service.reset_leader_complain_timer()
+            elif elected_leader is False:
+                util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
+                # In this case, a new leader can't be elected by the consensus of leader complaint.
+                # That's why the leader of current `round` is set to the next `round` again.
+                self.epoch.new_round(self.epoch.leader_id)
         elif self.epoch.height < block_height:
             self.__channel_service.state_machine.block_sync()
 
@@ -847,4 +844,4 @@ class BlockManager:
         else:
             await self._vote(unconfirmed_block)
 
-        self.__channel_service.start_leader_complain_timer_if_tx_exists()
+        self.__channel_service.turn_on_leader_complain_timer()
