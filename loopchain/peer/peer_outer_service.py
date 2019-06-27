@@ -276,10 +276,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_count = -1
             message_error = None
             try:
-                mq_info = asyncio.run_coroutine_threadsafe(
-                    stub.async_info().queue_info(),
-                    self.peer_service.inner_service.loop
-                ).result()
+                mq_info = stub.sync_info().queue_info()
                 message_count = mq_info.method.message_count
             except AttributeError:
                 message_error = "Stub is not initialized."

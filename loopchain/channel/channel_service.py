@@ -859,8 +859,8 @@ class ChannelService:
             self.start_leader_complain_timer_if_tx_exists()
 
     def reset_leader_complain_timer(self):
-        utils.logger.spam(f"reset_leader_complain_timer in channel service. ("
-                          f"{self.__block_manager.epoch.round}/{self.__block_manager.epoch.complain_duration})")
+        # utils.logger.spam(f"reset_leader_complain_timer in channel service. ("
+        #                   f"{self.__block_manager.epoch.round}/{self.__block_manager.epoch.complain_duration})")
 
         if self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN):
             utils.logger.spam(f"Try to stop leader complaint timer for reset.")
