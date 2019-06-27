@@ -253,8 +253,12 @@ class ConsensusSiever(ConsensusBase):
     def get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
-            prev_votes_list = prev_votes.votes
         except KeyError:
+            prev_votes = None
+
+        if prev_votes:
+            prev_votes_list = prev_votes.votes
+        else:
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
             if prev_votes_dumped:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
