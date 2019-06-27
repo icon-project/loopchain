@@ -84,7 +84,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        all_group_peer_list_str, peer_list_str = channel_stub.sync_task().get_peer_list()
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_peer_list(),
+            self.peer_service.inner_service.loop
+        )
+        all_group_peer_list_str, peer_list_str = future.result()
 
         message = "All Group Peers count: " + all_group_peer_list_str
 
@@ -156,9 +160,13 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             return loopchain_pb2.Message(code=message_code.Response.fail_illegal_params)
 
         channel_stub = StubCollection().channel_stubs[request.channel]
-        tx_list, next_index = channel_stub.sync_task().get_tx_by_address(address, index)
-
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_tx_by_address(address, index),
+            self.peer_service.inner_service.loop
+        )
+        tx_list, next_index = future.result()
         tx_list_dumped = json.dumps(tx_list).encode(encoding=conf.PEER_DATA_ENCODING)
+
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
                                      object=tx_list_dumped)
@@ -217,7 +225,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             status_data = self.peer_service.status_cache[channel]
         else:
             channel_stub = StubCollection().channel_stubs[channel]
-            status_data = channel_stub.sync_task().get_status()
+            status_data = asyncio.run_coroutine_threadsafe(
+                channel_stub.async_task().get_status(),
+                self.peer_service.inner_service.loop
+            ).result()
             self.peer_service.status_cache[channel] = status_data
 
         return status_data
@@ -238,7 +249,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             callback = partial(self.__status_update, channel_name)
             future = asyncio.run_coroutine_threadsafe(
                 channel_stub.async_task().get_status(),
-                self.peer_service.inner_service.loop)
+                self.peer_service.inner_service.loop
+            )
             future.add_done_callback(callback)
 
         except BaseException as e:
@@ -319,7 +331,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         try:
             for channel_name in self.peer_service.channel_infos:
                 channel_stub = StubCollection().channel_stubs[channel_name]
-                channel_stub.sync_task().stop()
+                asyncio.run_coroutine_threadsafe(channel_stub.async_task().stop(), self.peer_service.inner_service.loop)
 
             self.peer_service.p2p_server_stop()
 
@@ -342,12 +354,16 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                            f"height({request.block_height}) complained_peer({request.complained_leader_id})")
 
         channel_stub = StubCollection().channel_stubs[channel]
-        channel_stub.sync_task().complain_leader(
-            complained_leader_id=request.complained_leader_id,
-            new_leader_id=request.new_leader_id,
-            block_height=request.block_height,
-            peer_id=request.peer_id,
-            group_id=request.group_id
+
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().complain_leader(
+                complained_leader_id=request.complained_leader_id,
+                new_leader_id=request.new_leader_id,
+                block_height=request.block_height,
+                peer_id=request.peer_id,
+                group_id=request.group_id
+            ),
+            self.peer_service.inner_service.loop
         )
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -363,7 +379,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         logging.info(f"peer_outer_service::CreateTx request({request.data}), channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        result_hash = channel_stub.sync_task().create_tx(request.data)
+        result_hash = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().create_tx(request.data),
+            self.peer_service.inner_service.loop
+        ).result()
 
         return loopchain_pb2.CreateTxReply(
             response_code=message_code.Response.success,
@@ -405,7 +424,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        tx = channel_stub.sync_task().get_tx(request.tx_hash)
+        tx = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_tx(request.tx_hash),
+            self.peer_service.inner_service.loop
+        ).result()
 
         response_code, response_msg = message_code.get_response(message_code.Response.fail)
         response_meta = ""
@@ -437,14 +459,17 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         # Peer To Client
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, _, block_data_json, tx_data_json_list = \
-            channel_stub.sync_task().get_block(
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_block(
                 block_height=-1,
                 block_hash='',
                 block_data_filter='block_hash',
-                tx_data_filter='')
-
+                tx_data_filter=''
+            ), self.peer_service.inner_service.loop
+        )
+        response_code, block_hash, _, block_data_json, tx_data_json_list = future.result()
         response_code, response_msg = message_code.get_response(response_code)
+
         return loopchain_pb2.BlockReply(response_code=response_code,
                                         message=response_msg,
                                         block_hash=block_hash)
@@ -466,12 +491,15 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = \
-            channel_stub.sync_task().get_block(
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_block(
                 block_height=request.block_height,
                 block_hash=request.block_hash,
                 block_data_filter=request.block_data_filter,
-                tx_data_filter=request.tx_data_filter)
+                tx_data_filter=request.tx_data_filter
+            ), self.peer_service.inner_service.loop
+        )
+        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = future.result()
 
         return loopchain_pb2.GetBlockReply(response_code=response_code,
                                            block_hash=block_hash,
@@ -489,8 +517,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, response_message, block = \
-            channel_stub.sync_task().get_precommit_block(last_block_height=request.last_block_height)
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_precommit_block(last_block_height=request.last_block_height),
+            self.peer_service.inner_service.loop
+        )
+        response_code, response_message, block = future.result()
 
         return loopchain_pb2.PrecommitBlockReply(
             response_code=response_code, response_message=response_message, block=block)
@@ -515,7 +546,12 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         logging.debug(f"peer_outer_service:GetInvokeResult in channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        response_code, result = channel_stub.sync_task().get_invoke_result(request.tx_hash)
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().get_invoke_result(request.tx_hash),
+            self.peer_service.inner_service.loop
+        )
+        response_code, result = future.result()
+
         return loopchain_pb2.GetInvokeResultReply(response_code=response_code, result=result)
 
     def AnnounceUnconfirmedBlock(self, request, context):
@@ -529,7 +565,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         util.logger.debug(f"peer_outer_service::AnnounceUnconfirmedBlock channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        channel_stub.sync_task().announce_unconfirmed_block(request.block)
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().announce_unconfirmed_block(request.block),
+            self.peer_service.inner_service.loop
+        )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
     def BlockSync(self, request, context):
@@ -539,8 +578,12 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                      f"request height({request.block_height}) channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
+        future = asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().block_sync(request.block_hash, request.block_height),
+            self.peer_service.inner_service.loop
+        )
         response_code, block_height, max_block_height, unconfirmed_block_height, confirm_info, block_dumped = \
-            channel_stub.sync_task().block_sync(request.block_hash, request.block_height)
+            future.result()
 
         return loopchain_pb2.BlockSyncReply(
             response_code=response_code,
@@ -575,7 +618,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
-            channel_stub.sync_task().add_audience(peer_target=request.peer_target)
+            asyncio.run_coroutine_threadsafe(
+                channel_stub.async_task().add_audience(peer_target=request.peer_target),
+                self.peer_service.inner_service.loop
+            )
             util.logger.debug(f"peer_outer_service::Subscribe add_audience "
                               f"target({request.peer_target}) in channel({request.channel}), "
                               f"order({request.peer_order})")
@@ -601,7 +647,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
-            channel_stub.sync_task().remove_audience(peer_target=request.peer_target)
+            asyncio.run_coroutine_threadsafe(
+                channel_stub.async_task().remove_audience(peer_target=request.peer_target),
+                self.peer_service.inner_service.loop
+            )
             util.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
                              f"in channel({request.channel})")
         else:
@@ -627,7 +676,10 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         if request.peer_object:
             channel_stub = StubCollection().channel_stubs[channel]
-            channel_stub.sync_task().announce_new_peer(request.peer_object, request.peer_target)
+            asyncio.run_coroutine_threadsafe(
+                channel_stub.async_task().announce_new_peer(request.peer_object, request.peer_target),
+                self.peer_service.inner_service.loop
+            )
 
         return loopchain_pb2.CommonReply(response_code=0, message="success")
 
@@ -653,12 +705,15 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash.hex()})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
-        channel_stub.sync_task().vote_unconfirmed_block(
-            peer_id=request.peer_id,
-            group_id=request.group_id,
-            block_hash=request.block_hash,
-            vote_code=request.vote_code)
-
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().vote_unconfirmed_block(
+                peer_id=request.peer_id,
+                group_id=request.group_id,
+                block_hash=request.block_hash,
+                vote_code=request.vote_code
+            ),
+            self.peer_service.inner_service.loop
+        )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
     def GetChannelInfos(self, request: loopchain_pb2.GetChannelInfosRequest, context):
