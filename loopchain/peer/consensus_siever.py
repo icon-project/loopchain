@@ -198,7 +198,7 @@ class ConsensusSiever(ConsensusBase):
                     return self.__block_generation_timer.call()
 
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
-            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
+            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block, last_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")

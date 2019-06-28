@@ -40,7 +40,7 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            new_block, invoke_result = self.invoke_func(block)
+            new_block, invoke_result = self.invoke_func(block, prev_block)
             if header.state_hash != new_block.header.state_hash:
                 exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                          f"StateRootHash({header.state_hash}), "

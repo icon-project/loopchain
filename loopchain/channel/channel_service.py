@@ -700,7 +700,7 @@ class ChannelService:
             loggers.get_preset().update_logger()
             logging.debug("I'm general Peer!")
 
-    def genesis_invoke(self, block: Block) -> ('Block', dict):
+    def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
@@ -750,7 +750,7 @@ class ChannelService:
 
         return new_block, tx_receipts
 
-    def score_invoke(self, _block: Block) -> dict or None:
+    def score_invoke(self, _block: Block, prev_block: Block) -> dict or None:
         method = "icx_sendTransaction"
         transactions = []
         for tx in _block.body.transactions.values():
@@ -770,8 +770,16 @@ class ChannelService:
                 'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
                 'timestamp': _block.header.timestamp
             },
-            'transactions': transactions
+            'transactions': transactions,
+            'isBlockEditable': hex(conf.LOAD_PEERS_FROM_IISS),
+            'prevBlockGenerator': prev_block.header.peer_id.hex() if prev_block.header.peer_id else '',
+            'prevBlockValidators': [
+
+            ]
         }
+
+        utils.logger.notice(f"in score invoke request({request})")
+
         request = convert_params(request, ParamType.invoke)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         response = stub.sync_task().invoke(request)

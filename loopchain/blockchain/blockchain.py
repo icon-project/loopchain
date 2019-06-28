@@ -280,7 +280,7 @@ class BlockChain:
                 if block.header.height == 0:
                     block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
                 else:
-                    block, invoke_results = ObjectManager().channel_service.score_invoke(block)
+                    block, invoke_results = ObjectManager().channel_service.score_invoke(block, self.__last_block)
 
             try:
                 if need_to_write_tx_info:
@@ -382,11 +382,20 @@ class BlockChain:
                 if invoke_block is None:
                     raise RuntimeError("Error raised during prevent mismatch block, "
                                        f"Cannot find block({invoke_block_height}")
+                if invoke_block.header.height > 0:
+                    prev_invoke_block = self.find_block_by_height(invoke_block_height - 1)
+                    if prev_invoke_block is None:
+                        raise RuntimeError("Error raised during prevent mismatch block, "
+                                           f"Cannot find prev_block({invoke_block_height - 1}")
+                else:
+                    prev_invoke_block = None
 
                 if invoke_block_height == 0:
-                    invoke_block, invoke_block_result = ObjectManager().channel_service.genesis_invoke(invoke_block)
+                    invoke_block, invoke_block_result = \
+                        ObjectManager().channel_service.genesis_invoke(invoke_block)
                 else:
-                    invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
+                    invoke_block, invoke_block_result = \
+                        ObjectManager().channel_service.score_invoke(invoke_block, prev_invoke_block)
 
                 self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
