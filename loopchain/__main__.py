@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 
 import yappi
@@ -23,9 +22,6 @@ from . import launcher
 
 def main():
     try:
-        if os.getenv('DEFAULT_SCORE_HOST') is not None:
-            os.system("ssh-keyscan "+os.getenv('DEFAULT_SCORE_HOST')+" >> /root/.ssh/known_hosts")
-
         if conf.ENABLE_PROFILING:
             yappi.start()
             launcher.main(sys.argv[1:])

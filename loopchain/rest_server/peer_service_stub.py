@@ -24,15 +24,14 @@ from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 
 class PeerServiceStub(metaclass=SingletonMetaClass):
     REST_GRPC_TIMEOUT = conf.GRPC_TIMEOUT + conf.REST_ADDITIONAL_TIMEOUT
-    REST_SCORE_QUERY_TIMEOUT = conf.SCORE_QUERY_TIMEOUT + conf.REST_ADDITIONAL_TIMEOUT
 
     def __init__(self):
         self.__stub_to_peer_service = None
 
-    def set_stub_port(self, port, IP_address):
-        IP_address = conf.IP_LOCAL
+    def set_stub_port(self, port):
+        ip_address = conf.IP_LOCAL
         self.__stub_to_peer_service = StubManager(
-            IP_address + ':' + str(port), loopchain_pb2_grpc.PeerServiceStub, conf.GRPC_SSL_TYPE)
+            ip_address + ':' + str(port), loopchain_pb2_grpc.PeerServiceStub, conf.GRPC_SSL_TYPE)
 
     @property
     def stub(self):

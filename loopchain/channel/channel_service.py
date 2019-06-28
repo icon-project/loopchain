@@ -357,17 +357,12 @@ class ChannelService:
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
         """
-        for i in range(conf.SCORE_LOAD_RETRY_TIMES):
-            try:
-                self.__score_info = await self.__run_score_container()
-            except BaseException as e:
-                utils.logger.spam(f"channel_manager:load_score_container_each score_info load fail retry({i})")
-                logging.error(e)
-                traceback.print_exc()
-                time.sleep(conf.SCORE_LOAD_RETRY_INTERVAL)  # This blocking main thread is intended.
-
-            else:
-                break
+        try:
+            self.__score_info = await self.__run_score_container()
+        except BaseException as e:
+            logging.error(e)
+            traceback.print_exc()
+            utils.exit_and_msg(f"run_score_container failed!!")
 
     async def __init_sub_services(self):
         self.__inner_service.init_sub_services()
@@ -398,41 +393,6 @@ class ChannelService:
         await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
         await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
         return None
-
-    async def __load_score(self):
-        channel_name = ChannelProperty().name
-        score_package_name = ChannelProperty().score_package
-
-        utils.logger.spam(f"peer_service:__load_score --init--")
-        logging.info("LOAD SCORE AND CONNECT TO SCORE SERVICE!")
-
-        params = dict()
-        params[message_code.MetaParams.ScoreLoad.repository_path] = conf.DEFAULT_SCORE_REPOSITORY_PATH
-        params[message_code.MetaParams.ScoreLoad.score_package] = score_package_name
-        params[message_code.MetaParams.ScoreLoad.base] = conf.DEFAULT_SCORE_BASE
-        params[message_code.MetaParams.ScoreLoad.peer_id] = ChannelProperty().peer_id
-        meta = json.dumps(params)
-        logging.debug(f"load score params : {meta}")
-
-        utils.logger.spam(f"peer_service:__load_score --1--")
-        score_stub = StubCollection().score_stubs[channel_name]
-        response = await score_stub.async_task().score_load(meta)
-
-        logging.debug("try score load on score service: " + str(response))
-        if not response:
-            return None
-
-        if response.code != message_code.Response.success:
-            utils.exit_and_msg("Fail Get Score from Score Server...")
-            return None
-
-        logging.debug("Get Score from Score Server...")
-        score_info = json.loads(response.meta)
-
-        logging.info("LOAD SCORE DONE!")
-        utils.logger.spam(f"peer_service:__load_score --end--")
-
-        return score_info
 
     def _load_peers_from_iiss(self):
         utils.logger.debug(f"load peers from iiss...")
