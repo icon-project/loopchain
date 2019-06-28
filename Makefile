@@ -81,6 +81,7 @@ clean-mq:
 	@$(RABBITMQ_CMD) start_app
 
 clean-build:
+	@rm -rf build/
 	@rm -rf dist/
 	@rm -rf *.egg-info
 	@rm -rf .eggs/
@@ -100,14 +101,10 @@ clean-log:
 	@rm -rf log/
 
 # build
-build:
+build: clean-build
 	@if [ "$$(python -c 'import sys; print(sys.version_info[0])')" != 3 ]; then\
 		@echo "The script should be run on python3.";\
 		exit -1;\
 	fi
 
-	pip3 install -r requirements.txt
-	pip3 install wheel
-	rm -rf build dist/*.whl *.egg-info
 	python3 setup.py bdist_wheel
-	rm -rf build *.egg-info
