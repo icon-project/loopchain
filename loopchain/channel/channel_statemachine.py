@@ -152,6 +152,7 @@ class ChannelStateMachine(object):
     def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer()
+        self.__channel_service.block_manager.start_epoch()
 
     def _do_reset_network_on_enter(self):
         self._run_coroutine_threadsafe(self.__channel_service.reset_network())

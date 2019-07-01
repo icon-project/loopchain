@@ -222,22 +222,23 @@ class ChannelService:
         await self.__init_sub_services()
 
     async def __init_network(self):
-        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
         self.__init_radio_station_stub()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 self.connect_to_radio_station()
-            else:
-                await self.__load_peers_from_file()
+            await self._load_peers()
 
     async def evaluate_network(self):
-        await self.__select_node_type()
+        await self._select_node_type()
         await self.__init_network()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
+        await self._load_peers()
+        await self._select_node_type()
+
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await self.set_peer_type_in_channel()
         else:
@@ -254,7 +255,7 @@ class ChannelService:
     def __get_role_switch_block_height(self):
         return self.get_channel_option().get('role_switch_block_height', -1)
 
-    def __get_node_type_by_peer_list(self):
+    def _get_node_type_by_peer_list(self):
         if self.__peer_manager.get_peer(ChannelProperty().peer_id):
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
@@ -274,10 +275,29 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
+    async def _load_peers(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            block_height = self.__block_manager.get_blockchain().block_height
+            if self._is_genesis_node() and block_height == 0:
+                peer_info = {
+                    'id': ChannelProperty().peer_id,
+                    'peer_target': ChannelProperty().peer_target,
+                    'order': 1
+                }
+                self.__peer_manager.add_peer(peer_info)
+            else:
+                self._load_peers_from_iiss()
+        else:
+            await self._load_peers_from_file()
+
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.get_blockchain().block_height
         if current_height < 0:
             utils.logger.debug(f"Need to sync block, current_height({current_height})")
+            return False
+
+        if current_height == 0 and self._is_genesis_node():
+            logging.debug(f"It's GenesisNode, but not registered yet")
             return False
 
         switch_block_height = self.__get_role_switch_block_height()
@@ -286,22 +306,23 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
-        if conf.LOAD_PEERS_FROM_IISS:
-            self._load_peers_from_iiss()
-        if self.__get_node_type_by_peer_list() == ChannelProperty().node_type:
+        if self._get_node_type_by_peer_list() == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
         return True
 
-    async def __select_node_type(self):
+    async def _select_node_type(self):
         if self._is_role_switched():
-            new_node_type = self.__get_node_type_by_peer_list()
-            utils.logger.info(f"Role switching to new node type: {new_node_type}")
+            new_node_type = self._get_node_type_by_peer_list()
+            utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
             await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
+        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
+        if conf.LOAD_PEERS_FROM_IISS:
+            self._load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -463,7 +484,7 @@ class ChannelService:
             self.__peer_manager.add_peer(peer_info)
         self.show_peers()
 
-    async def __load_peers_from_file(self):
+    async def _load_peers_from_file(self):
         channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
         for peer_info in channel_info[ChannelProperty().name]["peers"]:
             self.__peer_manager.add_peer(peer_info)
@@ -617,7 +638,7 @@ class ChannelService:
         self.__block_manager.set_peer_type(peer_type)
 
     def _is_genesis_node(self):
-        return ('genesis_data_path' in conf.CHANNEL_OPTION[ChannelProperty().name]
+        return ('genesis_data_path' in self.get_channel_option()
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
     def __ready_to_height_sync(self):
