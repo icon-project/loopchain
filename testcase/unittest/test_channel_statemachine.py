@@ -45,6 +45,9 @@ class MockBlockManager:
     def update_service_status(self, status):
         pass
 
+    def start_epoch(self):
+        pass
+
 
 class MockBlockManagerCitizen:
     peer_type = loopchain_pb2.PEER
@@ -59,6 +62,9 @@ class MockBlockManagerCitizen:
         pass
 
     def update_service_status(self, status):
+        pass
+
+    def start_epoch(self):
         pass
 
 
