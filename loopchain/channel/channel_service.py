@@ -486,8 +486,7 @@ class ChannelService:
                 channel=ChannelProperty().name,
                 peer_object=b'',
                 peer_id=ChannelProperty().peer_id,
-                peer_target=ChannelProperty().peer_target,
-                group_id=ChannelProperty().peer_id),
+                peer_target=ChannelProperty().peer_target),
             retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
             is_stub_reuse=True,
             timeout=conf.CONNECTION_TIMEOUT_TO_RS)

@@ -261,7 +261,8 @@ class TestBlock(unittest.TestCase):
 
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
-        block_verifier.invoke_func = lambda b: (block, dummy_receipts)
+
+        block_verifier.invoke_func = lambda b, prev_b: (block, dummy_receipts)
         block_verifier.verify(block, None, None, block.header.peer_id, reps=block_builder.reps)
 
         block_serializer = BlockSerializer.new("0.3", tx_versioner)

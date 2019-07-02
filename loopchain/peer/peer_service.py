@@ -151,8 +151,7 @@ class PeerService:
                     method_name="GetChannelInfos",
                     message=loopchain_pb2.GetChannelInfosRequest(
                         peer_id=self._peer_id,
-                        peer_target=self._peer_target,
-                        group_id=self._peer_id),
+                        peer_target=self._peer_target),
                     retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
                     is_stub_reuse=False,
                     timeout=conf.CONNECTION_TIMEOUT_TO_RS
