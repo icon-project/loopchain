@@ -771,10 +771,8 @@ class ChannelService:
             },
             'transactions': transactions,
             'isBlockEditable': hex(conf.LOAD_PEERS_FROM_IISS),
-            'prevBlockGenerator': prev_block.header.peer_id.hex() if prev_block.header.peer_id else '',
-            'prevBlockValidators': [
-
-            ]
+            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
+            'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
         }
 
         utils.logger.notice(f"in score invoke request({request})")
