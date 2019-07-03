@@ -669,15 +669,6 @@ class BlockManager:
 
         if my_height >= max_height:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
-            next_leader = self.__current_last_block().header.next_leader
-            leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
-
-            if leader_peer:
-                self.__channel_service.peer_manager.set_leader_peer(leader_peer)
-                self.epoch = Epoch.new_epoch(leader_peer.peer_id)
-            elif self.epoch and self.epoch.height < my_height:
-                self.epoch = Epoch.new_epoch()
-
             self.__channel_service.state_machine.complete_sync()
         else:
             logging.warning(f"it's not completed block height synchronization in once ...\n"
@@ -685,6 +676,16 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
         return True
+
+    def start_epoch(self):
+        curr_block_header = self.__current_last_block().header
+        current_height = curr_block_header.height
+        next_leader = curr_block_header.next_leader
+        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
+        if leader_peer:
+            self.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        elif self.epoch and self.epoch.height < current_height:
+            self.epoch = Epoch.new_epoch()
 
     def __get_peer_stub_list(self):
         """It updates peer list for block manager refer to peer list on the loopchain network.
