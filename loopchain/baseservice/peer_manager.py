@@ -84,6 +84,30 @@ class PeerManager:
         self.__leader_complain_count = 0
         self.__highest_block_height = -1    # for RS heartbeat
 
+    @property
+    def peer_list(self) -> dict:
+        """
+
+        :return: { peer_id:PeerInfo }
+        """
+        # util.logger.spam(f"peer_list({self.peer_list_data.peer_info_list})")
+        return self.peer_list_data.peer_info_list
+
+    @property
+    def peer_order_list(self) -> dict:
+        """
+
+        :return: { order:peer_id }
+        """
+        return self.peer_list_data.peer_order_list
+
+    def set_peer_list(self, peer_list_data: PeerListData):
+        """ update PeerList
+
+        :param peer_list_data: PeerListData
+        """
+        self.peer_list_data = peer_list_data
+
     def peer_ids_hash(self):
         """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
 
@@ -110,29 +134,18 @@ class PeerManager:
         util.logger.debug(f"peer ids hash({peer_ids_hash})")
         return peer_ids_hash
 
-    @property
-    def peer_list(self) -> dict:
-        """
+    def get_quorum(self):
+        peer_count = self.get_peer_count()
+        quorum = math.floor(peer_count * conf.VOTING_RATIO) + 1
+        complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
 
-        :return: { peer_id:PeerInfo }
-        """
-        # util.logger.spam(f"peer_list({self.peer_list_data.peer_info_list})")
-        return self.peer_list_data.peer_info_list
+        return quorum, complain_quorum
 
-    @property
-    def peer_order_list(self) -> dict:
-        """
-
-        :return: { order:peer_id }
-        """
-        return self.peer_list_data.peer_order_list
-
-    def set_peer_list(self, peer_list_data: PeerListData):
-        """ update PeerList
-
-        :param peer_list_data: PeerListData
-        """
-        self.peer_list_data = peer_list_data
+    def get_reps(self):
+        peer_ids = (self.peer_order_list[peer_order]
+                    for peer_order in sorted(self.peer_order_list.keys()))
+        peers = (self.peer_list[peer_id] for peer_id in peer_ids)
+        return [{"id": peer.peer_id, "target": peer.target} for peer in peers]
 
     def get_peer_by_target(self, peer_target):
         return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
@@ -592,16 +605,3 @@ class PeerManager:
 
     def get_IP_of_peers_dict(self):
         return {peer_id: peer.target for peer_id, peer in self.peer_list.items()}
-
-    def get_quorum(self):
-        peer_count = self.get_peer_count()
-        quorum = math.floor(peer_count * conf.VOTING_RATIO) + 1
-        complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
-
-        return quorum, complain_quorum
-
-    def get_reps(self) -> list:
-        peer_ids = (self.peer_order_list[peer_order]
-                    for peer_order in sorted(self.peer_order_list.keys()))
-        peers = (self.peer_list[peer_id] for peer_id in peer_ids)
-        return [{"id": peer.peer_id, "target": peer.target} for peer in peers]

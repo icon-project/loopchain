@@ -84,9 +84,7 @@ class ConsensusSiever(ConsensusBase):
         block_builder.next_leader = next_leader
         block_builder.signer = ObjectManager().channel_service.peer_auth
         block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
-
-        # TODO: This should be changed when IISS is applied.
-        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
         return block_builder.build()
 
@@ -183,14 +181,11 @@ class ConsensusSiever(ConsensusBase):
                                          f"MAX_MADE_BLOCK_COUNT is {conf.MAX_MADE_BLOCK_COUNT} "
                                          f"There is no more right. Consensus loop will return.")
                         return
-                elif len(block_builder.transactions) > 0 or conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    if last_unconfirmed_block:
-                        next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
-                elif len(block_builder.transactions) == 0 and (
-                        last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) > 0):
-                    next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
-                else:
+                elif len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
+                        (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
+                elif last_unconfirmed_block:
+                    next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
             except NotEnoughVotes:
                 need_next_call = True
             finally:
