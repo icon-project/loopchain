@@ -770,28 +770,6 @@ class ChannelInnerTask:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def announce_new_peer(self, peer_info_dumped, peer_target) -> None:
-        try:
-            peer_info = PeerInfo.load(peer_info_dumped)
-        except Exception as e:
-            traceback.print_exc()
-            logging.error(f"Invalid peer info. peer_target={peer_target}, exception={e}")
-            return
-
-        logging.debug("Add New Peer: " + str(peer_info.peer_id))
-
-        peer_manager = self._channel_service.peer_manager
-        peer_manager.add_peer(peer_info)
-
-        logging.debug("Try save peer list...")
-        # self._channel_service.save_peer_manager(peer_manager)
-        self._channel_service.show_peers()
-
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            quorum, complain_quorum = peer_manager.get_quorum()
-            self._channel_service.consensus.set_quorum(quorum=quorum, complain_quorum=complain_quorum)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
     def delete_peer(self, peer_id) -> None:
         self._channel_service.peer_manager.remove_peer(peer_id)
 

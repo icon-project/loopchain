@@ -17,7 +17,6 @@ import asyncio
 import copy
 import datetime
 import json
-import pickle
 from functools import partial
 
 from loopchain.baseservice import TimerService
@@ -649,7 +648,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 self.peer_service.inner_service.loop
             )
             utils.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
-                             f"in channel({request.channel})")
+                              f"in channel({request.channel})")
         else:
             logging.error(f"This target({request.peer_target}), {request.node_type} failed to unsubscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
@@ -657,28 +656,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.success),
                                          message=message_code.get_response_msg(message_code.Response.success))
-
-    def AnnounceNewPeer(self, request, context):
-        """RadioStation에서 Broadcasting 으로 신규 피어정보를 받아온다
-
-        :param request: PeerRequest
-        :param context:
-        :return:
-        """
-        # RadioStation To Peer
-        # prevent to show certificate content
-        # logging.info('Here Comes new peer: ' + str(request))
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"peer outer service::AnnounceNewPeer channel({channel})")
-
-        if request.peer_object:
-            channel_stub = StubCollection().channel_stubs[channel]
-            asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().announce_new_peer(request.peer_object, request.peer_target),
-                self.peer_service.inner_service.loop
-            )
-
-        return loopchain_pb2.CommonReply(response_code=0, message="success")
 
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel

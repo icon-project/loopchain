@@ -333,18 +333,6 @@ class PeerManager:
             logging.debug("try get peer stub except: " + str(e))
             return None
 
-    def announce_new_peer(self, peer_request):
-        logging.debug("announce_new_peer")
-        for peer_id in list(self.peer_list):
-            peer_each = self.peer_list[peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_each)
-            try:
-                if peer_each.target != peer_request.peer_target:
-                    stub_manager.call("AnnounceNewPeer", peer_request, is_stub_reuse=True)
-            except Exception as e:
-                logging.warning("gRPC Exception: " + str(e))
-                logging.debug("No response target: " + str(peer_each.target))
-
     def complain_leader(self, is_announce=False) -> PeerInfo:
         """When current leader is offline, Find last height alive peer and set as a new leader.
 

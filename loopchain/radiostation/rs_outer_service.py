@@ -373,7 +373,6 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
             peer_dumped = peer.dump()
             request.peer_order = peer.order
             request.peer_object = peer_dumped
-            ObjectManager().rs_service.channel_manager.get_peer_manager(channel).announce_new_peer(request)
 
             return loopchain_pb2.CommonReply(
                 response_code=message_code.get_response_code(message_code.Response.success),
