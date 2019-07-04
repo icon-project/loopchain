@@ -14,12 +14,13 @@
 """ A class for icx authorization of Peer"""
 
 import binascii
-import getpass
 import hashlib
 import logging
 from typing import Union, Type, TypeVar
+
 from secp256k1 import Base, ALL_FLAGS
 from secp256k1 import PrivateKey, PublicKey
+
 from loopchain.crypto.cert_serializers import DerSerializer, PemSerializer
 
 T = TypeVar('T', bound='SignVerifier')
@@ -75,18 +76,6 @@ class SignVerifier:
         verifier = SignVerifier()
         verifier.address = address
         return verifier
-
-    @classmethod
-    def from_channel(cls: Type[T], channel: str) -> T:
-        from loopchain import configure as conf
-
-        if 'public_path' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(public_path) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            public_file = conf.CHANNEL_OPTION[channel]['public_path']
-        else:
-            public_file = conf.PUBLIC_PATH
-        return cls.from_pubkey_file(public_file)
 
     @classmethod
     def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
@@ -160,28 +149,6 @@ class Signer(SignVerifier):
     @classmethod
     def from_address(cls: Type[T], address: str) -> T:
         raise TypeError("Cannot create `Signer` from address")
-
-    @classmethod
-    def from_channel(cls: Type[T], channel: str) -> T:
-        from loopchain import configure as conf
-
-        if 'private_path' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(private_path) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            prikey_file = conf.CHANNEL_OPTION[channel]['private_path']
-        else:
-            prikey_file = conf.PRIVATE_PATH
-
-        if 'private_password' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(private_password) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            password = conf.CHANNEL_OPTION[channel]['private_password']
-        elif conf.PRIVATE_PASSWORD:
-            password = conf.PRIVATE_PASSWORD
-        else:
-            # created the private key file from tbears.
-            password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
-        return cls.from_prikey_file(prikey_file, password)
 
     @classmethod
     def from_pubkey(cls: Type[T], pubkey: bytes) -> T:

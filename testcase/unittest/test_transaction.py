@@ -209,7 +209,6 @@ class TestTransaction(unittest.TestCase):
                 "consensus_cert_use": True,
                 "tx_cert_use": True,
                 "key_load_type": conf.KeyLoadType.FILE_LOAD,
-                "public_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_certs/cert.pem'),
                 "private_path": os.path.join(conf.LOOPCHAIN_ROOT_PATH, 'resources/default_certs/key.pem'),
                 "private_password": None
             }

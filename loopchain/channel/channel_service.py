@@ -333,12 +333,9 @@ class ChannelService:
 
     async def __init_peer_auth(self):
         try:
-            node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key(ChannelProperty().name)
+            node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key()
             self.__peer_auth = Signer.from_prikey(node_key)
-        except KeyError:
-            self.__peer_auth = Signer.from_channel(ChannelProperty().name)
         except Exception as e:
-            logging.exception(f"peer auth init fail cause : {e}")
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
     def __init_block_manager(self):
