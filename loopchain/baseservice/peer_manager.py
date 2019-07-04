@@ -198,7 +198,7 @@ class PeerManager:
 
         self.peer_list_data.peer_leader = peer.order
 
-    def get_leader_peer(self, is_complain_to_rs=False, is_peer=True) -> PeerInfo:
+    def get_leader_peer(self, is_peer=True) -> PeerInfo:
         """
 
         :return:
@@ -253,7 +253,7 @@ class PeerManager:
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
-            leader_peer = self.get_leader_peer(is_complain_to_rs=True)
+            leader_peer = self.get_leader_peer()
         else:
             leader_peer = self.get_peer(current_leader_peer_id)
 

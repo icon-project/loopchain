@@ -42,17 +42,17 @@ class RestStubManager:
                 self._http_clients[url] = HTTPClient(url)
 
         self._method_versions = {
-            "GetChannelInfos": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
             "Status": conf.ApiVersion.v1,
-            "GetLastBlock": conf.ApiVersion.v3
+            "GetLastBlock": conf.ApiVersion.v3,
+            "GetReps": conf.ApiVersion.v3
         }
 
         self._method_names = {
-            "GetChannelInfos": "node_getChannelInfos",
             "GetBlockByHeight": "node_getBlockByHeight",
             "Status": "/status/peer/",
-            "GetLastBlock": "icx_getLastBlock"
+            "GetLastBlock": "icx_getLastBlock",
+            "GetReps": "rep_getList"
         }
 
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
