@@ -18,14 +18,19 @@ import json
 import logging
 import math
 import threading
-from typing import Union
+from functools import reduce
+from operator import add
+from typing import Union, cast
 
 import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
+from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
+from loopchain.utils.message_queue import StubCollection
 
 
 class PeerListData:
@@ -133,6 +138,68 @@ class PeerManager:
         peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
         util.logger.debug(f"peer ids hash({peer_ids_hash})")
         return peer_ids_hash
+
+    def load_peers_from_iiss(self):
+        util.logger.debug(f"load peers from iiss...")
+
+        request = {
+            "method": "ise_getPRepList"
+        }
+
+        request = convert_params(request, ParamType.call)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = cast(dict, stub.sync_task().call(request))
+        response_to_json_query(response)
+
+        util.logger.notice(f"in load_peers_from_iiss response({response})")
+        if not response['result'].get('preps'):
+            util.logger.debug(f"There is no preps in result.")
+            return
+
+        peer_ids = (preps["id"] for preps in response["result"]["preps"])
+        peer_ids_appended = reduce(add, peer_ids, '')
+
+        if self.get_peer_ids_hash(peer_ids_appended) == self.peer_ids_hash():
+            util.logger.debug(f"There is no change in peers.")
+            return
+
+        util.logger.debug(f"Peer manager have to update with new list.")
+        self.reset_peers(check_status=False)
+
+        if not conf.LOAD_PEERS_FROM_IISS:
+            return
+
+        reps = response["result"]["preps"]
+        self._add_reps(reps)
+
+        self.show_peers()
+
+    async def load_peers_from_file(self):
+        channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        reps: list = channel_info[ChannelProperty().name].get("peers")
+        for peer_info in reps:
+            self.add_peer(peer_info)
+        self.show_peers()
+
+    async def load_peers_from_rest_call(self):
+        # FIXME temporarily disable GetReps API for legacy support
+        # response = ObjectManager().channel_service.radio_station_stub.call("GetReps")
+        # reps = response.get('rep')
+        # self._add_reps(reps)
+        response = ObjectManager().channel_service.radio_station_stub.call("GetChannelInfos")
+        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
+        for peer_info in reps:
+            self.add_peer(peer_info)
+
+    def _add_reps(self, reps: list):
+        for order, rep_info in enumerate(reps, 1):
+            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            self.add_peer(peer_info)
+
+    def show_peers(self):
+        util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
+        for peer in self.get_IP_of_peers_in_group():
+            util.logger.debug("peer_target: " + peer)
 
     def get_quorum(self):
         peer_count = self.get_peer_count()

@@ -298,7 +298,14 @@ ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel inf
 ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
+
+
+##########
+# IISS ###
+##########
+ENABLE_IISS = True
 LOAD_PEERS_FROM_IISS = False
+
 
 ########
 # MQ ###

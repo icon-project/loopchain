@@ -14,22 +14,19 @@
 
 import asyncio
 import json
-import leveldb
 import logging
 import signal
 import traceback
-from functools import reduce
-from operator import add
+from typing import cast
 
 from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand, PeerListData, \
-    PeerInfo
+from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, PeerStatus, TimerService
+from loopchain.baseservice import StubManager, PeerManager, TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block, BlockBuilder
 from loopchain.blockchain.transactions import TransactionSerializer
@@ -39,7 +36,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
+from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -220,8 +217,6 @@ class ChannelService:
         self.__init_radio_station_stub()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.ENABLE_REP_RADIO_STATION:
-                self.connect_to_radio_station()
             await self._load_peers()
 
     async def evaluate_network(self):
@@ -273,7 +268,7 @@ class ChannelService:
         self.__radio_station_stub = None
 
     async def _load_peers(self):
-        if conf.LOAD_PEERS_FROM_IISS:
+        if conf.ENABLE_IISS:
             block_height = self.__block_manager.get_blockchain().block_height
             if self._is_genesis_node() and block_height == 0:
                 peer_info = {
@@ -283,13 +278,16 @@ class ChannelService:
                 }
                 self.__peer_manager.add_peer(peer_info)
             else:
-                self._load_peers_from_iiss()
+                self.__peer_manager.load_peers_from_iiss()
+
+            if not conf.LOAD_PEERS_FROM_IISS:
+                await self.__peer_manager.load_peers_from_file()
         else:
             if self.is_support_node_function(conf.NodeFunction.Vote):
-                await self._load_peers_from_file()
+                await self.__peer_manager.load_peers_from_file()
             else:
-                await self._load_peers_from_rest_call()
-        self.show_peers()
+                await self.__peer_manager.load_peers_from_rest_call()
+        self.__peer_manager.show_peers()
 
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.get_blockchain().block_height
@@ -322,8 +320,8 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        if conf.LOAD_PEERS_FROM_IISS:
-            self._load_peers_from_iiss()
+        if conf.ENABLE_IISS:
+            self.__peer_manager.load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -412,54 +410,6 @@ class ChannelService:
         await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
         return None
 
-    def _load_peers_from_iiss(self):
-        utils.logger.debug(f"load peers from iiss...")
-
-        request = {
-            "method": "ise_getPReps"
-        }
-
-        request = convert_params(request, ParamType.call)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response = stub.sync_task().call(request)
-        response_to_json_query(response)
-
-        utils.logger.spam(f"from icon service channels is {response}")
-
-        peer_ids = (preps["id"] for preps in response["result"]["preps"])
-        peer_ids_appended = reduce(add, peer_ids, '')
-
-        if self.__peer_manager.get_peer_ids_hash(peer_ids_appended) == self.__peer_manager.peer_ids_hash():
-            utils.logger.debug(f"There is no change in peers.")
-            return
-
-        utils.logger.debug(f"Peer manager have to update with new list.")
-        self.__peer_manager.reset_peers(check_status=False)
-
-        reps = response["result"]["preps"]
-        self._add_reps(reps)
-
-    async def _load_peers_from_file(self):
-        channel_info = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        reps: list = channel_info[ChannelProperty().name].get("peers")
-        for peer_info in reps:
-            self.__peer_manager.add_peer(peer_info)
-
-    async def _load_peers_from_rest_call(self):
-        # FIXME temporarily disable GetReps API for legacy support
-        # response = self.__radio_station_stub.call("GetReps")
-        # reps = response.get('rep')
-        # self._add_reps(reps)
-        response = self.__radio_station_stub.call("GetChannelInfos")
-        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
-        for peer_info in reps:
-            self.__peer_manager.add_peer(peer_info)
-
-    def _add_reps(self, reps: list):
-        for order, rep_info in enumerate(reps, 1):
-            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
-            self.__peer_manager.add_peer(peer_info)
-
     def is_support_node_function(self, node_function):
         return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
 
@@ -478,45 +428,6 @@ class ChannelService:
 
         reps = self.get_rep_ids()
         blockchain.generate_genesis_block(reps)
-
-    def connect_to_radio_station(self, is_reconnect=False):
-        response = self.__radio_station_stub.call_in_times(
-            method_name="ConnectPeer",
-            message=loopchain_pb2.ConnectPeerRequest(
-                channel=ChannelProperty().name,
-                peer_object=b'',
-                peer_id=ChannelProperty().peer_id,
-                peer_target=ChannelProperty().peer_target),
-            retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-            is_stub_reuse=True,
-            timeout=conf.CONNECTION_TIMEOUT_TO_RS)
-
-        # start next ConnectPeer timer
-        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_CONNECT_PEER,
-                                                  duration=conf.CONNECTION_RETRY_TIMER,
-                                                  callback=self.connect_to_radio_station,
-                                                  callback_kwargs={"is_reconnect": True})
-
-        if is_reconnect:
-            return
-
-        if response and response.status == message_code.Response.success:
-            try:
-                peer_list_data = PeerListData.load(response.peer_list)
-            except Exception as e:
-                traceback.print_exc()
-                logging.error(f"Invalid peer list. Check your Radio Station. exception={e}")
-                return
-
-            self.__peer_manager.set_peer_list(peer_list_data)
-            peers, peer_list = self.__peer_manager.get_peers_for_debug()
-            logging.debug("peer list update: " + peers)
-
-            # add connected peer to processes audience
-            for each_peer in peer_list:
-                utils.logger.spam(f"peer_service:connect_to_radio_station peer({each_peer.target}-{each_peer.status})")
-                if each_peer.status == PeerStatus.connected:
-                    self.__broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, each_peer.target)
 
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
@@ -617,11 +528,6 @@ class ChannelService:
         else:
             if self._is_genesis_node():
                 self.generate_genesis_block()
-
-    def show_peers(self):
-        utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
-        for peer in self.peer_manager.get_IP_of_peers_in_group():
-            utils.logger.debug("peer_target: " + peer)
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
@@ -770,19 +676,32 @@ class ChannelService:
                 'timestamp': _block.header.timestamp
             },
             'transactions': transactions,
-            'isBlockEditable': hex(conf.LOAD_PEERS_FROM_IISS),
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
         }
 
-        utils.logger.notice(f"in score invoke request({request})")
+        if conf.ENABLE_IISS:
+            request['isBlockEditable'] = hex(conf.ENABLE_IISS)
+
+        # utils.logger.notice(f"in score invoke request({request})")
 
         request = convert_params(request, ParamType.invoke)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response = stub.sync_task().invoke(request)
+        response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
-        tx_receipts = response["txResults"]
+        # utils.logger.notice(f"in score invoke response({response})")
+
+        tx_receipts = response.get("txResults", None)
+        if not isinstance(tx_receipts, dict):
+            tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts)}
+
+        added_transactions = response.get("addedTransactions", None)
+        utils.logger.notice(f"in score invoke added_transactions({added_transactions})")
+
+        next_prep = response.get("prep", None)
+        utils.logger.notice(f"in score invoke next_prep({next_prep})")
+
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
@@ -800,6 +719,7 @@ class ChannelService:
         new_block = block_builder.build()
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
+        # utils.logger.notice(f"in score invoke receipt({tx_receipts})")
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 

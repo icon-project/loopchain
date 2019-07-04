@@ -38,7 +38,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
             message_code.Request.get_total_supply: self.__handler_get_total_supply,
             message_code.Request.peer_peer_list: self.__handler_peer_list,
-            message_code.Request.peer_reconnect_to_rs: self.__handler_reconnect_to_rs,
             message_code.Request.peer_restart_channel: self.__handler_restart_channel
         }
 
@@ -171,13 +170,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
                                      object=tx_list_dumped)
-
-    def __handler_reconnect_to_rs(self, request, context):
-        logging.warning(f"RS lost peer info (candidate reason: RS restart)")
-        logging.warning(f"try reconnect to RS....")
-        ObjectManager().channel_service.connect_to_radio_station(is_reconnect=True)
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
 
     def __handler_restart_channel(self, request, context):
         logging.debug(f"Restart_channel({request.channel}) code({request.code}), message({request.message})")

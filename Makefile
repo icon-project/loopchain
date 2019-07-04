@@ -44,7 +44,14 @@ requires:
 install: $(INSTALL_REQUIRES)
 	$(PIP_INSTALL_CMD)
 
-develop: $(INSTALL_REQUIRES)
+# pip install packages
+requires-dev:
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@Loopchain_IISS
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
+	$(PIP_INSTALL) tbears
+
+develop: requires-dev
 	$(PIP_INSTALL_DEVELOP_CMD)
 
 # Generate python gRPC proto
