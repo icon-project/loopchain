@@ -21,8 +21,8 @@ import os
 import time
 from urllib.parse import urlparse, ParseResult
 
-from loopchain import utils
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.radiostation import RadioStationService
@@ -103,8 +103,9 @@ def start_as_channel(args):
 
 def start_as_rest_server(args):
     from iconcommons.icon_config import IconConfig
+    from iconcommons.logger import Logger
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
-    from iconrpcserver import icon_rpcserver_cli
+    from iconrpcserver import icon_rpcserver_app
 
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(args.port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -117,18 +118,17 @@ def start_as_rest_server(args):
 
     additional_conf = {
         "port": api_port,
-        "config": conf_path,
         "amqpTarget": conf.AMQP_TARGET,
         "amqpKey": amqp_key,
-        "channel": conf.LOOPCHAIN_DEFAULT_CHANNEL,
-        "tbearsMode": False
+        "channel": conf.LOOPCHAIN_DEFAULT_CHANNEL
     }
 
-    rpcserver_conf: IconConfig = IconConfig("", default_rpcserver_config)
+    rpcserver_conf: IconConfig = IconConfig(conf_path, default_rpcserver_config)
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
+    Logger.load_config(rpcserver_conf)
 
-    icon_rpcserver_cli.start(rpcserver_conf)
+    icon_rpcserver_app.run_in_foreground(rpcserver_conf)
 
 
 def start_as_rest_server_rs(args):
