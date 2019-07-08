@@ -17,7 +17,6 @@ import json
 import leveldb
 import logging
 import signal
-import time
 import traceback
 from functools import reduce
 from operator import add
@@ -132,8 +131,7 @@ class ChannelService:
 
             channel_name = ChannelProperty().name
             self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
-            results = await StubCollection().peer_stub.async_task().get_channel_info_detail(channel_name)
-
+            results = await StubCollection().peer_stub.async_task().get_node_info_detail()
             await self.init(**results)
 
             self.__timer_service.start()
@@ -210,7 +208,6 @@ class ChannelService:
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().node_type = conf.NodeType(kwargs.get('node_type'))
-        ChannelProperty().score_package = kwargs.get('score_package')
 
         self.__peer_manager = PeerManager(ChannelProperty().name)
         await self.__init_peer_auth()
@@ -218,7 +215,7 @@ class ChannelService:
         self.__init_block_manager()
 
         await self.__init_score_container()
-        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
+        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
     async def __init_network(self):
@@ -396,8 +393,7 @@ class ChannelService:
     async def __run_score_container(self):
         if conf.RUN_ICON_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
-                            '--channel', ChannelProperty().name,
-                            '--score_package', ChannelProperty().score_package]
+                            '--channel', ChannelProperty().name]
             process_args += command_arguments.get_raw_commands_by_filter(
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
@@ -451,8 +447,7 @@ class ChannelService:
         return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
 
     def get_channel_option(self) -> dict:
-        channel_option = conf.CHANNEL_OPTION
-        return channel_option[ChannelProperty().name]
+        return conf.CHANNEL_OPTION[ChannelProperty().name]
 
     def get_channel_infos(self) -> dict:
         return self.__channel_infos
@@ -683,16 +678,11 @@ class ChannelService:
         if self_peer_object.target == peer_leader.target:
             loggers.get_preset().is_leader = True
             loggers.get_preset().update_logger()
-
             logging.debug("I'm Leader Peer!")
         else:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
-
             logging.debug("I'm general Peer!")
-            # 새 leader 에게 subscribe 하기
-            # await self.subscribe_to_radio_station()
-            # await self.subscribe_to_peer(peer_leader.peer_id, loopchain_pb2.BLOCK_GENERATOR)
 
     def genesis_invoke(self, block: Block) -> ('Block', dict):
         method = "icx_sendTransaction"
@@ -791,13 +781,6 @@ class ChannelService:
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
         return new_block, tx_receipts
-
-    def score_change_block_hash(self, block_height, old_block_hash, new_block_hash):
-        change_hash_info = json.dumps({"block_height": block_height, "old_block_hash": old_block_hash,
-                                       "new_block_hash": new_block_hash})
-
-        stub = StubCollection().score_stubs[ChannelProperty().name]
-        stub.sync_task().change_block_hash(change_hash_info)
 
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")

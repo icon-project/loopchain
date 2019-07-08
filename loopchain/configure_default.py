@@ -216,7 +216,6 @@ REST_ADDITIONAL_TIMEOUT = 30  # seconds
 REST_PROXY_DEFAULT_PORT = 5000
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
-ENABLE_MULTI_CHANNEL_REQUEST = True
 
 
 class ApiVersion(IntEnum):
@@ -288,12 +287,7 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
 ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
-# Peer 의 중복 재접속을 허용한다.
-ALLOW_PEER_RECONNECT = True
-# 토큰 유효시간(분)
-TOKEN_INTERVAL = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
-TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
@@ -304,14 +298,13 @@ CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
 LOAD_PEERS_FROM_IISS = False
 
-
 ########
 # MQ ###
 ########
 AMQP_TARGET = "127.0.0.1"
 AMQP_USERNAME = os.getenv("AMQP_USERNAME", "guest")
 AMQP_PASSWORD = os.getenv("AMQP_PASSWORD", "guest")
-AMQP_CONNECTION_ATTEMPS = 32
+AMQP_CONNECTION_ATTEMPTS = 32
 AMQP_RETRY_DELAY = 5
 PEER_QUEUE_NAME_FORMAT = "Peer.{amqp_key}"
 CHANNEL_QUEUE_NAME_FORMAT = "Channel.{channel_name}.{amqp_key}"

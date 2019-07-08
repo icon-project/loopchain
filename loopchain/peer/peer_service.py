@@ -207,9 +207,6 @@ class PeerService:
 
         logging.info(f"run peer_id : {self._peer_id}")
 
-    def timer_test_callback_function(self, message):
-        logging.debug(f'timer test callback function :: ({message})')
-
     @staticmethod
     def _get_use_kms():
         if conf.GRPC_SSL_KEY_LOAD_TYPE == conf.KeyLoadType.KMS_LOAD:
@@ -277,7 +274,7 @@ class PeerService:
 
         async def _serve():
             await self.ready_tasks()
-            await self._inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
+            await self._inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
             if conf.CHANNEL_BUILTIN:
                 await self.serve_channels()
