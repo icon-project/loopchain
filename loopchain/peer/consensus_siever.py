@@ -260,11 +260,14 @@ class ConsensusSiever(ConsensusBase):
             prev_votes_list = prev_votes.votes
         else:
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
-            if prev_votes_dumped:
+            try:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
-                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
-            else:
+            except json.JSONDecodeError:  # handle exception for old votes
                 prev_votes_list = []
+            except TypeError:  # handle exception for not existing (NoneType) votes
+                prev_votes_list = []
+            else:
+                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
         return prev_votes_list
 
     @staticmethod
