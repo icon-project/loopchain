@@ -33,7 +33,6 @@ class LogConfiguration:
         self.service_type = ""
         self.peer_id = ""
         self.channel_name = ""
-        self.score_package = ""
         self.log_level = verboselogs.SPAM
         self.log_color = True
         self.log_output_type = conf.LogOutputType.console
@@ -63,8 +62,7 @@ class LogConfiguration:
         if logger is logging.root:
             self._log_format = self.log_format.format(
                 PEER_ID=self.peer_id[:8] if self.peer_id != "RadioStation" else self.peer_id,
-                CHANNEL_NAME=self.channel_name,
-                SCORE_PACKAGE=self.score_package and f"({self.score_package})"
+                CHANNEL_NAME=self.channel_name
             )
 
             self._update_log_output_type()
@@ -120,11 +118,10 @@ class LogConfiguration:
                             level=self._log_level)
 
     def _update_log_file_path(self):
-        log_file_name = self.log_file_prefix + "{SERVICE_TYPE}{CHANNEL_NAME}{SCORE_PACKAGE}"
+        log_file_name = self.log_file_prefix + "{SERVICE_TYPE}{CHANNEL_NAME}"
         log_file_name = log_file_name.format(
             SERVICE_TYPE=self.service_type and f".{self.service_type}",
-            CHANNEL_NAME=self.channel_name and f".{self.channel_name}",
-            SCORE_PACKAGE=self.score_package and f".{self.score_package}"
+            CHANNEL_NAME=self.channel_name and f".{self.channel_name}"
         ).replace(r"/", r"_")
         log_file_name += f".{self.log_file_extension}"
 

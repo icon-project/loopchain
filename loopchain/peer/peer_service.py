@@ -162,12 +162,12 @@ class PeerService:
                     return None
                 logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
                 return json.loads(response.channel_infos)
-            elif not conf.LOAD_PEERS_FROM_IISS:
-                return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-            else:
+            elif conf.LOAD_PEERS_FROM_IISS:
                 # this is temporary code for legacy support, and will be removed at next release.
                 return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
                         for channel in conf.CHANNEL_OPTION}
+            else:
+                return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
         return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
                 for channel in conf.CHANNEL_OPTION}

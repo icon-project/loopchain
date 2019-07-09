@@ -192,7 +192,7 @@ class ChannelService:
     async def init(self, **kwargs):
         """Initialize Channel Service
 
-        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type, score_package)
+        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type)
         within parameters
         :return: None
         """
