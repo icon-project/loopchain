@@ -24,8 +24,8 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
+from loopchain.baseservice import PeerManager, TimerService
 from loopchain.baseservice import RestStubManager, NodeSubscriber
-from loopchain.baseservice import StubManager, PeerManager, TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
@@ -34,7 +34,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
+from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType
@@ -367,15 +367,10 @@ class ChannelService:
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def __init_radio_station_stub(self):
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.ENABLE_REP_RADIO_STATION:
-                self.__radio_station_stub = StubManager.get_stub_manager_to_server(
-                    ChannelProperty().radio_station_target,
-                    loopchain_pb2_grpc.RadioStationStub,
-                    conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                    ssl_auth_type=conf.GRPC_SSL_TYPE)
-        else:
-            self.__radio_station_stub = RestStubManager(ChannelProperty().radio_station_target, ChannelProperty().name)
+        self.__radio_station_stub = RestStubManager(
+            ChannelProperty().radio_station_target,
+            ChannelProperty().name
+        )
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
