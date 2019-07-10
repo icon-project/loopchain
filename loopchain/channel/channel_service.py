@@ -184,7 +184,7 @@ class ChannelService:
     async def init(self, **kwargs):
         """Initialize Channel Service
 
-        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type)
+        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target)
         within parameters
         :return: None
         """
@@ -196,7 +196,12 @@ class ChannelService:
         ChannelProperty().rest_target = kwargs.get('rest_target')
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
-        ChannelProperty().node_type = conf.NodeType(kwargs.get('node_type'))
+
+        # FIXME this is temporary setting for node_type.
+        if ChannelProperty().radio_station_target:
+            ChannelProperty().node_type = conf.NodeType.CitizenNode
+        else:
+            ChannelProperty().node_type = conf.NodeType.CommunityNode
 
         self.__peer_manager = PeerManager()
         await self.__init_peer_auth()
@@ -208,7 +213,8 @@ class ChannelService:
         await self.__init_sub_services()
 
     async def __init_network(self):
-        self.__init_radio_station_stub()
+        if ChannelProperty().radio_station_target:
+            self.__init_radio_station_stub()
         await self._load_peers()
 
     async def evaluate_network(self):
@@ -304,7 +310,6 @@ class ChannelService:
             new_node_type = self._get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
-            await StubCollection().peer_stub.async_task().change_node_type(new_node_type.value)
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):

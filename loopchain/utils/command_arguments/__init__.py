@@ -65,8 +65,8 @@ types_by_names = {
 
 attributes = {
     Type.ServiceType:
-        Attribute("service_type", type=str,
-                  help="loopchain service to start [rs|peer|citizen|rest|rest-rs|score|tool|admin]"),
+        Attribute("service_type", type=str, default='citizen', nargs='?',
+                  help="loopchain service to start [peer|citizen|tool|admin]"),
 
     Type.Port:
         Attribute("-p", "--port",

@@ -85,10 +85,8 @@ def main(argv):
     async_.thread_monkey_patch()
     async_.concurrent_future_monkey_patch()
 
-    if args.service_type == "peer":
-        start_as_peer(args, conf.NodeType.CommunityNode)
-    elif args.service_type == "citizen":
-        start_as_peer(args, conf.NodeType.CitizenNode)
+    if args.service_type in ("peer", "citizen"):
+        start_as_peer(args)
     elif args.service_type == "rs" or args.service_type == "radiostation":
         start_as_rs(args)
     elif args.service_type == "rest":
@@ -252,12 +250,12 @@ def start_as_tool(args, quick_command):
     print_epilogue()
 
 
-def start_as_peer(args, node_type=None):
+def start_as_peer(args):
     print_prologue()
 
     # apply default configure values
     port = args.port or conf.PORT_PEER
-    radio_station_target = f"{conf.IP_RADIOSTATION}:{conf.PORT_RADIOSTATION}"
+    radio_station_target = None
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
@@ -267,11 +265,6 @@ def start_as_peer(args, node_type=None):
             command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
     check_port_available(int(port))
-
-    if node_type is None:
-        node_type = conf.NodeType.CommunityNode
-    elif node_type == conf.NodeType.CitizenNode and not args.radio_station_target:
-        utils.exit_and_msg(f"citizen node needs subscribing peer target input")
 
     if args.radio_station_target:
         try:
@@ -290,16 +283,11 @@ def start_as_peer(args, node_type=None):
 
         except Exception as e:
             utils.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
-                              f"[IP Address of Radio Station]:[PORT number of Radio Station], "
-                              f"or just [IP Address of Radio Station] format. error({e})")
-
-    # run peer service with parameters
-    logging.info(f"loopchain peer run with: port({port}) "
-                 f"radio station target({radio_station_target})")
+                               f"[IP Address of Radio Station]:[PORT number of Radio Station], "
+                               f"or just [IP Address of Radio Station] format. error({e})")
 
     PeerService(
-        radio_station_target=radio_station_target,
-        node_type=node_type
+        radio_station_target=radio_station_target
     ).serve(
         port=port,
         agent_pin=args.agent_pin,
