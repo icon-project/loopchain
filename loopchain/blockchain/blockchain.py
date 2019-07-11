@@ -733,6 +733,8 @@ class BlockChain:
             block_dump = json.loads(block_dump)
             block_height = self.__block_versioner.get_height(block_dump)
             block_version = self.__block_versioner.get_version(block_height)
+            confirm_info = self.find_confirm_info_by_hash(self.__block_versioner.get_hash(block_dump))
+            block_dump["confirm_prev_block"] = confirm_info is not b''
             self.__last_block = BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dump)
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")

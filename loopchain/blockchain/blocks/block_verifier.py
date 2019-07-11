@@ -99,16 +99,16 @@ class BlockVerifier(ABC):
             self._handle_exception(exception)
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
-        if block.header.prev_hash != prev_block.header.hash:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                     f"PrevHash({block.header.prev_hash.hex()}), "
-                                     f"Expected({prev_block.header.hash.hex()}).")
-            self._handle_exception(exception)
-
         if block.header.height != prev_block.header.height + 1:
             exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                      f"Height({block.header.height}), "
                                      f"Expected({prev_block.header.height + 1}).")
+            self._handle_exception(exception)
+
+        if block.header.prev_hash != prev_block.header.hash:
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"PrevHash({block.header.prev_hash.hex()}), "
+                                     f"Expected({prev_block.header.hash.hex()}).")
             self._handle_exception(exception)
 
     def verify_signature(self, block: 'Block'):

@@ -210,6 +210,7 @@ class ConsensusSiever(ConsensusBase):
                                  f"next_leader({next_leader.hex_hx()}) "
                                  f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
+                ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
                     ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
