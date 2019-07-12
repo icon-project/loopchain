@@ -497,6 +497,8 @@ class BlockChain:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
     def __save_tx_by_address(self, tx: 'Transaction'):
+        if tx.type() == "base":
+            return
         address = tx.from_address.hex_hx()
         return self.add_tx_to_list_by_address(address, tx.hash.hex())
 

@@ -343,7 +343,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        utils.logger.notice(f"ComplainLeader {request.complain_vote}")
+        utils.logger.info(f"ComplainLeader {request.complain_vote}")
 
         channel_stub = StubCollection().channel_stubs[channel]
         asyncio.run_coroutine_threadsafe(

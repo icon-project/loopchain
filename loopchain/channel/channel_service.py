@@ -510,9 +510,6 @@ class ChannelService:
             logger_preset.is_leader = False
         logger_preset.update_logger()
 
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            self.consensus.leader_id = leader_id
-
         self.__block_manager.set_peer_type(peer_type)
 
     def _is_genesis_node(self):
@@ -655,9 +652,10 @@ class ChannelService:
 
         return new_block, tx_receipts
 
-    def score_invoke(self, _block: Block, prev_block: Block) -> dict or None:
+    def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
         method = "icx_sendTransaction"
         transactions = []
+
         for tx in _block.body.transactions.values():
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
                                                       self.__block_manager.get_blockchain().tx_versioner)
@@ -668,7 +666,7 @@ class ChannelService:
             }
             transactions.append(transaction)
 
-        request = {
+        request_origin = {
             'block': {
                 'blockHeight': _block.header.height,
                 'blockHash': _block.header.hash.hex(),
@@ -681,30 +679,43 @@ class ChannelService:
         }
 
         if conf.ENABLE_IISS:
-            request['isBlockEditable'] = hex(conf.ENABLE_IISS)
+            request_origin['isBlockEditable'] = hex(is_block_editable)
 
-        # utils.logger.notice(f"in score invoke request({request})")
-
-        request = convert_params(request, ParamType.invoke)
+        request = convert_params(request_origin, ParamType.invoke)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
-        # utils.logger.notice(f"in score invoke response({response})")
-
-        tx_receipts = response.get("txResults", None)
-        if not isinstance(tx_receipts, dict):
-            tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts)}
-
-        added_transactions = response.get("addedTransactions", None)
-        utils.logger.notice(f"in score invoke added_transactions({added_transactions})")
+        tx_receipts_origin = response.get("txResults", None)
+        if not isinstance(tx_receipts_origin, dict):
+            tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
+        else:
+            tx_receipts = tx_receipts_origin
 
         next_prep = response.get("prep", None)
-        utils.logger.notice(f"in score invoke next_prep({next_prep})")
+        if next_prep:
+            utils.logger.notice(f"in score invoke next_prep({next_prep})")
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
+
+        added_transactions = response.get("addedTransactions", None)
+        if added_transactions:
+            original_transactions = block_builder.transactions.copy()
+            block_builder.transactions.clear()
+
+            for tx_receipt in tx_receipts_origin:
+                try:
+                    tx_data = added_transactions[tx_receipt['txHash']]
+                    tx_version, tx_type = self.__block_manager.get_blockchain().tx_versioner.get_version(tx_data)
+
+                    ts = TransactionSerializer.new(tx_version, tx_type,
+                                                   self.__block_manager.get_blockchain().tx_versioner)
+                    tx = ts.from_(tx_data)
+                except KeyError:
+                    tx = original_transactions[Hash32(bytes.fromhex(tx_receipt['txHash']))]
+                block_builder.transactions[tx.hash] = tx
 
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
@@ -719,7 +730,6 @@ class ChannelService:
         new_block = block_builder.build()
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
-        # utils.logger.notice(f"in score invoke receipt({tx_receipts})")
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 

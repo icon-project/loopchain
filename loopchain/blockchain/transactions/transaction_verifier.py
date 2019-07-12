@@ -67,7 +67,7 @@ class TransactionVerifier(ABC):
         hash_generator_version = versioner.get_hash_generator_version(version)
 
         from . import v3_issue
-        if version == v3_issue.version and type_ == "issue":
+        if version == v3_issue.version and type_ == "base":
             return v3_issue.TransactionVerifier(hash_generator_version)
 
         from . import v3

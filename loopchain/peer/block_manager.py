@@ -218,9 +218,6 @@ class BlockManager:
         return self.__blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     def get_tx_queue(self):
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            return self.__consensus.get_tx_queue()
-
         return self.__txQueue
 
     def get_count_of_unconfirmed_tx(self):

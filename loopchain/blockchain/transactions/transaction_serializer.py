@@ -41,7 +41,7 @@ class TransactionSerializer(ABC):
         hash_generator_version = versioner.get_hash_generator_version(version)
 
         from . import v3_issue
-        if version == v3_issue.version and type_ == "issue":
+        if version == v3_issue.version and type_ == "base":
             return v3_issue.TransactionSerializer(hash_generator_version)
 
         from . import v3

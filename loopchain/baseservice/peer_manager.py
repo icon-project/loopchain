@@ -140,8 +140,6 @@ class PeerManager:
         return peer_ids_hash
 
     def load_peers_from_iiss(self):
-        util.logger.debug(f"load peers from iiss...")
-
         request = {
             "method": "ise_getPRepList"
         }
@@ -151,8 +149,8 @@ class PeerManager:
         response = cast(dict, stub.sync_task().call(request))
         response_to_json_query(response)
 
-        util.logger.notice(f"in load_peers_from_iiss response({response})")
-        if not response['result'].get('preps'):
+        util.logger.debug(f"in load_peers_from_iiss response({response})")
+        if 'preps' not in response['result']:
             util.logger.debug(f"There is no preps in result.")
             return
 
@@ -163,23 +161,20 @@ class PeerManager:
             util.logger.debug(f"There is no change in peers.")
             return
 
-        util.logger.debug(f"Peer manager have to update with new list.")
-        self.reset_peers(check_status=False)
-
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
+        util.logger.debug(f"Peer manager have to update with new list.")
+        self.reset_peers(check_status=False)
+
         reps = response["result"]["preps"]
         self._add_reps(reps)
-
-        self.show_peers()
 
     async def load_peers_from_file(self):
         channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
         for peer_info in reps:
             self.add_peer(peer_info)
-        self.show_peers()
 
     async def load_peers_from_rest_call(self):
         # FIXME temporarily disable GetReps API for legacy support

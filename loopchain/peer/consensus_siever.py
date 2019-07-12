@@ -193,7 +193,10 @@ class ConsensusSiever(ConsensusBase):
                     return self.__block_generation_timer.call()
 
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
-            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block, last_block)
+
+            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(
+                candidate_block, last_block, conf.ENABLE_IISS
+            )
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
@@ -231,7 +234,6 @@ class ConsensusSiever(ConsensusBase):
         :param candidate_block:
         :return: vote_result or None
         """
-        # util.logger.notice(f"_wait_for_voting block({candidate_block.header.hash})")
         while True:
             votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
             util.logger.info(f"Votes : {votes.get_summary()}")

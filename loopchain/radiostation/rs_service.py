@@ -131,20 +131,6 @@ class RadioStationService:
                 logging.debug(f"register Peer : channel = {channel_name}, peer_info = {peer_info}")
                 peer_manager.add_peer(peer_info)
 
-            if conf.ENABLE_RADIOSTATION_HEARTBEAT:
-                timer_key = f"{TimerService.TIMER_KEY_RS_HEARTBEAT}_{channel_name}"
-                if timer_key not in self.timer_service.timer_list:
-                    self.timer_service.add_timer(
-                        timer_key,
-                        Timer(
-                            target=timer_key,
-                            duration=conf.SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT,
-                            is_repeat=True,
-                            callback=self.check_peer_status,
-                            callback_kwargs={"channel": channel_name}
-                        )
-                    )
-
     def serve(self, port: int = None, event_for_init: multiprocessing.Event=None):
         """Peer(BlockGenerator Peer) to RadioStation
 

@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict
+
+from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
-from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer
 
 
@@ -18,7 +18,7 @@ class BlockBuilder(ABC):
         self.prev_hash: 'Hash32' = None
         self.signer: 'Signer' = None
 
-        self.transactions: Dict['Hash32', 'Transaction'] = OrderedDict()
+        self.transactions: OrderedDict['Hash32', 'Transaction'] = OrderedDict()
 
         # Attributes to be generated
         self.block: Block = None

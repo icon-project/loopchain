@@ -203,20 +203,6 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         """
         logging.info(f"Trying to connect peer: {request.peer_id}")
 
-        if conf.ENABLE_RADIOSTATION_HEARTBEAT:
-            timer_key = f"{TimerService.TIMER_KEY_RS_HEARTBEAT}_{request.channel}"
-            if timer_key not in ObjectManager().rs_service.timer_service.timer_list:
-                ObjectManager().rs_service.timer_service.add_timer(
-                    timer_key,
-                    Timer(
-                        target=timer_key,
-                        duration=conf.SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT,
-                        is_repeat=True,
-                        callback=ObjectManager().rs_service.check_peer_status,
-                        callback_kwargs={"channel": request.channel}
-                    )
-                )
-
         if conf.ENABLE_CHANNEL_AUTH:
             if request.peer_target not in ObjectManager().rs_service.admin_manager.get_peer_list_by_channel(
                     request.channel):
