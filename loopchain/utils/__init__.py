@@ -25,19 +25,20 @@ import sys
 import time
 import timeit
 import traceback
-import verboselogs
 from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
-from fluent import event
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
+from typing import Tuple, Optional
+
+import verboselogs
+from fluent import event
 
 from loopchain import configure as conf
 from loopchain.protos import loopchain_pb2, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
-from loopchain.store.key_value_store_factory import KeyValueStoreFactory
+from loopchain.tools.grpc_helper import GRPCHelper
 
 apm_event = None
 
@@ -465,7 +466,7 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def init_default_key_value_store(store_identity) -> KeyValueStore:
+def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
     """init default key value store
 
     :param store_identity: identity for store
@@ -474,8 +475,7 @@ def init_default_key_value_store(store_identity) -> KeyValueStore:
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    store_default_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
-    store_path = store_default_path
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
     logger.spam(f"utils:init_default_key_value_store ({store_identity})")
 
     retry_count = 0
@@ -483,7 +483,7 @@ def init_default_key_value_store(store_identity) -> KeyValueStore:
     while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
             uri = f"file://{store_path}"
-            store = KeyValueStoreFactory.new(uri, create_if_missing=True)
+            store = KeyValueStore.new(uri, create_if_missing=True)
         except KeyValueStoreError as e:
             logging.error(f"KeyValueStoreError: {e}")
             logger.debug(f"retry_count: {retry_count}, uri: {uri}")

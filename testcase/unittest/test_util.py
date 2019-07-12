@@ -37,7 +37,6 @@ from loopchain.peer import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
 from loopchain.radiostation import RadioStationService
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
-from loopchain.store.key_value_store_factory import KeyValueStoreFactory
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
@@ -165,7 +164,7 @@ def make_key_value_store(store_identity="") -> KeyValueStore:
     while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
             uri = f"file://{store_path}"
-            store = KeyValueStoreFactory.new(uri, create_if_missing=True)
+            store = KeyValueStore.new(uri, create_if_missing=True)
             logging.debug(f"make key value store uri: {uri}")
         except KeyValueStoreError:
             store_path = store_default_path + str(retry_count)

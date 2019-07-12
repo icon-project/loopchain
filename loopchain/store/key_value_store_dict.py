@@ -93,12 +93,12 @@ class _KeyValueStoreCancelableWriteBatchDict(KeyValueStoreCancelableWriteBatch):
 class KeyValueStoreDict(KeyValueStore):
     """KeyValueStoreDict class is just for development"""
 
-    def __init__(self):
+    def __init__(self, **kwargs):
         self._store_items = dict()
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def get(self, key: bytes, default=None, **kwargs) -> bytes:
+    def get(self, key: bytes, *, default=None, **kwargs) -> bytes:
         if default is not None:
             _validate_args_bytes(default)
 
@@ -111,12 +111,12 @@ class KeyValueStoreDict(KeyValueStore):
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def put(self, key: bytes, value: bytes, sync=False, **kwargs):
+    def put(self, key: bytes, value: bytes, *, sync=False, **kwargs):
         self._store_items[key] = value
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def delete(self, key: bytes, sync=False, **kwargs):
+    def delete(self, key: bytes, *, sync=False, **kwargs):
         try:
             del self._store_items[key]
         except KeyError:
@@ -124,7 +124,8 @@ class KeyValueStoreDict(KeyValueStore):
 
     @_error_convert
     def close(self):
-        self._store_items = None
+        if not self._store_items:
+            self._store_items = None
 
     @_error_convert
     def destroy_store(self):
@@ -139,9 +140,9 @@ class KeyValueStoreDict(KeyValueStore):
         return _KeyValueStoreCancelableWriteBatchDict(self, self._store_items)
 
     @_error_convert
-    def Iterator(self, start_key: bytes=None, stop_key: bytes=None, include_value: bool=True, **kwargs):
+    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         if start_key is not None or stop_key is not None:
-            raise ValueError(f"Unsupport arguments which are start_key and stop_key")
+            raise ValueError(f"Unsupported arguments which are start_key and stop_key")
 
         if include_value:
             return self._store_items.items()

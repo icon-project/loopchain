@@ -40,6 +40,7 @@ from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, message_code, loopchain_pb2
+from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -343,13 +344,13 @@ class ChannelService:
         try:
             self.__block_manager = BlockManager(
                 name="loopchain.peer.BlockManager",
-                channel_manager=self,
+                channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
                 store_identity=ChannelProperty().peer_target
             )
-        except leveldb.LevelDBError as e:
-            utils.exit_and_msg("LevelDBError(" + str(e) + ")")
+        except KeyValueStoreError as e:
+            utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
 
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
@@ -553,7 +554,7 @@ class ChannelService:
         self.__block_manager.set_peer_type(peer_type)
 
     def save_peer_manager(self, peer_manager):
-        """peer_list 를 leveldb 에 저장한다.
+        """Save peer_list to leveldb
 
         :param peer_manager:
         """

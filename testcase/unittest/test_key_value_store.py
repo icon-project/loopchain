@@ -20,8 +20,7 @@ import unittest
 
 import testcase.unittest.test_util as test_util
 from loopchain import utils
-from loopchain.store.key_value_store import KeyValueStoreError
-from loopchain.store.key_value_store_factory import KeyValueStoreFactory
+from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 
 utils.loggers.set_preset_type(utils.loggers.PresetType.develop)
 utils.loggers.update_preset()
@@ -35,7 +34,7 @@ class TestKeyValueStore(unittest.TestCase):
     def tearDown(self):
         pass
 
-    def _get_test_items(self, count: int=5):
+    def _get_test_items(self, count: int = 5):
         test_items = dict()
         for i in range(1, count + 1):
             key = bytes(f"test_key_{i}", encoding='utf-8')
@@ -45,13 +44,13 @@ class TestKeyValueStore(unittest.TestCase):
 
     def _new_store(self, uri, store_type=None, create_if_missing=True):
         try:
-            store = KeyValueStoreFactory.new(uri, store_type=store_type, create_if_missing=False)
+            store = KeyValueStore.new(uri, store_type=store_type, create_if_missing=False)
         except KeyValueStoreError as e:
             utils.logger.spam(f"Doesn't need to clean the store. uri={uri}, e={e}")
         else:
             store.destroy_store()
 
-        return KeyValueStoreFactory.new(uri, store_type=store_type, create_if_missing=create_if_missing)
+        return KeyValueStore.new(uri, store_type=store_type, create_if_missing=create_if_missing)
 
     def test_key_value_store_basic(self):
         test_items = self._get_test_items(5)
@@ -70,7 +69,7 @@ class TestKeyValueStore(unittest.TestCase):
         with self.assertRaises(KeyError):
             store.get(b'unknown_key')
 
-        self.assertEqual(store.get(b'unknown_key', b'test_default_value'), b'test_default_value')
+        self.assertEqual(store.get(b'unknown_key', default=b'test_default_value'), b'test_default_value')
 
         count = 0
         for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4'):
@@ -177,16 +176,16 @@ class TestKeyValueStore(unittest.TestCase):
 
         leveldb_store = self._new_store(
             "file://./key_value_store_test_verify_leveldb_and_plyvel",
-            store_type=KeyValueStoreFactory.STORE_TYPE_LEVELDB,
+            store_type=KeyValueStore.STORE_TYPE_LEVELDB,
             create_if_missing=True
         )
 
         for key, value in test_items.items():
             leveldb_store.put(key, value)
 
-        plyvel_store = KeyValueStoreFactory.new(
+        plyvel_store = KeyValueStore.new(
             "file://./key_value_store_test_verify_leveldb_and_plyvel",
-            store_type=KeyValueStoreFactory.STORE_TYPE_PLYVEL,
+            store_type=KeyValueStore.STORE_TYPE_PLYVEL,
             create_if_missing=False
         )
 
@@ -209,15 +208,15 @@ class TestKeyValueStore(unittest.TestCase):
 
     @unittest.skip
     def test_key_value_store_verify_compatibility_with_existent_store(self):
-        leveldb_store = KeyValueStoreFactory.new(
+        leveldb_store = KeyValueStore.new(
             "file://./existent_db",
-            store_type=KeyValueStoreFactory.STORE_TYPE_LEVELDB,
+            store_type=KeyValueStore.STORE_TYPE_LEVELDB,
             create_if_missing=False
         )
 
-        plyvel_store = KeyValueStoreFactory.new(
+        plyvel_store = KeyValueStore.new(
             "file://./existent_db_copy",
-            store_type=KeyValueStoreFactory.STORE_TYPE_PLYVEL,
+            store_type=KeyValueStore.STORE_TYPE_PLYVEL,
             create_if_missing=False
         )
 

@@ -98,7 +98,7 @@ class KeyValueStorePlyvel(KeyValueStore):
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def get(self, key: bytes, default=None, **kwargs) -> bytes:
+    def get(self, key: bytes, *, default=None, **kwargs) -> bytes:
         if default is not None:
             _validate_args_bytes(default)
 
@@ -109,17 +109,19 @@ class KeyValueStorePlyvel(KeyValueStore):
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def put(self, key: bytes, value: bytes, sync=False, **kwargs):
+    def put(self, key: bytes, value: bytes, *, sync=False, **kwargs):
         self._db.put(key, value, sync=sync, **kwargs)
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def delete(self, key: bytes, sync=False, **kwargs):
+    def delete(self, key: bytes, *, sync=False, **kwargs):
         self._db.delete(key, sync=sync, **kwargs)
 
     @_error_convert
     def close(self):
-        self._db.close()
+        if self._db:
+            self._db.close()
+            self._db = None
 
     @_error_convert
     def destroy_store(self):
@@ -135,7 +137,7 @@ class KeyValueStorePlyvel(KeyValueStore):
         return _KeyValueStoreCancelableWriteBatchPlyvel(self, self._db, sync=sync)
 
     @_error_convert
-    def Iterator(self, start_key: bytes=None, stop_key: bytes=None, include_value: bool=True, **kwargs):
+    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         if 'start' in kwargs or 'stop' in kwargs:
             raise ValueError(f"Use start_key and stop_key arguments instead of start and stop arguments")
 

@@ -16,6 +16,8 @@
 import abc
 import functools
 
+from loopchain import utils, configure as conf
+
 
 class KeyValueStoreError(Exception):
     pass
@@ -76,6 +78,7 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
     # Store: key1/value1, key2/value2
     """
+
     def __init__(self, store: 'KeyValueStore', sync=False):
         self._store = store
         self._batch = self._store.WriteBatch(sync=sync)
@@ -134,8 +137,35 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
 
 class KeyValueStore(abc.ABC):
+    STORE_TYPE_PLYVEL = 'plyvel'
+    STORE_TYPE_LEVELDB = 'leveldb'
+    STORE_TYPE_DICT = 'dict'
+
+    @staticmethod
+    def new(uri: str, store_type: str = None, **kwargs) -> 'KeyValueStore':
+        if store_type is None:
+            store_type = conf.DEFAULT_KEY_VALUE_STORE_TYPE
+
+        utils.logger.info(f"New KeyValueStore. store_type={store_type}, uri={uri}")
+
+        if store_type == KeyValueStore.STORE_TYPE_PLYVEL:
+            utils.logger.debug(f"New KeyValueStorePlyvel.")
+            from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
+            return KeyValueStorePlyvel(uri, **kwargs)
+        elif store_type == KeyValueStore.STORE_TYPE_LEVELDB:
+            utils.logger.warning(f"New KeyValueStoreLevelDb. store_type={store_type}, uri={uri}")
+            from loopchain.store.key_value_store_leveldb import KeyValueStoreLevelDb
+            return KeyValueStoreLevelDb(uri, **kwargs)
+        elif store_type == KeyValueStore.STORE_TYPE_DICT:
+            raise ValueError(f"KeyValueStoreDict is just for development.")
+            # if you want to use keyValueStoreDict for develop, uncomment below lines
+            # from loopchain.store.key_value_store_dict import KeyValueStoreDict
+            # return KeyValueStoreDict(**kwargs)
+        else:
+            raise ValueError(f"store_name is invalid. store_type={store_type}")
+
     @abc.abstractmethod
-    def get(self, key: bytes, default=None, **kwargs) -> bytes:
+    def get(self, key: bytes, *, default=None, **kwargs) -> bytes:
         """Get a value of the key
 
         :param key:
@@ -146,19 +176,21 @@ class KeyValueStore(abc.ABC):
         raise NotImplementedError("get() function is interface method")
 
     @abc.abstractmethod
-    def put(self, key: bytes, value: bytes, sync=False, **kwargs):
+    def put(self, key: bytes, value: bytes, *, sync=False, **kwargs):
         """Add or modify a value of the key.
 
         :param key:
         :param value:
+        :param sync:
         """
         raise NotImplementedError("put() function is interface method")
 
     @abc.abstractmethod
-    def delete(self, key: bytes, sync=False, **kwargs):
+    def delete(self, key: bytes, *, sync=False, **kwargs):
         """Delete a record of the key.
 
         :param key:
+        :param sync:
         """
         raise NotImplementedError("delete() function is interface method")
 
@@ -187,7 +219,7 @@ class KeyValueStore(abc.ABC):
         raise NotImplementedError("CancelableWriteBatch constructor is not implemented in KeyValueStore class")
 
     @abc.abstractmethod
-    def Iterator(self, start_key: bytes=None, stop_key: bytes=None, include_value: bool=True, **kwargs):
+    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         """Return iterator
 
         :param start_key: a start key (inclusive)

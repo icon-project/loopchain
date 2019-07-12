@@ -101,7 +101,7 @@ class KeyValueStoreLevelDb(KeyValueStore):
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def get(self, key, default=None, **kwargs) -> bytes:
+    def get(self, key, *, default=None, **kwargs) -> bytes:
         if default is not None:
             _validate_args_bytes(default)
 
@@ -114,18 +114,19 @@ class KeyValueStoreLevelDb(KeyValueStore):
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def put(self, key, value, sync=False, **kwargs):
+    def put(self, key, value, *, sync=False, **kwargs):
         self._db.Put(key, value, sync=sync, **kwargs)
 
     @_validate_args_bytes_without_first
     @_error_convert
-    def delete(self, key, sync=False, **kwargs):
+    def delete(self, key, *, sync=False, **kwargs):
         self._db.Delete(key, sync=sync, **kwargs)
 
     @_error_convert
     def close(self):
-        del self._db
-        self._db = None
+        if self._db:
+            del self._db
+            self._db = None
 
     @_error_convert
     def destroy_store(self):
@@ -141,7 +142,7 @@ class KeyValueStoreLevelDb(KeyValueStore):
         return _KeyValueStoreCancelableWriteBatchLevelDb(self, self._db, sync)
 
     @_error_convert
-    def Iterator(self, start_key: bytes=None, stop_key: bytes=None, include_value: bool=True, **kwargs):
+    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         if 'key_from' in kwargs or 'key_to' in kwargs:
             raise ValueError(f"Use start_key and stop_key arguments instead of key_from and key_to arguments")
 
