@@ -33,7 +33,7 @@ from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import message_code
+from loopchain.p2p import message_code
 
 ws_methods = Methods()
 CONNECTION_FAIL_CONDITIONS = {

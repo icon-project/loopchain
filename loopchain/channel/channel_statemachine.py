@@ -6,12 +6,11 @@ import traceback
 from earlgrey import MessageQueueService
 from transitions import State
 
-import loopchain.utils as util
-from loopchain import configure as conf
+from loopchain import utils, configure as conf
 from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
-from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2
+from loopchain.p2p import status_code
+from loopchain.p2p.p2p_service import PeerType
 from loopchain.statemachine import statemachine
 from loopchain.utils import loggers
 
@@ -36,7 +35,7 @@ class ChannelStateMachine(object):
                     on_exit='_subscribe_network_on_exit'),
               State(name='Watch',
                     ignore_invalid_triggers=True,
-                    on_enter='_watch_on_enter', 
+                    on_enter='_watch_on_enter',
                     on_exit='_watch_on_exit'),
               State(name='Vote',
                     ignore_invalid_triggers=True,
@@ -121,7 +120,7 @@ class ChannelStateMachine(object):
 
     def _is_leader(self):
         return (not self._has_no_vote_function() and
-                self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR)
+                self.__channel_service.block_manager.peer_type == PeerType.BLOCK_GENERATOR)
 
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
@@ -138,9 +137,9 @@ class ChannelStateMachine(object):
                 self._run_coroutine_threadsafe(
                     self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_))
             except UnrecordedBlock as e:
-                util.logger.info(e)
+                utils.logger.info(e)
             except InvalidUnconfirmedBlock as e:
-                util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
+                utils.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
             self._run_coroutine_threadsafe(
                 self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
@@ -203,11 +202,11 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
     def _leadercomplain_on_enter(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_enter")
+        utils.logger.debug(f"_leadercomplain_on_enter")
         self.__channel_service.block_manager.leader_complain()
 
     def _leadercomplain_on_exit(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_exit")
+        utils.logger.debug(f"_leadercomplain_on_exit")
 
     def _run_coroutine_threadsafe(self, coro):
         async def _run_with_handling_exception():

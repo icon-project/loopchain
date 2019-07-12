@@ -19,12 +19,20 @@ from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
     from loopchain.peer import PeerInnerStub
-    from loopchain.channel.channel_inner_service import ChannelInnerStub, \
-        ChannelTxReceiverInnerStub, ChannelTxCreatorInnerStub
+    from loopchain.channel.channel_inner_service import (ChannelInnerStub,
+                                                         ChannelTxCreatorInnerStub,
+                                                         ChannelTxReceiverInnerStub)
     from loopchain.scoreservice import IconScoreInnerStub
 
 
 class StubCollection(metaclass=SingletonMetaClass):
+    """
+    rpc stubs with rabbitmq for inter process communication
+
+    FIXME : consider singleton to borg
+    ref : https://github.com/faif/python-patterns/blob/master/patterns/creational/borg.py
+    """
+
     def __init__(self):
         self.amqp_target = None
         self.amqp_key = None

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import asyncio
-import json
 import logging
 import signal
 import traceback
@@ -24,14 +23,13 @@ from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
-from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
-from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
+from loopchain.p2p.p2p_service import PeerType
 from loopchain.peer import BlockManager
-from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType
@@ -448,7 +446,7 @@ class ChannelService:
             logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
-        peer_type = loopchain_pb2.PEER
+        peer_type = PeerType.PEER
         leader_id = self.__block_manager.get_next_leader()
         utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
@@ -456,7 +454,7 @@ class ChannelService:
         if ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
             utils.logger.info(f"Set Peer Type Leader! channel({ChannelProperty().name})")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
+            peer_type = PeerType.BLOCK_GENERATOR
         else:
             logger_preset.is_leader = False
         logger_preset.update_logger()
@@ -513,11 +511,11 @@ class ChannelService:
 
         if ChannelProperty().peer_id == new_leader_id:
             utils.logger.debug("Set Peer Type Leader!")
-            peer_type = loopchain_pb2.BLOCK_GENERATOR
+            peer_type = PeerType.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
         else:
             utils.logger.debug("Set Peer Type Peer!")
-            peer_type = loopchain_pb2.PEER
+            peer_type = PeerType.BLOCK_GENERATOR
             self.state_machine.turn_to_peer()
 
         self.__block_manager.set_peer_type(peer_type)

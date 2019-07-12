@@ -12,12 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """gRPC helper for security"""
-
 import logging
 from concurrent import futures
 
+import grpc
+
+from loopchain import configure as conf
 from loopchain.components import SingletonMetaClass
-from loopchain.tools.grpc_helper.grpc_connector import *
+from .grpc_connector import GRPCConnector, GRPCConnectorInsecure, GRPCConnectorServerOnly, GRPCConnectorMutual
+from .grpc_secure_key import GRPCSecureKeyCollection
+
+__all__ = ['GRPCHelper']
 
 
 class GRPCHelper(metaclass=SingletonMetaClass):

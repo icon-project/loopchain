@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright 2018 ICON Foundation
@@ -31,8 +30,8 @@ from loopchain.baseservice import CommonSubprocess
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVersioner
 from loopchain.blockchain.types import Address
+from loopchain.p2p.protos import loopchain_pb2_grpc
 from loopchain.peer import Signer
-from loopchain.protos import loopchain_pb2_grpc
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
@@ -48,6 +47,7 @@ def run_peer_server_as_process(port, radiostation_port=conf.PORT_RADIOSTATION, g
     return CommonSubprocess(args)
 
 
+# FIXME : not use?
 def run_peer_server_as_process_and_stub(
         port, radiostation_port=conf.PORT_RADIOSTATION, group_id=None, score=None, timeout=None, wait=True):
     if timeout is None:
@@ -77,7 +77,8 @@ def run_peer_server_as_process_and_stub(
         except Exception as e:
             logging.warning(f"Exception in loop : {e}")
 
-    stub, channel = util.get_stub_to_server(f"localhost:{port}", stub_class=loopchain_pb2_grpc.PeerServiceStub)
+    stub, channel = util.get_stub_to_server(target=f"localhost:{port}",
+                                            stub_class=loopchain_pb2_grpc.PeerServiceStub)
     return process, stub
 
 
@@ -152,6 +153,10 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
 
 
 def add_genesis_block():
+    """ FIXME: unresloved code, remove this?
+    :return:
+    """
+
     tx_info = None
     channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
 

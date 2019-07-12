@@ -5,18 +5,22 @@ import datetime
 import logging
 import time
 import timeit
+from concurrent import futures
 
 import grpc
 from grpc._channel import _Rendezvous
 
-import loopchain.utils as util
-from loopchain import configure as conf
+# TODO : how to use utils and configure from loopchain
+from loopchain import utils, configure as conf
 
 
 class StubManager:
+    """gRPC call manager
+    FIXME : change class name to p2p server request manager? need refactoring
+    """
 
-    def __init__(self, target, stub_type, ssl_auth_type=conf.SSLAuthType.none):
-        self.__target = target
+    def __init__(self, target: str, stub_type, ssl_auth_type=conf.SSLAuthType.none):
+        self.__target: str = target
         self.__stub_type = stub_type
         self.__ssl_auth_type = ssl_auth_type
         self.__stub = None
@@ -27,17 +31,15 @@ class StubManager:
         self.__make_stub(False)
 
     def __make_stub(self, is_stub_reuse=True):
-        if util.datetime_diff_in_mins(self.__stub_update_time) >= conf.STUB_REUSE_TIMEOUT or \
+        if utils.datetime_diff_in_mins(self.__stub_update_time) >= conf.STUB_REUSE_TIMEOUT or \
                 not is_stub_reuse or self.__stub is None:
-            util.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
+            utils.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
 
-            self.__stub, self.__channel = util.get_stub_to_server(
+            self.__stub, self.__channel = utils.get_stub_to_server(
                 self.__target, self.__stub_type, ssl_auth_type=self.__ssl_auth_type)
             self.__stub_update_time = datetime.datetime.now()
             if self.__stub:
                 self.__update_last_succeed_time()
-        else:
-            pass
 
     @property
     def stub(self, is_stub_reuse=True):
@@ -50,7 +52,7 @@ class StubManager:
         self.__stub = value
 
     @property
-    def target(self):
+    def target(self) -> str:
         return self.__target
 
     def elapsed_last_succeed_time(self):
@@ -77,10 +79,10 @@ class StubManager:
         return None
 
     @staticmethod
-    def print_broadcast_fail(result: _Rendezvous):
+    def print_broadcast_fail(result: _Rendezvous, exception=None):
         if result.code() != grpc.StatusCode.OK:
             logging.warning(f"call_async fail  : {result}\n"
-                            f"cause by : {result.details()}")
+                            f"cause by : {exception}\n")
 
     def call_async(self, method_name, message, call_back=None, timeout=None, is_stub_reuse=True) -> grpc.Future:
         if timeout is None:
@@ -92,7 +94,20 @@ class StubManager:
         def done_callback(result: _Rendezvous):
             if result.code() == grpc.StatusCode.OK:
                 self.__update_last_succeed_time()
-            call_back(result)
+
+            if isinstance(result, _Rendezvous) and result.code() == grpc.StatusCode.OK:
+                return
+            if isinstance(result, futures.Future) and not result.exception():
+                return
+
+            exception = None
+            if isinstance(result, _Rendezvous):
+                exception = result.details()
+            elif isinstance(result, futures.Future):
+                # FIXME : Is possible result instance futures.Future?
+                exception = result.exception()
+
+            call_back(result, exception)
 
         try:
             stub_method = getattr(self.__stub, method_name)
@@ -130,7 +145,7 @@ class StubManager:
                               + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
                               + ") timeout(" + str(time_out_seconds) + ")")
 
-            # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
+            # sleep for RETRY_INTERVAL, retry if remain TIMEOUT
             time.sleep(conf.CONNECTION_RETRY_INTERVAL)
             self.__make_stub(False)
             duration = timeit.default_timer() - start_time

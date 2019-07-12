@@ -24,7 +24,7 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
-from loopchain.tools.grpc_helper import grpc_patcher
+from loopchain.p2p.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async_
 
 

@@ -34,6 +34,9 @@ class DataType(IntEnum):
 
 
 class Configure(metaclass=SingletonMetaClass):
+    """
+    FIXME : consider borg(monostate) pattern
+    """
 
     def __init__(self):
         self.__configure_info_list = {}

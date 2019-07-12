@@ -34,8 +34,8 @@ from typing import Tuple, Union
 import verboselogs
 
 from loopchain import configure as conf
+from loopchain.p2p.grpc_helper import GRPCHelper
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
-from loopchain.tools.grpc_helper import GRPCHelper
 
 logger = verboselogs.VerboseLogger("dev")
 

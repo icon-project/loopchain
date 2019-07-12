@@ -23,7 +23,7 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes import Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
-from loopchain.protos import message_code
+from loopchain.p2p import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils.message_queue import StubCollection
 

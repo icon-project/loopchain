@@ -18,35 +18,27 @@ import asyncio
 import getpass
 import logging
 import multiprocessing
-import os
 import signal
 import timeit
-
-import grpc
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import CommonSubprocess, ObjectManager, RestService
 from loopchain.crypto.signature import Signer
-from loopchain.peer import PeerInnerService, PeerOuterService
-from loopchain.protos import loopchain_pb2_grpc
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.p2p.p2p_service import P2PService
+from loopchain.peer import PeerInnerService
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
 
 class PeerService:
-    """Main class of peer service having outer & inner gRPC interface
-
+    """Peer Service
+    p2p networking with P2PService(outer) and inter process communication with rabbitMQ(inner)
     """
     def __init__(self):
-        """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
-
-        :return:
-        """
         self._peer_id = None
         self._node_key = bytes()
-        self.p2p_outer_server: grpc.Server = None
+        self.p2p_service: P2PService = None
         self._channel_infos = None
 
         self._peer_target = None
@@ -55,7 +47,6 @@ class PeerService:
 
         # gRPC service for Peer
         self._inner_service: PeerInnerService = None
-        self._outer_service: PeerOuterService = None
 
         self._channel_services = {}
         self._rest_service = None
@@ -65,10 +56,6 @@ class PeerService:
     @property
     def inner_service(self):
         return self._inner_service
-
-    @property
-    def outer_service(self):
-        return self._outer_service
 
     @property
     def peer_target(self):
@@ -93,9 +80,6 @@ class PeerService:
     @property
     def node_key(self):
         return self._node_key
-
-    def p2p_server_stop(self):
-        self.p2p_outer_server.stop(None)
 
     def _init_port(self, port):
         # service 초기화 작업
@@ -153,9 +137,11 @@ class PeerService:
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
-    def run_p2p_server(self):
-        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
-        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self.p2p_outer_server)
+    def start_p2p_server(self):
+        self.p2p_service.start_server()
+
+    def stop_p2p_server(self):
+        self.p2p_service.stop_server()
 
     def serve(self,
               port,
@@ -185,14 +171,15 @@ class PeerService:
         StubCollection().amqp_key = amqp_key
 
         peer_queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=amqp_key)
-        self._outer_service = PeerOuterService()
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
         self._channel_infos = conf.CHANNEL_OPTION
 
         self._run_rest_services(port)
-        self.run_p2p_server()
+
+        self.p2p_service = P2PService(self._peer_port)
+        self.start_p2p_server()
 
         self._close_kms_helper()
 
@@ -239,7 +226,7 @@ class PeerService:
             except asyncio.CancelledError as e:
                 logging.info(f"_cleanup() task : {task}, error : {e}")
 
-        self.p2p_server_stop()
+        self.stop_p2p_server()
         logging.info("_cleanup() p2p server.")
 
         if self._rest_service is not None:

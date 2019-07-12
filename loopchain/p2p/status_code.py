@@ -15,16 +15,23 @@
 
 from enum import IntEnum
 
-import loopchain_pb2
-
 
 class Service(IntEnum):
+    """
+    TODO : peer type is need in this enum?
+    same value can't use by key of dict :
+    https://docs.python.org/3.6/library/enum.html?highlight=enum#duplicating-enum-members-and-values
+    """
+
     # Service state Code >= 0 : Service available states
     online = 0
+
+    """
     peer_type_peer = loopchain_pb2.PEER  # 0
     peer_type_leader = loopchain_pb2.BLOCK_GENERATOR  # 1
     peer_type_community = loopchain_pb2.CommunityNode  # 3
     peer_type_citizen = loopchain_pb2.CitizenNode  # 1
+    """
 
     # Service state Code < 0 : Service not available states
     block_height_sync = -100
@@ -33,10 +40,11 @@ class Service(IntEnum):
 
 __StatusReasonMap = {
     Service.online: str(Service.online),
-    Service.peer_type_peer: str(Service.peer_type_peer),
-    Service.peer_type_leader: str(Service.peer_type_leader),
-    Service.peer_type_community: str(Service.peer_type_community),
-    Service.peer_type_citizen: str(Service.peer_type_citizen),
+    # FIXME : not use
+    # Service.peer_type_peer: str(Service.peer_type_peer),
+    # Service.peer_type_leader: str(Service.peer_type_leader),
+    # Service.peer_type_community: str(Service.peer_type_community),
+    # Service.peer_type_citizen: str(Service.peer_type_citizen),
     Service.block_height_sync: "block height sync",
     Service.mq_down: "mq down"
 }

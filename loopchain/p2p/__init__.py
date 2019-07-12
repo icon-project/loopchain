@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .grpc_helper import *
-from .grpc_connector import *
-from .grpc_secure_key import *
-from .grpc_patcher import *
+""" A package for p2p network on the loopchain"""

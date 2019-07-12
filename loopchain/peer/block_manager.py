@@ -19,20 +19,18 @@ from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, Blockchain
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
-                                            NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
-from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+                                            NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader,
+                                            ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError,
+                                            InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError)
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
-from loopchain.blockchain.types import ExternalAddress
-from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
+from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue, Hash32
 from loopchain.blockchain.votes import Vote, Votes
 from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.peer import status_code
+from loopchain.p2p import status_code, message_code
+from loopchain.p2p.grpc_helper.grpc_message import P2PMessage
+from loopchain.p2p.p2p_service import PeerType, P2PService
 from loopchain.peer.consensus_siever import ConsensusSiever
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
@@ -62,7 +60,7 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.set_peer_type(loopchain_pb2.PEER)
+        self.set_peer_type(PeerType.PEER)
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
@@ -141,7 +139,7 @@ class BlockManager:
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
+            P2PMessage.block_send(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
 
@@ -374,14 +372,14 @@ class BlockManager:
         :param block_height:
         :return block, max_block_height, confirm_info, response_code
         """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
             return self.__block_request_by_citizen(block_height)
 
     def __block_request_by_voter(self, block_height, peer_stub):
-        response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
+        response = peer_stub.BlockSync(P2PMessage.block_sync_request(
             block_height=block_height,
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
@@ -524,6 +522,7 @@ class BlockManager:
                                       reps_getter=reps_getter)
         return self.blockchain.add_block(prev_block, confirm_info)
 
+    # FIXME : peer_stubs... (start)
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
@@ -730,10 +729,9 @@ class BlockManager:
             if target in self.__block_height_sync_bad_targets:
                 continue
             util.logger.debug(f"try to target({target})")
-            channel = GRPCHelper().create_client_channel(target)
-            stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+            stub = P2PService.get_peer_service_stub(target)
             try:
-                response = stub.GetStatus(loopchain_pb2.StatusRequest(
+                response = stub.GetStatus(P2PMessage.status_request(
                     request='block_sync',
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
@@ -748,6 +746,7 @@ class BlockManager:
                 util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
+    # FIXME : peer_stubs... (end)
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
@@ -801,7 +800,7 @@ class BlockManager:
         )
 
         fail_vote_dumped = json.dumps(fail_vote.serialize())
-        request = loopchain_pb2.ComplainLeaderRequest(
+        request = P2PMessage.complain_leader_request(
             complain_vote=fail_vote_dumped,
             channel=self.channel_name
         )
@@ -856,7 +855,7 @@ class BlockManager:
 
         leader_vote_serialized = leader_vote.serialize()
         leader_vote_dumped = json.dumps(leader_vote_serialized)
-        request = loopchain_pb2.ComplainLeaderRequest(
+        request = P2PMessage.complain_leader_request(
             complain_vote=leader_vote_dumped,
             channel=self.channel_name
         )
@@ -884,7 +883,9 @@ class BlockManager:
 
         vote_serialized = vote.serialize()
         vote_dumped = json.dumps(vote_serialized)
-        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
+
+        # FIXME : which one is right? ChannelProperty().name or self.channel_name
+        block_vote = P2PMessage.block_vote(vote=vote_dumped, channel=ChannelProperty().name)
 
         target_reps_hash = block.header.reps_hash or ChannelProperty().crep_root_hash
 

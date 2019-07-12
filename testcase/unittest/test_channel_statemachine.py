@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright 2018 ICON Foundation
@@ -14,20 +13,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import unittest
+
 from unittest.mock import MagicMock
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
+import unittest
 from loopchain.blockchain.blockchain import BlockChain
 from loopchain.channel.channel_statemachine import ChannelStateMachine
-from loopchain.protos import loopchain_pb2
+from loopchain.p2p.p2p_service import PeerType
 
 
 class MockBlockManager:
+    peer_type = PeerType.BLOCK_GENERATOR
+
     def __init__(self):
         self.timer_called = 0
-        self.peer_type = loopchain_pb2.BLOCK_GENERATOR
+        self.peer_type = PeerType.BLOCK_GENERATOR
         self.blockchain = MagicMock(BlockChain)
 
     def start_block_generate_timer(self):
@@ -61,7 +63,7 @@ class MockPeerManager:
 class MockBlockManagerCitizen(MockBlockManager):
     def __init__(self):
         super().__init__()
-        self.peer_type = loopchain_pb2.PEER
+        self.peer_type = PeerType.PEER
 
 
 class MockInnerService:

@@ -1,4 +1,4 @@
-"""gRPC broadcast thread"""
+"""broadcast scheduler"""
 
 import abc
 import logging
@@ -11,32 +11,20 @@ import time
 from concurrent import futures
 from functools import partial
 
-import grpc
-from grpc._channel import _Rendezvous
-
-from loopchain import configure as conf, utils as util
-from loopchain.baseservice import (StubManager, ObjectManager, CommonThread, BroadcastCommand,
-                                   TimerService, Timer)
+from loopchain import configure as conf, utils
+from loopchain.baseservice import CommonThread, BroadcastCommand, TimerService, Timer, ObjectManager
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.baseservice.tx_message import TxItem, TxMessagesQueue
+from loopchain.baseservice.tx_message import TxItem
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
+from loopchain.p2p.broadcaster import Broadcaster
 
 
-class _Broadcaster:
-    """broadcast class for each channel"""
-    THREAD_VARIABLE_PEER_STATUS = "peer_status"
+class BroadcastHandler:
+    """Handle broadcast command for each channel
+    """
 
-    def __init__(self, channel: str, self_target: str=None):
+    def __init__(self, channel: str, self_target: str = None):
         self.__channel = channel
-        self.__self_target = self_target
-
-        self.__audience = {}  # self.__audience[peer_target] = stub_manager
-
-        if conf.IS_BROADCAST_ASYNC:
-            self.__broadcast_run = self.__broadcast_run_async
-        else:
-            self.__broadcast_run = self.__broadcast_run_sync
 
         self.__handler_map = {
             BroadcastCommand.CREATE_TX: self.__handler_create_tx,
@@ -49,8 +37,9 @@ class _Broadcaster:
             "AddTxList"
         }
 
-        self.tx_messages_queue: TxMessagesQueue = TxMessagesQueue()
+        self.__broadcaster = Broadcaster(channel=channel, self_target=self_target)
 
+        # FIXME : move timer service to somewhere
         self.__timer_service = TimerService()
 
     @property
@@ -66,177 +55,32 @@ class _Broadcaster:
             self.__timer_service.wait()
 
     def handle_command(self, command, params):
+        logging.warning(f"handle_command: {command}")
         func = self.__handler_map[command]
         func(params)
-
-    def __keep_grpc_connection(self, result, timeout, stub_manager: StubManager):
-        return isinstance(result, _Rendezvous) \
-               and result.code() in (grpc.StatusCode.DEADLINE_EXCEEDED, grpc.StatusCode.UNAVAILABLE) \
-               and stub_manager.elapsed_last_succeed_time() < timeout
-
-    def __broadcast_retry_async(self, peer_target, method_name, method_param, retry_times, timeout, stub, result):
-        if isinstance(result, _Rendezvous) and result.code() == grpc.StatusCode.OK:
-            return
-        if isinstance(result, futures.Future) and not result.exception():
-            return
-
-        logging.debug(f"try retry to : peer_target({peer_target})\n")
-        if retry_times > 0:
-            try:
-                stub_manager: StubManager = self.__audience[peer_target]
-                if stub_manager is None:
-                    logging.warning(f"broadcast_thread:__broadcast_retry_async Failed to connect to ({peer_target}).")
-                    return
-                retry_times -= 1
-                is_stub_reuse = stub_manager.stub != stub or self.__keep_grpc_connection(result, timeout, stub_manager)
-                self.__call_async_to_target(peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout)
-            except KeyError as e:
-                logging.debug(f"broadcast_thread:__broadcast_retry_async ({peer_target}) not in audience. ({e})")
-        else:
-            if isinstance(result, _Rendezvous):
-                exception = result.details()
-            elif isinstance(result, futures.Future):
-                exception = result.exception()
-
-            logging.warning(f"__broadcast_run_async fail({result})\n"
-                            f"cause by: {exception}\n"
-                            f"peer_target({peer_target})\n"
-                            f"method_name({method_name})\n"
-                            f"retry_remains({retry_times})\n"
-                            f"timeout({timeout})")
-
-    def __call_async_to_target(self, peer_target, method_name, method_param, is_stub_reuse, retry_times, timeout):
-        try:
-            stub_manager: StubManager = self.__audience[peer_target]
-            if stub_manager is None:
-                logging.debug(f"broadcast_thread:__call_async_to_target Failed to connect to ({peer_target}).")
-                return
-            call_back_partial = partial(self.__broadcast_retry_async,
-                                        peer_target,
-                                        method_name,
-                                        method_param,
-                                        retry_times,
-                                        timeout,
-                                        stub_manager.stub)
-            stub_manager.call_async(method_name=method_name,
-                                    message=method_param,
-                                    is_stub_reuse=is_stub_reuse,
-                                    call_back=call_back_partial,
-                                    timeout=timeout)
-        except KeyError as e:
-            logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
-
-    def __broadcast_run_async(self, method_name, method_param, retry_times=None, timeout=None):
-        """call gRPC interface of audience
-
-        :param method_name: gRPC interface
-        :param method_param: gRPC message
-        """
-
-        if timeout is None:
-            timeout = conf.GRPC_TIMEOUT_BROADCAST_RETRY
-
-        retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-        # logging.debug(f"broadcast({method_name}) async... ({len(self.__audience)})")
-
-        for target in self.__get_broadcast_targets(method_name):
-            # util.logger.debug(f"method_name({method_name}), peer_target({target})")
-            self.__call_async_to_target(target, method_name, method_param, True, retry_times, timeout)
-
-    def __broadcast_run_sync(self, method_name, method_param, retry_times=None, timeout=None):
-        """call gRPC interface of audience
-
-        :param method_name: gRPC interface
-        :param method_param: gRPC message
-        """
-        # logging.debug(f"broadcast({method_name}) sync... ({len(self.__audience)})")
-
-        if timeout is None:
-            timeout = conf.GRPC_TIMEOUT_BROADCAST_RETRY
-
-        retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-
-        for target in self.__get_broadcast_targets(method_name):
-            try:
-                stub_manager: StubManager = self.__audience[target]
-                if stub_manager is None:
-                    logging.debug(f"broadcast_thread:__broadcast_run_sync Failed to connect to ({target}).")
-                    continue
-
-                response = stub_manager.call_in_times(method_name=method_name,
-                                                      message=method_param,
-                                                      timeout=timeout,
-                                                      retry_times=retry_times)
-                if response is None:
-                    logging.warning(f"broadcast_thread:__broadcast_run_sync fail ({method_name}) "
-                                    f"target({target}) ")
-            except KeyError as e:
-                logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_send_to_single_target(self, param):
         method_name = param[0]
         method_param = param[1]
         target = param[2]
-        self.__call_async_to_target(target, method_name, method_param, True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
+
+        self.__broadcaster.call_async_to_target(target, method_name, method_param,
+                                                True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
 
     def __add_audience(self, audience_target):
-        util.logger.debug(f"audience_target({audience_target})")
-        if audience_target not in self.__audience:
-            stub_manager = StubManager(
-                audience_target, loopchain_pb2_grpc.PeerServiceStub,
-                ssl_auth_type=conf.GRPC_SSL_TYPE
-            )
-            self.__audience[audience_target] = stub_manager
+        utils.logger.debug(f"audience_target({audience_target})")
+        self.__broadcaster.add_audience(audience_target)
 
     def __handler_update_audience(self, audience_targets):
-        old_audience = self.__audience.copy()
-
-        for audience_target in audience_targets:
-            self.__add_audience(audience_target)
-            old_audience.pop(audience_target, None)
-
-        for old_audience_target in old_audience:
-            old_stubmanager: StubManager = self.__audience.pop(old_audience_target, None)
-            # TODO If necessary, close grpc with old_stubmanager. If not necessary just remove this comment.
+        self.__broadcaster.update_audience(audience_targets)
 
     def __handler_broadcast(self, broadcast_param):
-        # util.logger.debug(f"BroadcastThread received broadcast command")
+        # utils.logger.debug(f"BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
         broadcast_method_kwparam = broadcast_param[2]
-        # util.logger.debug("BroadcastThread method name: " + broadcast_method_name)
-        # util.logger.debug("BroadcastThread method param: " + str(broadcast_method_param))
-        self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
-    def __send_tx_by_timer(self, **kwargs):
-        # Send multiple tx
-        tx_messages = self.tx_messages_queue.pop()
-
-        message = loopchain_pb2.TxSendList(
-            channel=self.__channel,
-            tx_list=tx_messages.get_messages()
-        )
-
-        self.__broadcast_run("AddTxList", message)
-        if not self.tx_messages_queue.empty():
-            self.__send_tx_in_timer()
-
-    def __send_tx_in_timer(self, tx_item=None):
-        duration = 0
-        if tx_item:
-            self.tx_messages_queue.append(tx_item)
-            duration = conf.SEND_TX_LIST_DURATION
-
-        if TimerService.TIMER_KEY_ADD_TX not in self.__timer_service.timer_list:
-            self.__timer_service.add_timer(
-                TimerService.TIMER_KEY_ADD_TX,
-                Timer(
-                    target=TimerService.TIMER_KEY_ADD_TX,
-                    duration=duration,
-                    callback=self.__send_tx_by_timer,
-                    callback_kwargs={}
-                )
-            )
+        self.__broadcaster.broadcast(broadcast_method_name, broadcast_method_param, broadcast_method_kwparam)
 
     def __handler_create_tx(self, create_tx_param):
         # logging.debug(f"Broadcast create_tx....")
@@ -248,14 +92,28 @@ class _Broadcaster:
             logging.warning(f"tx dumps fail ({e})")
             return
 
-        self.__send_tx_in_timer(tx_item)
+        self.__broadcaster.add_tx_item(tx_item)
+        self.__send_tx_in_timer(conf.SEND_TX_LIST_DURATION)
 
-    def __get_broadcast_targets(self, method_name):
+    def __send_tx_by_timer(self, **kwargs):
+        # Send multiple tx
+        self.__broadcaster.send_tx_list()
+        if not self.__broadcaster.queue_empty():
+            self.__send_tx_in_timer()
 
-        peer_targets = list(self.__audience)
-        if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
-            peer_targets.remove(self.__self_target)
-        return peer_targets
+    def __send_tx_in_timer(self, duration: int = 0):
+        # utils.logger.spam(f"broadcast_scheduler:__send_tx_in_timer")
+
+        if TimerService.TIMER_KEY_ADD_TX not in self.__timer_service.timer_list:
+            self.__timer_service.add_timer(
+                TimerService.TIMER_KEY_ADD_TX,
+                Timer(
+                    target=TimerService.TIMER_KEY_ADD_TX,
+                    duration=duration,
+                    callback=self.__send_tx_by_timer,
+                    callback_kwargs={}
+                )
+            )
 
 
 class BroadcastScheduler(metaclass=abc.ABCMeta):
@@ -320,17 +178,18 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self.__perform_schedule_listener(command, params)
 
     def _update_audience(self, reps_hash):
+        # FIXME : without ObjectManager if possible
         blockchain = ObjectManager().channel_service.block_manager.blockchain
         update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
 
         if update_reps:
-            util.logger.info(f"\nupdate_reps({update_reps})")
+            utils.logger.info(f"\nupdate_reps({update_reps})")
             audience_targets = list(update_reps.values())
 
             self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
             self.__audience_reps_hash = reps_hash
         else:
-            util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
+            utils.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
 
     def schedule_broadcast(self,
                            method_name,
@@ -347,7 +206,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         if timeout is not None:
             kwargs['timeout'] = timeout
 
-        util.logger.debug(f"broadcast method_name({method_name})")
+        utils.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
     def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
@@ -355,10 +214,16 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
 
 class _BroadcastThread(CommonThread):
+    """
+    TODO : consider broadcastThread change to coroutine
+    TODO : queue.priorityQueue to asyncio.PriorityQueue
+    """
+
     def __init__(self, channel: str, self_target: str=None):
+        super().__init__()
         self.broadcast_queue = queue.PriorityQueue()
         self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
-        self.__broadcaster = _Broadcaster(channel, self_target)
+        self.__broadcast_handler = BroadcastHandler(channel, self_target)
 
     def stop(self):
         super().stop()
@@ -367,7 +232,7 @@ class _BroadcastThread(CommonThread):
 
     def run(self, event: threading.Event):
         event.set()
-        self.__broadcaster.start()
+        self.__broadcast_handler.start()
 
         def _callback(curr_future: futures.Future, executor_future: futures.Future):
             if executor_future.exception():
@@ -381,7 +246,7 @@ class _BroadcastThread(CommonThread):
             if command is None:
                 break
 
-            return_future = self.__broadcast_pool.submit(self.__broadcaster.handle_command, command, params)
+            return_future = self.__broadcast_pool.submit(self.__broadcast_handler.handle_command, command, params)
             if future is not None:
                 return_future.add_done_callback(partial(_callback, future))
 
@@ -436,8 +301,8 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
 
         broadcast_queue.cancel_join_thread()
 
-        broadcaster = _Broadcaster(channel, self_target)
-        broadcaster.start()
+        broadcast_handler = BroadcastHandler(channel, self_target)
+        broadcast_handler.start()
 
         original_sigterm_handler = signal.getsignal(signal.SIGTERM)
         original_sigint_handler = signal.getsignal(signal.SIGINT)
@@ -448,16 +313,16 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
             logging.error(f"BroadcastScheduler process({channel}) has been received "
                           f"signal({repr(signal.Signals(signal_num))})")
             broadcast_queue.put((None, None))
-            broadcaster.stop()
+            broadcast_handler.stop()
 
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
 
         while True:
             command, params = broadcast_queue.get()
-            if not broadcaster.is_running or command is None:
+            if not broadcast_handler.is_running or command is None:
                 break
-            broadcaster.handle_command(command, params)
+            broadcast_handler.handle_command(command, params)
 
         while not broadcast_queue.empty():
             broadcast_queue.get()

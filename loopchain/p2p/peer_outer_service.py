@@ -7,13 +7,10 @@ import math
 import time
 import typing
 
-from loopchain import configure as conf
-from loopchain import utils
-from loopchain.baseservice import ObjectManager
+from loopchain import utils, configure as conf
 from loopchain.baseservice.lru_cache import lru_cache
-from loopchain.blockchain import ChannelStatusError
-from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
+from loopchain.p2p import status_code, message_code
+from loopchain.p2p.protos import loopchain_pb2, loopchain_pb2_grpc, ComplainLeaderRequest
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -26,6 +23,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     @property
     def peer_service(self):
+        # TODO : remove ObjectManager
+        from loopchain.baseservice import ObjectManager
         return ObjectManager().peer_service
 
     def __set_status_cache(self, future):
@@ -43,6 +42,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
+            # TODO : remove import from loopchain.blockchain
+            from loopchain.blockchain import ChannelStatusError
             raise ChannelStatusError(f"Invalid channel({channel_name})")
 
         if self.__status_cache is None:
@@ -67,6 +68,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
+            # TODO : remove import from loopchain.blockchain
+            from loopchain.blockchain import ChannelStatusError
             raise ChannelStatusError(f"Invalid channel({channel_name})")
 
         status_data: typing.Optional[dict] = None
@@ -80,6 +83,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                                                   time_in_seconds=math.trunc(time.time()))
 
         if status_data is None:
+            # TODO : remove import from loopchain.blockchain
+            from loopchain.blockchain import ChannelStatusError
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
 
         status_data = copy.deepcopy(status_data)

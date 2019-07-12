@@ -15,7 +15,7 @@
 
 from typing import TYPE_CHECKING
 
-from loopchain.protos import message_code
+from loopchain.p2p import message_code
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import Transaction
@@ -218,7 +218,7 @@ class TransactionInvalidError(MessageCodeError):
     def __init__(self, tx: 'Transaction', message=''):
         super().__init__(message)
         self.tx = tx
-        
+
     def __str__(self):
         return \
             f"{super().__str__()}\n" \

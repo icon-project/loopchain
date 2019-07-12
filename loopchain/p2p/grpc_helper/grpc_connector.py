@@ -16,7 +16,7 @@ import abc
 import grpc
 
 from loopchain import configure as conf
-from loopchain.tools.grpc_helper.grpc_secure_key import GRPCSecureKeyCollection
+from .grpc_secure_key import GRPCSecureKeyCollection
 
 
 class GRPCConnector(abc.ABC):
