@@ -34,7 +34,7 @@ class BlockVersioner:
 
     def get_height(self, block_dumped: Union[str, dict]):
         if isinstance(block_dumped, str):
-           block_dumped = json.loads(block_dumped)
+            block_dumped = json.loads(block_dumped)
         height = block_dumped["height"]
         return int(height, 16) if isinstance(height, str) else height
 
@@ -43,7 +43,8 @@ class BlockVersioner:
             block_dumped = json.loads(block_dumped)
 
         hash_ = block_dumped.get("block_hash") or block_dumped.get("hash")
-        return Hash32.fromhex(hash_, True) if isinstance(hash_, str) else hash_
+        ignore_prefix = block_dumped['version'] == '0.1a'
+        return Hash32.fromhex(hash_, ignore_prefix) if isinstance(hash_, str) else hash_
 
 
 default_block_versions = [
