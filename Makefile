@@ -6,7 +6,7 @@ ifeq ($(wildcard $(USER_MAKEFILE)),)
 	INSTALL_REQUIRES := requires
 	INSTALL_DEVELOP_REQUIRES := requires-dev
 	PIP_INSTALL_CMD := $(PIP_INSTALL) -e .
-	PIP_INSTALL_DEVELOP_CMD := $(PIP_INSTALL_CMD)[tests]
+	PIP_INSTALL_DEVELOP_CMD := $(PIP_INSTALL_CMD)[tests,linter]
 else
 	include $(USER_MAKEFILE)
 endif
@@ -57,6 +57,7 @@ requires-dev:
 ## pip install packages for develop
 develop: $(INSTALL_DEVELOP_REQUIRES)
 	$(PIP_INSTALL_DEVELOP_CMD)
+	pre-commit install
 
 ## Generate python gRPC proto
 generate-proto:
@@ -85,6 +86,9 @@ unit-test:
 integration-test:
 	@echo "Start integration test..."
 	$(TEST_CMD) testcase/integration || exit -1
+
+lint:
+	@flake8 --config=setup.cfg --exit-zero loopchain
 
 ## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check
