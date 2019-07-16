@@ -25,7 +25,7 @@ def _error_convert(func):
     def _wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except Exception as e:
+        except RuntimeError as e:
             raise KeyValueStoreError(e)
 
     return _wrapper
@@ -102,12 +102,10 @@ class KeyValueStoreDict(KeyValueStore):
         if default is not None:
             _validate_args_bytes(default)
 
-        try:
-            return self._store_items[key]
-        except KeyError:
-            if default is None:
-                raise KeyError(f"Has no value of key({key}")
-            return default
+        result = self._store_items.get(key, default)
+        if result is None:
+            raise KeyError(f"Has no value of key({key})")
+        return result
 
     @_validate_args_bytes_without_first
     @_error_convert

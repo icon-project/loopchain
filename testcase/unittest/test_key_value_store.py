@@ -29,6 +29,7 @@ utils.loggers.update_preset()
 class TestKeyValueStore(unittest.TestCase):
 
     def setUp(self):
+        self.store_types = ['dict', 'leveldb', 'plyvel']
         test_util.print_testname(self._testMethodName)
 
     def tearDown(self):
@@ -44,132 +45,157 @@ class TestKeyValueStore(unittest.TestCase):
 
     def _new_store(self, uri, store_type=None, create_if_missing=True):
         try:
-            store = KeyValueStore.new(uri, store_type=store_type, create_if_missing=False)
+            if store_type == KeyValueStore.STORE_TYPE_DICT:
+                from loopchain.store.key_value_store_dict import KeyValueStoreDict
+                utils.logger.info(f"New KeyValueStore. store_type={store_type}, uri={uri}")
+                return KeyValueStoreDict()
+
+            return KeyValueStore.new(uri, store_type=store_type, create_if_missing=create_if_missing)
         except KeyValueStoreError as e:
             utils.logger.spam(f"Doesn't need to clean the store. uri={uri}, e={e}")
-        else:
-            store.destroy_store()
 
-        return KeyValueStore.new(uri, store_type=store_type, create_if_missing=create_if_missing)
+        return KeyValueStore.new(uri, store_type=store_type, create_if_missing=True)
 
     def test_key_value_store_basic(self):
-        test_items = self._get_test_items(5)
-        utils.logger.debug(f"test_items={test_items}")
+        for store_type in self.store_types:
+            test_items = self._get_test_items(5)
+            utils.logger.debug(f"test_items={test_items}")
 
-        store = self._new_store("file://./key_value_store_test_basic")
+            store = self._new_store("file://./key_value_store_test_basic", store_type=store_type)
 
-        #
-        # put/get
-        #
+            #
+            # put/get
+            #
 
-        for key, value in test_items.items():
-            store.put(key, value)
-            self.assertEqual(store.get(key), value)
+            for key, value in test_items.items():
+                store.put(key, value)
+                self.assertEqual(store.get(key), value)
 
-        with self.assertRaises(KeyError):
-            store.get(b'unknown_key')
+            with self.assertRaises(KeyError):
+                store.get(b'unknown_key')
 
-        self.assertEqual(store.get(b'unknown_key', default=b'test_default_value'), b'test_default_value')
+            self.assertEqual(store.get(b'unknown_key', default=b'test_default_value'), b'test_default_value')
 
-        count = 0
-        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4'):
-            self.assertIn(key, (b'test_key_2', b'test_key_3', b'test_key_4'))
-            count += 1
-        self.assertEqual(count, 3)
+            kwargs = {}
 
-        count = 0
-        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4', include_stop=True):
-            self.assertIn(key, (b'test_key_2', b'test_key_3', b'test_key_4'))
-            count += 1
-        self.assertEqual(count, 3)
+            if store_type is 'dict':
+                container = tuple(test_items.keys())
+            else:
+                kwargs.update({
+                    'start_key': b'test_key_2',
+                    'stop_key': b'test_key_4'
+                })
+                container = (b'test_key_2', b'test_key_3', b'test_key_4')
+            expect_count = len(container)
 
-        count = 0
-        for key, value in store.Iterator(start_key=b'test_key_2', stop_key=b'test_key_4', include_stop=False):
-            self.assertIn(key, (b'test_key_2', b'test_key_3'))
-            count += 1
-        self.assertEqual(count, 2)
+            count = 0
+            for key, value in store.Iterator(**kwargs):
+                self.assertIn(key, container)
+                count += 1
+            self.assertEqual(count, expect_count)
 
-        #
-        #
-        # delete
-        #
+            if store_type == 'plyvel':
+                kwargs.update({'include_stop': True})
 
-        del_key = b'test_key_2'
-        del test_items[del_key]
-        store.delete(del_key)
-        with self.assertRaises(KeyError):
-            store.get(del_key)
+            count = 0
+            for key, value in store.Iterator(**kwargs):
+                self.assertIn(key, container)
+                count += 1
+            self.assertEqual(count, expect_count)
 
-        count = 0
-        for key, value in store.Iterator():
-            utils.logger.spam(f"DB iterator: key={key}, value={value}")
-            self.assertEqual(value, test_items[key])
-            count += 1
-        utils.logger.debug(f"Count after {del_key} has been deleted={count}")
-        self.assertEqual(count, len(test_items))
+            count = 0
+            if store_type == 'plyvel':
+                kwargs.update({'include_stop': False})
+                container = (b'test_key_2', b'test_key_3')
+                expect_count = 2
 
-        store.destroy_store()
+            for key, value in store.Iterator(**kwargs):
+                self.assertIn(key, container)
+                count += 1
+            self.assertEqual(count, expect_count)
+
+            #
+            # delete
+            #
+
+            del_key = b'test_key_2'
+            del test_items[del_key]
+            store.delete(del_key)
+            with self.assertRaises(KeyError):
+                store.get(del_key)
+
+            count = 0
+            for key, value in store.Iterator():
+                utils.logger.spam(f"DB iterator: key={key}, value={value}")
+                self.assertEqual(value, test_items[bytes(key)])
+                count += 1
+            utils.logger.debug(f"Count after {del_key} has been deleted={count}")
+            self.assertEqual(count, len(test_items))
+
+            store.destroy_store()
 
     def test_key_value_store_write_batch(self):
-        store = self._new_store("file://./key_value_store_test_write_batch")
+        for store_type in self.store_types:
+            store = self._new_store("file://./key_value_store_test_write_batch", store_type=store_type)
 
-        batch = store.WriteBatch()
-        batch.put(b'test_key_1', b'test_value_1')
-        batch.put(b'test_key_2', b'test_value_2')
+            batch = store.WriteBatch()
+            batch.put(b'test_key_1', b'test_value_1')
+            batch.put(b'test_key_2', b'test_value_2')
 
-        with self.assertRaises(KeyError):
-            store.get(b'test_key_1')
-        with self.assertRaises(KeyError):
-            store.get(b'test_key_2')
+            with self.assertRaises(KeyError):
+                store.get(b'test_key_1')
+            with self.assertRaises(KeyError):
+                store.get(b'test_key_2')
 
-        batch.write()
-        self.assertEqual(store.get(b'test_key_1'), b'test_value_1')
-        self.assertEqual(store.get(b'test_key_2'), b'test_value_2')
-        batch = None
+            batch.write()
+            self.assertEqual(store.get(b'test_key_1'), b'test_value_1')
+            self.assertEqual(store.get(b'test_key_2'), b'test_value_2')
+            batch = None
 
-        store.destroy_store()
+            store.destroy_store()
 
     def test_key_value_store_cancelable_write_batch(self):
-        test_items = self._get_test_items(5)
+        for store_type in self.store_types:
+            test_items = self._get_test_items(5)
 
-        store = self._new_store("file://./key_value_store_test_cancelable_write_batch")
+            store = self._new_store("file://./key_value_store_test_cancelable_write_batch", store_type=store_type)
 
-        for key, value in test_items.items():
-            store.put(key, value)
+            for key, value in test_items.items():
+                store.put(key, value)
 
-        cancelable_batch = store.CancelableWriteBatch()
-        cancelable_batch.put(b'cancelable_key_1', b'cancelable_value_1')
-        cancelable_batch.put(b'test_key_2', b'edited_test_value_2')
-        cancelable_batch.put(b'cancelable_key_2', b'cancelable_value_2')
-        cancelable_batch.put(b'test_key_4', b'edited_test_value_4')
-        cancelable_batch.write()
+            cancelable_batch = store.CancelableWriteBatch()
+            cancelable_batch.put(b'cancelable_key_1', b'cancelable_value_1')
+            cancelable_batch.put(b'test_key_2', b'edited_test_value_2')
+            cancelable_batch.put(b'cancelable_key_2', b'cancelable_value_2')
+            cancelable_batch.put(b'test_key_4', b'edited_test_value_4')
+            cancelable_batch.write()
 
-        edited_test_items = test_items.copy()
-        edited_test_items[b'cancelable_key_1'] = b'cancelable_value_1'
-        edited_test_items[b'test_key_2'] = b'edited_test_value_2'
-        edited_test_items[b'cancelable_key_2'] = b'cancelable_value_2'
-        edited_test_items[b'test_key_4'] = b'edited_test_value_4'
+            edited_test_items = test_items.copy()
+            edited_test_items[b'cancelable_key_1'] = b'cancelable_value_1'
+            edited_test_items[b'test_key_2'] = b'edited_test_value_2'
+            edited_test_items[b'cancelable_key_2'] = b'cancelable_value_2'
+            edited_test_items[b'test_key_4'] = b'edited_test_value_4'
 
-        count = 0
-        for key, value in store.Iterator():
-            utils.logger.spam(f"Edited DB iterator: key={key}, value={value}")
-            self.assertEqual(value, edited_test_items[key])
-            count += 1
-        utils.logger.debug(f"Count after cancelable_batch has been written={count}")
-        self.assertEqual(count, len(edited_test_items))
+            count = 0
+            for key, value in store.Iterator():
+                utils.logger.spam(f"Edited DB iterator: key={key}, value={value}")
+                self.assertEqual(value, edited_test_items[bytes(key)])
+                count += 1
+            utils.logger.debug(f"Count after cancelable_batch has been written={count}")
+            self.assertEqual(count, len(edited_test_items))
 
-        cancelable_batch.cancel()
-        count = 0
-        for key, value in store.Iterator():
-            utils.logger.spam(f"Original DB iterator: key={key}, value={value}")
-            self.assertEqual(value, test_items[key])
-            count += 1
-        utils.logger.debug(f"Original count={count}")
-        self.assertEqual(count, len(test_items))
+            cancelable_batch.cancel()
+            count = 0
+            for key, value in store.Iterator():
+                utils.logger.spam(f"Original DB iterator: key={key}, value={value}")
+                self.assertEqual(value, test_items[bytes(key)])
+                count += 1
+            utils.logger.debug(f"Original count={count}")
+            self.assertEqual(count, len(test_items))
 
-        cancelable_batch = None
+            cancelable_batch = None
 
-        store.destroy_store()
+            store.destroy_store()
 
     def test_key_value_store_verify_compatibility(self):
         test_items = self._get_test_items(5)

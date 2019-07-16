@@ -74,7 +74,7 @@ class _KeyValueStoreCancelableWriteBatchLevelDb(KeyValueStoreCancelableWriteBatc
     def _get_original_touched_item(self):
         for key in self._touched_keys:
             try:
-                yield key, self._snapshot.get(key)
+                yield key, self._snapshot.Get(key, default=None)
             except KeyError:
                 return key, None
 

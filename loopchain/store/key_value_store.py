@@ -15,6 +15,7 @@
 
 import abc
 import functools
+from typing import Union
 
 from loopchain import utils, configure as conf
 
@@ -237,8 +238,8 @@ class KeyValueStore(abc.ABC):
         self.close()
 
 
-def _validate_args_bytes(arg: bytes):
-    if not isinstance(arg, bytes):
+def _validate_args_bytes(arg: Union[bytes, bytearray]):
+    if not isinstance(arg, (bytes, bytearray)):
         raise ValueError(f"Argument type({type(arg)}) is not bytes. argument={arg}")
 
 
