@@ -181,7 +181,7 @@ class Epoch:
                                  f"tx({tx.hash}), timestamp({tx.timestamp})")
                 continue
 
-            tv = TransactionVerifier.new(tx.version, tx_versioner)
+            tv = TransactionVerifier.new(tx.version, tx.type(), tx_versioner)
 
             try:
                 tv.verify(tx, self.__blockchain)

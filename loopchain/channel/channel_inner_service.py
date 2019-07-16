@@ -94,9 +94,9 @@ class ChannelTxCreatorInnerTask:
         tx = None
 
         try:
-            tx_version = self.__tx_versioner.get_version(kwargs)
+            tx_version, tx_type = self.__tx_versioner.get_version(kwargs)
 
-            ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
+            ts = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
             tx = ts.from_(kwargs)
 
             nid = self.__properties.get('nid', None)
@@ -104,7 +104,7 @@ class ChannelTxCreatorInnerTask:
                 util.logger.warning(f"NID has not been set yet.")
                 raise NodeInitializationError(tx.hash.hex())
 
-            tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
+            tv = TransactionVerifier.new(tx_version, tx_type, self.__tx_versioner)
             tv.pre_verify(tx, nid=nid)
 
             self.__pre_validate(tx)
@@ -240,12 +240,12 @@ class ChannelTxReceiverInnerTask:
         for tx_item in request.tx_list:
             tx_json = json.loads(tx_item.tx_json)
 
-            tx_version = self.__tx_versioner.get_version(tx_json)
+            tx_version, tx_type = self.__tx_versioner.get_version(tx_json)
 
-            ts = TransactionSerializer.new(tx_version, self.__tx_versioner)
+            ts = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
             tx = ts.from_(tx_json)
 
-            tv = TransactionVerifier.new(tx_version, self.__tx_versioner)
+            tv = TransactionVerifier.new(tx_version, tx_type, self.__tx_versioner)
             tv.pre_verify(tx, nid=self.__nid)
 
             tx.size(self.__tx_versioner)
@@ -641,12 +641,12 @@ class ChannelInnerTask:
         tx_json = request.tx_json
 
         tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
-        tx_version = tx_versioner.get_version(tx_json)
+        tx_version, tx_type = tx_versioner.get_version(tx_json)
 
-        ts = TransactionSerializer.new(tx_version, tx_versioner)
+        ts = TransactionSerializer.new(tx_version, tx_type, tx_versioner)
         tx = ts.from_(tx_json)
 
-        tv = TransactionVerifier.new(tx_version, tx_versioner)
+        tv = TransactionVerifier.new(tx_version, tx_type, tx_versioner)
         tv.verify(tx)
 
         if tx is not None:
@@ -670,7 +670,7 @@ class ChannelInnerTask:
         tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
             blockchain = self._channel_service.block_manager.get_blockchain()
-            tx_serializer = TransactionSerializer.new(tx.version, blockchain.tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), blockchain.tx_versioner)
             tx_origin = tx_serializer.to_origin_data(tx)
 
             logging.info(f"get_tx_info pending : tx_hash({tx_hash})")

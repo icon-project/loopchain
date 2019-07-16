@@ -79,8 +79,8 @@ class TestCrypto(unittest.TestCase):
                  "value.0xde0b6b3a7640000"
 
         tv = TransactionVersioner()
-        version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv)
+        version, type_ = tv.get_version(question)
+        ts = TransactionSerializer.new(version, type_, tv)
         tx = ts.from_(question)
 
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
@@ -137,8 +137,8 @@ class TestCrypto(unittest.TestCase):
                  "timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
         tv = TransactionVersioner()
-        version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv)
+        version, type_ = tv.get_version(question)
+        ts = TransactionSerializer.new(version, type_, tv)
         tx = ts.from_(question)
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         self.assertEqual(result, answer)
@@ -195,8 +195,8 @@ class TestCrypto(unittest.TestCase):
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
         tv = TransactionVersioner()
-        version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv)
+        version, type_ = tv.get_version(question)
+        ts = TransactionSerializer.new(version, type_, tv)
         tx = ts.from_(question)
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
         logging.info(f"result : {result}")
@@ -253,9 +253,9 @@ class TestCrypto(unittest.TestCase):
                  r"timestamp.0x563a6cf330136.to.cxb0776ee37f5b45bfaea8cff1d8232fbb6122ec32.version.0x3"
 
         tv = TransactionVersioner()
-        version = tv.get_version(question)
+        version, type_ = tv.get_version(question)
 
-        ts = TransactionSerializer.new(version, tv)
+        ts = TransactionSerializer.new(version, type_, tv)
         tx = ts.from_(question)
 
         result = self.hash_generator.generate_salted_origin(ts.to_origin_data(tx))
@@ -321,8 +321,8 @@ class TestCrypto(unittest.TestCase):
         question = request["params"]
 
         tv = TransactionVersioner()
-        version = tv.get_version(question)
-        ts = TransactionSerializer.new(version, tv)
+        version, type_ = tv.get_version(question)
+        ts = TransactionSerializer.new(version, type_, tv)
         tx = ts.from_(question)
 
         result_new_hash = self.hash_generator.generate_hash(ts.to_origin_data(tx))

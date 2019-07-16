@@ -80,14 +80,14 @@ class BlockVerifier(ABC):
 
     def verify_transactions(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
+            tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
             tv.verify(tx, blockchain)
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)
 
     def verify_transactions_loosely(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
+            tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
             tv.verify_loosely(tx, blockchain)
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)

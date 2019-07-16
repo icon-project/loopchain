@@ -35,10 +35,13 @@ class Transaction(ABC):
         fields_str = ', '.join(f"{f.name}={getattr(self, f.name)}" for f in fields)
         return f"{self.__class__.__qualname__}({fields_str})"
 
+    def type(self):
+        return None
+
     def size(self, versioner: 'TransactionVersioner'):
         if not hasattr(self, _size_attr_name_):
             from loopchain.blockchain.transactions import TransactionSerializer
-            ts = TransactionSerializer.new(self.version, versioner)
+            ts = TransactionSerializer.new(self.version, self.type(), versioner)
             tx_serialized = ts.to_full_data(self)
             tx_serialized = json.dumps(tx_serialized)
             tx_serialized = tx_serialized.encode('utf-8')

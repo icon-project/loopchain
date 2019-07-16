@@ -432,7 +432,7 @@ class BlockChain:
             tx_hash = tx.hash.hex()
             invoke_result = invoke_results[tx_hash]
 
-            tx_serializer = TransactionSerializer.new(tx.version, self.__tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
             tx_info = {
                 'block_hash': block.header.hash.hex(),
                 'block_height': block.header.height,
@@ -556,8 +556,8 @@ class BlockChain:
             return None
 
         tx_data = tx_info_json["transaction"]
-        tx_version = self.tx_versioner.get_version(tx_data)
-        tx_serializer = TransactionSerializer.new(tx_version, self.tx_versioner)
+        tx_version, tx_type = self.tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         return tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
@@ -607,7 +607,7 @@ class BlockChain:
         :return:
         """
         logging.info("Make Genesis Block....")
-        tx_builder = TransactionBuilder.new("genesis", self.tx_versioner)
+        tx_builder = TransactionBuilder.new("genesis", "", self.tx_versioner)
 
         nid = tx_info.get("nid")
         if nid is not None:

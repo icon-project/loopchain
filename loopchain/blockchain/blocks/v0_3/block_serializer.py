@@ -18,7 +18,7 @@ class BlockSerializer(BaseBlockSerializer):
 
         transactions = []
         for tx in body.transactions.values():
-            ts = TransactionSerializer.new(tx.version, self._tx_versioner)
+            ts = TransactionSerializer.new(tx.version, tx.type(), self._tx_versioner)
             tx_serialized = ts.to_full_data(tx)
             transactions.append(tx_serialized)
 
@@ -102,8 +102,8 @@ class BlockSerializer(BaseBlockSerializer):
     def _deserialize_body_data(self, json_data: dict):
         transactions = OrderedDict()
         for tx_data in json_data['transactions']:
-            tx_version = self._tx_versioner.get_version(tx_data)
-            ts = TransactionSerializer.new(tx_version, self._tx_versioner)
+            tx_version, tx_type = self._tx_versioner.get_version(tx_data)
+            ts = TransactionSerializer.new(tx_version, tx_type, self._tx_versioner)
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
