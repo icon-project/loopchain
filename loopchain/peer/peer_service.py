@@ -35,6 +35,8 @@ from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
+DEFAULT_SCORE_PACKAGE = 'score/icx'
+
 
 class PeerService:
     """Main class of peer service having outer & inner gRPC interface
@@ -143,7 +145,6 @@ class PeerService:
         self.p2p_outer_server.stop(None)
 
     def _get_channel_infos(self):
-        # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
         if self.is_support_node_function(conf.NodeFunction.Vote):
             if conf.ENABLE_REP_RADIO_STATION:
                 response = self.stub_to_radiostation.call_in_times(
@@ -156,19 +157,20 @@ class PeerService:
                     is_stub_reuse=False,
                     timeout=conf.CONNECTION_TIMEOUT_TO_RS
                 )
-                # util.logger.spam(f"__get_channel_infos:response::{response}")
 
                 if not response:
                     return None
                 logging.info(f"Connect to channels({utils.pretty_json(response.channel_infos)})")
-                channels = json.loads(response.channel_infos)
+                return json.loads(response.channel_infos)
+            elif conf.LOAD_PEERS_FROM_IISS:
+                # this is temporary code for legacy support, and will be removed at next release.
+                return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
+                        for channel in conf.CHANNEL_OPTION}
             else:
-                channels = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        else:
-            response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
-            channels = {channel: value for channel, value in response["channel_infos"].items()}
+                return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
-        return channels
+        return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
+                for channel in conf.CHANNEL_OPTION}
 
     def _init_port(self, port):
         # service 초기화 작업
@@ -262,7 +264,7 @@ class PeerService:
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        self._reset_channel_infos()
+        self._load_channel_infos()
 
         self._run_rest_services(port)
         self.run_p2p_server()
@@ -314,7 +316,7 @@ class PeerService:
         loop.create_task(_close())
 
     async def serve_channels(self):
-        for i, channel_name in enumerate(self._channel_infos.keys()):
+        for i, channel_name in enumerate(conf.CHANNEL_OPTION):
             score_port = self._peer_port + conf.PORT_DIFF_SCORE_CONTAINER + conf.PORT_DIFF_BETWEEN_SCORE_CONTAINER * i
 
             args = ['python3', '-m', 'loopchain', 'channel']
@@ -338,20 +340,18 @@ class PeerService:
     async def ready_tasks(self):
         await StubCollection().create_peer_stub()  # for getting status info
 
-        for channel_name, channel_info in self._channel_infos.items():
+        for channel_name in conf.CHANNEL_OPTION:
             await StubCollection().create_channel_stub(channel_name)
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
 
-    def _reset_channel_infos(self):
+    def _load_channel_infos(self):
         self._channel_infos = self._get_channel_infos()
-        if not self._channel_infos:
-            utils.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
 
     async def change_node_type(self, node_type):
         if self._node_type.value == node_type:
-            utils.logger.warning(f"Does not change node type because new note type equals current node type")
+            utils.logger.warning(f"There's no change in node type.")
             return
 
         self._node_type = conf.NodeType(node_type)
@@ -360,4 +360,4 @@ class PeerService:
 
         self._radio_station_stub = None
 
-        self._reset_channel_infos()
+        self._load_channel_infos()

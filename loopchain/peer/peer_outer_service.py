@@ -331,7 +331,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             logging.info('Peer will stop... by: ' + request.reason)
 
         try:
-            for channel_name in self.peer_service.channel_infos:
+            for channel_name in conf.CHANNEL_OPTION:
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 asyncio.run_coroutine_threadsafe(channel_stub.async_task().stop(), self.peer_service.inner_service.loop)
 
@@ -610,17 +610,18 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
                                              message=f"There is no channel_stubs for channel({channel_name}).")
 
-        peer_list = [target['peer_target'] for target in self.peer_service.channel_infos[channel_name]["peers"]]
+        reps: list = channel_stub.async_task().get_reps()
+        peer_targets = [rep.get('target') for rep in reps]
 
-        if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
+        if (request.peer_target in peer_targets and conf.ENABLE_CHANNEL_AUTH) or \
                 (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
             asyncio.run_coroutine_threadsafe(
                 channel_stub.async_task().add_audience(peer_target=request.peer_target),
                 self.peer_service.inner_service.loop
             )
             utils.logger.debug(f"peer_outer_service::Subscribe add_audience "
-                              f"target({request.peer_target}) in channel({request.channel}), "
-                              f"order({request.peer_order})")
+                               f"target({request.peer_target}) in channel({request.channel}), "
+                               f"order({request.peer_order})")
         else:
             logging.error(f"This target({request.peer_target}, {request.node_type}) failed to subscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
@@ -690,18 +691,3 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
-    def GetChannelInfos(self, request: loopchain_pb2.GetChannelInfosRequest, context):
-        """Return channels by peer target
-
-        :param request:
-        :param context:
-        :return:
-        """
-        logging.info(f"peer_outer_service:GetChannelInfos target({request.peer_target}) "
-                     f"channel_infos({ObjectManager().peer_service.channel_infos})")
-
-        return loopchain_pb2.GetChannelInfosReply(
-            response_code=message_code.Response.success,
-            channel_infos=json.dumps(ObjectManager().peer_service.channel_infos)
-        )

@@ -57,7 +57,6 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
-        self.__channel_infos: dict = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -129,8 +128,6 @@ class ChannelService:
         async def _serve():
             await StubCollection().create_peer_stub()
 
-            channel_name = ChannelProperty().name
-            self.__channel_infos = (await StubCollection().peer_stub.async_task().get_channel_infos())[channel_name]
             results = await StubCollection().peer_stub.async_task().get_node_info_detail()
             await self.init(**results)
 
@@ -195,7 +192,7 @@ class ChannelService:
     async def init(self, **kwargs):
         """Initialize Channel Service
 
-        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type, score_package)
+        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target, node_type)
         within parameters
         :return: None
         """
@@ -243,7 +240,9 @@ class ChannelService:
             await self.subscribe_to_parent()
 
         self.__state_machine.complete_subscribe()
-        self.turn_on_leader_complain_timer()
+
+        if self.is_support_node_function(conf.NodeFunction.Vote):
+            self.turn_on_leader_complain_timer()
 
     def update_sub_services_properties(self):
         nid = self.__block_manager.get_blockchain().find_nid()
@@ -285,7 +284,11 @@ class ChannelService:
             else:
                 self._load_peers_from_iiss()
         else:
-            await self._load_peers_from_file()
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                await self._load_peers_from_file()
+            else:
+                await self._load_peers_from_rest_call()
+        self.show_peers()
 
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.get_blockchain().block_height
@@ -432,25 +435,30 @@ class ChannelService:
         utils.logger.debug(f"Peer manager have to update with new list.")
         self.__peer_manager.reset_peers(check_status=False)
 
-        for order, rep_info in enumerate(response["result"]["preps"], 1):
-            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
-            self.__peer_manager.add_peer(peer_info)
-        self.show_peers()
+        reps = response["result"]["preps"]
+        self._add_reps(reps)
 
     async def _load_peers_from_file(self):
-        channel_info = await StubCollection().peer_stub.async_task().get_channel_infos()
-        for peer_info in channel_info[ChannelProperty().name]["peers"]:
+        channel_info = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        reps: list = channel_info[ChannelProperty().name].get("peers")
+        for peer_info in reps:
             self.__peer_manager.add_peer(peer_info)
-        self.show_peers()
+
+    async def _load_peers_from_rest_call(self):
+        response = self.__radio_station_stub.call("GetReps")
+        reps = response.get('rep')
+        self._add_reps(reps)
+
+    def _add_reps(self, reps: list):
+        for order, rep_info in enumerate(reps, 1):
+            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            self.__peer_manager.add_peer(peer_info)
 
     def is_support_node_function(self, node_function):
         return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
 
     def get_channel_option(self) -> dict:
         return conf.CHANNEL_OPTION[ChannelProperty().name]
-
-    def get_channel_infos(self) -> dict:
-        return self.__channel_infos
 
     def get_rep_ids(self) -> list:
         return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
@@ -839,7 +847,7 @@ class ChannelService:
             duration = self.__block_manager.epoch.complain_duration
         # utils.logger.spam(
         #     f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
-        if self.state_machine.state not in ("BlockGenerate", "BlockSync", "Watch"):
+        if self.state_machine.state in ("Vote", "LeaderComplain"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
                                                       is_repeat=True, callback=self.state_machine.leader_complain)
