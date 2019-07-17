@@ -65,7 +65,7 @@ class ChannelTxCreatorInnerTask:
 
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
-            raise TransactionInvalidOutOfTimeBound(tx.hash.hex(), tx.timestamp, util.get_now_time_stamp())
+            raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
 
     def cleanup(self):
         self.__broadcast_scheduler.stop()

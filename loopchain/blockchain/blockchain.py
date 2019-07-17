@@ -609,7 +609,7 @@ class BlockChain:
         tx_builder.nid = nid  # Optional. It will be 0x3 except for mainnet and testnet if not defined
         tx_builder.accounts = tx_info["accounts"]
         tx_builder.message = tx_info["message"]
-        tx = tx_builder.build()
+        tx = tx_builder.build(False)
 
         block_version = self.block_versioner.get_version(0)
         block_builder = BlockBuilder.new(block_version, self.tx_versioner)

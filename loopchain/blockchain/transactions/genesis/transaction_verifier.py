@@ -5,6 +5,7 @@ from loopchain.blockchain.transactions.genesis import Transaction, TransactionSe
 
 class TransactionVerifier(BaseTransactionVerifier):
     _hash_salt = HASH_SALT
+    _allow_unsigned = True
 
     def __init__(self, hash_generator_version: int, raise_exceptions=True):
         super().__init__(hash_generator_version, raise_exceptions)
@@ -18,13 +19,11 @@ class TransactionVerifier(BaseTransactionVerifier):
 
     def verify_loosely(self, tx: 'Transaction', blockchain=None):
         self.verify_hash(tx)
+        self.verify_signature(tx)
         self.verify_accounts(tx)
         if blockchain:
             self.verify_empty_blockchain(tx, blockchain)
             self.verify_tx_hash_unique(tx, blockchain)
-
-    def verify_signature(self, tx: 'Transaction'):
-        pass
 
     def verify_accounts(self, tx: 'Transaction'):
         for account in tx.accounts:

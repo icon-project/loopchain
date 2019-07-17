@@ -13,7 +13,13 @@
 # limitations under the License.
 """A module of exceptions for errors on block chain"""
 
+from typing import TYPE_CHECKING
 from loopchain.protos import message_code
+
+
+if TYPE_CHECKING:
+    from loopchain.blockchain.transactions import Transaction
+    from loopchain.blockchain.types import Hash32
 
 
 class BlockInValidError(Exception):
@@ -135,109 +141,58 @@ class NodeInitializationError(MessageCodeError):
 class TransactionInvalidError(MessageCodeError):
     message_code = message_code.Response.fail_tx_invalid_unknown
 
-    def __init__(self, tx_hash=None, message=''):
+    def __init__(self, tx: 'Transaction', message=''):
         super().__init__(message)
-        self.tx_hash = tx_hash
+        self.tx = tx
         
     def __str__(self):
-        return f"{super().__str__()} tx_hash: {self.tx_hash}"
+        return \
+            f"{super().__str__()}\n" \
+            f"Transaction: {self.tx}"
 
 
-class TransactionInvalidHashFormatError(TransactionInvalidError):
-    message_code = message_code.Response.fail_tx_invalid_hash_format
-
-
-class TransactionInvalidHashGenerationError(TransactionInvalidError):
-    message_code = message_code.Response.fail_tx_invalid_hash_generation
-
-    def __init__(self, tx_hash, origin_data, message=''):
-        super().__init__(tx_hash, message)
-        self.origin_data = origin_data
-
-    def __str__(self):
-        return f"{super().__str__()} origin_data: {self.origin_data}"
-
-
-class TransactionInvalidHashNotMatchError(TransactionInvalidError):
+class TransactionInvalidHashError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_hash_not_match
 
-    def __init__(self, tx_hash, expected_tx_hash):
-        super().__init__(tx_hash)
+    def __init__(self, tx: 'Transaction', expected_tx_hash: 'Hash32', message=''):
+        super().__init__(tx, message)
         self.excepted_tx_hash = expected_tx_hash
 
     def __str__(self):
-        return f"{super().__str__()} expected_tx_hash: {self.excepted_tx_hash}"
-
-
-class TransactionInvalidAddressNotMatchError(TransactionInvalidError):
-    message_code = message_code.Response.fail_tx_invalid_address_not_match
-
-    def __init__(self, tx_hash, address, expected_address):
-        super().__init__(tx_hash)
-        self.address = address
-        self.expected_address = expected_address
-
-    def __str__(self):
-        return f"{super().__str__()} address: {self.address} expected_tx_hash: {self.expected_address}"
-
-
-class TransactionInvalidAddressError(TransactionInvalidError):
-    message_code = message_code.Response.fail_tx_invalid_address_format
-
-    def __init__(self, tx_hash, address, message=''):
-        super().__init__(tx_hash, message)
-        self.address = address
-
-    def __str__(self):
-        return f"{super().__str__()} address: {self.address}"
+        return \
+            f"{super().__str__()}\n" \
+            f"Expected hash: {self.excepted_tx_hash.hex_0x()}"
 
 
 class TransactionInvalidSignatureError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_signature
 
-    def __init__(self, tx_hash, signature, address):
-        super().__init__(tx_hash)
-        self.signature = signature
-        self.address = address
 
-    def __str__(self):
-        return f"{super().__str__()} address: {self.address} signature: {self.signature}"
-
-
-class TransactionInvalidParamError(TransactionInvalidError):
-    message_code = message_code.Response.fail_tx_invalid_params
-
-    def __init__(self, tx_hash, origin_data, message=''):
-        super().__init__(tx_hash, message)
-        self.origin_data = origin_data
-
-    def __str__(self):
-        return f"{super().__str__()} origin_data: {self.origin_data}"
-
-
-class TransactionInvalidDuplicatedHash(TransactionInvalidError):
+class TransactionDuplicatedHashError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_duplicated_hash
 
 
-class TransactionInvalidOutOfTimeBound(TransactionInvalidError):
+class TransactionOutOfTimeBound(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_out_of_time_bound
 
-    def __init__(self, tx_hash, tx_timestamp, cur_timestamp, message=''):
-        super().__init__(tx_hash, message)
-        self.tx_timestamp = tx_timestamp
+    def __init__(self, tx: 'Transaction', cur_timestamp: int, message=''):
+        super().__init__(tx, message)
         self.cur_timestamp = cur_timestamp
 
     def __str__(self):
-        return f"{super().__str__()} tx_timestamp: {self.tx_timestamp} cur_timestamp: {self.cur_timestamp}"
+        return \
+            f"{super().__str__()}\n" \
+            f"Current_timestamp: {self.cur_timestamp}"
 
 
 class TransactionInvalidNidError(TransactionInvalidError):
     message_code = message_code.Response.fail_tx_invalid_wrong_nid
 
-    def __init__(self, tx_hash, nid, expected_nid, message=''):
-        super().__init__(tx_hash, message)
-        self.nid = nid
+    def __init__(self, tx: 'Transaction', expected_nid: int, message=''):
+        super().__init__(tx, message)
         self.expected_nid = expected_nid
 
     def __str__(self):
-        return f"{super().__str__()} nid: {self.nid} expected_nid: {self.expected_nid}"
+        return \
+            f"{super().__str__()}" \
+            f"expected_nid: {self.expected_nid}"

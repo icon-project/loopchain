@@ -32,7 +32,7 @@ class TransactionBuilder(ABC):
         self.raw_data = None
 
     @abstractmethod
-    def build(self) -> 'Transaction':
+    def build(self, is_signing=True) -> 'Transaction':
         raise NotImplementedError
 
     def build_hash(self):
@@ -56,7 +56,7 @@ class TransactionBuilder(ABC):
         return self.from_address
 
     @abstractmethod
-    def build_raw_data(self) -> dict:
+    def build_raw_data(self, is_signing=True) -> dict:
         pass
 
     @abstractmethod
@@ -69,6 +69,10 @@ class TransactionBuilder(ABC):
 
         self.signature = Signature(self.signer.sign_hash(self.hash))
         return self.signature
+
+    @abstractmethod
+    def sign_transaction(self, tx: 'Transaction'):
+        raise NotImplementedError
 
     @classmethod
     def new(cls, version: str, versioner: 'TransactionVersioner'):
