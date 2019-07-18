@@ -16,7 +16,6 @@
 # limitations under the License.
 """Test block chain class"""
 
-import leveldb
 import logging
 import os
 import random
@@ -38,7 +37,6 @@ loggers.update_preset()
 @unittest.skip("BVS")
 class TestBlockChain(unittest.TestCase):
     chain = None
-    db_name = 'blockchain_db'
     __peer_id = 'aaa'
 
     def setUp(self):
@@ -47,14 +45,14 @@ class TestBlockChain(unittest.TestCase):
 
         set_mock(self)
         # BlockChain 을 만듬
-        test_db = test_util.make_level_db(self.db_name)
-        self.assertIsNotNone(test_db, "DB생성 불가")
-        self.chain = BlockChain(test_db)
+        self.test_store = test_util.make_key_value_store('blockchain_db')
+        self.assertIsNotNone(self.test_store, "DB생성 불가")
+        self.chain = BlockChain(self.test_store)
 
     def tearDown(self):
         # Blockchain을 삭제
         ObjectManager().peer_service = None
-        leveldb.DestroyDB(self.db_name)
+        self.test_store.destroy_store()
         os.system("rm -rf ./blockchain_db*")
 
     def generate_test_block(self):
@@ -245,8 +243,8 @@ class TestBlockChain(unittest.TestCase):
     # blockchain is no more singleton. (for multi chain)
     @unittest.skip
     def test_blockchain_is_singleton(self):
-        x = BlockChain(test_util.make_level_db())
-        y = BlockChain(test_util.make_level_db())
+        x = BlockChain(test_util.make_key_value_store())
+        y = BlockChain(test_util.make_key_value_store())
 
         self.assertTrue((x is y))
 

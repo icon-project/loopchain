@@ -151,6 +151,8 @@ MAX_MADE_BLOCK_COUNT = 10
 WAIT_SECONDS_FOR_VOTE = 0.2
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
+# default key value store type
+DEFAULT_KEY_VALUE_STORE_TYPE = "plyvel"
 # default level db path
 DEFAULT_LEVEL_DB_PATH = "./db"
 # peer_id (UUID) 는 최초 1회 생성하여 level db에 저장한다.

@@ -10,6 +10,7 @@ gunicorn==19.9.0
 jsonrpcclient==2.6.0
 jsonrpcserver==3.5.6
 leveldb==0.20
+plyvel==1.1.0
 pika==0.12.0
 python-pkcs11==0.5.0
 requests==2.20.0
