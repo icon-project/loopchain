@@ -20,6 +20,7 @@ import traceback
 from asyncio import Event
 
 import websockets
+from websockets import WebSocketClientProtocol
 from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
@@ -44,7 +45,7 @@ class NodeSubscriber:
     def __init__(self, channel, rs_target):
         self._target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{rs_target}/api/ws/{channel}"
         self._exception = None
-        self._websocket = None
+        self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None
 
         ws_methods.add(self.node_ws_PublishHeartbeat)
@@ -60,36 +61,51 @@ class NodeSubscriber:
         if self._websocket is not None:
             websocket = self._websocket
             self._websocket = None
-            await websocket.close()
+            if not websocket.closed:
+                logging.debug("Closing websocket connection...")
+                await websocket.close()
 
     async def subscribe(self, block_height, event: Event):
         self._exception = None
         self._subscribe_event = event
+        await self.close()
 
         try:
             # set websocket payload maxsize to 4MB.
-            self._websocket = await websockets.connect(self._target_uri, max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK)
-            logging.debug(f"Websocket connection is Completed.")
-            request = Request("node_ws_Subscribe", height=block_height, peer_id=ChannelProperty().peer_id)
+            self._websocket: WebSocketClientProtocol = await websockets.connect(
+                uri=self._target_uri,
+                max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK
+            )
+            logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
+            request = Request(
+                method="node_ws_Subscribe",
+                heigit=block_height,
+                peer_id=ChannelProperty().peer_id
+            )
             await self._websocket.send(json.dumps(request))
             await self._subscribe_loop(self._websocket)
-        except AnnounceNewBlockError:
-            raise
+        except AnnounceNewBlockError as e:
+            logging.error(f"{type(e)} during subscribe, caused by: {e}")
+            raise e
         except Exception as e:
             traceback.print_exc()
-            logging.error(f"websocket subscribe exception, caused by: {type(e)}, {e}")
+            logging.error(f"{type(e)} during subscribe, caused by: {e}")
             raise ConnectionError
         finally:
             await self.close()
 
-    async def _subscribe_loop(self, websocket):
+    async def _subscribe_loop(self, websocket: WebSocketClientProtocol):
         while True:
             if self._exception:
                 raise self._exception
 
             try:
-                response = await asyncio.wait_for(websocket.recv(), timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT)
+                response = await asyncio.wait_for(
+                    fut=websocket.recv(),
+                    timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT
+                )
             except asyncio.TimeoutError:
+                self._exception = asyncio.TimeoutError('Timed out for websocket recv')
                 continue
             else:
                 response_dict = json.loads(response)
@@ -143,6 +159,7 @@ class NodeSubscriber:
             return
 
         if not self._subscribe_event.is_set():
+            # set subscribe_event to transit the state to Watch.
             self._subscribe_event.set()
 
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT

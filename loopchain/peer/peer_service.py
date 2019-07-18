@@ -316,7 +316,7 @@ class PeerService:
         loop.create_task(_close())
 
     async def serve_channels(self):
-        for i, channel_name in enumerate(conf.CHANNEL_OPTION):
+        for i, channel_name in enumerate(self._channel_infos):
             score_port = self._peer_port + conf.PORT_DIFF_SCORE_CONTAINER + conf.PORT_DIFF_BETWEEN_SCORE_CONTAINER * i
 
             args = ['python3', '-m', 'loopchain', 'channel']
@@ -340,7 +340,7 @@ class PeerService:
     async def ready_tasks(self):
         await StubCollection().create_peer_stub()  # for getting status info
 
-        for channel_name in conf.CHANNEL_OPTION:
+        for channel_name in self._channel_infos:
             await StubCollection().create_channel_stub(channel_name)
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
