@@ -40,7 +40,7 @@ class TestTransaction(unittest.TestCase):
         self.tx_versioner.hash_generator_versions["0x2"] = 0
 
     def test_transaction_genesis(self):
-        tb = TransactionBuilder.new("genesis", self.tx_versioner)
+        tb = TransactionBuilder.new("genesis", None, self.tx_versioner)
         tb.accounts = [
             {
                 "name": "test0",
@@ -51,16 +51,16 @@ class TestTransaction(unittest.TestCase):
         tb.message = "Icon Loop"
         tx = tb.build(False)
 
-        tv = TransactionVerifier.new("genesis", self.tx_versioner)
+        tv = TransactionVerifier.new("genesis", tx.type(), self.tx_versioner)
         tv.verify(tx)
 
-        ts = TransactionSerializer.new("genesis", self.tx_versioner)
+        ts = TransactionSerializer.new("genesis", tx.type(), self.tx_versioner)
         tx_raw_data = ts.to_raw_data(tx)
 
         self.assertEqual(ts.from_(tx_raw_data), tx)
 
     def test_transaction_v2(self):
-        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb = TransactionBuilder.new("0x2", None, self.tx_versioner)
         tb.fee = 1000000
         tb.value = 100000
         tb.signer = self.signer
@@ -68,16 +68,16 @@ class TestTransaction(unittest.TestCase):
         tb.nonce = random.randint(0, 100000)
         tx = tb.build()
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new("0x2", tx.type(), self.tx_versioner)
         tv.verify(tx)
 
-        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        ts = TransactionSerializer.new("0x2", tx.type(), self.tx_versioner)
         tx_raw_data = ts.to_raw_data(tx)
 
         self.assertEqual(ts.from_(tx_raw_data), tx)
 
     def test_transaction_v3(self):
-        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb = TransactionBuilder.new("0x3", None, self.tx_versioner)
         tb.step_limit = 1000000
         tb.value = 100000
         tb.signer = self.signer
@@ -88,10 +88,10 @@ class TestTransaction(unittest.TestCase):
         tb.data_type = "message"
         tx = tb.build()
 
-        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv = TransactionVerifier.new("0x3",  tx.type(), self.tx_versioner)
         tv.verify(tx)
 
-        ts = TransactionSerializer.new("0x3", self.tx_versioner)
+        ts = TransactionSerializer.new("0x3", tx.type(), self.tx_versioner)
         tx_raw_data = ts.to_raw_data(tx)
 
         self.assertEqual(ts.from_(tx_raw_data), tx)
@@ -99,7 +99,7 @@ class TestTransaction(unittest.TestCase):
     def test_transaction_v2_unsigned(self):
         signer = Signer.new()
 
-        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb = TransactionBuilder.new("0x2", None, self.tx_versioner)
         tb.fee = 1000000
         tb.value = 100000
         tb.from_address = ExternalAddress.fromhex_address(signer.address)
@@ -107,7 +107,7 @@ class TestTransaction(unittest.TestCase):
         tb.nonce = random.randint(0, 100000)
         tx = tb.build(is_signing=False)
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new("0x2", tx.type(), self.tx_versioner)
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx))
 
@@ -119,7 +119,7 @@ class TestTransaction(unittest.TestCase):
     def test_transaction_v3_unsigned(self):
         signer = Signer.new()
 
-        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb = TransactionBuilder.new("0x3", None, self.tx_versioner)
         tb.step_limit = 1000000
         tb.value = 100000
         tb.from_address = ExternalAddress.fromhex_address(signer.address)
@@ -130,7 +130,7 @@ class TestTransaction(unittest.TestCase):
         tb.data_type = "message"
         tx = tb.build(False)
 
-        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv = TransactionVerifier.new("0x3", tx.type(), self.tx_versioner)
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx, nid=3))
 
@@ -153,10 +153,11 @@ class TestTransaction(unittest.TestCase):
         }
         tx_dumped['tx_hash'] = os.urandom(32).hex()  # invalid hash
 
-        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx_version, tx_type = self.tx_versioner.get_version(tx_dumped)
+        ts = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         tx = ts.from_(tx_dumped)
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new(tx_version, tx_type, self.tx_versioner)
         self.assertRaises(TransactionInvalidHashError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidHashError, lambda: tv.pre_verify(tx))
 
@@ -174,10 +175,11 @@ class TestTransaction(unittest.TestCase):
         }
         tx_dumped['value'] = hex(int(random.randrange(1, 100)))  # invalid value
 
-        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx_version, tx_type = self.tx_versioner.get_version(tx_dumped)
+        ts = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         tx = ts.from_(tx_dumped)
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new(tx_version, tx_type, self.tx_versioner)
         self.assertRaises(TransactionInvalidHashError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidHashError, lambda: tv.pre_verify(tx))
 
@@ -195,10 +197,11 @@ class TestTransaction(unittest.TestCase):
         }
         tx_dumped['signature'] = Signature(os.urandom(Signature.size)).to_base64str()  # invalid signature
 
-        ts = TransactionSerializer.new("0x2", self.tx_versioner)
+        tx_version, tx_type = self.tx_versioner.get_version(tx_dumped)
+        ts = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         tx = ts.from_(tx_dumped)
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new(tx_version, tx_type, self.tx_versioner)
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx))
 
@@ -219,10 +222,11 @@ class TestTransaction(unittest.TestCase):
         }
         tx_dumped['signature'] = Signature(os.urandom(Signature.size)).to_base64str()  # invalid signature
 
-        ts = TransactionSerializer.new("0x3", self.tx_versioner)
+        tx_version, tx_type = self.tx_versioner.get_version(tx_dumped)
+        ts = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         tx = ts.from_(tx_dumped)
 
-        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv = TransactionVerifier.new(tx_version, tx_type, self.tx_versioner)
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.verify(tx))
         self.assertRaises(TransactionInvalidSignatureError, lambda: tv.pre_verify(tx, nid=3))
 
@@ -231,7 +235,7 @@ class TestTransaction(unittest.TestCase):
         nids = list(range(0, 1000))
         random.shuffle(nids)
 
-        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb = TransactionBuilder.new("0x3", None, self.tx_versioner)
         tb.step_limit = 1000000
         tb.value = 100000
         tb.signer = self.signer
@@ -246,14 +250,14 @@ class TestTransaction(unittest.TestCase):
         mock_blockchain = MockBlockchain(find_nid=lambda: hex(expected_nid),
                                          find_tx_by_key=lambda _: False)
 
-        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv = TransactionVerifier.new(tx.version, tx.type(), self.tx_versioner)
         self.assertRaises(TransactionInvalidNidError, lambda: tv.verify(tx, mock_blockchain))
         self.assertRaises(TransactionInvalidNidError, lambda: tv.pre_verify(tx, nid=expected_nid))
 
     def test_transaction_v2_duplicate_hash(self):
         MockBlockchain = namedtuple("MockBlockchain", "find_nid find_tx_by_key")
 
-        tb = TransactionBuilder.new("0x2", self.tx_versioner)
+        tb = TransactionBuilder.new("0x2", None, self.tx_versioner)
         tb.fee = 1000000
         tb.value = 100000
         tb.signer = self.signer
@@ -264,13 +268,13 @@ class TestTransaction(unittest.TestCase):
         mock_blockchain = MockBlockchain(find_nid=lambda: hex(3),
                                          find_tx_by_key=lambda _: True)
 
-        tv = TransactionVerifier.new("0x2", self.tx_versioner)
+        tv = TransactionVerifier.new(tx.version, tx.type(), self.tx_versioner)
         self.assertRaises(TransactionDuplicatedHashError, lambda: tv.verify(tx, mock_blockchain))
 
     def test_transaction_v3_duplicate_hash(self):
         MockBlockchain = namedtuple("MockBlockchain", "find_nid find_tx_by_key")
 
-        tb = TransactionBuilder.new("0x3", self.tx_versioner)
+        tb = TransactionBuilder.new("0x3", None, self.tx_versioner)
         tb.step_limit = 1000000
         tb.value = 100000
         tb.signer = self.signer
@@ -284,6 +288,6 @@ class TestTransaction(unittest.TestCase):
         mock_blockchain = MockBlockchain(find_nid=lambda: hex(3),
                                          find_tx_by_key=lambda _: True)
 
-        tv = TransactionVerifier.new("0x3", self.tx_versioner)
+        tv = TransactionVerifier.new(tx.version, tx.type(), self.tx_versioner)
         self.assertRaises(TransactionDuplicatedHashError, lambda: tv.verify(tx, mock_blockchain))
 

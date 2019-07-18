@@ -75,7 +75,7 @@ class TransactionBuilder(ABC):
         raise NotImplementedError
 
     @classmethod
-    def new(cls, version: str, versioner: 'TransactionVersioner'):
+    def new(cls, version: str, type_: str, versioner: 'TransactionVersioner'):
         hash_generator_version = versioner.get_hash_generator_version(version)
 
         from . import v3

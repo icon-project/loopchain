@@ -697,7 +697,8 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, self.__block_manager.get_blockchain().tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
+                                                      self.__block_manager.get_blockchain().tx_versioner)
             transaction = {
                 "method": method,
                 "params": {
@@ -746,7 +747,8 @@ class ChannelService:
         method = "icx_sendTransaction"
         transactions = []
         for tx in _block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, self.__block_manager.get_blockchain().tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
+                                                      self.__block_manager.get_blockchain().tx_versioner)
 
             transaction = {
                 "method": method,

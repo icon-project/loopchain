@@ -231,7 +231,7 @@ class TestBlock(unittest.TestCase):
         dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
         for i in range(5):
-            tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+            tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
             tx_builder.signer = test_signer
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
@@ -239,7 +239,7 @@ class TestBlock(unittest.TestCase):
             tx_builder.nid = 2
             tx = tx_builder.build()
 
-            tx_serializer = TransactionSerializer.new(tx.version, tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
             block_builder.transactions[tx.hash] = tx
             dummy_receipts[tx.hash.hex()] = {
                 "dummy_receipt": "dummy",
@@ -295,7 +295,7 @@ class TestBlock(unittest.TestCase):
             block_builder = BlockBuilder.new("0.1a", tx_versioner)
 
             for i in range(1000):
-                tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+                tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
                 tx_builder.signer = test_signer
                 tx_builder.to_address = ExternalAddress.new()
                 tx_builder.step_limit = random.randint(0, 10000)
@@ -303,7 +303,7 @@ class TestBlock(unittest.TestCase):
                 tx_builder.nid = 2
                 tx = tx_builder.build()
 
-                tx_serializer = TransactionSerializer.new(tx.version, tx_versioner)
+                tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
                 block_builder.transactions[tx.hash] = tx
                 dummy_receipts[tx.hash.hex()] = {
                     "dummy_receipt": "dummy",

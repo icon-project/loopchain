@@ -50,5 +50,5 @@ class TxItem:
     @classmethod
     def get_serializer(cls, tx: Transaction, tx_versioner: TransactionVersioner):
         if tx.version not in cls.tx_serializers:
-            cls.tx_serializers[tx.version] = TransactionSerializer.new(tx.version, tx_versioner)
+            cls.tx_serializers[tx.version] = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
         return cls.tx_serializers[tx.version]

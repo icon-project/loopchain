@@ -6,14 +6,15 @@ class TransactionVersioner:
         self.hash_generator_versions = dict(default_hash_generator_versions)
 
     def get_version(self, tx_data: dict):
-        if 'signature' not in tx_data:
-            return genesis.version
+        if 'accounts' in tx_data:
+            return genesis.version, None
 
         version = tx_data.get('version')
-        if version:
-            return version
+        if not version:
+            return v2.version, None
 
-        return v2.version
+        type_ = tx_data.get("dataType")
+        return version, type_
 
     def get_hash_generator_version(self, version: str):
         return self.hash_generator_versions[version]

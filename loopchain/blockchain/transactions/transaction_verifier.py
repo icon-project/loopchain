@@ -63,8 +63,12 @@ class TransactionVerifier(ABC):
             self.exceptions.append(exception)
 
     @classmethod
-    def new(cls, version: str, versioner: 'TransactionVersioner', raise_exceptions=True):
+    def new(cls, version: str, type_: str, versioner: 'TransactionVersioner', raise_exceptions=True):
         hash_generator_version = versioner.get_hash_generator_version(version)
+
+        from . import v3_issue
+        if version == v3_issue.version and type_ == "issue":
+            return v3_issue.TransactionVerifier(hash_generator_version)
 
         from . import v3
         if version == v3.version:
