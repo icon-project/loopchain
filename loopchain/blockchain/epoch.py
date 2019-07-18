@@ -61,7 +61,8 @@ class Epoch:
         return Epoch(block_manager, leader_id)
 
     def new_round(self, new_leader_id, round_=None):
-        self.set_epoch_leader(new_leader_id, True)
+        is_complained = round_ != 0
+        self.set_epoch_leader(new_leader_id, is_complained)
 
         if round_ is None:
             self.round += 1

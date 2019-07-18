@@ -137,7 +137,7 @@ class ConsensusSiever(ConsensusBase):
 
             if self._block_manager.epoch.round > 0:
                 complain_votes = self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
-                util.logger.info(f"complain_votes : {complain_votes}")
+                # util.logger.info(f"complain_votes : {complain_votes}")
 
             else:
                 complain_votes = None
@@ -161,6 +161,15 @@ class ConsensusSiever(ConsensusBase):
                         util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                         return
                     """
+                    # It should be enhanced after coming up for compatibility of versions.
+                    self._blockchain.last_unconfirmed_block = None
+                    dumped_votes = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
+                    if block_builder.version == '0.1a':
+                        votes = dumped_votes
+                    else:
+                        votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+
+                    block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
                     self._made_block_count += 1
                 elif self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
                     if last_unconfirmed_block:
