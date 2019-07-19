@@ -77,14 +77,12 @@ class TestLoopchainBasic:
         Loopchain.end_line = 80 * channel_count
         proc_name = "Exception_detective"
 
-        with pytest.raises(RuntimeError):
-            try:
+        try:
+            with pytest.raises(RuntimeError):
                 xprocess.ensure(proc_name, Loopchain)
                 raise AssertionError("Exception Found!")
-            except RuntimeError as e:
-                print("All green. No exception found until timeout.")
-                raise e
-            finally:
-                proc_info = xprocess.getinfo(proc_name)
-                proc_info.terminate()
-                time.sleep(3)
+            print("All green. No exception found until timeout.")
+        finally:
+            proc_info = xprocess.getinfo(proc_name)
+            proc_info.terminate()
+            time.sleep(3)

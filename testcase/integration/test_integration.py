@@ -1,4 +1,3 @@
-import binascii
 import random
 import time
 
@@ -8,10 +7,13 @@ from iconsdk.icon_service import IconService
 from iconsdk.providers.http_provider import HTTPProvider
 from iconsdk.signed_transaction import SignedTransaction
 from iconsdk.wallet.wallet import KeyWallet
-from loopchain.blockchain.types import VarBytes
 
 from loopchain import conf
 from loopchain import utils
+from loopchain.blockchain.blocks import Block, BlockSerializer
+from loopchain.blockchain.transactions import TransactionVerifier
+from loopchain.blockchain.transactions import TransactionVersioner
+from loopchain.blockchain.types import VarBytes
 from . import conftest
 from .conftest import Loopchain
 
@@ -55,14 +57,14 @@ def loopchain_proc(xprocess, request, generate_peer_conf_path_list_extended):
         print(f"==========PEER_{peer_order} READY TO START ==========")
         xprocess.ensure(proc_name, Loopchain)
 
-        # Store process infomation for terminate processes at the end of the test
+        # Store process information for terminate processes at the end of the test
         proc_info = xprocess.getinfo(proc_name)
         proc_info_list.append(proc_info)
 
     print(f"==========ALL GREEN ==========")
     time.sleep(0.5 * peer_count * channel_count)
 
-    yield True
+    yield
 
     # Executed after this fixture's scope ends.
     for proc_info in proc_info_list:
@@ -75,96 +77,52 @@ class TestLoopchain:
     sent_tx_data = {}  # Sent tx data. Needed to be compared whether it equals with the queried one.
     tx_hash_by_channel = {}  # Tx hashes. It collects return values of 'send_transaction'.
 
-    # @pytest.mark.skip
-    def test_health_check_before_test(self, request):
+    @pytest.mark.parametrize("port, channel_name", conftest.port_channel_list)
+    def test_health_check_before_test(self, port, channel_name):
         """Health check before test starts
 
-        Test steps:
-            1. Get genesis local file which is created when the test starts.
-            2. Get rich account's balance (God is not used. Generally third one.)
-            3. Get balance from 'All channels of All peers'.
-            4. Compare original balance with queried one.
-
         Assertion Tests:
-            1. Queried balance == Expected balance
-            2. All queried balance has same value
-        """
-        global genesis_data
-        print("Genesis data: ", genesis_data)
-
-        peer_count = int(request.config.getoption("--peer-count"))
-        channel_count = int(request.config.getoption("--channel-count"))
-
-        genesis_node = genesis_data["transaction_data"]["accounts"][2]
-        target_account = genesis_node["address"]
-        expected_balance = int(genesis_node["balance"], 16)
-        print("Address of billionaire account: ", target_account)
-
-        querried_balance_list = []
-
-        for peer_order in range(peer_count):
-            port = 9000 + (peer_order * 100)
-
-            for channel_num in range(channel_count):
-                url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, f"channel_{channel_num}")
-                print("Req url: ", url)
-                icon_service = IconService(HTTPProvider(url))
-                queried_balance = icon_service.get_balance(target_account)
-                print("Queried balance: ", queried_balance)
-
-                assert queried_balance == expected_balance
-                querried_balance_list.append(queried_balance)
-                time.sleep(0.5)
-
-        print("Balance all: ", querried_balance_list)
-        assert len(set(querried_balance_list)) == 1
-
-    # @pytest.mark.skip
-    def test_compare_genesis_tx_with_initial_data(self):
-        """Test that the first peer is initialized with given genesis data
-
-        Similar to 'test_health_check_before_test',
-        but it tries to catch all critical values of genesis tx in order to ensure test reliablity.
-
-        # TODO: Could be changed or enhanced when the block version 0.3 is applied.
-
-        Test steps:
-            1. Get genesis tx
-            2. Query genesis tx
-            3. Compare two Txs
+            1. Expected genesis transaction data == genesis_tx from peer
+            2. genesis_tx from peer == genesis_tx passed through tx verifier and tx serializer
         """
         global genesis_data
         expected_data = genesis_data["transaction_data"]
-        print("EXPECTED tx_data: ", expected_data)
 
-        # TODO: iconsdk does not provide channel select on current version (1.0.9).
-        url = utils.normalize_request_url("9000", conf.ApiVersion.v3, "channel_0")
+        url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, channel_name)
+        print("Req url: ", url)
+
         icon_service = IconService(HTTPProvider(url))
-        block = icon_service.get_block(0)
-        tx_list = block["confirmed_transaction_list"][0]
-        print("tx_list: ", tx_list)
+        genesis_block: dict = icon_service.get_block(0)
 
-        assert tx_list["message"] == expected_data["message"]
-        assert tx_list["nid"] == expected_data["nid"]
-        assert tx_list["accounts"] == expected_data["accounts"]
+        # TODO: dummy data to deserialize block. Fix in iconsdk
+        genesis_block["commit_state"] = None
+        genesis_block["confirmed_transaction_list"][0]["nid"] = "0x3"
 
-    @pytest.mark.skip(reason="Could be a redundant test")
-    def test_all_peers_running_with_synced_data(self, request):
+        tx_versioner = TransactionVersioner()
+        block_serializer = BlockSerializer.new("0.1a", TransactionVersioner())
+        genesis_block: Block = block_serializer.deserialize(block_dumped=genesis_block)
+        genesis_tx = list(genesis_block.body.transactions.values())[0]
+        print("genesis_tx: ", genesis_tx)
+
+        tv = TransactionVerifier.new("genesis", genesis_tx.type(), tx_versioner)
+        tv.verify(genesis_tx)
+
+        assert expected_data["accounts"] == genesis_tx.raw_data["accounts"]
+        assert expected_data["message"] == genesis_tx.raw_data["message"]
+        assert expected_data["nid"] == genesis_tx.raw_data["nid"]
+
+    @pytest.mark.parametrize("port, channel_name", conftest.port_channel_list)
+    def test_get_lastest_block_has_no_error(self, port, channel_name):
         """Test that all peers are alive"""
-        peer_count = int(request.config.getoption("--peer-count"))
+        url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, channel_name)
+        icon_service = IconService(HTTPProvider(url))
+        block = icon_service.get_block("latest")
 
-        for peer_order in range(1, peer_count):
-            port = 9000 + (peer_order * 100)
-            url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, "channel_0")
-            icon_service = IconService(HTTPProvider(url))
-            block = icon_service.get_block("latest")
+        print("REQ url: ", url)
+        print("RES block: ", block)
 
-            print("REQ url: ", url)
-            print("RES block: ", block)
+        assert "error" not in block
 
-            assert "error" not in block
-
-    # @pytest.mark.skip
     def test_send_tx_message(self, request):
         """Test for 'send_transaction'
 
@@ -240,8 +198,8 @@ class TestLoopchain:
         print(f"Await consensus final...({final_await_sec})")
         time.sleep(final_await_sec)
 
-    # @pytest.mark.skip
-    def test_sent_tx_is_synced(self, request):
+    @pytest.mark.parametrize("port, channel_name", conftest.port_channel_list)
+    def test_sent_tx_is_synced(self, port, channel_name):
         """Following test of 'test_send_tx_message'
 
         Check that send_transaction is successfully completed.
@@ -260,23 +218,16 @@ class TestLoopchain:
         """
         print("sent_tx_data: ", TestLoopchain.sent_tx_data)
 
-        peer_count = int(request.config.getoption("--peer-count"))
-        channel_count = int(request.config.getoption("--channel-count"))
+        url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, channel_name)
+        print("Req url: ", url)
+        icon_service = IconService(HTTPProvider(url))
+        tx_hash = TestLoopchain.tx_hash_by_channel[channel_name]
+        print("Tx hash to be queried: ", tx_hash)
+        queried_tx = icon_service.get_transaction(tx_hash)
+        print("Tx result: ", queried_tx)
 
-        for peer_order in range(peer_count):
-            port = 9000 + (peer_order * 100)
-            for channel_order in range(channel_count):
-                channel_name = f"channel_{channel_order}"
-                url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, channel_name)
-                print("Req url: ", url)
-                icon_service = IconService(HTTPProvider(url))
-                tx_hash = TestLoopchain.tx_hash_by_channel[channel_name]
-                print("Tx hash to be queried: ", tx_hash)
-                queried_tx = icon_service.get_transaction(tx_hash)
-                print("Tx result: ", queried_tx)
+        assert queried_tx["from"] == TestLoopchain.sent_tx_data[channel_name]["from"]
+        assert queried_tx["to"] == TestLoopchain.sent_tx_data[channel_name]["to"]
+        assert queried_tx["data"] == TestLoopchain.sent_tx_data[channel_name]["msg"]
 
-                assert queried_tx["from"] == TestLoopchain.sent_tx_data[channel_name]["from"]
-                assert queried_tx["to"] == TestLoopchain.sent_tx_data[channel_name]["to"]
-                assert queried_tx["data"] == TestLoopchain.sent_tx_data[channel_name]["msg"]
-
-                time.sleep(0.5)
+        time.sleep(0.5)

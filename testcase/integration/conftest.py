@@ -7,6 +7,8 @@ import pytest
 from iconsdk.wallet.wallet import KeyWallet
 from xprocess import ProcessStarter
 
+port_channel_list = []
+
 
 def pytest_addoption(parser):
     """Set args for tests
@@ -18,6 +20,18 @@ def pytest_addoption(parser):
     parser.addoption("--channel-count", action="store", default=2, help="Number of channel to set in each peer.\n"
                                                                         "Each will be named as 'channel_[num]'.\n"
                                                                         "Use this option to test multi-channel.\n")
+
+
+def pytest_configure(config):
+    peer_count = int(config.getoption("--peer-count"))
+    channel_count = int(config.getoption("--channel-count"))
+
+    for peer_order in range(peer_count):
+        port = 9000 + (peer_order * 100)
+        for channel_num in range(channel_count):
+            port_channel_list.append([port, f"channel_{channel_num}"])
+
+    print("list made: ", port_channel_list)
 
 
 def _get_channel_setting() -> dict:
