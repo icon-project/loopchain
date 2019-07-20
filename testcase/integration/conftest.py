@@ -1,5 +1,6 @@
 import itertools
 import json
+from typing import Tuple
 import os
 from functools import partial
 
@@ -13,7 +14,9 @@ port_channel_list = []
 def pytest_addoption(parser):
     """Set args for tests
 
-    >> pytest tests/integration [--opt]
+    Options below can be used at `--opt`
+        >> pytest testcat/integration [--opt]
+        ...
     """
     parser.addoption("--peer-count", action="store", default=4, help="Number of peer to be tested")
     parser.addoption("--peer-type", action="store", default="peer", help="Type of peer. ([peer|citizen])")
@@ -23,6 +26,7 @@ def pytest_addoption(parser):
 
 
 def pytest_configure(config):
+    """Make parameter list reuse in integration tests"""
     peer_count = int(config.getoption("--peer-count"))
     channel_count = int(config.getoption("--channel-count"))
 
@@ -35,6 +39,10 @@ def pytest_configure(config):
 
 
 def _get_channel_setting() -> dict:
+    """Default config format for each channel
+
+    :return dict channel_setting : Default config format for each channel
+    """
     channel_setting = {
         "block_versions": {
             "0.1a": 0
@@ -53,17 +61,12 @@ def _get_channel_setting() -> dict:
     return channel_setting
 
 
-def generate_addr(wallet_key_path: str, password: str = "password"):
+def generate_addr(wallet_key_path: str, password: str = "password") -> str:
     """Generate address from given wallet path and password
 
-    Generally, the password set as "password"
-
-    Args:
-        wallet_key_path (str): Desired path of wallet key file
-        password (str): Desired password of wallet
-
-    Returns:
-        account_addr (str): Account address
+    :param str wallet_key_path : Desired path of wallet key file
+    :param str password : Desired password of wallet
+    :return str account_addr: Account address of wallet
     """
     wallet = KeyWallet.create()
     wallet.store(wallet_key_path, password)
@@ -73,12 +76,10 @@ def generate_addr(wallet_key_path: str, password: str = "password"):
 
 
 def generate_channel_manage_data(channel_manage_data_path: str, config_path_list: list):
-    """Generate channel_manage_data.json
+    """Generate channel_manage_data.json at given path
 
-    Args:
-        channel_manage_data_path (str): Desired path of channel_manage_data.json
-        config_path_list (list): Peer infos to be contained to the json file
-
+    :param str channel_manage_data_path: Desired path of channel_manage_data.json
+    :param list config_path_list: Peer information list to be contained to the json file
     """
     channel_manage_data = {}
     peers = []
@@ -107,23 +108,20 @@ def generate_channel_manage_data(channel_manage_data_path: str, config_path_list
 
 
 def generate_genesis_file(genesis_path: str, accounts: list):
-    """
-    Generate genesis file
+    """Generate genesis file at given path
 
-    It mimics genesis block tx.
-    It will be contained to genesis block in this test.
+    Makes genesis block tx which is to be contained in genesis block
 
-    Args:
-        genesis_path (str): Desired path of genesis file
-        accounts (list): This will be contained to genesis tx. Sample schema is below.
-            [
-                {
-                    "name": "treasury",
-                    "address": "hx1000000000000000000000000000000000000000",
-                    "balance": "0x1111"
-                },
-                ...
-            ]
+    :param str genesis_path : Desired path of genesis file
+    :param list accounts : Account list to be contained to genesis tx. Sample schema is below.
+        accounts = [
+            {
+                "name": "treasury",
+                "address": "hx1000000000000000000000000000000000000000",
+                "balance": "0x1111"
+            },
+            ...
+        ]
     """
     genesis_data = {
         "transaction_data": {
@@ -147,7 +145,12 @@ def generate_genesis_file(genesis_path: str, accounts: list):
 
 
 def get_peer_info(conf_path_list: list, order: int = 0) -> dict:
-    """Get peer information"""
+    """Get peer information
+
+    :param list conf_path_list: List of peer config paths
+    :param int order: Peer order in list to extract its info
+    :return dict peer_info: Peer information
+    """
     target_peer_conf_path = conf_path_list[order]
 
     with open(target_peer_conf_path) as f:
@@ -156,8 +159,12 @@ def get_peer_info(conf_path_list: list, order: int = 0) -> dict:
     return peer_info
 
 
-def get_genesis_data(conf_path_list: list):
-    """Get genesis data which is stored at first peer info"""
+def get_genesis_data(conf_path_list: list) -> dict:
+    """Get genesis data from first peer's information
+
+    :param list conf_path_list: List of peer config paths
+    :return dict loaded_genesis_data: Genesis data
+    """
     if not conf_path_list:
         raise RuntimeError()
 
@@ -170,21 +177,23 @@ def get_genesis_data(conf_path_list: list):
     return loaded_genesis_data
 
 
-def _generate_peer_conf_path_list(temporary_path, peer_count: int, channel_list, wallet_password: str = "password") -> tuple:
+def _generate_peer_conf_path_list(temporary_path,
+                                  peer_count: int,
+                                  channel_list: list,
+                                  wallet_password: str = "password") -> Tuple[list, str]:
     """Generate config for one peer
 
     It must be used as a wrapped function, due to the random-generated config path.
     TODO: This function would be out-of-dated, due to features related to remove channel_manage_data.json
 
-    Args:
-        temporary_path: Do not supply this.
-        peer_count (int): Value how many config peers are created
-        wallet_password (str): Password of wallet
-        channel_list: Iterable contains channel names. Each peer contains those channels.
+    :param fixture temporary_path: Pytest built-in fixture to make temporary config path
+    :param int peer_count: Desired number to create peer configs
+    :param str wallet_password: Password of wallet
+    :param list channel_list: Iterable contains channel names. Those channels will be inserted to each peer' config.
 
-    Returns tuple that contains below:
-        peer_conf_path_list (list): Paths of configure file
-        channel_manage_data_path (str): Channel manage data path
+    :returns:
+        - peer_conf_path_list (:py:class:`list`) - List of configure file paths
+        - channel_manage_data_path (:py:class:`str`): Path of channel manage data
     """
     accounts_in_genesis = [
         {
@@ -272,7 +281,13 @@ def generate_peer_conf_path_list_extended(tmp_path_factory):
 class Loopchain(ProcessStarter):
     """Loopchain process starter
 
-    When the stdout line count reaches to end_line, Loopchain process assume that the process fail to run.
+    When the number of stdout line reaches to the `end_line` with no `pattern` matched,
+    Loopchain process assumes that the process has failed to run.
+
+    - args      : Cmd args to execute process
+    - pattern   : Expected regex pattern to be found from stdout.
+        If the pattern is found, It assumes that the process is successfully started
+    - end_line  : Deadline of stdout pattern matching.
     """
     args = None
     pattern = None

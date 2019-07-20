@@ -19,7 +19,7 @@ from .conftest import Loopchain
 
 # Global variables
 peer_conf_path_list = []  # Peer config file path list. Needed to query peers' information.
-genesis_data: dict = None  # Genesis tx content. Compared with tx in genesis block.
+genesis_data: dict = {}  # Genesis tx content. Compared with tx in genesis block.
 
 
 @pytest.fixture(scope="class", autouse=True)
@@ -36,7 +36,7 @@ def loopchain_proc(xprocess, request, generate_peer_conf_path_list_extended):
     channel_list = [f"channel_{i}" for i in range(channel_count)]
     print(f"\n*--- Test env:\n Peer Type: {peer_type}, Peer Count: {peer_count}, Channel Count: {channel_count}")
 
-    Loopchain.pattern = f"BroadcastScheduler process\(channel_{channel_count - 1}\) start"
+    Loopchain.pattern = fr"BroadcastScheduler process\(channel_{channel_count - 1}\) start"
     Loopchain.end_line = 80 * peer_count * channel_count
 
     # Generate configure files. Run only one time at the beginning of the test.
@@ -66,11 +66,11 @@ def loopchain_proc(xprocess, request, generate_peer_conf_path_list_extended):
 
     yield
 
-    # Executed after this fixture's scope ends.
+    # Executed here after this fixture's scope ends.
     for proc_info in proc_info_list:
         proc_info.terminate()
 
-    time.sleep(3)  # For additional tests, need a moment to cool down.
+    time.sleep(3)  # For additional tests, wait for a moment to cool down.
 
 
 class TestLoopchain:
@@ -81,9 +81,8 @@ class TestLoopchain:
     def test_health_check_before_test(self, port, channel_name):
         """Health check before test starts
 
-        Assertion Tests:
-            1. Expected genesis transaction data == genesis_tx from peer
-            2. genesis_tx from peer == genesis_tx passed through tx verifier and tx serializer
+        **Assertion Tests**:
+            - Compare values of `accounts`, `message` and `nid` between queried genesis tx and origin data
         """
         global genesis_data
         expected_data = genesis_data["transaction_data"]
@@ -113,7 +112,7 @@ class TestLoopchain:
 
     @pytest.mark.parametrize("port, channel_name", conftest.port_channel_list)
     def test_get_lastest_block_has_no_error(self, port, channel_name):
-        """Test that all peers are alive"""
+        """Test that getLastBlock API has no issue"""
         url = utils.normalize_request_url(str(port), conf.ApiVersion.v3, channel_name)
         icon_service = IconService(HTTPProvider(url))
         block = icon_service.get_block("latest")
@@ -126,21 +125,19 @@ class TestLoopchain:
     def test_send_tx_message(self, request):
         """Test for 'send_transaction'
 
-        Note:
-            Uses Message Type Transaction.
-            From address is equal to To address.
-            Interval await time is essential, due to consensus completion and different tx hashes between channels.
+        .. note::
+            Test steps:
+                1. Get peer info from first peer
+                2. Extract key and password and make wallet
+                3. Build message transaction and sign it
+                4. Send Tx to first channel.
+                5. Await consensus time(currently 0.5 * <<Number of peers>> 'sec')
+                6. Repeat from '3'
 
-        Test steps:
-            1. Get peer info from first peer
-            2. Extract key and password and make wallet
-            3. Build message transaction and sign it
-            4. Send Tx to first channel.
-            5. Await consensus time(currently 0.5 * <<Number of peers>> 'sec')
-            6. Repeat from '3'
+        .. warnings:: Interval await time is essential, due to consensus completion.
 
-        Assertion Test:
-            1. Check that return value of send_transaction has valid tx hash format.
+        **Assertion Test**:
+            - Check that return value of send_transaction has valid tx hash format.
         """
         global peer_conf_path_list
 
@@ -204,13 +201,13 @@ class TestLoopchain:
 
         Check that send_transaction is successfully completed.
 
-        Test steps:
+        **Test steps**:
             1. Get tx_hash from previous test
             2. Query tx_hash to first channel
             3. Compare queried tx with original data
             4. Repeat until the channel order reaches to the end
 
-        Assertion Tests:
+        **Assertion Tests**:
             Check Tx values below
             1. From address
             2. To address
