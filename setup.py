@@ -20,6 +20,9 @@ setup_options = {
     'packages': find_packages(),
     'license': "Apache License 2.0",
     'install_requires': requires,
+    'extras_require': {
+        'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1'],
+    },
     'entry_points': {
         'console_scripts': [
             'loop=loopchain.__main__:main',
