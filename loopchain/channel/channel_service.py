@@ -516,17 +516,19 @@ class ChannelService:
 
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
-            logging.debug(f"error: {type(future.exception())}, {str(future.exception())}")
+            exc = future.exception()
+            traceback.print_tb(exc.__traceback__)
+            logging.debug(f"error: {type(exc)}, {str(exc)}")
 
             if ChannelProperty().node_type != conf.NodeType.CitizenNode:
                 logging.debug(f"This node is not Citizen anymore.")
                 return
 
-            if isinstance(future.exception(), AnnounceNewBlockError):
+            if isinstance(exc, AnnounceNewBlockError):
                 self.__state_machine.block_sync()
                 return
 
-            if future.exception():
+            if exc:
                 logging.warning(f"Waiting for next subscribe request...")
                 if self.__state_machine.state != "SubscribeNetwork":
                     self.__state_machine.subscribe_network()
