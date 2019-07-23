@@ -1,0 +1,73 @@
+language: python
+python:
+ - "3.7"
+dist: bionic
+services:
+- docker
+
+branches:
+ only:
+  - TEMPORARY_DISABLED
+
+env:
+ global:
+  - ICON_RC_REPO="https://github.com/icon-project/rewardcalculator.git"
+  - GOROOT="/snap/go/current"
+  - GOTOOLDIR="/snap/go/current/pkg/tool/linux_amd64"
+  - export PATH=/snap/bin:$PATH
+ matrix:
+  - TEST_TARGET=unit-test
+  - TEST_TARGET=integration-test
+
+addons:
+ apt:
+  update: true
+  packages:
+   - make
+   - build-essential
+   - libssl-dev
+   - zlib1g-dev
+   - libbz2-dev
+   - libreadline-dev
+   - libsqlite3-dev
+   - wget
+   - curl
+   - llvm
+   - libncurses5-dev
+   - libncursesw5-dev
+   - xz-utils
+   - tk-dev
+   - libffi-dev
+   - liblzma-dev
+   - automake
+   - libtool
+   - lsof
+   - figlet
+   - libsecp256k1-dev
+
+ snaps:
+  - name: go
+    confinement: classic
+ 
+before_install:
+ - git clone $ICON_RC_REPO
+ - cd rewardcalculator
+ - git checkout develop -f
+ - make && sudo make install
+ - cd -
+ - icon_rc -version
+
+ - docker pull rabbitmq:3.7
+ - sudo docker run -d -p 5672:5672 -h localhost --name rabbit rabbitmq:3.7
+install:
+ - make develop
+ - pip list
+script:
+ - figlet -f smslant "loopchain test"
+ - make $TEST_TARGET
+
+notifications:
+  slack:
+   secure: UpmFjZxDhPhF2YKcsUyHNNg41K1ql/AYZuq6KPMWFfy2WjVOtAc9mNWOFv4AG7xW942wpKAwGA8h1T4HL26SNKIiTBTxQ6a0K8x+irgwXNt3TGQmtst6MPbrAanI6288PIA06GGxSxZnCjzDf2fB4CE4b7DxHl4GlCUJX4avm1a4tIodmUp7HHGPLCNItNs+JELHxUZ/uTbn/X1EKfHR9dBjKEkJ0pfqHtOMwfE9PgRF/xZIl7OsCaGfSqeiAvkAkd6rGTN/UYm7mlKaKMCZ6O22n0mAd8icdUQoTNDWh/aVwlJ3ZErmftMqHbgSuBeu+IYc+stluh7eKHAIFIwhvy9kSDGXDXvAyIC2fvXZUVCYIvxz50C1BkbQVGCqga4Rv2AiroSFicHccHZnNmIovwLFkprxk3w/bfdhxszLxzQ0BTUJSXte1kYJWOFKfCJqxQkeYxkVV/5DldMPQ5D47ms42IW8lQMWJQzhtAGCThIIwCG/bgPfo2Kbuowp+w+MULV+5SbN07Gi6pPnXNht2pRW/opxllOITuuvk4HbFgWy/XpShl+RU4p+jwvGrC8IEVERHjQuS+i/sENCfo/0Yv71vj4kjiVNk02tzTJtIt0yeRhgAXqsnIgN8dNiTw+Sa0kIII08oIksflG62tvaF4UjcGXj4DoNO1QBon1TYgs=
+  email:
+   - jsj8830@icon.foundation
