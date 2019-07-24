@@ -79,7 +79,7 @@ class NodeSubscriber:
             logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
             request = Request(
                 method="node_ws_Subscribe",
-                heigit=block_height,
+                height=block_height,
                 peer_id=ChannelProperty().peer_id
             )
             await self._websocket.send(json.dumps(request))
