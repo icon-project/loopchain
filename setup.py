@@ -1,16 +1,9 @@
 #!/usr/bin/env python
-import os
 import re
 
 from setuptools import setup, find_packages, Command
 from setuptools.command.build_py import build_py
 from setuptools.command.develop import develop
-
-version = os.environ.get('VERSION')
-
-if version is None:
-    with open(os.path.join('.', 'VERSION')) as version_file:
-        version = version_file.read().strip()
 
 install_requires = []
 setup_requires = []
@@ -57,7 +50,6 @@ class DevelopCommand(develop):
 
 setup_options = {
     'name': 'loopchain',
-    'version': version,
     'description': 'Blockchain consensus engine based on LFT',
     'author': 'ICON foundation',
     'packages': find_packages(),
@@ -67,6 +59,7 @@ setup_options = {
     'install_requires': install_requires,
     'extras_require': {
         'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1', "pytest-benchmark"],
+        'misc': ['bump2version'],
     },
     'entry_points': {
         'console_scripts': [
