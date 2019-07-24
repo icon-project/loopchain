@@ -5,8 +5,7 @@ from setuptools import setup, find_packages
 from setuptools.command.build_py import build_py as _build_py
 from setuptools.command.develop import develop as _develop
 
-with open('requirements.txt') as requirements:
-    requires = list(requirements)
+project_root = os.path.abspath(os.path.dirname(__file__))
 
 version = os.environ.get('VERSION')
 
@@ -46,13 +45,12 @@ setup_options = {
     'name': 'loopchain',
     'version': version,
     'description': 'Blockchain consensus engine based on LFT',
+    'long_description_content_type': 'text/markdown',
+    'url': 'https://github.com/icon-project/loopchain',
     'author': 'ICON foundation',
-    'packages': find_packages(),
+    'author_email': 'foo@icon.foundation',
+    'packages': find_packages(exclude=['testcase', 'docs']),
     'license': "Apache License 2.0",
-    'install_requires': requires,
-    'extras_require': {
-        'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1'],
-    },
     'entry_points': {
         'console_scripts': [
             'loop=loopchain.__main__:main',
@@ -60,7 +58,6 @@ setup_options = {
         ],
     },
     'setup_requires': ['pytest-runner'],
-    'tests_require': ['pytest'],
     'cmdclass': {
         'build_py': build_py,
         'develop': develop
@@ -75,7 +72,14 @@ setup_options = {
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3 :: Only'
-    ]
+    ],
+    'keywords': '',  # FIXME or delete
+    'python_requires': '>=3.6, <=3.7.3',
+    'project_urls': {
+        'Bug Reports': 'https://github.com/icon-project/loopchain/issues',
+        'Source': 'https://github.com/icon-project/loopchain.git',
+        'Documentation': 'https://www.icondev.io/docs'
+    },
 }
 
 setup(**setup_options)
