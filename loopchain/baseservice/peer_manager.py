@@ -18,6 +18,7 @@ import json
 import logging
 import math
 import threading
+import typing
 from functools import reduce
 from operator import add
 from typing import Union, cast
@@ -26,7 +27,7 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerInfo
+from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, Peer
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -36,30 +37,30 @@ from loopchain.utils.message_queue import StubCollection
 class PeerListData:
     # Manage PeerList to save DB.
     def __init__(self):
-        self.peer_info_list: dict = {}  # { peer_id:PeerInfo }
-        self.peer_leader = 0  # leader_order
+        self.peer_list: dict = {}  # { peer_id:Peer }
         self.peer_order_list: dict = {}  # { order:peer_id }
+        self.peer_leader = 0  # leader_order
 
     def serialize(self) -> dict:
-        peer_info_list_serialized = {peer_id: peer_info.serialize()
-                                     for peer_id, peer_info in self.peer_info_list.items()}
+        peer_list_serialized = {peer_id: peer.serialize()
+                                for peer_id, peer in self.peer_list.items()}
 
         return {
-            'peer_info_list': peer_info_list_serialized,
+            'peer_list': peer_list_serialized,
             'peer_leader': self.peer_leader,
             'peer_order_list': self.peer_order_list
         }
 
     @staticmethod
     def deserialize(peer_list_data_serialized: dict) -> 'PeerListData':
-        peer_info_list = {peer_id: PeerInfo.deserialize(peer_info_serialized)
-                          for peer_id, peer_info_serialized in peer_list_data_serialized['peer_info_list'].items()}
+        peer_list = {peer_id: Peer.deserialize(peer_serialized)
+                     for peer_id, peer_serialized in peer_list_data_serialized['peer_list'].items()}
 
         peer_order_list = {int(order): peer_id
                            for order, peer_id in peer_list_data_serialized['peer_order_list'].items()}
 
         peer_list_data = PeerListData()
-        peer_list_data.peer_info_list = peer_info_list
+        peer_list_data.peer_list = peer_list
         peer_list_data.peer_leader = peer_list_data_serialized['peer_leader']
         peer_list_data.peer_order_list = peer_order_list
         return peer_list_data
@@ -94,8 +95,7 @@ class PeerManager:
 
         :return: { peer_id:PeerInfo }
         """
-        # util.logger.spam(f"peer_list({self.peer_list_data.peer_info_list})")
-        return self.peer_list_data.peer_info_list
+        return self.peer_list_data.peer_list
 
     @property
     def peer_order_list(self) -> dict:
@@ -172,8 +172,8 @@ class PeerManager:
     async def load_peers_from_file(self):
         channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
-        for peer_info in reps:
-            self.add_peer(peer_info)
+        for peer in reps:
+            self.add_peer(peer)
 
     async def load_peers_from_rest_call(self):
         # FIXME temporarily disable GetReps API for legacy support
@@ -187,8 +187,8 @@ class PeerManager:
 
     def _add_reps(self, reps: list):
         for order, rep_info in enumerate(reps, 1):
-            peer_info = PeerInfo(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
-            self.add_peer(peer_info)
+            peer = Peer(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            self.add_peer(peer)
 
     def show_peers(self):
         util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
@@ -211,51 +211,40 @@ class PeerManager:
     def get_peer_by_target(self, peer_target):
         return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
 
-    def add_peer(self, peer_info: Union[PeerInfo, dict]):
+    def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager
 
-        :param peer_info: PeerInfo, dict
+        :param peer: Peer, dict
         :return: create_peer_order
         """
 
-        if isinstance(peer_info, dict):
-            peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
+        if isinstance(peer, dict):
+            peer = Peer(peer["id"], peer["id"], peer["peer_target"], order=peer["order"])
 
-        logging.debug(f"add peer id: {peer_info.peer_id}")
+        logging.debug(f"add peer id: {peer.peer_id}")
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
-            if peer_info.order <= 0:
-                if peer_info.peer_id in self.peer_list:
-                    peer_info.order = self.peer_list[peer_info.peer_id].order
+            if peer.order <= 0:
+                if peer.peer_id in self.peer_list:
+                    peer.order = self.peer_list[peer.peer_id].order
                 else:
-                    peer_info.order = self.__make_peer_order(peer_info)
+                    peer.order = self.__make_peer_order(peer)
 
-            logging.debug(f"new peer order {peer_info.peer_id} : {peer_info.order}")
+            logging.debug(f"new peer order {peer.peer_id} : {peer.order}")
 
             # set to leader peer
             if self.peer_list_data.peer_leader == 0 or len(self.peer_list) == 0:
-                logging.debug("Set Group Leader Peer: " + str(peer_info.order))
-                self.peer_list_data.peer_leader = peer_info.order
+                logging.debug("Set Group Leader Peer: " + str(peer.order))
+                self.peer_list_data.peer_leader = peer.order
 
-            self.peer_list[peer_info.peer_id] = peer_info
-            self.peer_order_list[peer_info.order] = peer_info.peer_id
+            self.peer_list[peer.peer_id] = peer
+            self.peer_order_list[peer.order] = peer.peer_id
 
         broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
+        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer.target)
 
-        return peer_info.order
-
-    def update_peer_status(self, peer_id, peer_status=PeerStatus.connected) -> PeerInfo:
-        try:
-            peer = self.peer_list[peer_id]
-            peer.status = peer_status
-            return peer
-        except Exception as e:
-            logging.warning(f"fail update peer status peer_id({peer_id})")
-            logging.warning(f"exception : {e}")
-
-        return None
+        return peer.order
 
     def set_leader_peer(self, peer):
         """리더 피어를 지정한다.
@@ -270,7 +259,7 @@ class PeerManager:
 
         self.peer_list_data.peer_leader = peer.order
 
-    def get_leader_peer(self, is_peer=True) -> PeerInfo:
+    def get_leader_peer(self, is_peer=True) -> typing.Optional[Peer]:
         """
 
         :return:
@@ -289,7 +278,7 @@ class PeerManager:
 
         return None
 
-    def get_leader_id(self) -> str or None:
+    def get_leader_id(self) -> typing.Optional[str]:
         """get leader's peer id
 
         :return: leader peer_id
@@ -382,8 +371,8 @@ class PeerManager:
                              f"\npeer_list({self.peer_list})")
             return None
 
-    def get_peer_stub_manager(self, peer) -> StubManager:
-        logging.debug(f"get_peer_stub_manager peer_info : {peer.peer_id}")
+    def get_peer_stub_manager(self, peer) -> typing.Optional[StubManager]:
+        logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
 
         try:
             return self.peer_list[peer.peer_id].stub_manager
@@ -391,10 +380,9 @@ class PeerManager:
             logging.debug("try get peer stub except: " + str(e))
             return None
 
-    def complain_leader(self, is_announce=False) -> PeerInfo:
+    def complain_leader(self) -> Peer:
         """When current leader is offline, Find last height alive peer and set as a new leader.
 
-        :param is_announce:
         :return:
         """
 
@@ -418,7 +406,7 @@ class PeerManager:
                 self.set_leader_peer(new_leader)
         return new_leader
 
-    def __find_highest_peer(self) -> PeerInfo:
+    def __find_highest_peer(self) -> Peer:
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
         most_height = 0
         most_height_peer = None
@@ -439,63 +427,7 @@ class PeerManager:
 
         return most_height_peer
 
-    def check_peer_status(self):
-        nonresponse_peer_list = []
-        check_leader_peer_count = 0
-
-        for peer_id in list(self.peer_list):
-            peer_info: PeerInfo = self.peer_list[peer_id]
-
-            try:
-                response = peer_info.stub_manager.call(
-                    "Request", loopchain_pb2.Message(
-                        code=message_code.Request.status,
-                        channel=self.__channel_name,
-                        message="check peer status by rs",
-                        meta=json.dumps({"highest_block_height": self.__highest_block_height})
-                    ), is_stub_reuse=True)
-                if response.code != message_code.Response.success:
-                    raise Exception
-
-                peer_info.no_response_count_reset()
-                peer_info.status = PeerStatus.connected
-                peer_status = json.loads(response.meta)
-
-                if peer_status["state"] == "BlockGenerate":
-                    check_leader_peer_count += 1
-
-                if peer_status["block_height"] >= self.__highest_block_height:
-                    self.__highest_block_height = peer_status["block_height"]
-            except Exception as e:
-                util.apm_event(conf.RADIO_STATION_NAME, {
-                    'event_type': 'DisconnectedPeer',
-                    'peer_name': conf.PEER_NAME,
-                    'channel_name': self.__channel_name,
-                    'data': {
-                        'message': 'there is disconnected peer gRPC Exception: ' + str(e),
-                        'peer_id': peer_info.peer_id}})
-
-                logging.warning("there is disconnected peer peer_id(" + peer_info.peer_id +
-                                ") gRPC Exception: " + str(e))
-                peer_info.no_response_count_up()
-
-                util.logger.spam(
-                    f"peer_manager::check_peer_status "
-                    f"peer_id({peer_info.peer_id}) "
-                    f"no response count up({peer_info.no_response_count})")
-
-                if peer_info.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
-                    peer_info.status = PeerStatus.disconnected
-                    logging.debug(f"peer status update time: {peer_info.status_update_time}")
-                    logging.debug(f"this peer not respond {peer_info.peer_id}")
-                    nonresponse_peer_list.append(peer_info)
-
-        logging.info(f"non response peer list : {nonresponse_peer_list}")
-
     def reset_peers(self, reset_action=None, check_status=True):
-        self.__reset_peers_in_group(reset_action, check_status)
-
-    def __reset_peers_in_group(self, reset_action, check_status=True):
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
         for peer_id in list(self.peer_list):
             peer_each = self.peer_list[peer_id]
@@ -539,7 +471,7 @@ class PeerManager:
 
         return last_order
 
-    def get_peer(self, peer_id) -> PeerInfo:
+    def get_peer(self, peer_id) -> Peer:
         """peer_id 에 해당하는 peer 를 찾는다.
 
         :param peer_id:

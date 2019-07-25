@@ -104,17 +104,6 @@ class RadioStationService:
     def timer_service(self) -> TimerService:
         return self.__timer_service
 
-    def check_peer_status(self, channel):
-        """service loop for status heartbeat check to peer list
-
-        :return:
-        """
-        util.logger.spam(f"rs_service:check_peer_status(Heartbeat...{channel}) "
-                         f"for reset Leader and delete no response Peer")
-
-        peer_manager = self.__channel_manager.get_peer_manager(channel)
-        peer_manager.check_peer_status()
-
     def register_peers(self):
         util.logger.spam(f"register_peers() : start register to peer_manager")
 

@@ -21,7 +21,7 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import (PeerStatus, PeerInfo, PeerListData, PeerManager,
+from loopchain.baseservice import (PeerStatus, Peer, PeerListData, PeerManager,
                                    ObjectManager, TimerService, Timer)
 from loopchain.configure_default import KeyLoadType
 from loopchain.protos import loopchain_pb2_grpc, message_code
@@ -52,7 +52,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         :return: proto.Message {object=leader_peer_object}
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if not request.channel else request.channel
-        leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
+        leader_peer: Peer = ObjectManager().rs_service.channel_manager.get_peer_manager(
             channel_name).get_leader_peer(is_peer=False)
         if leader_peer is not None:
             logging.debug(f"leader_peer ({leader_peer.peer_id})")
@@ -77,7 +77,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         # get_leader_peer 한 내용과 다르면 AnnounceNewLeader 를 broadcast 하여야 한다.
 
         logging.debug("in complain leader (radiostation)")
-        leader_peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(
+        leader_peer: Peer = ObjectManager().rs_service.channel_manager.get_peer_manager(
             conf.LOOPCHAIN_DEFAULT_CHANNEL).complain_leader()
         if leader_peer is not None:
             logging.warning(f"leader_peer after complain({leader_peer.peer_id})")
@@ -220,7 +220,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                       f"\nPeer_target : {request.peer_target}"
                       f"\nChannel : {request.channel}")
 
-        peer = PeerInfo(request.peer_id, request.group_id, request.peer_target, PeerStatus.unknown)
+        peer = Peer(request.peer_id, request.group_id, request.peer_target, PeerStatus.unknown)
 
         util.logger.spam(f"service::ConnectPeer try add_peer")
 
@@ -352,22 +352,9 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
         logging.debug("Radio Station Subscription peer_id: " + str(request))
         ObjectManager().rs_service.channel_manager.add_audience(channel, request.peer_target)
 
-        peer: PeerInfo = ObjectManager().rs_service.channel_manager.get_peer_manager(channel).update_peer_status(
-            peer_id=request.peer_id, peer_status=PeerStatus.connected)
-
-        try:
-            peer_dumped = peer.dump()
-            request.peer_order = peer.order
-            request.peer_object = peer_dumped
-
-            return loopchain_pb2.CommonReply(
-                response_code=message_code.get_response_code(message_code.Response.success),
-                message=message_code.get_response_msg(message_code.Response.success))
-
-        except Exception as e:
-            logging.warning("Fail Peer Dump: " + str(e))
-            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
-                                             message=message_code.get_response_msg(message_code.Response.fail))
+        return loopchain_pb2.CommonReply(
+            response_code=message_code.get_response_code(message_code.Response.success),
+            message=message_code.get_response_msg(message_code.Response.success))
 
     def UnSubscribe(self, request, context):
         """RadioStation 의 broadcast 채널에서 Peer 를 제외한다.

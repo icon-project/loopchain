@@ -30,7 +30,7 @@ class PeerStatus(IntEnum):
     disconnected = 2
 
 
-class PeerInfo:
+class Peer:
     """Peer Object"""
 
     STATUS_UPDATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S.%f'
@@ -127,25 +127,25 @@ class PeerInfo:
             'group_id': self.__group_id,
             'order': self.__order,
             'target': self.__target,
-            'status_update_time': self.__status_update_time.strftime(PeerInfo.STATUS_UPDATE_TIME_FORMAT),
+            'status_update_time': self.__status_update_time.strftime(Peer.STATUS_UPDATE_TIME_FORMAT),
             'status': self.__status
         }
 
     @staticmethod
-    def deserialize(peer_info_serialized: dict) -> 'PeerInfo':
-        peer_info = PeerInfo(peer_id=peer_info_serialized['peer_id'],
-                             target=peer_info_serialized['target'],
-                             status=peer_info_serialized['status'],
-                             order=peer_info_serialized['order'])
-        peer_info.__status_update_time = datetime.datetime.strptime(peer_info_serialized['status_update_time'],
-                                                                    PeerInfo.STATUS_UPDATE_TIME_FORMAT)
-        return peer_info
+    def deserialize(peer_serialized: dict) -> 'Peer':
+        peer = Peer(peer_id=peer_serialized['peer_id'],
+                    target=peer_serialized['target'],
+                    status=peer_serialized['status'],
+                    order=peer_serialized['order'])
+        peer.__status_update_time = datetime.datetime.strptime(peer_serialized['status_update_time'],
+                                                               Peer.STATUS_UPDATE_TIME_FORMAT)
+        return peer
 
     def dump(self) -> bytes:
         serialized = self.serialize()
         return json.dumps(serialized).encode(encoding=conf.PEER_DATA_ENCODING)
 
     @staticmethod
-    def load(peer_info_dumped: bytes):
-        serialized = json.loads(peer_info_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
-        return PeerInfo.deserialize(serialized)
+    def load(peer_dumped: bytes):
+        serialized = json.loads(peer_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
+        return Peer.deserialize(serialized)

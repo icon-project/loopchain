@@ -26,7 +26,7 @@ from earlgrey import *
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
-from loopchain.baseservice import PeerInfo
+from loopchain.baseservice import Peer
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *

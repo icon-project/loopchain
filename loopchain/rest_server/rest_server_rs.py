@@ -25,7 +25,7 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, PeerInfo
+from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, Peer
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
@@ -172,7 +172,7 @@ class Peer_(HTTPMethodView):
                     leader_peer_id = leader_peer.peer_id
 
                 for peer_id in peer_manager.peer_list:
-                    peer_each: PeerInfo = peer_manager.peer_list[peer_id]
+                    peer_each: Peer = peer_manager.peer_list[peer_id]
                     peer_data = peer_each.serialize()
 
                     if peer_each.peer_id == leader_peer_id:
@@ -248,8 +248,8 @@ class Peer_(HTTPMethodView):
             result['response_code'] = grpc_response.code
 
             if grpc_response.code == message_code.Response.success:
-                peer_info = PeerInfo.load(grpc_response.object)
-                result['data'] = peer_info.serialize()
+                peer = Peer.load(grpc_response.object)
+                result['data'] = peer.serialize()
             else:
                 result['message'] = message_code.get_response_msg(grpc_response.code)
 
