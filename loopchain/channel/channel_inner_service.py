@@ -603,6 +603,7 @@ class ChannelInnerTask:
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
         status_data["leader"] = self._channel_service.peer_manager.leader_id or ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
+        status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data
 

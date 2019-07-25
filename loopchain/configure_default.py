@@ -365,8 +365,6 @@ PRIVATE_PASSWORD = None
 
 # KMS
 KMS_AGENT_PASSWORD = ""
-KMS_SIGNATURE_KEY_ID = ""
-KMS_SIGNATURE_KEY_ID_LIST = {}
 KMS_TLS_KEY_ID = ""
 KMS_SECRET_KEY_LABEL = "KEY_ENCRYPTION"
 
@@ -415,6 +413,14 @@ CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/ic
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
 CREP_ROOT_HASH = ''
+ICON_VERSIONS = {
+    'loopchain': '0.0.0',
+    'iconservice': '0.0.0',
+    'iconrpcserver': '0.0.0',
+    'iconcommons': '0.0.0',
+    'tbears': '0.0.0',
+    'earlgrey': '0.0.0'
+}
 
 ####################
 # QOS ####
