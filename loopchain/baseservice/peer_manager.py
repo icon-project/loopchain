@@ -26,7 +26,7 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerObject, PeerInfo
+from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, PeerInfo
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -81,7 +81,6 @@ class PeerManager:
         """
         self.peer_list_data = PeerListData()
         self.__channel_name = channel_name
-        self.peer_object_list = {}
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
@@ -223,7 +222,6 @@ class PeerManager:
             peer_info = PeerInfo(peer_info["id"], peer_info["id"], peer_info["peer_target"], order=peer_info["order"])
 
         logging.debug(f"add peer id: {peer_info.peer_id}")
-        peer_object = PeerObject(self.__channel_name, peer_info)
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
@@ -242,7 +240,6 @@ class PeerManager:
 
             self.peer_list[peer_info.peer_id] = peer_info
             self.peer_order_list[peer_info.order] = peer_info.peer_id
-            self.peer_object_list[peer_info.peer_id] = peer_object
 
         broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
         broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_info.target)
@@ -310,19 +307,6 @@ class PeerManager:
                 f"get_leader_id KeyError leader_peer_order({leader_peer_order})")
 
         return None
-
-    def get_leader_object(self) -> PeerObject:
-        """get leader peer object
-
-        :return: leader peer object
-        """
-
-        try:
-            leader_id = self.get_leader_id()
-            leader_object = self.peer_object_list[leader_id]
-            return leader_object
-        except KeyError as e:
-            raise e
 
     def get_next_leader_peer(self, current_leader_peer_id=None, is_only_alive=False):
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
@@ -395,7 +379,6 @@ class PeerManager:
             logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
             util.logger.spam(f"peer_manager:__get_next_peer "
                              f"\npeer_id({peer.peer_id}), "
-                             f"\npeer_object_list({self.peer_object_list}), "
                              f"\npeer_list({self.peer_list})")
             return None
 
@@ -403,7 +386,7 @@ class PeerManager:
         logging.debug(f"get_peer_stub_manager peer_info : {peer.peer_id}")
 
         try:
-            return self.peer_object_list[peer.peer_id].stub_manager
+            return self.peer_list[peer.peer_id].stub_manager
         except Exception as e:
             logging.debug("try get peer stub except: " + str(e))
             return None
@@ -460,13 +443,11 @@ class PeerManager:
         nonresponse_peer_list = []
         check_leader_peer_count = 0
 
-        for peer_id in list(self.peer_object_list):
+        for peer_id in list(self.peer_list):
             peer_info: PeerInfo = self.peer_list[peer_id]
-            stub_manager = self.get_peer_stub_manager(peer_info)
-            peer_object: PeerObject = self.peer_object_list[peer_id]
 
             try:
-                response = stub_manager.call(
+                response = peer_info.stub_manager.call(
                     "Request", loopchain_pb2.Message(
                         code=message_code.Request.status,
                         channel=self.__channel_name,
@@ -476,7 +457,7 @@ class PeerManager:
                 if response.code != message_code.Response.success:
                     raise Exception
 
-                peer_object.no_response_count_reset()
+                peer_info.no_response_count_reset()
                 peer_info.status = PeerStatus.connected
                 peer_status = json.loads(response.meta)
 
@@ -496,14 +477,14 @@ class PeerManager:
 
                 logging.warning("there is disconnected peer peer_id(" + peer_info.peer_id +
                                 ") gRPC Exception: " + str(e))
-                peer_object.no_response_count_up()
+                peer_info.no_response_count_up()
 
                 util.logger.spam(
                     f"peer_manager::check_peer_status "
-                    f"peer_id({peer_object.peer_info.peer_id}) "
-                    f"no response count up({peer_object.no_response_count})")
+                    f"peer_id({peer_info.peer_id}) "
+                    f"no response count up({peer_info.no_response_count})")
 
-                if peer_object.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
+                if peer_info.no_response_count >= conf.NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT:
                     peer_info.status = PeerStatus.disconnected
                     logging.debug(f"peer status update time: {peer_info.status_update_time}")
                     logging.debug(f"this peer not respond {peer_info.peer_id}")
@@ -586,7 +567,6 @@ class PeerManager:
 
     def __remove_peer_from_group(self, peer_id):
         removed_peer = self.peer_list.pop(peer_id, None)
-        self.peer_object_list.pop(peer_id, None)
         if removed_peer:
             self.peer_order_list.pop(removed_peer.order, None)
 

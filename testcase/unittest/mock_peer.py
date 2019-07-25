@@ -1,7 +1,7 @@
 import os
 
 from loopchain import configure as conf
-from loopchain.baseservice import ScoreResponse, PeerInfo, PeerStatus, PeerObject, ObjectManager
+from loopchain.baseservice import ScoreResponse, PeerInfo, PeerStatus, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer
@@ -46,12 +46,6 @@ class ChannelServiceMock:
 class PeerManagerMock:
     def __init__(self, peer_auth):
         self.__peer_auth = peer_auth
-
-    def get_leader_object(self):
-        mock_info = PeerInfo(peer_id="peer_id", group_id='a', target="192.0.0.1:1234", status=PeerStatus.unknown,
-                             cert=self.__peer_auth.peer_cert, order=0)
-        mock_peer_object = PeerObject(list(conf.CHANNEL_OPTION)[0], mock_info)
-        return mock_peer_object
 
 
 def set_mock(test):

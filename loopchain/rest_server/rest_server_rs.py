@@ -77,7 +77,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
         )
 
     def set_resource(self):
-        self.__app.add_route(Peer.as_view(), '/api/v1/peer/<request_type:string>')
+        self.__app.add_route(Peer_.as_view(), '/api/v1/peer/<request_type:string>')
         self.__app.add_route(Configuration.as_view(), '/api/v1/conf')
         self.__app.add_route(Certificate.as_view(), '/api/v1/cert/<request_type:string>/<certificate_type:string>')
 
@@ -140,7 +140,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
         self.__app.run(host='0.0.0.0', port=api_port, debug=False, ssl=self.ssl_context)
 
 
-class Peer(HTTPMethodView):
+class Peer_(HTTPMethodView):
     __REQUEST_TYPE = {
         'PEER_LIST': 'list',
         'LEADER_PEER': 'leader',

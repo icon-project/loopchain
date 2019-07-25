@@ -14,8 +14,9 @@
 """PeerInfo for shared peer info and PeerLiveData for instance data can't serialized"""
 
 import datetime
-import logging
 import json
+import logging
+import typing
 from enum import IntEnum
 
 from loopchain import configure as conf
@@ -41,7 +42,7 @@ class PeerInfo:
 
         :param peer_id: peer_id
         :param group_id: peer's group_id
-        :param target: grpc target info default ""
+        :param target: gRPC target info default ""
         :param status: connect status if db loaded peer to PeerStatus.unknown default ""
         :param order:
         :return:
@@ -53,6 +54,11 @@ class PeerInfo:
 
         self.__status_update_time = datetime.datetime.now()
         self.__status = status
+
+        # live data, It is not revealed from deserialize.
+        self.__stub_manager: typing.Optional[StubManager] = None
+        self.__cert_verifier = None
+        self.__no_response_count = 0
 
     @property
     def peer_id(self) -> str:
@@ -89,6 +95,29 @@ class PeerInfo:
             self.__status = status
 
     @property
+    def stub_manager(self):
+        if not self.__stub_manager:
+            try:
+                self.__stub_manager = StubManager(self.__target,
+                                                  loopchain_pb2_grpc.PeerServiceStub,
+                                                  conf.GRPC_SSL_TYPE)
+            except Exception as e:
+                logging.exception(f"Create Peer create stub_manager fail target : {self.__target} \n"
+                                  f"exception : {e}")
+
+        return self.__stub_manager
+
+    @property
+    def no_response_count(self):
+        return self.__no_response_count
+
+    def no_response_count_up(self):
+        self.__no_response_count += 1
+
+    def no_response_count_reset(self):
+        self.__no_response_count = 0
+
+    @property
     def status_update_time(self):
         return self.__status_update_time
 
@@ -120,52 +149,3 @@ class PeerInfo:
     def load(peer_info_dumped: bytes):
         serialized = json.loads(peer_info_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
         return PeerInfo.deserialize(serialized)
-
-
-class PeerObject:
-    """Peer object has PeerInfo and live data"""
-
-    def __init__(self, channel: str, peer_info: PeerInfo):
-        """set peer info and create live data
-
-        :param channel: peer channel name
-        :param peer_info: peer info
-        """
-        self.__peer_info: PeerInfo = peer_info
-        self.__stub_manager: StubManager = None
-        self.__cert_verifier = None
-        self.__no_response_count = 0
-        self.__channel = channel
-
-        self.__create_live_data()
-
-    def __create_live_data(self):
-        try:
-            self.__stub_manager = StubManager(self.__peer_info.target,
-                                              loopchain_pb2_grpc.PeerServiceStub,
-                                              conf.GRPC_SSL_TYPE)
-        except Exception as e:
-            logging.exception(f"Create Peer create stub_manager fail target : {self.__peer_info.target} \n"
-                              f"exception : {e}")
-
-    @property
-    def peer_info(self)-> PeerInfo:
-        return self.__peer_info
-
-    @property
-    def stub_manager(self) -> StubManager:
-        return self.__stub_manager
-
-    @property
-    def no_response_count(self):
-        return self.__no_response_count
-
-    @property
-    def channel(self):
-        return self.__channel
-
-    def no_response_count_up(self):
-        self.__no_response_count += 1
-
-    def no_response_count_reset(self):
-        self.__no_response_count = 0
