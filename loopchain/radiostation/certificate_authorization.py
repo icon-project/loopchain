@@ -268,7 +268,7 @@ class CertificateAuthorization:
 
         peer_info = b''.join([peer.peer_id.encode('utf-8'),
                               peer.target.encode('utf-8'),
-                              peer.group_id.encode('utf-8')]) + bytes([peer_type])
+                              peer.peer_id.encode('utf-8')]) + bytes([peer_type])
 
         peer_cert = x509.load_der_x509_certificate(bytes.fromhex(peer.cert), default_backend())
         peer_pub = peer_cert.public_key().public_bytes(encoding=serialization.Encoding.DER,

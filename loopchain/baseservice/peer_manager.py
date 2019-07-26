@@ -28,9 +28,8 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, PeerStatus, Peer
+from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import message_code
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
@@ -164,7 +163,7 @@ class PeerManager:
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
-        util.logger.debug(f"Peer manager have to update with new list.")
+        util.logger.notice(f"\n\n\n\n\n======================\nPeer manager have to update with new list.")
         self.reset_peers(check_status=False)
 
         reps = response["result"]["preps"]
@@ -188,7 +187,7 @@ class PeerManager:
 
     def _add_reps(self, reps: list):
         for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["id"], rep_info["target"], order=order)
+            peer = Peer(rep_info["id"], rep_info["p2pEndPoint"], order=order)
             self.add_peer(peer)
 
     def show_peers(self):
@@ -220,7 +219,7 @@ class PeerManager:
         """
 
         if isinstance(peer, dict):
-            peer = Peer(peer["id"], peer["id"], peer["peer_target"], order=peer["order"])
+            peer = Peer(peer["id"], peer["peer_target"], order=peer["order"])
 
         logging.debug(f"add peer id: {peer.peer_id}")
 
@@ -298,7 +297,7 @@ class PeerManager:
 
         return None
 
-    def get_next_leader_peer(self, current_leader_peer_id=None, is_only_alive=False):
+    def get_next_leader_peer(self, current_leader_peer_id=None):
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
 
         if not current_leader_peer_id:
@@ -306,9 +305,9 @@ class PeerManager:
         else:
             leader_peer = self.get_peer(current_leader_peer_id)
 
-        return self.__get_next_peer(leader_peer, is_only_alive)
+        return self.__get_next_peer(leader_peer)
 
-    def __get_next_peer(self, peer, is_only_alive=False):
+    def __get_next_peer(self, peer):
         if peer is None:
             return None
 
@@ -323,39 +322,6 @@ class PeerManager:
         peer_count = len(order_list)
 
         util.logger.spam(f"peer_manager:__get_next_peer peer_count({peer_count})")
-
-        for i in range(peer_count):
-            # Prevent out of range
-            if next_order_position >= peer_count:
-                next_order_position = 0
-
-            # It doesn't matter that peer status is connected or not, when 'is_only_alive' is false.
-            if not is_only_alive:
-                break
-
-            peer_order = order_list[next_order_position]
-            peer_id = self.peer_order_list[peer_order]
-            peer_each = self.peer_list[peer_id]
-
-            # It need to check real time status of peer, if 'is_only_alive' is true and status is connected.
-            if is_only_alive and peer_each.status == PeerStatus.connected:
-
-                next_peer_id = self.peer_order_list[order_list[next_order_position]]
-                leader_peer = self.peer_list[next_peer_id]
-                stub_manager = self.get_peer_stub_manager(leader_peer)
-
-                response = stub_manager.call_in_times(
-                    "Request", loopchain_pb2.Message(
-                        code=message_code.Request.status,
-                        channel=self.__channel_name
-                    ), is_stub_reuse=True)
-
-                # If it has no response, increase count of 'next_order_position' for checking next peer.
-                if response is not None:
-                    break  # LABEL 1
-
-            next_order_position += 1
-            util.logger.spam(f"peer_manager:__get_next_peer next_order_position({next_order_position})")
 
         if next_order_position >= peer_count:
             util.logger.spam(f"peer_manager:__get_next_peer Fail break at LABEL 1")
@@ -527,11 +493,6 @@ class PeerManager:
             logging.debug("no peer list")
 
         return count
-
-    def get_connected_peer_count(self):
-        return sum(
-            self.peer_list[peer_id].status == PeerStatus.connected for peer_id in self.peer_list
-        )
 
     def get_peers_for_debug(self):
         peers = ""

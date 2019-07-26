@@ -1,7 +1,7 @@
 import os
 
 from loopchain import configure as conf
-from loopchain.baseservice import ScoreResponse, Peer, PeerStatus, ObjectManager
+from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer

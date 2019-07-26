@@ -25,7 +25,7 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, Peer
+from loopchain.baseservice import PeerListData, PeerManager, Peer
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
@@ -182,8 +182,7 @@ class Peer_(HTTPMethodView):
 
                     all_peer_list.append(peer_data)
 
-                    if peer_each.status == PeerStatus.connected:
-                        connected_peer_list.append(peer_data)
+                    connected_peer_list.append(peer_data)
 
             json_data = {
                 'registered_peer_count': len(all_peer_list),
@@ -229,7 +228,7 @@ class Peer_(HTTPMethodView):
                         all_peer_list.append(status_json)
 
                 registered_peer_count = peer_manager.get_peer_count()
-                connected_peer_count = peer_manager.get_connected_peer_count()
+                connected_peer_count = registered_peer_count
 
             json_data = {
                 'registered_peer_count': registered_peer_count,

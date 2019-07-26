@@ -695,6 +695,7 @@ class ChannelService:
         next_prep = response.get("prep", None)
         if next_prep:
             utils.logger.notice(f"in score invoke next_prep({next_prep})")
+            # conf.LOAD_PEERS_FROM_IISS = True
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()

@@ -21,8 +21,7 @@ import loopchain_pb2
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import (PeerStatus, Peer, PeerListData, PeerManager,
-                                   ObjectManager, TimerService, Timer)
+from loopchain.baseservice import Peer, PeerListData, PeerManager, ObjectManager
 from loopchain.configure_default import KeyLoadType
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
@@ -220,7 +219,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
                       f"\nPeer_target : {request.peer_target}"
                       f"\nChannel : {request.channel}")
 
-        peer = Peer(request.peer_id, request.group_id, request.peer_target, PeerStatus.unknown)
+        peer = Peer(request.peer_id, request.peer_target)
 
         util.logger.spam(f"service::ConnectPeer try add_peer")
 
