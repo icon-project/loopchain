@@ -18,7 +18,6 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import TYPE_CHECKING
 from typing import Union, List
 
 from loopchain import configure as conf
@@ -33,7 +32,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
+from loopchain.store.key_value_store import KeyValueStore
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -124,11 +123,6 @@ class BlockChain:
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
-
-    def clear_all_blocks(self):
-        import shutil
-        logging.debug(f"clear key value store({self._blockchain_store_path})")
-        shutil.rmtree(self._blockchain_store_path)
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:

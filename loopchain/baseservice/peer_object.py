@@ -58,7 +58,6 @@ class Peer:
         # live data, It is not revealed from deserialize.
         self.__stub_manager: typing.Optional[StubManager] = None
         self.__cert_verifier = None
-        self.__no_response_count = 0
 
     @property
     def peer_id(self) -> str:
@@ -106,16 +105,6 @@ class Peer:
                                   f"exception : {e}")
 
         return self.__stub_manager
-
-    @property
-    def no_response_count(self):
-        return self.__no_response_count
-
-    def no_response_count_up(self):
-        self.__no_response_count += 1
-
-    def no_response_count_reset(self):
-        self.__no_response_count = 0
 
     @property
     def status_update_time(self):

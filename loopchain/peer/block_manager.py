@@ -589,9 +589,6 @@ class BlockManager:
                     logging.error("fail block height sync: " + str(e))
                     break
                 except exception.BlockError:
-                    result = False
-                    logging.error("Block Error Clear all block and restart peer.")
-                    self.__blockchain.clear_all_blocks()
                     util.exit_and_msg("Block Error Clear all block and restart peer.")
                     break
                 finally:

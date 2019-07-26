@@ -21,6 +21,7 @@ import threading
 import typing
 from functools import reduce
 from operator import add
+from typing import TYPE_CHECKING
 from typing import Union, cast
 
 import loopchain_pb2
@@ -32,6 +33,9 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
+
+if TYPE_CHECKING:
+    pass
 
 
 class PeerListData:
@@ -85,9 +89,6 @@ class PeerManager:
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
-
-        self.__leader_complain_count = 0
-        self.__highest_block_height = -1    # for RS heartbeat
 
     @property
     def peer_list(self) -> dict:
