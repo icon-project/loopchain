@@ -18,6 +18,7 @@ import copy
 import datetime
 import json
 from functools import partial
+from typing import cast
 
 from loopchain.baseservice import TimerService
 from loopchain.blockchain import *
@@ -601,7 +602,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
                                              message=f"There is no channel_stubs for channel({channel_name}).")
 
-        reps: list = channel_stub.async_task().get_reps()
+        reps: list = cast(list, channel_stub.async_task().get_reps())
         peer_targets = [rep.get('target') for rep in reps]
 
         if (request.peer_target in peer_targets and conf.ENABLE_CHANNEL_AUTH) or \

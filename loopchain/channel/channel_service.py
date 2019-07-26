@@ -674,7 +674,7 @@ class ChannelService:
                 'timestamp': _block.header.timestamp
             },
             'transactions': transactions,
-            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
+            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else [],
             'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
         }
 
@@ -686,22 +686,22 @@ class ChannelService:
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
-        tx_receipts_origin = response.get("txResults", None)
+        tx_receipts_origin = response.get("txResults")
         if not isinstance(tx_receipts_origin, dict):
             tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
         else:
             tx_receipts = tx_receipts_origin
 
-        next_prep = response.get("prep", None)
+        next_prep = response.get("prep")
         if next_prep:
-            utils.logger.notice(f"in score invoke next_prep({next_prep})")
-            # conf.LOAD_PEERS_FROM_IISS = True
+            utils.logger.debug(f"in score invoke next_prep({next_prep})")
+            conf.LOAD_PEERS_FROM_IISS = True
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
 
-        added_transactions = response.get("addedTransactions", None)
+        added_transactions = response.get("addedTransactions")
         if added_transactions:
             original_transactions = block_builder.transactions.copy()
             block_builder.transactions.clear()

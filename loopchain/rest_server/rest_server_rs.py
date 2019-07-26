@@ -154,11 +154,7 @@ class Peer_(HTTPMethodView):
         channel = get_channel_name_from_args(args)
         logging.debug(f'channel name : {channel}')
         if request_type == self.__REQUEST_TYPE['PEER_LIST']:
-            grpc_response = ServerComponents().get_peer_list(channel)
-
             peer_manager = PeerManager(channel)
-            peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.set_peer_list(peer_list_data)
 
             all_peer_list = []
             connected_peer_list = []
@@ -196,11 +192,7 @@ class Peer_(HTTPMethodView):
             }
             
         elif request_type == self.__REQUEST_TYPE['PEER_STATUS_LIST']:
-            grpc_response = ServerComponents().get_peer_list(channel)
-
             peer_manager = PeerManager(channel)
-            peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.set_peer_list(peer_list_data)
 
             registered_peer_count = 0
             connected_peer_count = 0

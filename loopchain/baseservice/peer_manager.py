@@ -18,10 +18,9 @@ import json
 import logging
 import math
 import threading
-import typing
 from functools import reduce
 from operator import add
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Dict
 from typing import Union, cast
 
 import loopchain_pb2
@@ -34,15 +33,15 @@ from loopchain.utils.icon_service import convert_params, ParamType, response_to_
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
-    pass
+    from loopchain.blockchain.blocks import BlockHeader
 
 
 class PeerListData:
     # Manage PeerList to save DB.
     def __init__(self):
-        self.peer_list: dict = {}  # { peer_id:Peer }
-        self.peer_order_list: dict = {}  # { order:peer_id }
-        self.peer_leader = 0  # leader_order
+        self.peer_list: Dict[BlockHeader.peer_id, Peer] = {}  # { peer_id:Peer }
+        self.peer_order_list: Dict[int, BlockHeader.peer_id] = {}  # { order:peer_id }
+        self.peer_leader: int = 0  # leader_order
 
     def serialize(self) -> dict:
         peer_list_serialized = {peer_id: peer.serialize()
@@ -105,13 +104,6 @@ class PeerManager:
         """
         return self.peer_list_data.peer_order_list
 
-    def set_peer_list(self, peer_list_data: PeerListData):
-        """ update PeerList
-
-        :param peer_list_data: PeerListData
-        """
-        self.peer_list_data = peer_list_data
-
     def peer_ids_hash(self):
         """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
 
@@ -163,7 +155,6 @@ class PeerManager:
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
-        util.logger.notice(f"\n\n\n\n\n======================\nPeer manager have to update with new list.")
         self.reset_peers(check_status=False)
 
         reps = response["result"]["preps"]
@@ -259,7 +250,7 @@ class PeerManager:
 
         self.peer_list_data.peer_leader = peer.order
 
-    def get_leader_peer(self, is_peer=True) -> typing.Optional[Peer]:
+    def get_leader_peer(self, is_peer=True) -> Optional[Peer]:
         """
 
         :return:
@@ -278,7 +269,7 @@ class PeerManager:
 
         return None
 
-    def get_leader_id(self) -> typing.Optional[str]:
+    def get_leader_id(self) -> Optional[str]:
         """get leader's peer id
 
         :return: leader peer_id
@@ -338,7 +329,7 @@ class PeerManager:
                              f"\npeer_list({self.peer_list})")
             return None
 
-    def get_peer_stub_manager(self, peer) -> typing.Optional[StubManager]:
+    def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
         logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
 
         try:

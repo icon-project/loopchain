@@ -18,7 +18,7 @@ class BlockBuilder(ABC):
         self.prev_hash: 'Hash32' = None
         self.signer: 'Signer' = None
 
-        self.transactions: OrderedDict['Hash32', 'Transaction'] = OrderedDict()
+        self.transactions: OrderedDict[Hash32, Transaction] = OrderedDict()
 
         # Attributes to be generated
         self.block: Block = None

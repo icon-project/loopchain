@@ -548,7 +548,7 @@ class ChannelInnerTask:
                 for ctz in self._citizens.values()]
 
     @message_queue_task
-    async def get_reps(self) -> Dict[str, str]:
+    async def get_reps(self) -> List[Dict[str, str]]:
         peer_manager = self._channel_service.peer_manager
         return peer_manager.get_reps()
 

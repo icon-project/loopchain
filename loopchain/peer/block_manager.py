@@ -746,7 +746,6 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
-        # util.logger.notice(f"do leader complain.")
         new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 
