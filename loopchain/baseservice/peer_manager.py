@@ -178,7 +178,7 @@ class PeerManager:
 
     def _add_reps(self, reps: list):
         for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["p2pEndPoint"], order=order)
+            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
             self.add_peer(peer)
 
     def show_peers(self):
@@ -429,7 +429,7 @@ class PeerManager:
 
         return last_order
 
-    def get_peer(self, peer_id) -> Peer:
+    def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
 
         :param peer_id:
@@ -492,8 +492,8 @@ class PeerManager:
             for peer_id in self.peer_list:
                 peer_each = self.peer_list[peer_id]
                 peer_list.append(peer_each)
-                peers += "\n" + (str(peer_each.order) + ":" + peer_each.target
-                                 + " " + str(peer_each.status)) + " " + str(peer_id) + " (" + str(type(peer_id)) + ")"
+                peers += "\n" + str(peer_each.order) + ":" + peer_each.target \
+                         + " " + str(peer_id) + " (" + str(type(peer_id)) + ")"
         except KeyError:
             logging.debug("no peer list")
 

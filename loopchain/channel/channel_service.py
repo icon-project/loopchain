@@ -672,7 +672,7 @@ class ChannelService:
                 'timestamp': _block.header.timestamp
             },
             'transactions': transactions,
-            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else [],
+            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
         }
 
