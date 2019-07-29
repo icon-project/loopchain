@@ -3,7 +3,9 @@ USER_MAKEFILE := user.mk
 
 PIP_INSTALL := pip3 install
 ifeq ($(wildcard $(USER_MAKEFILE)),)
-	PIP_INSTALL_REQUIREMENTS := $(PIP_INSTALL) -e .
+	INSTALL_REQUIRES := requires
+	PIP_INSTALL_CMD := $(PIP_INSTALL) -e .
+	PIP_INSTALL_DEVELOP_CMD := $(PIP_INSTALL_CMD)[tests]
 else
 	include $(USER_MAKEFILE)
 endif
@@ -30,10 +32,7 @@ requirements:
 	@echo "The check for required packages installation is completed."
 
 # pip install packages & generate all
-all: install generate
-
-# pip install packages & generate-proto
-develop: install-dev generate-proto
+all: install generate-key
 
 # pip install packages
 requires:
@@ -42,19 +41,19 @@ requires:
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
 	$(PIP_INSTALL) tbears
 
-install: requires
-	$(PIP_INSTALL_REQUIREMENTS)
+install: $(INSTALL_REQUIRES)
+	$(PIP_INSTALL_CMD)
 
-install-dev: requires
-	$(PIP_INSTALL_REQUIREMENTS)[tests]
-
-# Generate python gRPC proto and generate a key
-generate: generate-proto generate-key
+develop: $(INSTALL_REQUIRES)
+	$(PIP_INSTALL_DEVELOP_CMD)
 
 # Generate python gRPC proto
 generate-proto:
 	@echo "Generating python grpc code from proto into > " `pwd`
-	python3 -m grpc.tools.protoc -I'./loopchain/protos' --python_out='./loopchain/protos' --grpc_python_out='./loopchain/protos' './loopchain/protos/loopchain.proto'
+	python3 -m grpc_tools.protoc -I'./loopchain/protos' \
+		--python_out='./loopchain/protos' \
+		--grpc_python_out='./loopchain/protos' \
+		'./loopchain/protos/loopchain.proto'
 
 # Generate a key
 generate-key:
@@ -116,6 +115,16 @@ build: clean-build
 	@if [ "$$(python -c 'import sys; print(sys.version_info[0])')" != 3 ]; then\
 		@echo "The script should be run on python3.";\
 		exit -1;\
+	fi
+
+	@if ! python -c 'import wheel' &> /dev/null; then \
+		pip install wheel; \
+	fi
+
+	@if ! python -c 'import grpc_tools' &> /dev/null; then \
+		pip install grpcio==1.20.1; \
+		pip install grpcio-tools==1.20.1; \
+		pip install protobuf==3.7.0; \
 	fi
 
 	python3 setup.py bdist_wheel
