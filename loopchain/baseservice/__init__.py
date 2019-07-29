@@ -19,7 +19,7 @@ from .stub_manager import *
 from .object_manager import *
 from .common_thread import *
 from .common_process import *
-from .rest_stub_manager import *
+from .rest_client import *
 from .timer_service import *
 from .common_subprocess import *
 from .block_generation_scheduelr import *

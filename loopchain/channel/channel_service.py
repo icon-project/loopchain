@@ -17,14 +17,17 @@ import json
 import logging
 import signal
 import traceback
+from urllib.parse import urlparse
 
+import requests
+from aiohttp import ClientSession
 from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
-from loopchain.baseservice import RestStubManager, NodeSubscriber
+from loopchain.baseservice import RestClient, NodeSubscriber
 from loopchain.baseservice import TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
@@ -50,7 +53,7 @@ class ChannelService:
         self.__peer_auth: Signer = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
-        self.__radio_station_stub = None
+        self.__rs_client: RestClient = None
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
@@ -90,8 +93,8 @@ class ChannelService:
         return self.__score_info
 
     @property
-    def radio_station_stub(self):
-        return self.__radio_station_stub
+    def rs_client(self):
+        return self.__rs_client
 
     @property
     def peer_manager(self):
@@ -185,7 +188,7 @@ class ChannelService:
     async def init(self, **kwargs):
         """Initialize Channel Service
 
-        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target, rs_target)
+        :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
         :return: None
         """
@@ -195,15 +198,10 @@ class ChannelService:
         ChannelProperty().peer_port = kwargs.get('peer_port')
         ChannelProperty().peer_target = kwargs.get('peer_target')
         ChannelProperty().rest_target = kwargs.get('rest_target')
-        ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
-
-        # FIXME this is temporary setting for node_type.
-        if ChannelProperty().radio_station_target:
-            ChannelProperty().node_type = conf.NodeType.CitizenNode
-        else:
-            ChannelProperty().node_type = conf.NodeType.CommunityNode
+        ChannelProperty().node_type = conf.NodeType.CitizenNode
+        ChannelProperty().rs_target = None
 
         self.__peer_manager = PeerManager()
         await self.__init_peer_auth()
@@ -215,12 +213,11 @@ class ChannelService:
         await self.__init_sub_services()
 
     async def __init_network(self):
-        if ChannelProperty().radio_station_target:
-            self.__init_radio_station_stub()
+        self._init_rs_client()
         await self.__peer_manager.load_peers()
+        await self._select_node_type()
 
     async def evaluate_network(self):
-        await self._select_node_type()
         await self.__init_network()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
@@ -266,18 +263,10 @@ class ChannelService:
         for peer_id in peer_ids:
             self.__peer_manager.remove_peer(peer_id)
 
-        self.__radio_station_stub = None
+        self.__rs_client = None
 
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.blockchain.block_height
-        if current_height < 0:
-            utils.logger.debug(f"Need to sync block, current_height({current_height})")
-            return False
-
-        if current_height == 0 and self._is_genesis_node():
-            utils.logger.debug(f"It's GenesisNode, but not registered yet")
-            return False
-
         switch_block_height = self.__get_role_switch_block_height()
         if switch_block_height != -1 and current_height < switch_block_height:
             utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
@@ -285,14 +274,14 @@ class ChannelService:
             return False
 
         new_node_type = self._get_node_type_by_peer_list()
-        if ChannelProperty().node_type == conf.NodeType.CommunityNode \
-                and new_node_type == conf.NodeType.CitizenNode:
-            utils.logger.debug(f"prep right expired...")
-            self.start_shutdown_timer_when_term_expired()
-            return False
-
         if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
+            return False
+
+        if (ChannelProperty().node_type == conf.NodeType.CommunityNode
+                and new_node_type == conf.NodeType.CitizenNode):
+            utils.logger.debug(f"prep right expired...")
+            self.start_shutdown_timer_when_term_expired()
             return False
 
         return True
@@ -345,11 +334,23 @@ class ChannelService:
         scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
-    def __init_radio_station_stub(self):
-        self.__radio_station_stub = RestStubManager(
-            ChannelProperty().radio_station_target,
-            ChannelProperty().name
+    def _init_rs_client(self):
+        radiostations: list = self.get_channel_option().get('radiostations')
+        if not radiostations:
+            logging.warning(f"no configurations for radiostations.")
+            return
+
+        radiostations = utils.convert_local_ip_to_private_ip(radiostations)
+        try:
+            radiostations.remove(ChannelProperty().rest_target)
+        except ValueError:
+            pass
+
+        self.__rs_client = RestClient(
+            target=radiostations,
+            channel=ChannelProperty().name
         )
+        ChannelProperty().rs_target = self.__rs_client.target
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
@@ -369,7 +370,7 @@ class ChannelService:
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(
             channel=ChannelProperty().name,
-            rs_target=ChannelProperty().radio_station_target
+            rs_target=ChannelProperty().rs_target
         )
 
     async def __run_score_container(self):

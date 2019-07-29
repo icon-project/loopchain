@@ -18,6 +18,7 @@ And also has insecure inner service for inner process modules."""
 import getpass
 import logging
 import multiprocessing
+import os
 import signal
 import timeit
 from functools import partial
@@ -26,7 +27,7 @@ import grpc
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import CommonSubprocess, ObjectManager, RestStubManager
+from loopchain.baseservice import CommonSubprocess, ObjectManager, RestClient
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
@@ -42,14 +43,11 @@ class PeerService:
     """Main class of peer service having outer & inner gRPC interface
 
     """
-    def __init__(self, radio_station_target=None):
+    def __init__(self):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
-        :param radio_station_target: IP:Port of Radio Station
         :return:
         """
-        self._radio_station_target = radio_station_target
-        self._radio_station_stub = None
         self._peer_id = None
         self._node_key = bytes()
         self.p2p_outer_server: grpc.Server = None
@@ -92,14 +90,6 @@ class PeerService:
         return self._channel_infos
 
     @property
-    def radio_station_target(self):
-        return self._radio_station_target
-
-    @property
-    def radio_station_stub(self):
-        return self._radio_station_stub
-
-    @property
     def peer_port(self):
         return self._peer_port
 
@@ -114,15 +104,12 @@ class PeerService:
     def p2p_server_stop(self):
         self.p2p_outer_server.stop(None)
 
-    def _init_radio_station_stub(self):
-        self._radio_station_stub = RestStubManager(self._radio_station_target)
-
     def _get_channel_infos(self):
-        if self._radio_station_target:
-            response = self._radio_station_stub.call("GetChannelInfos")
-            return {channel: value for channel, value in response["channel_infos"].items()}
-        else:
+        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
             return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+        else:
+            # TODO rest call to neighbor..?
+            pass
 
     def _init_port(self, port):
         # service 초기화 작업
@@ -216,8 +203,6 @@ class PeerService:
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        if self._radio_station_target:
-            self._init_radio_station_stub()
         self._load_channel_infos()
 
         self._run_rest_services(port)

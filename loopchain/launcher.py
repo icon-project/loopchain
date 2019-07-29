@@ -286,9 +286,7 @@ def start_as_peer(args):
                                f"[IP Address of Radio Station]:[PORT number of Radio Station], "
                                f"or just [IP Address of Radio Station] format. error({e})")
 
-    PeerService(
-        radio_station_target=radio_station_target
-    ).serve(
+    PeerService().serve(
         port=port,
         agent_pin=args.agent_pin,
         amqp_target=amqp_target,
