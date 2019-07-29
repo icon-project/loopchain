@@ -215,9 +215,7 @@ class ChannelService:
 
     async def __init_network(self):
         self.__init_radio_station_stub()
-
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            await self._load_peers()
+        await self._load_peers()
 
     async def evaluate_network(self):
         await self._select_node_type()
