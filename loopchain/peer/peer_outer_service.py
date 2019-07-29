@@ -17,8 +17,8 @@ import asyncio
 import copy
 import datetime
 import json
-import pickle
 from functools import partial
+from typing import cast
 
 from loopchain.baseservice import TimerService
 from loopchain.blockchain import *
@@ -39,7 +39,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
             message_code.Request.get_total_supply: self.__handler_get_total_supply,
             message_code.Request.peer_peer_list: self.__handler_peer_list,
-            message_code.Request.peer_reconnect_to_rs: self.__handler_reconnect_to_rs,
             message_code.Request.peer_restart_channel: self.__handler_restart_channel
         }
 
@@ -172,13 +171,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
                                      object=tx_list_dumped)
-
-    def __handler_reconnect_to_rs(self, request, context):
-        logging.warning(f"RS lost peer info (candidate reason: RS restart)")
-        logging.warning(f"try reconnect to RS....")
-        ObjectManager().channel_service.connect_to_radio_station(is_reconnect=True)
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
 
     def __handler_restart_channel(self, request, context):
         logging.debug(f"Restart_channel({request.channel}) code({request.code}), message({request.message})")
@@ -352,7 +344,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        utils.logger.notice(f"ComplainLeader {request.complain_vote}")
+        utils.logger.info(f"ComplainLeader {request.complain_vote}")
 
         channel_stub = StubCollection().channel_stubs[channel]
         asyncio.run_coroutine_threadsafe(
@@ -610,7 +602,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
                                              message=f"There is no channel_stubs for channel({channel_name}).")
 
-        reps: list = channel_stub.async_task().get_reps()
+        reps: list = cast(list, channel_stub.async_task().get_reps())
         peer_targets = [rep.get('target') for rep in reps]
 
         if (request.peer_target in peer_targets and conf.ENABLE_CHANNEL_AUTH) or \
@@ -649,7 +641,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 self.peer_service.inner_service.loop
             )
             utils.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
-                             f"in channel({request.channel})")
+                              f"in channel({request.channel})")
         else:
             logging.error(f"This target({request.peer_target}), {request.node_type} failed to unsubscribe.")
             return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
@@ -657,28 +649,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.success),
                                          message=message_code.get_response_msg(message_code.Response.success))
-
-    def AnnounceNewPeer(self, request, context):
-        """RadioStation에서 Broadcasting 으로 신규 피어정보를 받아온다
-
-        :param request: PeerRequest
-        :param context:
-        :return:
-        """
-        # RadioStation To Peer
-        # prevent to show certificate content
-        # logging.info('Here Comes new peer: ' + str(request))
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"peer outer service::AnnounceNewPeer channel({channel})")
-
-        if request.peer_object:
-            channel_stub = StubCollection().channel_stubs[channel]
-            asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().announce_new_peer(request.peer_object, request.peer_target),
-                self.peer_service.inner_service.loop
-            )
-
-        return loopchain_pb2.CommonReply(response_code=0, message="success")
 
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel

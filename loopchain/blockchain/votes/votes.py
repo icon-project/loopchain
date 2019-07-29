@@ -16,6 +16,7 @@ import math
 from abc import ABC, abstractmethod
 from collections import Counter
 from typing import Iterable, List, Generic, TypeVar, Optional
+
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.votes import Vote
 

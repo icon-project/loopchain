@@ -25,7 +25,7 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerListData, PeerManager, PeerStatus, PeerInfo
+from loopchain.baseservice import PeerListData, PeerManager, Peer
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass
@@ -77,7 +77,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
         )
 
     def set_resource(self):
-        self.__app.add_route(Peer.as_view(), '/api/v1/peer/<request_type:string>')
+        self.__app.add_route(Peer_.as_view(), '/api/v1/peer/<request_type:string>')
         self.__app.add_route(Configuration.as_view(), '/api/v1/conf')
         self.__app.add_route(Certificate.as_view(), '/api/v1/cert/<request_type:string>/<certificate_type:string>')
 
@@ -140,7 +140,7 @@ class ServerComponents(metaclass=SingletonMetaClass):
         self.__app.run(host='0.0.0.0', port=api_port, debug=False, ssl=self.ssl_context)
 
 
-class Peer(HTTPMethodView):
+class Peer_(HTTPMethodView):
     __REQUEST_TYPE = {
         'PEER_LIST': 'list',
         'LEADER_PEER': 'leader',
@@ -154,11 +154,7 @@ class Peer(HTTPMethodView):
         channel = get_channel_name_from_args(args)
         logging.debug(f'channel name : {channel}')
         if request_type == self.__REQUEST_TYPE['PEER_LIST']:
-            grpc_response = ServerComponents().get_peer_list(channel)
-
             peer_manager = PeerManager(channel)
-            peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.set_peer_list(peer_list_data)
 
             all_peer_list = []
             connected_peer_list = []
@@ -172,7 +168,7 @@ class Peer(HTTPMethodView):
                     leader_peer_id = leader_peer.peer_id
 
                 for peer_id in peer_manager.peer_list:
-                    peer_each: PeerInfo = peer_manager.peer_list[peer_id]
+                    peer_each: Peer = peer_manager.peer_list[peer_id]
                     peer_data = peer_each.serialize()
 
                     if peer_each.peer_id == leader_peer_id:
@@ -182,8 +178,7 @@ class Peer(HTTPMethodView):
 
                     all_peer_list.append(peer_data)
 
-                    if peer_each.status == PeerStatus.connected:
-                        connected_peer_list.append(peer_data)
+                    connected_peer_list.append(peer_data)
 
             json_data = {
                 'registered_peer_count': len(all_peer_list),
@@ -197,11 +192,7 @@ class Peer(HTTPMethodView):
             }
             
         elif request_type == self.__REQUEST_TYPE['PEER_STATUS_LIST']:
-            grpc_response = ServerComponents().get_peer_list(channel)
-
             peer_manager = PeerManager(channel)
-            peer_list_data = PeerListData.load(grpc_response.peer_list)
-            peer_manager.set_peer_list(peer_list_data)
 
             registered_peer_count = 0
             connected_peer_count = 0
@@ -229,7 +220,7 @@ class Peer(HTTPMethodView):
                         all_peer_list.append(status_json)
 
                 registered_peer_count = peer_manager.get_peer_count()
-                connected_peer_count = peer_manager.get_connected_peer_count()
+                connected_peer_count = registered_peer_count
 
             json_data = {
                 'registered_peer_count': registered_peer_count,
@@ -248,8 +239,8 @@ class Peer(HTTPMethodView):
             result['response_code'] = grpc_response.code
 
             if grpc_response.code == message_code.Response.success:
-                peer_info = PeerInfo.load(grpc_response.object)
-                result['data'] = peer_info.serialize()
+                peer = Peer.load(grpc_response.object)
+                result['data'] = peer.serialize()
             else:
                 result['message'] = message_code.get_response_msg(grpc_response.code)
 

@@ -29,7 +29,7 @@ class BlockVerifier(BaseBlockVerifier):
         invoke_result = None
         if self.invoke_func:
             try:
-                new_block, invoke_result = self.invoke_func(block)
+                new_block, invoke_result = self.invoke_func(block, prev_block)
             except GenericJsonRpcServerError as e:
                 if hasattr(e, 'message') and 'Failed to invoke a block' in e.message:
                     e = ScoreInvokeError(f"{e.message} with block({header.hash.hex()})")

@@ -218,9 +218,6 @@ class BlockManager:
         return self.__blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     def get_tx_queue(self):
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            return self.__consensus.get_tx_queue()
-
         return self.__txQueue
 
     def get_count_of_unconfirmed_tx(self):
@@ -592,9 +589,6 @@ class BlockManager:
                     logging.error("fail block height sync: " + str(e))
                     break
                 except exception.BlockError:
-                    result = False
-                    logging.error("Block Error Clear all block and restart peer.")
-                    self.__blockchain.clear_all_blocks()
                     util.exit_and_msg("Block Error Clear all block and restart peer.")
                     break
                 finally:
@@ -752,7 +746,6 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
-        # util.logger.notice(f"do leader complain.")
         new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 

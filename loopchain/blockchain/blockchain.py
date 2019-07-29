@@ -18,7 +18,6 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import TYPE_CHECKING
 from typing import Union, List
 
 from loopchain import configure as conf
@@ -33,7 +32,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
+from loopchain.store.key_value_store import KeyValueStore
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -124,11 +123,6 @@ class BlockChain:
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
-
-    def clear_all_blocks(self):
-        import shutil
-        logging.debug(f"clear key value store({self._blockchain_store_path})")
-        shutil.rmtree(self._blockchain_store_path)
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -280,7 +274,7 @@ class BlockChain:
                 if block.header.height == 0:
                     block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
                 else:
-                    block, invoke_results = ObjectManager().channel_service.score_invoke(block)
+                    block, invoke_results = ObjectManager().channel_service.score_invoke(block, self.__last_block)
 
             try:
                 if need_to_write_tx_info:
@@ -382,11 +376,20 @@ class BlockChain:
                 if invoke_block is None:
                     raise RuntimeError("Error raised during prevent mismatch block, "
                                        f"Cannot find block({invoke_block_height}")
+                if invoke_block.header.height > 0:
+                    prev_invoke_block = self.find_block_by_height(invoke_block_height - 1)
+                    if prev_invoke_block is None:
+                        raise RuntimeError("Error raised during prevent mismatch block, "
+                                           f"Cannot find prev_block({invoke_block_height - 1}")
+                else:
+                    prev_invoke_block = None
 
                 if invoke_block_height == 0:
-                    invoke_block, invoke_block_result = ObjectManager().channel_service.genesis_invoke(invoke_block)
+                    invoke_block, invoke_block_result = \
+                        ObjectManager().channel_service.genesis_invoke(invoke_block)
                 else:
-                    invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
+                    invoke_block, invoke_block_result = \
+                        ObjectManager().channel_service.score_invoke(invoke_block, prev_invoke_block)
 
                 self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
@@ -488,6 +491,8 @@ class BlockChain:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
     def __save_tx_by_address(self, tx: 'Transaction'):
+        if tx.type() == "base":
+            return
         address = tx.from_address.hex_hx()
         return self.add_tx_to_list_by_address(address, tx.hash.hex())
 

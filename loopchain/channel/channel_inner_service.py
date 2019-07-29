@@ -26,7 +26,7 @@ from earlgrey import *
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
-from loopchain.baseservice import PeerInfo
+from loopchain.baseservice import Peer
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *
@@ -548,7 +548,7 @@ class ChannelInnerTask:
                 for ctz in self._citizens.values()]
 
     @message_queue_task
-    async def get_reps(self) -> Dict[str, str]:
+    async def get_reps(self) -> List[Dict[str, str]]:
         peer_manager = self._channel_service.peer_manager
         return peer_manager.get_reps()
 
@@ -768,28 +768,6 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def remove_audience(self, peer_target) -> None:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def announce_new_peer(self, peer_info_dumped, peer_target) -> None:
-        try:
-            peer_info = PeerInfo.load(peer_info_dumped)
-        except Exception as e:
-            traceback.print_exc()
-            logging.error(f"Invalid peer info. peer_target={peer_target}, exception={e}")
-            return
-
-        logging.debug("Add New Peer: " + str(peer_info.peer_id))
-
-        peer_manager = self._channel_service.peer_manager
-        peer_manager.add_peer(peer_info)
-
-        logging.debug("Try save peer list...")
-        # self._channel_service.save_peer_manager(peer_manager)
-        self._channel_service.show_peers()
-
-        if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
-            quorum, complain_quorum = peer_manager.get_quorum()
-            self._channel_service.consensus.set_quorum(quorum=quorum, complain_quorum=complain_quorum)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def delete_peer(self, peer_id) -> None:

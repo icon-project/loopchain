@@ -278,9 +278,6 @@ class NodeType(IntEnum):
 # RadioStation ###
 ##################
 LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
-# RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
-# LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy
-ENABLE_RADIOSTATION_HEARTBEAT = True
 SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 15   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
 # How many non-response will allow. After this count RS. will delete that node in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
@@ -298,7 +295,14 @@ ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel inf
 ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
+
+
+##########
+# IISS ###
+##########
+ENABLE_IISS = True
 LOAD_PEERS_FROM_IISS = False
+
 
 ########
 # MQ ###

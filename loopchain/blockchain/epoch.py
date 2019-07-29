@@ -46,6 +46,7 @@ class Epoch:
         self.round = 0
         self.complain_votes: Dict[int, LeaderVotes] = {}
         self.complained_result = None
+        self.reps = []  # init by self.new_votes()
 
         self.new_votes()
         self.new_round(leader_id, 0)
@@ -76,8 +77,9 @@ class Epoch:
     def new_votes(self):
         audience = ObjectManager().channel_service.peer_manager.peer_list
         rep_info = sorted(audience.values(), key=lambda peer: peer.order)
-        reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
-        leader_votes = LeaderVotes(reps,
+        self.reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
+
+        leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,
                                    self.height,
                                    ExternalAddress.fromhex_address(self.leader_id))
