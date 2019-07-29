@@ -19,7 +19,6 @@
 import asyncio
 import json
 import logging
-import multiprocessing
 import os
 import random
 import time
@@ -35,17 +34,12 @@ from loopchain.blockchain.types import Address
 from loopchain.components import SingletonMetaClass
 from loopchain.peer import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-from loopchain.radiostation import RadioStationService
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
-
-
-def run_radio_station(port, event_for_init: multiprocessing.Event=None):
-    RadioStationService().serve(port, event_for_init)
 
 
 def run_peer_server_as_process(port, radiostation_port=conf.PORT_RADIOSTATION, group_id=None, score=None):
@@ -196,17 +190,6 @@ def clean_up_temp_db_files(kill_process=True):
     os.system(f'rm -rf $(find {loopchain_root} -name *_block)')
     os.system(f"rm -rf {loopchain_root}/testcase/db_*")
     os.system(f"rm -rf {loopchain_root}/.storage")
-    os.system(f"rm -rf {loopchain_root}/log")
-    os.system(f"rm -rf {loopchain_root}/chaindb_*")
-    os.system(f"rm -rf {loopchain_root}/blockchain_db*")
-    os.system(f"rm -rf {loopchain_root}/block_confirm_db*")
-    os.system(f"rm -rf {loopchain_root}/genesis_db*")
-    os.system(f"rm -rf {loopchain_root}/testcase/chaindb_*")
-    os.system(f"rm -rf {loopchain_root}/sample_score")
-    os.system(f"rm -rf {loopchain_root}/testcase/sample_score")
-    os.system(f"rm -rf {loopchain_root}/certificate_db")
-    os.system(f"rm -rf {loopchain_root}/resources/test_score_deploy")
-    os.system(f"rm -rf {loopchain_root}/resources/test_score_repository/loopchain")
     time.sleep(1)
 
 

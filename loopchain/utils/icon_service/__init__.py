@@ -12,7 +12,7 @@
 
 from typing import Any
 from jsonrpcserver import status
-from loopchain.rest_server.json_rpc.exception import GenericJsonRpcServerError
+from loopchain.jsonrpc.exception import GenericJsonRpcServerError
 
 from .converter import convert_params, ParamType
 

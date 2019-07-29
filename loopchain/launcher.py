@@ -25,8 +25,6 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
-from loopchain.radiostation import RadioStationService
-from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
 from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async_
 
@@ -87,12 +85,8 @@ def main(argv):
 
     if args.service_type in ("peer", "citizen"):
         start_as_peer(args)
-    elif args.service_type == "rs" or args.service_type == "radiostation":
-        start_as_rs(args)
     elif args.service_type == "rest":
         start_as_rest_server(args)
-    elif args.service_type == "rest-rs":
-        start_as_rest_server_rs(args)
     elif args.service_type == "score":
         start_as_score(args)
     elif args.service_type == "channel":
@@ -151,17 +145,6 @@ def start_as_rest_server(args):
     icon_rpcserver_app.run_in_foreground(rpcserver_conf)
 
 
-def start_as_rest_server_rs(args):
-    rs_port = args.port
-    api_port = int(rs_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
-
-    RSServerComponents().set_resource()
-    RSServerComponents().set_stub_port(port=rs_port)
-
-    logging.info(f"Sanic rest server for RS is running!: {api_port}")
-    RSServerComponents().serve(api_port)
-
-
 def start_as_score(args):
     from iconservice.icon_service import IconService
     from iconservice.icon_config import default_icon_config
@@ -204,27 +187,6 @@ def start_as_score(args):
     icon_service.serve(config=icon_conf)
 
 
-def start_as_rs(args):
-    print_prologue()
-
-    # apply default configure values
-    port = args.port or conf.PORT_RADIOSTATION
-    cert = args.cert or None
-    pw = None
-    seed = args.seed or None
-    check_port_available(int(port))
-
-    if seed:
-        try:
-            seed = int(seed)
-        except ValueError as e:
-            utils.exit_and_msg(f"seed or s opt must be int \n"
-                               f"input value : {seed}")
-
-    RadioStationService(conf.IP_RADIOSTATION, cert, pw, seed).serve(port)
-    print_epilogue()
-
-
 def start_as_admin(args, quick_command):
     print_prologue()
     try:
@@ -241,11 +203,11 @@ def start_as_tool(args, quick_command):
     print_prologue()
 
     try:
-        from _tools.loopchain_private_tools import demotool
+        from _tools.loopchain_private_tools.demotool import DemoTool
     except Exception as e:
         logging.error(f"tool service does not be provided. {e}")
     else:
-        demotool.main_menu(True)
+        DemoTool().main()
 
     print_epilogue()
 
