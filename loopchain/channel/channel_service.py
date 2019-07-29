@@ -446,9 +446,14 @@ class ChannelService:
             self.__peer_manager.add_peer(peer_info)
 
     async def _load_peers_from_rest_call(self):
-        response = self.__radio_station_stub.call("GetReps")
-        reps = response.get('rep')
-        self._add_reps(reps)
+        # FIXME temporarily disable GetReps API for legacy support
+        # response = self.__radio_station_stub.call("GetReps")
+        # reps = response.get('rep')
+        # self._add_reps(reps)
+        response = self.__radio_station_stub.call("GetChannelInfos")
+        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
+        for peer_info in reps:
+            self.__peer_manager.add_peer(peer_info)
 
     def _add_reps(self, reps: list):
         for order, rep_info in enumerate(reps, 1):

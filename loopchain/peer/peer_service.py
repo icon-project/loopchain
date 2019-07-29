@@ -168,9 +168,9 @@ class PeerService:
                         for channel in conf.CHANNEL_OPTION}
             else:
                 return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-
-        return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
-                for channel in conf.CHANNEL_OPTION}
+        else:
+            response = self.stub_to_radiostation.call("GetChannelInfos")
+            return {channel: value for channel, value in response["channel_infos"].items()}
 
     def _init_port(self, port):
         # service 초기화 작업
