@@ -266,25 +266,25 @@ class ChannelService:
         self.__radio_station_stub = None
 
     async def _load_peers(self):
-        if conf.ENABLE_IISS:
-            block_height = self.__block_manager.get_blockchain().block_height
-            if self._is_genesis_node() and block_height == 0:
-                peer_info = {
-                    'id': ChannelProperty().peer_id,
-                    'peer_target': ChannelProperty().peer_target,
-                    'order': 1
-                }
-                self.__peer_manager.add_peer(peer_info)
-            else:
-                self.__peer_manager.load_peers_from_iiss()
-
-            if not conf.LOAD_PEERS_FROM_IISS:
-                await self.__peer_manager.load_peers_from_file()
+        if not self.is_support_node_function(conf.NodeFunction.Vote):
+            await self.__peer_manager.load_peers_from_rest_call()
         else:
-            if self.is_support_node_function(conf.NodeFunction.Vote):
-                await self.__peer_manager.load_peers_from_file()
+            if conf.ENABLE_IISS:
+                block_height = self.__block_manager.get_blockchain().block_height
+                if self._is_genesis_node() and block_height == 0:
+                    peer_info = {
+                        'id': ChannelProperty().peer_id,
+                        'peer_target': ChannelProperty().peer_target,
+                        'order': 1
+                    }
+                    self.__peer_manager.add_peer(peer_info)
+                else:
+                    self.__peer_manager.load_peers_from_iiss()
+
+                if not conf.LOAD_PEERS_FROM_IISS:
+                    await self.__peer_manager.load_peers_from_file()
             else:
-                await self.__peer_manager.load_peers_from_rest_call()
+                await self.__peer_manager.load_peers_from_file()
         self.__peer_manager.show_peers()
 
     def _is_role_switched(self) -> bool:
