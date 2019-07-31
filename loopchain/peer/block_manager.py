@@ -133,9 +133,6 @@ class BlockManager:
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
-    def set_invoke_results(self, block_hash, invoke_results):
-        self.__blockchain.set_invoke_results(block_hash, invoke_results)
-
     def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
         self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
 
@@ -836,7 +833,7 @@ class BlockManager:
             logging.error(e)
             traceback.print_exc()
         else:
-            self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
+            self.__blockchain.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
             is_validate = exc is None

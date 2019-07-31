@@ -196,7 +196,7 @@ class ConsensusSiever(ConsensusBase):
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(
                 candidate_block, last_block, conf.ENABLE_IISS
             )
-            self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
+            self._blockchain.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
