@@ -89,9 +89,8 @@ class ConsensusSiever(ConsensusBase):
         return block_builder.build()
 
     async def __add_block(self, block: Block):
-        vote = self._block_manager.candidate_blocks.get_votes(block.header.hash)
-        vote_result = await self._wait_for_voting(block)
-        if not vote_result:
+        vote = await self._wait_for_voting(block)
+        if not vote:
             raise NotEnoughVotes
 
         self._block_manager.get_blockchain().add_block(block, confirm_info=vote.votes)
@@ -235,12 +234,11 @@ class ConsensusSiever(ConsensusBase):
         :return: vote_result or None
         """
         while True:
-            votes = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
-            util.logger.info(f"Votes : {votes.get_summary()}")
-            vote_result = votes.get_result()
-            if vote_result is not None or votes.is_completed():
+            vote = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
+            util.logger.info(f"Votes : {vote.get_summary()}")
+            if vote.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
-                return vote_result
+                return vote
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
             timeout_timestamp = candidate_block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000

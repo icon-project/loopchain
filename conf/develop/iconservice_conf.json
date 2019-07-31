@@ -20,5 +20,6 @@
     "scorePackageValidator": false
   },
   "mainPRepCount": 4,
-  "mainAndSubPRepCount": 4
+  "mainAndSubPRepCount": 4,
+  "decentralizeTrigger": 0
 }
