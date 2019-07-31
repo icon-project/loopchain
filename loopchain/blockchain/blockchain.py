@@ -18,7 +18,7 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import Union, List
+from typing import Union, List, cast
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -273,10 +273,7 @@ class BlockChain:
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None and need_to_score_invoke:
-                if block.header.height == 0:
-                    block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
-                else:
-                    block, invoke_results = ObjectManager().channel_service.score_invoke(block, self.__last_block)
+                self.get_invoke_func(block.header.height)(block, self.__last_block)
 
             try:
                 if not need_to_write_tx_info:
@@ -432,12 +429,8 @@ class BlockChain:
                 else:
                     prev_invoke_block = None
 
-                if invoke_block_height == 0:
-                    invoke_block, invoke_block_result = \
-                        ObjectManager().channel_service.genesis_invoke(invoke_block)
-                else:
-                    invoke_block, invoke_block_result = \
-                        ObjectManager().channel_service.score_invoke(invoke_block, prev_invoke_block)
+                invoke_block, invoke_block_result = \
+                    self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
                 self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
@@ -629,7 +622,7 @@ class BlockChain:
         block_builder.leader_votes = []
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
-        block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
+        block, invoke_results = self.genesis_invoke(block)
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
 
@@ -872,6 +865,12 @@ class BlockChain:
         receipts_hash = block_prover.to_hash32(tx_result)
         return block_prover.prove(receipts_hash, block.header.receipts_hash, proof)
 
+    def get_invoke_func(self, height):
+        if height == 0:
+            return self.genesis_invoke
+        else:
+            return self.score_invoke
+
     def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
         method = "icx_sendTransaction"
         transactions = []
@@ -909,7 +908,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.get_rep_ids()
+        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
@@ -945,7 +944,8 @@ class BlockChain:
             },
             'transactions': transactions,
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
-            'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
+            'prevBlockValidators':
+                [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
         }
 
         if conf.ENABLE_IISS:
@@ -993,7 +993,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.get_rep_ids()
+        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:

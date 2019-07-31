@@ -478,10 +478,7 @@ class BlockManager:
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
-        if block_.header.height == 0:
-            block_verifier.invoke_func = self.__channel_service.genesis_invoke
-        else:
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+        block_verifier.invoke_func = self.__blockchain.get_invoke_func(block_.header.height)
 
         reps = self.__channel_service.get_rep_ids()
         invoke_results = block_verifier.verify_loosely(block_,
@@ -514,10 +511,7 @@ class BlockManager:
 
         block_version = self.get_blockchain().block_versioner.get_version(prev_block.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
-        if prev_block.header.height == 0:
-            block_verifier.invoke_func = self.__channel_service.genesis_invoke
-        else:
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+        block_verifier.invoke_func = self.__blockchain.get_invoke_func(prev_block.header.height)
 
         reps = self.__channel_service.get_rep_ids()
         invoke_results = block_verifier.verify_loosely(prev_block,
@@ -820,7 +814,7 @@ class BlockManager:
         try:
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+            block_verifier.invoke_func = self.__blockchain.score_invoke
             reps = self.__channel_service.get_rep_ids()
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
             invoke_results = block_verifier.verify(unconfirmed_block,

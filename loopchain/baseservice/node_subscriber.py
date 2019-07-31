@@ -134,7 +134,7 @@ class NodeSubscriber:
             confirmed_block = block_serializer.deserialize(block_dict)
 
             block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
-            block_verifier.invoke_func = ObjectManager().channel_service.score_invoke
+            block_verifier.invoke_func = blockchain.score_invoke
             reps = ObjectManager().channel_service.get_rep_ids()
             try:
                 block_verifier.verify(confirmed_block,

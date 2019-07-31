@@ -193,7 +193,7 @@ class ConsensusSiever(ConsensusBase):
 
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
 
-            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(
+            candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, last_block, conf.ENABLE_IISS
             )
             self._blockchain.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
