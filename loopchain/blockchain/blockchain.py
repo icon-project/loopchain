@@ -277,8 +277,8 @@ class BlockChain:
                     block, invoke_results = ObjectManager().channel_service.score_invoke(block, self.__last_block)
 
             try:
-                if need_to_write_tx_info:
-                    self.__add_tx_to_block_db(block, invoke_results)
+                if not need_to_write_tx_info:
+                    invoke_results = None
                 if need_to_score_invoke:
                     ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
@@ -287,7 +287,7 @@ class BlockChain:
                 raise e
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
-            next_total_tx = self.__write_block_data(block, confirm_info)
+            next_total_tx = self.__write_block_data(block, confirm_info, invoke_results)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -317,7 +317,62 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, confirm_info):
+    def __add_tx_to_block_db(self, block, invoke_results, batch=None):
+        """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
+        get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
+        :param block:
+            """
+        write_target = batch or self._blockchain_store
+
+        # loop all tx in block
+        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
+        block_manager = ObjectManager().channel_service.block_manager
+        tx_queue = block_manager.get_tx_queue()
+        # utils.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
+        # utils.logger.spam(
+        #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
+
+        for index, tx in enumerate(block.body.transactions.values()):
+            tx_hash = tx.hash.hex()
+            invoke_result = invoke_results[tx_hash]
+
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
+            tx_info = {
+                'block_hash': block.header.hash.hex(),
+                'block_height': block.header.height,
+                'tx_index': hex(index),
+                'transaction': tx_serializer.to_db_data(tx),
+                'result': invoke_result
+            }
+
+            write_target.put(
+                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
+                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
+
+            # try:
+            #     utils.logger.spam(
+            #         f"blockchain:__add_tx_to_block_db::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
+            # except KeyError as e:
+            #     utils.logger.spam(f"__add_tx_to_block_db :: {e}")
+
+            tx_queue.pop(tx_hash, None)
+            # utils.logger.spam(f"pop tx from queue:{tx_hash}")
+
+            if block.header.height > 0:
+                self.__save_tx_by_address(tx)
+
+        # save_invoke_result_block_height
+        bit_length = block.header.height.bit_length()
+        byte_length = (bit_length + 7) // 8
+        block_height_bytes = block.header.height.to_bytes(byte_length, byteorder='big')
+        write_target.put(
+            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
+            block_height_bytes
+        )
+
+        return batch
+
+    def __write_block_data(self, block: Block, confirm_info, invoke_results):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -339,6 +394,9 @@ class BlockChain:
             BlockChain.BLOCK_HEIGHT_KEY +
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
+
+        if invoke_results:
+            batch = self.__add_tx_to_block_db(block, invoke_results, batch)
 
         if confirm_info:
             batch.put(
@@ -417,59 +475,6 @@ class BlockChain:
                                "Peer will be down. : "
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
-
-    def __add_tx_to_block_db(self, block, invoke_results):
-        """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
-        get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
-        :param block:
-        """
-        # loop all tx in block
-        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        block_manager = ObjectManager().channel_service.block_manager
-        tx_queue = block_manager.get_tx_queue()
-        # utils.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
-        # utils.logger.spam(
-        #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
-
-        for index, tx in enumerate(block.body.transactions.values()):
-            tx_hash = tx.hash.hex()
-            invoke_result = invoke_results[tx_hash]
-
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
-            tx_info = {
-                'block_hash': block.header.hash.hex(),
-                'block_height': block.header.height,
-                'tx_index': hex(index),
-                'transaction': tx_serializer.to_db_data(tx),
-                'result': invoke_result
-            }
-
-            self._blockchain_store.put(
-                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
-
-            # try:
-            #     utils.logger.spam(
-            #         f"blockchain:__add_tx_to_block_db::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
-            # except KeyError as e:
-            #     utils.logger.spam(f"__add_tx_to_block_db :: {e}")
-
-            tx_queue.pop(tx_hash, None)
-            # utils.logger.spam(f"pop tx from queue:{tx_hash}")
-
-            if block.header.height > 0:
-                self.__save_tx_by_address(tx)
-
-        self.__save_invoke_result_block_height(block.header.height)
-
-    def __save_invoke_result_block_height(self, height):
-        bit_length = height.bit_length()
-        byte_length = (bit_length + 7) // 8
-        block_height_bytes = height.to_bytes(byte_length, byteorder='big')
-        self._blockchain_store.put(
-            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
-            block_height_bytes
-        )
 
     def __precommit_tx(self, precommit_block):
         """ change status of transactions in a precommit block
