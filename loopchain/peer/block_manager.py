@@ -481,10 +481,10 @@ class BlockManager:
         block_verifier.invoke_func = self.__blockchain.get_invoke_func(block_.header.height)
 
         reps = self.__channel_service.get_rep_ids()
-        invoke_results = block_verifier.verify_loosely(block_,
-                                                       self.__blockchain.last_block,
-                                                       self.__blockchain,
-                                                       reps=reps)
+        block_verifier.verify_loosely(block_,
+                                      self.__blockchain.last_block,
+                                      self.__blockchain,
+                                      reps=reps)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
             if isinstance(exc, TransactionDuplicatedHashError):
@@ -500,7 +500,6 @@ class BlockManager:
             else:
                 raise exc
 
-        self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
         return self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
@@ -514,11 +513,10 @@ class BlockManager:
         block_verifier.invoke_func = self.__blockchain.get_invoke_func(prev_block.header.height)
 
         reps = self.__channel_service.get_rep_ids()
-        invoke_results = block_verifier.verify_loosely(prev_block,
-                                                       self.__blockchain.last_block,
-                                                       self.__blockchain,
-                                                       reps=reps)
-        self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
+        block_verifier.verify_loosely(prev_block,
+                                      self.__blockchain.last_block,
+                                      self.__blockchain,
+                                      reps=reps)
         return self.__blockchain.add_block(prev_block, confirm_info)
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
@@ -817,17 +815,16 @@ class BlockManager:
             block_verifier.invoke_func = self.__blockchain.score_invoke
             reps = self.__channel_service.get_rep_ids()
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
-            invoke_results = block_verifier.verify(unconfirmed_block,
-                                                   self.__blockchain.last_block,
-                                                   self.__blockchain,
-                                                   self.__blockchain.last_block.header.next_leader,
-                                                   reps=reps)
+            block_verifier.verify(unconfirmed_block,
+                                  self.__blockchain.last_block,
+                                  self.__blockchain,
+                                  self.__blockchain.last_block.header.next_leader,
+                                  reps=reps)
         except Exception as e:
             exc = e
             logging.error(e)
             traceback.print_exc()
         else:
-            self.__blockchain.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
             is_validate = exc is None

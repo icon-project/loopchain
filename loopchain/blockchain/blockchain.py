@@ -18,11 +18,12 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import Union, List, cast
+from typing import Union, List, cast, Optional
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
+from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
 from loopchain.blockchain.exception import *
@@ -75,17 +76,15 @@ class BlockChain:
         self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
-        # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
         self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
 
-        # made block count as a leader
-        self.__invoke_results = {}
+        self.__invoke_results = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
 
         self.__add_block_lock = threading.RLock()
         self.__confirmed_block_lock = threading.RLock()
 
         self.__total_tx = 0
-        self.__nid: str = None
+        self.__nid: Optional[str] = None
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -623,7 +622,6 @@ class BlockChain:
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
         block, invoke_results = self.genesis_invoke(block)
-        self.set_invoke_results(block.header.hash.hex(), invoke_results)
         self.add_block(block)
 
     def put_precommit_block(self, precommit_block: Block):
@@ -765,14 +763,6 @@ class BlockChain:
         ChannelProperty().nid = nid
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
-
-    def set_invoke_results(self, block_hash, invoke_results):
-        self.__invoke_results[block_hash] = invoke_results
-
-    def invoke_for_precommit(self, precommit_block: Block):
-        invoke_results = \
-            self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
-        self.__add_tx_to_block_db(precommit_block, invoke_results)
 
     def block_dumps(self, block: Block) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
@@ -919,6 +909,7 @@ class BlockChain:
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
+        self.__invoke_results[new_block.header.hash.hex()] = tx_receipts
         return new_block, tx_receipts
 
     def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
@@ -1004,4 +995,5 @@ class BlockChain:
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
+        self.__invoke_results[new_block.header.hash.hex()] = tx_receipts
         return new_block, tx_receipts
