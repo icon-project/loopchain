@@ -48,8 +48,6 @@ class Epoch:
         self.complained_result = None
         self.reps = []  # init by self.new_votes()
 
-        self.invoke_result = {}  # tx receipts
-
         self.new_votes()
         self.new_round(leader_id, 0)
 

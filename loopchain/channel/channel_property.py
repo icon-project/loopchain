@@ -24,5 +24,6 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.amqp_target = None
         self.peer_port = None
         self.peer_id = None
+        self.peer_auth = None
         self.node_type = None
         self.nid = None

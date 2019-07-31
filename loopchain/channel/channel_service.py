@@ -95,10 +95,6 @@ class ChannelService:
         return self.__radio_station_stub
 
     @property
-    def peer_auth(self):
-        return self.__peer_auth
-
-    @property
     def peer_manager(self):
         return self.__peer_manager
 
@@ -332,6 +328,7 @@ class ChannelService:
         try:
             node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key()
             self.__peer_auth = Signer.from_prikey(node_key)
+            ChannelProperty().peer_auth = self.__peer_auth
         except Exception as e:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
@@ -639,7 +636,7 @@ class ChannelService:
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = self.peer_auth
+            block_builder.signer = self.__peer_auth
         else:
             block_builder.signature = block.header.signature
         new_block = block_builder.build()
@@ -723,7 +720,7 @@ class ChannelService:
         block_builder.receipts = tx_receipts
         block_builder.reps = self.get_rep_ids()
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = self.peer_auth
+            block_builder.signer = self.__peer_auth
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
