@@ -60,6 +60,7 @@ class BlockChain:
 
     # Additional information of the block is generated when the add_block phase of the consensus is reached.
     CONFIRM_INFO_KEY = b'confirm_info_key'
+    PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
     def __init__(self, channel_name=None, store_id=None, block_manager=None):
@@ -78,7 +79,8 @@ class BlockChain:
         store_id = f"{store_id}_{channel_name}"
         self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
 
-        self.__invoke_results = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
+        # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
+        self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
 
         self.__add_block_lock = threading.RLock()
         self.__confirmed_block_lock = threading.RLock()
@@ -270,21 +272,21 @@ class BlockChain:
 
     def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
-            invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
-            if invoke_results is None and need_to_score_invoke:
+            receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
+            if receipts is None and need_to_score_invoke:
                 self.get_invoke_func(block.header.height)(block, self.__last_block)
 
             try:
                 if not need_to_write_tx_info:
-                    invoke_results = None
+                    receipts = None
                 if need_to_score_invoke:
                     ObjectManager().channel_service.score_write_precommit_state(block)
-                next_total_tx = self.__write_block_data(block, confirm_info, invoke_results)
+                next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
             except Exception as e:
                 logging.warning(f"blockchain:__add_block FAIL {e}")
                 raise e
             finally:
-                self.__invoke_results.pop(block.header.hash.hex(), None)
+                self.__invoke_results.pop(block.header.hash, None)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -314,10 +316,13 @@ class BlockChain:
 
             return True
 
-    def __add_tx_to_block_db(self, block, invoke_results, batch=None):
-        """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
-        get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
+    def __add_tx_to_block_db(self, block, receipts, batch=None):
+        """save additional information of transactions to efficient searching and support user APIs.
+
         :param block:
+        :param receipts: invoke result of transaction
+        :param batch:
+        :return:
         """
         write_target = batch or self._blockchain_store
 
@@ -327,7 +332,7 @@ class BlockChain:
 
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
-            invoke_result = invoke_results[tx_hash]
+            receipt = receipts[tx_hash]
 
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
             tx_info = {
@@ -335,7 +340,7 @@ class BlockChain:
                 'block_height': block.header.height,
                 'tx_index': hex(index),
                 'transaction': tx_serializer.to_db_data(tx),
-                'result': invoke_result
+                'result': receipt
             }
 
             write_target.put(
@@ -345,7 +350,7 @@ class BlockChain:
             tx_queue.pop(tx_hash, None)
 
             if block.header.height > 0:
-                self.__save_tx_by_address(tx)
+                self.__save_tx_by_address(tx, batch)
 
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
@@ -358,7 +363,7 @@ class BlockChain:
 
         return batch
 
-    def __write_block_data(self, block: Block, confirm_info, invoke_results):
+    def __write_block_data(self, block: Block, confirm_info, receipts, next_prep):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -381,8 +386,16 @@ class BlockChain:
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
 
-        if invoke_results:
-            batch = self.__add_tx_to_block_db(block, invoke_results, batch)
+        if receipts:
+            batch = self.__add_tx_to_block_db(block, receipts, batch)
+
+        if next_prep:
+            utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
+                              f"\npreps({next_prep['preps']})")
+            batch.put(
+                BlockChain.PREPS_KEY + next_prep['rootHash'].encode(encoding=conf.HASH_KEY_ENCODING),
+                json.dumps(next_prep['preps']).encode(encoding=conf.PEER_DATA_ENCODING)
+            )
 
         if confirm_info:
             batch.put(
@@ -428,10 +441,10 @@ class BlockChain:
                 else:
                     prev_invoke_block = None
 
-                invoke_block, invoke_block_result = \
+                invoke_block, receipts = \
                     self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
-                self.__add_tx_to_block_db(invoke_block, invoke_block_result)
+                self.__add_tx_to_block_db(invoke_block, receipts)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
@@ -477,11 +490,11 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: 'Transaction'):
+    def __save_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
         address = tx.from_address.hex_hx()
-        return self.add_tx_to_list_by_address(address, tx.hash.hex())
+        return self.add_tx_to_list_by_address(address, tx.hash.hex(), batch)
 
     @staticmethod
     def __get_tx_list_key(address, index):
@@ -514,7 +527,8 @@ class BlockChain:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
 
-    def add_tx_to_list_by_address(self, address, tx_hash):
+    def add_tx_to_list_by_address(self, address, tx_hash, batch=None):
+        write_target = batch or self._blockchain_store
         current_list, current_index = self.get_tx_list_by_address(address, 0)
 
         if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
@@ -525,7 +539,7 @@ class BlockChain:
 
         current_list.insert(0, tx_hash)
         list_key = self.__get_tx_list_key(address, 0)
-        self._blockchain_store.put(list_key, pickle.dumps(current_list))
+        write_target.put(list_key, pickle.dumps(current_list))
 
         return True
 
@@ -909,7 +923,7 @@ class BlockChain:
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
-        self.__invoke_results[new_block.header.hash.hex()] = tx_receipts
+        self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
     def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
@@ -955,7 +969,7 @@ class BlockChain:
 
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.debug(f"in score invoke next_prep({next_prep})")
+            utils.logger.notice(f"in score invoke next_prep({next_prep})")
             conf.LOAD_PEERS_FROM_IISS = True
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
@@ -995,5 +1009,5 @@ class BlockChain:
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
-        self.__invoke_results[new_block.header.hash.hex()] = tx_receipts
+        self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
         return new_block, tx_receipts
