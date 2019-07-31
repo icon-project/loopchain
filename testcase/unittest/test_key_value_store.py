@@ -89,7 +89,7 @@ class TestKeyValueStore(unittest.TestCase):
             expect_count = len(container)
 
             count = 0
-            for key, value in store.Iterator(**kwargs):
+            for key, value in store.iterator(**kwargs):
                 self.assertIn(key, container)
                 count += 1
             self.assertEqual(count, expect_count)
@@ -98,7 +98,7 @@ class TestKeyValueStore(unittest.TestCase):
                 kwargs.update({'include_stop': True})
 
             count = 0
-            for key, value in store.Iterator(**kwargs):
+            for key, value in store.iterator(**kwargs):
                 self.assertIn(key, container)
                 count += 1
             self.assertEqual(count, expect_count)
@@ -109,7 +109,7 @@ class TestKeyValueStore(unittest.TestCase):
                 container = (b'test_key_2', b'test_key_3')
                 expect_count = 2
 
-            for key, value in store.Iterator(**kwargs):
+            for key, value in store.iterator(**kwargs):
                 self.assertIn(key, container)
                 count += 1
             self.assertEqual(count, expect_count)
@@ -125,7 +125,7 @@ class TestKeyValueStore(unittest.TestCase):
                 store.get(del_key)
 
             count = 0
-            for key, value in store.Iterator():
+            for key, value in store.iterator():
                 utils.logger.spam(f"DB iterator: key={key}, value={value}")
                 self.assertEqual(value, test_items[bytes(key)])
                 count += 1
@@ -138,7 +138,7 @@ class TestKeyValueStore(unittest.TestCase):
         for store_type in self.store_types:
             store = self._new_store("file://./key_value_store_test_write_batch", store_type=store_type)
 
-            batch = store.WriteBatch()
+            batch = store.write_batch()
             batch.put(b'test_key_1', b'test_value_1')
             batch.put(b'test_key_2', b'test_value_2')
 
@@ -163,7 +163,7 @@ class TestKeyValueStore(unittest.TestCase):
             for key, value in test_items.items():
                 store.put(key, value)
 
-            cancelable_batch = store.CancelableWriteBatch()
+            cancelable_batch = store.cancelable_write_batch()
             cancelable_batch.put(b'cancelable_key_1', b'cancelable_value_1')
             cancelable_batch.put(b'test_key_2', b'edited_test_value_2')
             cancelable_batch.put(b'cancelable_key_2', b'cancelable_value_2')
@@ -177,7 +177,7 @@ class TestKeyValueStore(unittest.TestCase):
             edited_test_items[b'test_key_4'] = b'edited_test_value_4'
 
             count = 0
-            for key, value in store.Iterator():
+            for key, value in store.iterator():
                 utils.logger.spam(f"Edited DB iterator: key={key}, value={value}")
                 self.assertEqual(value, edited_test_items[bytes(key)])
                 count += 1
@@ -186,7 +186,7 @@ class TestKeyValueStore(unittest.TestCase):
 
             cancelable_batch.cancel()
             count = 0
-            for key, value in store.Iterator():
+            for key, value in store.iterator():
                 utils.logger.spam(f"Original DB iterator: key={key}, value={value}")
                 self.assertEqual(value, test_items[bytes(key)])
                 count += 1
@@ -216,13 +216,13 @@ class TestKeyValueStore(unittest.TestCase):
         )
 
         leveldb_bin = bytes()
-        for key, value in leveldb_store.Iterator():
+        for key, value in leveldb_store.iterator():
             utils.logger.spam(f"leveldb iterator: key={key}, value={value}")
             self.assertEqual(value, plyvel_store.get(bytes(key)))
             leveldb_bin += key + value
 
         plyvel_bin = bytes()
-        for key, value in plyvel_store.Iterator():
+        for key, value in plyvel_store.iterator():
             plyvel_bin += key + value
 
         utils.logger.debug(f"leveldb binary: {leveldb_bin}")
@@ -247,7 +247,7 @@ class TestKeyValueStore(unittest.TestCase):
         )
 
         leveldb_count = 0
-        for key, value in leveldb_store.Iterator():
+        for key, value in leveldb_store.iterator():
             plyvel_value = plyvel_store.get(bytes(key))
             self.assertEqual(value, plyvel_value)
             leveldb_count += 1
@@ -255,7 +255,7 @@ class TestKeyValueStore(unittest.TestCase):
                 utils.logger.spam(f"leveldb count={leveldb_count}")
 
         plyvel_count = 0
-        for key, value in plyvel_store.Iterator():
+        for key, value in plyvel_store.iterator():
             leveldb_value = leveldb_store.get(key)
             self.assertEqual(value, leveldb_value)
             plyvel_count += 1

@@ -14,7 +14,6 @@
 
 import asyncio
 import json
-import leveldb
 import logging
 import signal
 import traceback

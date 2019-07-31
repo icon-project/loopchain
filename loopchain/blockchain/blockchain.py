@@ -18,7 +18,6 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import TYPE_CHECKING
 from typing import Union, List
 
 from loopchain import configure as conf
@@ -33,7 +32,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
+from loopchain.store.key_value_store import KeyValueStore
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -337,7 +336,7 @@ class BlockChain:
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
-        batch = self._blockchain_store.WriteBatch()
+        batch = self._blockchain_store.write_batch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
         batch.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
         batch.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)

@@ -129,15 +129,15 @@ class KeyValueStorePlyvel(KeyValueStore):
         plyvel.destroy_db(self._path)
 
     @_error_convert
-    def WriteBatch(self, sync=False) -> KeyValueStoreWriteBatch:
+    def write_batch(self, sync=False) -> KeyValueStoreWriteBatch:
         return _KeyValueStoreWriteBatchPlyvel(self._db, sync=sync)
 
     @_error_convert
-    def CancelableWriteBatch(self, sync=False) -> KeyValueStoreCancelableWriteBatch:
+    def cancelable_write_batch(self, sync=False) -> KeyValueStoreCancelableWriteBatch:
         return _KeyValueStoreCancelableWriteBatchPlyvel(self, self._db, sync=sync)
 
     @_error_convert
-    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
+    def iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         if 'start' in kwargs or 'stop' in kwargs:
             raise ValueError(f"Use start_key and stop_key arguments instead of start and stop arguments")
 

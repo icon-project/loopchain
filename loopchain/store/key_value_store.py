@@ -82,7 +82,7 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
     def __init__(self, store: 'KeyValueStore', sync=False):
         self._store = store
-        self._batch = self._store.WriteBatch(sync=sync)
+        self._batch = self._store.write_batch(sync=sync)
         self._sync = sync
 
     def put(self, key: bytes, value: bytes):
@@ -112,7 +112,7 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
     def cancel(self):
         """Cancel written operations."""
-        batch = self._store.WriteBatch(sync=self._sync)
+        batch = self._store.write_batch(sync=self._sync)
         for key, value in self._get_original_touched_item():
             if value is None:
                 batch.delete(key)
@@ -149,7 +149,11 @@ class KeyValueStore(abc.ABC):
 
         utils.logger.info(f"New KeyValueStore. store_type={store_type}, uri={uri}")
 
-        if store_type == KeyValueStore.STORE_TYPE_PLYVEL:
+        if store_type == KeyValueStore.STORE_TYPE_REDIS:
+            utils.logger.debug(f"New KeyValueStoreRedis.")
+            from loopchain.store.store_redis import KeyValueStoreRedis
+            return KeyValueStoreRedis(uri, **kwargs)
+        elif store_type == KeyValueStore.STORE_TYPE_PLYVEL:
             utils.logger.debug(f"New KeyValueStorePlyvel.")
             from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
             return KeyValueStorePlyvel(uri, **kwargs)
@@ -210,17 +214,17 @@ class KeyValueStore(abc.ABC):
         raise NotImplementedError("destroy_store() function is interface method")
 
     @abc.abstractmethod
-    def WriteBatch(self, sync=False) -> KeyValueStoreWriteBatch:
+    def write_batch(self, sync=False) -> KeyValueStoreWriteBatch:
         """Make a KeyValueStoreWriteBatch instance for this instance"""
         raise NotImplementedError("WriteBatch constructor is not implemented in KeyValueStore class")
 
     @abc.abstractmethod
-    def CancelableWriteBatch(self, sync=False) -> KeyValueStoreCancelableWriteBatch:
+    def cancelable_write_batch(self, sync=False) -> KeyValueStoreCancelableWriteBatch:
         """Make a KeyValueStoreCancelableWriteBatch instance for this instance"""
         raise NotImplementedError("CancelableWriteBatch constructor is not implemented in KeyValueStore class")
 
     @abc.abstractmethod
-    def Iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
+    def iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
         """Return iterator
 
         :param start_key: a start key (inclusive)
@@ -251,3 +255,19 @@ def _validate_args_bytes_without_first(func):
         return func(*args, **kwargs)
 
     return _wrapper
+
+
+class AsyncKeyValueStore(abc.ABC):
+    STORE_TYPE_REDIS = 'redis'
+
+    @staticmethod
+    def new(uri: str, store_type: str = None, **kwargs) -> 'AsyncKeyValueStore':
+        if store_type is None:
+            store_type = conf.DEFAULT_KEY_VALUE_STORE_TYPE
+
+        utils.logger.info(f"New KeyValueStore. store_type={store_type}, uri={uri}")
+
+        if store_type == AsyncKeyValueStore.STORE_TYPE_REDIS:
+            utils.logger.debug(f"New KeyValueStoreRedis.")
+            from loopchain.store.store_redis import AsyncStoreRedis
+            return AsyncStoreRedis(uri, **kwargs)
