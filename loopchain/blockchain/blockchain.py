@@ -61,7 +61,7 @@ class BlockChain:
     CONFIRM_INFO_KEY = b'confirm_info_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None):
+    def __init__(self, channel_name=None, store_id=None, block_manager=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -72,6 +72,7 @@ class BlockChain:
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
+        self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
         # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
@@ -326,8 +327,7 @@ class BlockChain:
 
         # loop all tx in block
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        block_manager = ObjectManager().channel_service.block_manager
-        tx_queue = block_manager.get_tx_queue()
+        tx_queue = self.__block_manager.get_tx_queue()
 
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
@@ -472,7 +472,7 @@ class BlockChain:
         """
         # loop all tx in block
         logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
-        tx_queue = ObjectManager().channel_service.block_manager.get_tx_queue()
+        tx_queue = self.__block_manager.get_tx_queue()
         # utils.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
 
         for tx in precommit_block.body.transactions.values():
@@ -571,8 +571,7 @@ class BlockChain:
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
-            block_manager = ObjectManager().channel_service.block_manager
-            if tx_hash in block_manager.get_tx_queue():
+            if tx_hash in self.__block_manager.get_tx_queue():
                 # this case is tx pending
                 logging.debug(f"blockchain:find_invoke_result_by_tx_hash pending tx({tx_hash})")
                 return {'code': ScoreResponse.NOT_INVOKED}
@@ -685,8 +684,7 @@ class BlockChain:
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
-        block_manager: 'BlockManager' = ObjectManager().channel_service.block_manager
-        candidate_blocks = block_manager.candidate_blocks
+        candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
@@ -703,7 +701,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if current_block.header.complained and block_manager.epoch.complained_result:
+                    if current_block.header.complained and self.__block_manager.epoch.complained_result:
                         utils.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
                     return None

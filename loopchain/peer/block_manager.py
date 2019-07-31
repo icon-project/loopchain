@@ -61,7 +61,7 @@ class BlockManager:
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__blockchain = BlockChain(channel_name, store_identity)
+        self.__blockchain = BlockChain(channel_name, store_identity, self)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
