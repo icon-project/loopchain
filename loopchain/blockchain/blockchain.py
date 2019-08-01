@@ -18,11 +18,12 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import Union, List
+from typing import Union, List, cast, Optional
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
+from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
 from loopchain.blockchain.exception import *
@@ -33,6 +34,7 @@ from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatu
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.store.key_value_store import KeyValueStore
+from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -58,9 +60,10 @@ class BlockChain:
 
     # Additional information of the block is generated when the add_block phase of the consensus is reached.
     CONFIRM_INFO_KEY = b'confirm_info_key'
+    PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None):
+    def __init__(self, channel_name=None, store_id=None, block_manager=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -71,19 +74,19 @@ class BlockChain:
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
+        self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
-        # block db has [ block_hash - block | block_height - block_hash | BlockChain.LAST_BLOCK_KEY - block_hash ]
         self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
 
-        # made block count as a leader
-        self.__invoke_results = {}
+        # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
+        self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
 
         self.__add_block_lock = threading.RLock()
         self.__confirmed_block_lock = threading.RLock()
 
         self.__total_tx = 0
-        self.__nid: str = None
+        self.__nid: Optional[str] = None
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -269,25 +272,21 @@ class BlockChain:
 
     def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
-            invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
-            if invoke_results is None and need_to_score_invoke:
-                if block.header.height == 0:
-                    block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
-                else:
-                    block, invoke_results = ObjectManager().channel_service.score_invoke(block, self.__last_block)
+            receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
+            if receipts is None and need_to_score_invoke:
+                self.get_invoke_func(block.header.height)(block, self.__last_block)
+
+            if not need_to_write_tx_info:
+                receipts = None
+            next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
 
             try:
-                if need_to_write_tx_info:
-                    self.__add_tx_to_block_db(block, invoke_results)
                 if need_to_score_invoke:
                     ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
-                logging.warning(f"blockchain:add_block FAIL "
-                                f"channel_service.score_write_precommit_state")
-                raise e
-            finally:
-                self.__invoke_results.pop(block.header.hash.hex(), None)
-            next_total_tx = self.__write_block_data(block, confirm_info)
+                utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")
+
+            self.__invoke_results.pop(block.header.hash, None)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -317,7 +316,54 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, confirm_info):
+    def __add_tx_to_block_db(self, block, receipts, batch=None):
+        """save additional information of transactions to efficient searching and support user APIs.
+
+        :param block:
+        :param receipts: invoke result of transaction
+        :param batch:
+        :return:
+        """
+        write_target = batch or self._blockchain_store
+
+        # loop all tx in block
+        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
+        tx_queue = self.__block_manager.get_tx_queue()
+
+        for index, tx in enumerate(block.body.transactions.values()):
+            tx_hash = tx.hash.hex()
+            receipt = receipts[tx_hash]
+
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
+            tx_info = {
+                'block_hash': block.header.hash.hex(),
+                'block_height': block.header.height,
+                'tx_index': hex(index),
+                'transaction': tx_serializer.to_db_data(tx),
+                'result': receipt
+            }
+
+            write_target.put(
+                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
+                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
+
+            tx_queue.pop(tx_hash, None)
+
+            if block.header.height > 0:
+                self.__save_tx_by_address(tx, batch)
+
+        # save_invoke_result_block_height
+        bit_length = block.header.height.bit_length()
+        byte_length = (bit_length + 7) // 8
+        block_height_bytes = block.header.height.to_bytes(byte_length, byteorder='big')
+        write_target.put(
+            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
+            block_height_bytes
+        )
+
+        return batch
+
+    def __write_block_data(self, block: Block, confirm_info, receipts, next_prep):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -339,6 +385,17 @@ class BlockChain:
             BlockChain.BLOCK_HEIGHT_KEY +
             block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
             block_hash_encoded)
+
+        if receipts:
+            batch = self.__add_tx_to_block_db(block, receipts, batch)
+
+        if next_prep:
+            utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
+                              f"\npreps({next_prep['preps']})")
+            batch.put(
+                BlockChain.PREPS_KEY + next_prep['rootHash'].encode(encoding=conf.HASH_KEY_ENCODING),
+                json.dumps(next_prep['preps']).encode(encoding=conf.PEER_DATA_ENCODING)
+            )
 
         if confirm_info:
             batch.put(
@@ -384,14 +441,10 @@ class BlockChain:
                 else:
                     prev_invoke_block = None
 
-                if invoke_block_height == 0:
-                    invoke_block, invoke_block_result = \
-                        ObjectManager().channel_service.genesis_invoke(invoke_block)
-                else:
-                    invoke_block, invoke_block_result = \
-                        ObjectManager().channel_service.score_invoke(invoke_block, prev_invoke_block)
+                invoke_block, receipts = \
+                    self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
-                self.__add_tx_to_block_db(invoke_block, invoke_block_result)
+                self.__add_tx_to_block_db(invoke_block, receipts)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
@@ -418,66 +471,13 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    def __add_tx_to_block_db(self, block, invoke_results):
-        """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
-        get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
-        :param block:
-        """
-        # loop all tx in block
-        logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        block_manager = ObjectManager().channel_service.block_manager
-        tx_queue = block_manager.get_tx_queue()
-        # utils.logger.spam(f"blockchain:__add_tx_to_block_db::tx_queue : {tx_queue}")
-        # utils.logger.spam(
-        #     f"blockchain:__add_tx_to_block_db::confirmed_transaction_list : {block.confirmed_transaction_list}")
-
-        for index, tx in enumerate(block.body.transactions.values()):
-            tx_hash = tx.hash.hex()
-            invoke_result = invoke_results[tx_hash]
-
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
-            tx_info = {
-                'block_hash': block.header.hash.hex(),
-                'block_height': block.header.height,
-                'tx_index': hex(index),
-                'transaction': tx_serializer.to_db_data(tx),
-                'result': invoke_result
-            }
-
-            self._blockchain_store.put(
-                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
-
-            # try:
-            #     utils.logger.spam(
-            #         f"blockchain:__add_tx_to_block_db::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
-            # except KeyError as e:
-            #     utils.logger.spam(f"__add_tx_to_block_db :: {e}")
-
-            tx_queue.pop(tx_hash, None)
-            # utils.logger.spam(f"pop tx from queue:{tx_hash}")
-
-            if block.header.height > 0:
-                self.__save_tx_by_address(tx)
-
-        self.__save_invoke_result_block_height(block.header.height)
-
-    def __save_invoke_result_block_height(self, height):
-        bit_length = height.bit_length()
-        byte_length = (bit_length + 7) // 8
-        block_height_bytes = height.to_bytes(byte_length, byteorder='big')
-        self._blockchain_store.put(
-            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
-            block_height_bytes
-        )
-
     def __precommit_tx(self, precommit_block):
         """ change status of transactions in a precommit block
         :param block:
         """
         # loop all tx in block
         logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
-        tx_queue = ObjectManager().channel_service.block_manager.get_tx_queue()
+        tx_queue = self.__block_manager.get_tx_queue()
         # utils.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
 
         for tx in precommit_block.body.transactions.values():
@@ -490,11 +490,11 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: 'Transaction'):
+    def __save_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
         address = tx.from_address.hex_hx()
-        return self.add_tx_to_list_by_address(address, tx.hash.hex())
+        return self.add_tx_to_list_by_address(address, tx.hash.hex(), batch)
 
     @staticmethod
     def __get_tx_list_key(address, index):
@@ -527,7 +527,8 @@ class BlockChain:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
 
-    def add_tx_to_list_by_address(self, address, tx_hash):
+    def add_tx_to_list_by_address(self, address, tx_hash, batch=None):
+        write_target = batch or self._blockchain_store
         current_list, current_index = self.get_tx_list_by_address(address, 0)
 
         if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
@@ -538,7 +539,7 @@ class BlockChain:
 
         current_list.insert(0, tx_hash)
         list_key = self.__get_tx_list_key(address, 0)
-        self._blockchain_store.put(list_key, pickle.dumps(current_list))
+        write_target.put(list_key, pickle.dumps(current_list))
 
         return True
 
@@ -576,8 +577,7 @@ class BlockChain:
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
-            block_manager = ObjectManager().channel_service.block_manager
-            if tx_hash in block_manager.get_tx_queue():
+            if tx_hash in self.__block_manager.get_tx_queue():
                 # this case is tx pending
                 logging.debug(f"blockchain:find_invoke_result_by_tx_hash pending tx({tx_hash})")
                 return {'code': ScoreResponse.NOT_INVOKED}
@@ -630,13 +630,12 @@ class BlockChain:
         block_builder.transactions[tx.hash] = tx
         block_builder.reps = reps
         block_builder.prev_hash = Hash32.new()
-        block_builder.signer = ObjectManager().channel_service.peer_auth
+        block_builder.signer = ChannelProperty().peer_auth
         block_builder.prev_votes = []
         block_builder.leader_votes = []
         block = block_builder.build()  # It does not have commit state. It will be rebuilt.
 
-        block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
-        self.set_invoke_results(block.header.hash.hex(), invoke_results)
+        block, invoke_results = self.genesis_invoke(block)
         self.add_block(block)
 
     def put_precommit_block(self, precommit_block: Block):
@@ -690,8 +689,7 @@ class BlockChain:
         #                    f"tx count({len(current_block.body.transactions)}), "
         #                    f"height({current_block.header.height})")
 
-        block_manager: 'BlockManager' = ObjectManager().channel_service.block_manager
-        candidate_blocks = block_manager.candidate_blocks
+        candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 
@@ -708,7 +706,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if current_block.header.complained and block_manager.epoch.complained_result:
+                    if current_block.header.complained and self.__block_manager.epoch.complained_result:
                         utils.logger.debug("reset last_unconfirmed_block by complain block")
                         self.last_unconfirmed_block = current_block
                     return None
@@ -779,14 +777,6 @@ class BlockChain:
         ChannelProperty().nid = nid
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
-
-    def set_invoke_results(self, block_hash, invoke_results):
-        self.__invoke_results[block_hash] = invoke_results
-
-    def invoke_for_precommit(self, precommit_block: Block):
-        invoke_results = \
-            self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
-        self.__add_tx_to_block_db(precommit_block, invoke_results)
 
     def block_dumps(self, block: Block) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
@@ -878,3 +868,146 @@ class BlockChain:
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Receipt)  # Do not need receipts
         receipts_hash = block_prover.to_hash32(tx_result)
         return block_prover.prove(receipts_hash, block.header.receipts_hash, proof)
+
+    def get_invoke_func(self, height):
+        if height == 0:
+            return self.genesis_invoke
+        else:
+            return self.score_invoke
+
+    def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
+        method = "icx_sendTransaction"
+        transactions = []
+        for tx in block.body.transactions.values():
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
+                                                      self.__block_manager.get_blockchain().tx_versioner)
+            transaction = {
+                "method": method,
+                "params": {
+                    "txHash": tx.hash.hex()
+                },
+                "genesisData": tx_serializer.to_full_data(tx)
+            }
+            transactions.append(transaction)
+
+        request = {
+            'block': {
+                'blockHeight': block.header.height,
+                'blockHash': block.header.hash.hex(),
+                'timestamp': block.header.timestamp
+            },
+            'transactions': transactions
+        }
+        request = convert_params(request, ParamType.invoke)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response = stub.sync_task().invoke(request)
+        response_to_json_query(response)
+
+        tx_receipts = response["txResults"]
+        block_builder = BlockBuilder.from_new(block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = block.header.peer_id
+        block_builder.commit_state = {
+            ChannelProperty().name: response['stateRootHash']
+        }
+        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
+        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+            block_builder.signer = ChannelProperty().peer_auth
+        else:
+            block_builder.signature = block.header.signature
+        new_block = block_builder.build()
+        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
+
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
+        self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
+        return new_block, tx_receipts
+
+    def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
+        method = "icx_sendTransaction"
+        transactions = []
+
+        for tx in _block.body.transactions.values():
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
+                                                      self.__block_manager.get_blockchain().tx_versioner)
+
+            transaction = {
+                "method": method,
+                "params": tx_serializer.to_full_data(tx)
+            }
+            transactions.append(transaction)
+
+        request_origin = {
+            'block': {
+                'blockHeight': _block.header.height,
+                'blockHash': _block.header.hash.hex(),
+                'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
+                'timestamp': _block.header.timestamp
+            },
+            'transactions': transactions,
+            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
+            'prevBlockValidators':
+                [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
+        }
+
+        if conf.ENABLE_IISS:
+            request_origin['isBlockEditable'] = hex(is_block_editable)
+
+        request = convert_params(request_origin, ParamType.invoke)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        response: dict = cast(dict, stub.sync_task().invoke(request))
+        response_to_json_query(response)
+
+        tx_receipts_origin = response.get("txResults")
+        if not isinstance(tx_receipts_origin, dict):
+            tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
+        else:
+            tx_receipts = tx_receipts_origin
+
+        next_prep = response.get("prep")
+        if next_prep:
+            utils.logger.notice(f"in score invoke next_prep({next_prep})")
+            conf.LOAD_PEERS_FROM_IISS = True
+
+        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = _block.header.peer_id
+
+        added_transactions = response.get("addedTransactions")
+        if added_transactions:
+            original_transactions = block_builder.transactions.copy()
+            block_builder.transactions.clear()
+
+            for tx_receipt in tx_receipts_origin:
+                try:
+                    tx_data = added_transactions[tx_receipt['txHash']]
+                    tx_version, tx_type = self.__block_manager.get_blockchain().tx_versioner.get_version(tx_data)
+
+                    ts = TransactionSerializer.new(tx_version, tx_type,
+                                                   self.__block_manager.get_blockchain().tx_versioner)
+                    tx = ts.from_(tx_data)
+                except KeyError:
+                    tx = original_transactions[Hash32(bytes.fromhex(tx_receipt['txHash']))]
+                block_builder.transactions[tx.hash] = tx
+
+        block_builder.commit_state = {
+            ChannelProperty().name: response['stateRootHash']
+        }
+        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.receipts = tx_receipts
+        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+            block_builder.signer = ChannelProperty().peer_auth
+        else:
+            block_builder.signature = _block.header.signature
+        new_block = block_builder.build()
+        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
+
+        for tx_receipt in tx_receipts.values():
+            tx_receipt["blockHash"] = new_block.header.hash.hex()
+
+        self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
+        return new_block, tx_receipts

@@ -82,7 +82,7 @@ class ConsensusSiever(ConsensusBase):
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
         block_builder.next_leader = next_leader
-        block_builder.signer = ObjectManager().channel_service.peer_auth
+        block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
         block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
@@ -193,10 +193,9 @@ class ConsensusSiever(ConsensusBase):
 
             candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
 
-            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(
+            candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, last_block, conf.ENABLE_IISS
             )
-            self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 

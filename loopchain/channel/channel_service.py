@@ -17,7 +17,6 @@ import json
 import logging
 import signal
 import traceback
-from typing import cast
 
 from earlgrey import MessageQueueService
 
@@ -28,9 +27,8 @@ from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.baseservice import StubManager, PeerManager, TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
-from loopchain.blockchain.blocks import Block, BlockBuilder
-from loopchain.blockchain.transactions import TransactionSerializer
-from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -39,7 +37,7 @@ from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
-from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
+from loopchain.utils.icon_service import convert_params, ParamType
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -93,10 +91,6 @@ class ChannelService:
     @property
     def radio_station_stub(self):
         return self.__radio_station_stub
-
-    @property
-    def peer_auth(self):
-        return self.__peer_auth
 
     @property
     def peer_manager(self):
@@ -332,6 +326,7 @@ class ChannelService:
         try:
             node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key()
             self.__peer_auth = Signer.from_prikey(node_key)
+            ChannelProperty().peer_auth = self.__peer_auth
         except Exception as e:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
@@ -599,140 +594,6 @@ class ChannelService:
             loggers.get_preset().is_leader = False
             loggers.get_preset().update_logger()
             logging.debug("I'm general Peer!")
-
-    def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
-        method = "icx_sendTransaction"
-        transactions = []
-        for tx in block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
-                                                      self.__block_manager.get_blockchain().tx_versioner)
-            transaction = {
-                "method": method,
-                "params": {
-                    "txHash": tx.hash.hex()
-                },
-                "genesisData": tx_serializer.to_full_data(tx)
-            }
-            transactions.append(transaction)
-
-        request = {
-            'block': {
-                'blockHeight': block.header.height,
-                'blockHash': block.header.hash.hex(),
-                'timestamp': block.header.timestamp
-            },
-            'transactions': transactions
-        }
-        request = convert_params(request, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response = stub.sync_task().invoke(request)
-        response_to_json_query(response)
-
-        tx_receipts = response["txResults"]
-        block_builder = BlockBuilder.from_new(block, self.__block_manager.get_blockchain().tx_versioner)
-        block_builder.reset_cache()
-        block_builder.peer_id = block.header.peer_id
-        block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
-        }
-        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
-        block_builder.receipts = tx_receipts
-        block_builder.reps = self.get_rep_ids()
-        if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = self.peer_auth
-        else:
-            block_builder.signature = block.header.signature
-        new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
-
-        for tx_receipt in tx_receipts.values():
-            tx_receipt["blockHash"] = new_block.header.hash.hex()
-
-        return new_block, tx_receipts
-
-    def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
-        method = "icx_sendTransaction"
-        transactions = []
-
-        for tx in _block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
-                                                      self.__block_manager.get_blockchain().tx_versioner)
-
-            transaction = {
-                "method": method,
-                "params": tx_serializer.to_full_data(tx)
-            }
-            transactions.append(transaction)
-
-        request_origin = {
-            'block': {
-                'blockHeight': _block.header.height,
-                'blockHash': _block.header.hash.hex(),
-                'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
-                'timestamp': _block.header.timestamp
-            },
-            'transactions': transactions,
-            'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
-            'prevBlockValidators': [rep['id'] for rep in self.__peer_manager.get_reps()]
-        }
-
-        if conf.ENABLE_IISS:
-            request_origin['isBlockEditable'] = hex(is_block_editable)
-
-        request = convert_params(request_origin, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response: dict = cast(dict, stub.sync_task().invoke(request))
-        response_to_json_query(response)
-
-        tx_receipts_origin = response.get("txResults")
-        if not isinstance(tx_receipts_origin, dict):
-            tx_receipts = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
-        else:
-            tx_receipts = tx_receipts_origin
-
-        next_prep = response.get("prep")
-        if next_prep:
-            utils.logger.debug(f"in score invoke next_prep({next_prep})")
-            conf.LOAD_PEERS_FROM_IISS = True
-
-        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
-        block_builder.reset_cache()
-        block_builder.peer_id = _block.header.peer_id
-
-        added_transactions = response.get("addedTransactions")
-        if added_transactions:
-            original_transactions = block_builder.transactions.copy()
-            block_builder.transactions.clear()
-
-            for tx_receipt in tx_receipts_origin:
-                try:
-                    tx_data = added_transactions[tx_receipt['txHash']]
-                    tx_version, tx_type = self.__block_manager.get_blockchain().tx_versioner.get_version(tx_data)
-
-                    ts = TransactionSerializer.new(tx_version, tx_type,
-                                                   self.__block_manager.get_blockchain().tx_versioner)
-                    tx = ts.from_(tx_data)
-                except KeyError:
-                    tx = original_transactions[Hash32(bytes.fromhex(tx_receipt['txHash']))]
-                block_builder.transactions[tx.hash] = tx
-
-        block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
-        }
-        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
-        block_builder.receipts = tx_receipts
-        block_builder.reps = self.get_rep_ids()
-        if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
-            block_builder.signer = self.peer_auth
-        else:
-            block_builder.signature = _block.header.signature
-        new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
-
-        for tx_receipt in tx_receipts.values():
-            tx_receipt["blockHash"] = new_block.header.hash.hex()
-
-        return new_block, tx_receipts
 
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")

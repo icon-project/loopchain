@@ -617,7 +617,7 @@ class ChannelInnerTask:
         send_tx_type = self._channel_service.get_channel_option()["send_tx_type"]
         tx.init_meta(ChannelProperty().peer_id, score_id, score_version, ChannelProperty().name, send_tx_type)
         tx.put_data(data)
-        tx.sign_hash(self._channel_service.peer_auth)
+        tx.sign_hash(ChannelProperty().peer_auth)
 
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, tx)
 

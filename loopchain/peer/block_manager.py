@@ -61,7 +61,7 @@ class BlockManager:
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__blockchain = BlockChain(channel_name, store_identity)
+        self.__blockchain = BlockChain(channel_name, store_identity, self)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
@@ -132,9 +132,6 @@ class BlockManager:
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
-
-    def set_invoke_results(self, block_hash, invoke_results):
-        self.__blockchain.set_invoke_results(block_hash, invoke_results)
 
     def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
         self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
@@ -481,16 +478,13 @@ class BlockManager:
 
         block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
-        if block_.header.height == 0:
-            block_verifier.invoke_func = self.__channel_service.genesis_invoke
-        else:
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+        block_verifier.invoke_func = self.__blockchain.get_invoke_func(block_.header.height)
 
         reps = self.__channel_service.get_rep_ids()
-        invoke_results = block_verifier.verify_loosely(block_,
-                                                       self.__blockchain.last_block,
-                                                       self.__blockchain,
-                                                       reps=reps)
+        block_verifier.verify_loosely(block_,
+                                      self.__blockchain.last_block,
+                                      self.__blockchain,
+                                      reps=reps)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
             if isinstance(exc, TransactionDuplicatedHashError):
@@ -506,7 +500,6 @@ class BlockManager:
             else:
                 raise exc
 
-        self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
         return self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
@@ -517,17 +510,13 @@ class BlockManager:
 
         block_version = self.get_blockchain().block_versioner.get_version(prev_block.header.height)
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
-        if prev_block.header.height == 0:
-            block_verifier.invoke_func = self.__channel_service.genesis_invoke
-        else:
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+        block_verifier.invoke_func = self.__blockchain.get_invoke_func(prev_block.header.height)
 
         reps = self.__channel_service.get_rep_ids()
-        invoke_results = block_verifier.verify_loosely(prev_block,
-                                                       self.__blockchain.last_block,
-                                                       self.__blockchain,
-                                                       reps=reps)
-        self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
+        block_verifier.verify_loosely(prev_block,
+                                      self.__blockchain.last_block,
+                                      self.__blockchain,
+                                      reps=reps)
         return self.__blockchain.add_block(prev_block, confirm_info)
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
@@ -762,7 +751,7 @@ class BlockManager:
             complained_leader_id = ""
 
         leader_vote = LeaderVote.new(
-            signer=self.__channel_service.peer_auth,
+            signer=ChannelProperty().peer_auth,
             block_height=self.epoch.height,
             old_leader=ExternalAddress.fromhex_address(complained_leader_id),
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
@@ -788,7 +777,7 @@ class BlockManager:
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
         vote = BlockVote.new(
-            signer=self.__channel_service.peer_auth,
+            signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
             block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()
@@ -823,20 +812,19 @@ class BlockManager:
         try:
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
-            block_verifier.invoke_func = self.__channel_service.score_invoke
+            block_verifier.invoke_func = self.__blockchain.score_invoke
             reps = self.__channel_service.get_rep_ids()
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
-            invoke_results = block_verifier.verify(unconfirmed_block,
-                                                   self.__blockchain.last_block,
-                                                   self.__blockchain,
-                                                   self.__blockchain.last_block.header.next_leader,
-                                                   reps=reps)
+            block_verifier.verify(unconfirmed_block,
+                                  self.__blockchain.last_block,
+                                  self.__blockchain,
+                                  self.__blockchain.last_block.header.next_leader,
+                                  reps=reps)
         except Exception as e:
             exc = e
             logging.error(e)
             traceback.print_exc()
         else:
-            self.set_invoke_results(unconfirmed_block.header.hash.hex(), invoke_results)
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
             is_validate = exc is None

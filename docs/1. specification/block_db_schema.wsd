@@ -1,0 +1,57 @@
+@startuml block db schema
+' uncomment the line below if you're using computer with a retina display
+' skinparam dpi 300
+!define Table(name,desc) class name as "desc" << (T,#FFAAAA) >>
+' we use bold for primary key
+' green color for unique
+' and underscore for not_null
+!define primary_key(x) <b>x</b>
+!define unique(x) <color:green>x</color>
+!define not_null(x) <u>x</u>
+' other tags available:
+' <i></i>
+' <back:COLOR></color>, where color is a color name or html color code
+' (#FFAACC)
+' see: http://plantuml.com/classes.html#More
+hide methods
+hide stereotypes
+
+' entities
+
+Table(Block, "Block\n(Block)") {
+primary_key(block_hash) bytes
+not_null(block_data) bytes //block serialize data
+}
+
+Table(TxInfo, "Transaction Info\n(info data for transaction)") {
+primary_key(tx_hash) bytes
+not_null(tx_info) bytes
+\ttx_info.block_hash //block tx_hash
+\ttx_info.block_height //block height
+\ttx_info.tx_index //tx index in block data
+\ttx_info.transaction //json form origin transaction data
+\ttx_info.result //receipt from score service
+}
+
+Table(Preps, "Preps") {
+    primary_key(prep_hash) bytes
+    not_null(preps) bytes
+}
+
+Table(Height, "Block Height") {
+primary_key(block_height) bytes
+not_null(block_hash) bytes
+}
+
+Table(LastBlock, "LastBlock") {
+primary_key(LAST_BLOCK_KEY) bytes
+not_null(block_hash) bytes
+}
+
+' relationships
+Block "1" --> "0..N" TxInfo : "Block includes transactions"
+Block "1" --> "1" Height 
+'
+' plantuml sample from (https://gist.github.com/QuantumGhost/0955a45383a0b6c0bc24f9654b3cb561)
+'
+@enduml
