@@ -775,18 +775,23 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:
-        vote_serialized = json.loads(vote_dumped)
-        vote = BlockVote.deserialize(vote_serialized)
+        try:
+            vote_serialized = json.loads(vote_dumped)
+        except json.decoder.JSONDecodeError:
+            util.logger.warning(f"This vote({vote_dumped}) may be from old version.")
+            raise
+        else:
+            vote = BlockVote.deserialize(vote_serialized)
 
-        util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
-                         f"({ChannelProperty().name}) block_hash({vote.block_hash})")
+            util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
+                             f"({ChannelProperty().name}) block_hash({vote.block_hash})")
 
-        util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
-        self._channel_service.block_manager.candidate_blocks.add_vote(vote)
+            util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
+            self._channel_service.block_manager.candidate_blocks.add_vote(vote)
 
-        block_manager = self._channel_service.block_manager
-        if self._channel_service.state_machine.state == "BlockGenerate" and block_manager.consensus_algorithm:
-            block_manager.consensus_algorithm.vote(vote)
+            block_manager = self._channel_service.block_manager
+            if self._channel_service.state_machine.state == "BlockGenerate" and block_manager.consensus_algorithm:
+                block_manager.consensus_algorithm.vote(vote)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
