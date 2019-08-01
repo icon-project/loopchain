@@ -276,17 +276,17 @@ class BlockChain:
             if receipts is None and need_to_score_invoke:
                 self.get_invoke_func(block.header.height)(block, self.__last_block)
 
+            if not need_to_write_tx_info:
+                receipts = None
+            next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
+
             try:
-                if not need_to_write_tx_info:
-                    receipts = None
                 if need_to_score_invoke:
                     ObjectManager().channel_service.score_write_precommit_state(block)
-                next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
             except Exception as e:
-                logging.warning(f"blockchain:__add_block FAIL {e}")
-                raise e
-            finally:
-                self.__invoke_results.pop(block.header.hash, None)
+                utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")
+
+            self.__invoke_results.pop(block.header.hash, None)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
