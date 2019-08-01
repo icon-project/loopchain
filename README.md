@@ -70,6 +70,8 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
 ### Installation
 
+#### via source code
+
 1. Check all requirements properly installed
 
     ```bash
@@ -78,7 +80,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
     If you don't see any error logs and you have started rabbitmq server, you may move on to next step.
 
-2. Proceed installation
+1. Proceed installation
 
     ```bash
     $ make all
@@ -86,17 +88,21 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
     This command is for setting up:
 
-    * packages: installs all necessary python packages.
+    * packages: installs all necessary python packages via `setup.py`.
     * gRPC proto: generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
     * keystore: generates a keystore file.
     
     > **_NOTE_**: Password must be at least 8 characters long including alphabet, number, and special character.  
     > Please be careful not to forget the password since you will need it to run the Citizen Node.
 
-3. Run Citizen
+1. Run Citizen
 
     * [Run Citizen Node on ICON Testnet network]
     * [Run Citizen Node on ICON Mainnet network]
+
+#### via snapcraft (linux only)
+
+1. follow this guide : [install loopchain via snap]
 
 ### TearDown
 
@@ -130,6 +136,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 [ICON RPC Server]: https://github.com/icon-project/icon-rpc-server
 [virtualenv]: https://virtualenv.pypa.io/en/stable/
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
+[install loopchain via snap]: https://snapcraft.io/loopchain
 
 <!--Relative links-->
 [Run Citizen Node on ICON Testnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network
