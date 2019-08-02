@@ -31,13 +31,35 @@ from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async_
 
 
+def parse_args_include_unknowns(parser, args=None, namespace=None):
+    args, argv = parser.parse_known_args(args, namespace)
+    unknowns = None
+    if argv:
+        print(f'unrecognized arguments: {argv}')
+        unknowns = ''.join(argv)
+    return args, unknowns
+
+
+def get_quick_command(unknowns):
+    if not unknowns:
+        return None
+
+    quick_command = ''.join(unknowns.split('-'))
+    if quick_command.isnumeric():
+        return unknowns
+
+    raise Exception(f'There is unrecognized argument {unknowns}')
+
+
 def main(argv):
     parser = argparse.ArgumentParser()
     for cmd_arg_type in command_arguments.Type:
         cmd_arg_attr = command_arguments.attributes[cmd_arg_type]
         parser.add_argument(*cmd_arg_attr.names, **cmd_arg_attr.kwargs)
 
-    args = parser.parse_args(argv)
+    args, unknowns = parse_args_include_unknowns(parser, argv)
+    quick_command = get_quick_command(unknowns)
+
     command_arguments.set_raw_commands(args)
 
     if args.radio_station_target == 'testnet':
@@ -78,9 +100,9 @@ def main(argv):
     elif args.service_type == "channel":
         start_as_channel(args)
     elif args.service_type == "tool":
-        start_as_tool(args)
+        start_as_tool(args, quick_command)
     elif args.service_type == "admin":
-        start_as_admin(args)
+        start_as_admin(args, quick_command)
     else:
         print(f"not supported service type {args.service_type}\ncheck loopchain help.\n")
         os.system("python3 ./loopchain.py -h")
@@ -199,25 +221,25 @@ def start_as_rs(args):
             seed = int(seed)
         except ValueError as e:
             utils.exit_and_msg(f"seed or s opt must be int \n"
-                              f"input value : {seed}")
+                               f"input value : {seed}")
 
     RadioStationService(conf.IP_RADIOSTATION, cert, pw, seed).serve(port)
     print_epilogue()
 
 
-def start_as_admin(args):
+def start_as_admin(args, quick_command):
     print_prologue()
     try:
         from _tools.loopchain_private_tools import gtool
     except Exception as e:
         logging.error(f"admin service does not be provided. {e}")
     else:
-        gtool.main()
+        gtool.main(quick_command)
 
     print_epilogue()
 
 
-def start_as_tool(args):
+def start_as_tool(args, quick_command):
     print_prologue()
 
     try:
