@@ -18,9 +18,8 @@ import json
 import logging
 import math
 import threading
-from functools import reduce
-from operator import add
-from typing import TYPE_CHECKING, Optional, Dict
+from collections import OrderedDict
+from typing import TYPE_CHECKING, Optional
 from typing import Union, cast
 
 import loopchain_pb2
@@ -37,11 +36,10 @@ if TYPE_CHECKING:
 
 
 class PeerListData:
-    # Manage PeerList to save DB.
+    """Manage peer list as serializable data."""
     def __init__(self):
-        self.peer_list: Dict[BlockHeader.peer_id, Peer] = {}  # { peer_id:Peer }
-        self.peer_order_list: Dict[int, BlockHeader.peer_id] = {}  # { order:peer_id }
-        self.peer_leader: int = 0  # leader_order
+        self.peer_list: OrderedDict[BlockHeader.peer_id, Peer] = OrderedDict()  # { peer_id:Peer }
+        self.leader_id: BlockHeader.peer_id = None  # leader_peer_id
 
     def serialize(self) -> dict:
         peer_list_serialized = {peer_id: peer.serialize()
@@ -49,8 +47,7 @@ class PeerListData:
 
         return {
             'peer_list': peer_list_serialized,
-            'peer_leader': self.peer_leader,
-            'peer_order_list': self.peer_order_list
+            'leader_id': self.leader_id
         }
 
     @staticmethod
@@ -58,13 +55,9 @@ class PeerListData:
         peer_list = {peer_id: Peer.deserialize(peer_serialized)
                      for peer_id, peer_serialized in peer_list_data_serialized['peer_list'].items()}
 
-        peer_order_list = {int(order): peer_id
-                           for order, peer_id in peer_list_data_serialized['peer_order_list'].items()}
-
         peer_list_data = PeerListData()
         peer_list_data.peer_list = peer_list
-        peer_list_data.peer_leader = peer_list_data_serialized['peer_leader']
-        peer_list_data.peer_order_list = peer_order_list
+        peer_list_data.leader_id = peer_list_data_serialized['leader_id']
         return peer_list_data
 
     def dump(self) -> bytes:
@@ -76,12 +69,19 @@ class PeerListData:
         serialized = json.loads(peer_list_data_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
         return PeerListData.deserialize(serialized)
 
+    def next_peer(self, peer_id) -> Optional[Peer]:
+        try:
+            return list(self.peer_list.values())[list(self.peer_list.keys()).index(peer_id) + 1]
+        except IndexError:
+            return list(self.peer_list.values())[0]
+        except ValueError:
+            util.logger.warning(f"peer_id({peer_id}) not in peer_list")
+            return None
+
 
 class PeerManager:
     def __init__(self, channel_name):
-        """DB에서 기존에 생성된 PeerList 를 가져온다.
-        이때 peer status 는 unknown 으로 리셋한다.
-        """
+        """Manage peer list in operation."""
         self.peer_list_data = PeerListData()
         self.__channel_name = channel_name
 
@@ -96,31 +96,27 @@ class PeerManager:
         """
         return self.peer_list_data.peer_list
 
-    @property
-    def peer_order_list(self) -> dict:
-        """
+    def get_peer_last(self) -> Optional[Peer]:
+        """get last peer in peer_list
 
-        :return: { order:peer_id }
+        :return:
         """
-        return self.peer_list_data.peer_order_list
+        peer_list = list(self.peer_list_data.peer_list.values())
+        if len(peer_list) > 0:
+            return peer_list[-1]
+        return None
 
     def peer_ids_hash(self):
         """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
 
         :return:
         """
-        order_list = list(self.peer_order_list.keys())
-        order_list.sort()
-        peer_count = len(order_list)
         peer_ids = ""
 
-        for i in range(peer_count):
-            peer_order = order_list[i]
-            peer_id = self.peer_order_list[peer_order]
-            peer_each = self.peer_list[peer_id]
+        for peer in self.peer_list.values():
 
-            util.logger.debug(f"peer_order({peer_order}), peer_id({peer_id}), peer_target({peer_each.target})")
-            peer_ids += peer_id
+            util.logger.debug(f"peer_order({peer.order}), peer_id({peer.peer_id}), peer_target({peer.target})")
+            peer_ids += peer.peer_id
 
         return self.get_peer_ids_hash(peer_ids)
 
@@ -145,10 +141,10 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        peer_ids = (preps["id"] for preps in response["result"]["preps"])
-        peer_ids_appended = reduce(add, peer_ids, '')
-
-        if self.get_peer_ids_hash(peer_ids_appended) == self.peer_ids_hash():
+        util.logger.notice(f"load_peers_from_iiss "
+                           f"reps_root_hash({response['result']['rootHash']}) and "
+                           f"peer_ids_hash({self.peer_ids_hash()})")
+        if response["result"]["rootHash"] == self.peer_ids_hash():
             util.logger.debug(f"There is no change in peers.")
             return
 
@@ -161,6 +157,7 @@ class PeerManager:
         self._add_reps(reps)
 
     async def load_peers_from_file(self):
+        util.logger.notice(f"load_peers_from_file")
         channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
         for peer in reps:
@@ -195,10 +192,7 @@ class PeerManager:
         return quorum, complain_quorum
 
     def get_reps(self):
-        peer_ids = (self.peer_order_list[peer_order]
-                    for peer_order in sorted(self.peer_order_list.keys()))
-        peers = (self.peer_list[peer_id] for peer_id in peer_ids)
-        return [{"id": peer.peer_id, "target": peer.target} for peer in peers]
+        return [{"id": peer.peer_id, "target": peer.target} for peer in self.peer_list.values()]
 
     def get_peer_by_target(self, peer_target):
         return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
@@ -217,21 +211,18 @@ class PeerManager:
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
-            if peer.order <= 0:
-                if peer.peer_id in self.peer_list:
-                    peer.order = self.peer_list[peer.peer_id].order
-                else:
-                    peer.order = self.__make_peer_order(peer)
-
-            logging.debug(f"new peer order {peer.peer_id} : {peer.order}")
+            last_peer = self.get_peer_last()
+            if last_peer and peer.order <= last_peer.order:
+                util.logger.warning(f"Fail add peer order({peer.order}), last peer order({last_peer.order})"
+                                    f"\npeers({self.peer_list_data.peer_list})")
+                return None
 
             # set to leader peer
-            if self.peer_list_data.peer_leader == 0 or len(self.peer_list) == 0:
+            if not self.peer_list_data.leader_id or len(self.peer_list) == 0:
                 logging.debug("Set Group Leader Peer: " + str(peer.order))
-                self.peer_list_data.peer_leader = peer.order
+                self.peer_list_data.leader_id = peer.peer_id
 
             self.peer_list[peer.peer_id] = peer
-            self.peer_order_list[peer.order] = peer.peer_id
 
         broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
         broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer.target)
@@ -249,7 +240,7 @@ class PeerManager:
         if self.get_peer(peer.peer_id) is None:
             self.add_peer(peer)
 
-        self.peer_list_data.peer_leader = peer.order
+        self.peer_list_data.leader_id = peer.peer_id
 
     def get_leader_peer(self, is_peer=True) -> Optional[Peer]:
         """
@@ -257,18 +248,12 @@ class PeerManager:
         :return:
         """
 
-        try:
-            leader_peer_id = self.get_leader_id()
-            if leader_peer_id:
-                leader_peer = self.get_peer(leader_peer_id)
-                return leader_peer
-        except KeyError as e:
-            logging.exception(f"peer_manager:get_leader_peer exception({e})")
+        leader_peer = self.get_peer(self.peer_list_data.leader_id)
+        if not leader_peer and is_peer and \
+                ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            util.exit_and_msg(f"Fail to find a leader of this network!")
 
-            if is_peer and ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-                util.exit_and_msg(f"Fail to find a leader of this network.... {e}")
-
-        return None
+        return leader_peer
 
     def get_leader_id(self) -> Optional[str]:
         """get leader's peer id
@@ -278,16 +263,7 @@ class PeerManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             return None
 
-        leader_peer_order = self.peer_list_data.peer_leader
-        logging.debug(f"peer_manager:get_leader_id leader peer order {leader_peer_order}")
-        # util.logger.spam(f"peer_manager:get_leader_id peer_order_list({self.peer_order_list})")
-        try:
-            return self.peer_order_list[leader_peer_order]
-        except KeyError:
-            util.logger.spam(
-                f"get_leader_id KeyError leader_peer_order({leader_peer_order})")
-
-        return None
+        return self.peer_list_data.leader_id
 
     def get_next_leader_peer(self, current_leader_peer_id=None):
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
@@ -297,38 +273,7 @@ class PeerManager:
         else:
             leader_peer = self.get_peer(current_leader_peer_id)
 
-        return self.__get_next_peer(leader_peer)
-
-    def __get_next_peer(self, peer):
-        if peer is None:
-            return None
-
-        order_list = list(self.peer_order_list.keys())
-        order_list.sort()
-
-        # logging.debug("order list: " + str(order_list))
-        # logging.debug("peer.order: " + str(peer.order))
-
-        peer_order_position = order_list.index(peer.order)
-        next_order_position = peer_order_position + 1
-        peer_count = len(order_list)
-
-        util.logger.spam(f"peer_manager:__get_next_peer peer_count({peer_count})")
-
-        if next_order_position >= peer_count:
-            util.logger.spam(f"peer_manager:__get_next_peer Fail break at LABEL 1")
-            next_order_position = 0
-
-        try:
-            next_peer_id = self.peer_order_list[order_list[next_order_position]]
-            util.logger.debug("peer_manager:__get_next_peer next_leader_peer_id: " + str(next_peer_id))
-            return self.peer_list[next_peer_id]
-        except (IndexError, KeyError) as e:
-            logging.warning(f"peer_manager:__get_next_peer there is no next peer ({e})")
-            util.logger.spam(f"peer_manager:__get_next_peer "
-                             f"\npeer_id({peer.peer_id}), "
-                             f"\npeer_list({self.peer_list})")
-            return None
+        return self.peer_list_data.next_peer(leader_peer.peer_id)
 
     def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
         logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
@@ -409,27 +354,6 @@ class PeerManager:
                 if reset_action is not None:
                     reset_action(peer_each.peer_id, peer_each.target)
 
-    def __make_peer_order(self, peer):
-        """소속된 그룹과 상관없이 전체 peer 가 순서에 대한 order 값을 가진다.
-        이 과정은 중복된 order 발급을 방지하기 위하여 atomic 하여야 한다.
-
-        :param peer:
-        :return:
-        """
-        last_order = 0
-        # logging.debug("Peer List is: " + str(self.peer_list))
-
-        # 기존에 등록된 peer_id 는 같은 order 를 재사용한다.
-
-        for peer_id in self.peer_list:
-            peer_each = self.peer_list[peer_id]
-            logging.debug("peer each: " + str(peer_each))
-            last_order = [last_order, peer_each.order][last_order < peer_each.order]
-
-        last_order += 1
-
-        return last_order
-
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
 
@@ -458,9 +382,6 @@ class PeerManager:
 
     def __remove_peer_from_group(self, peer_id):
         removed_peer = self.peer_list.pop(peer_id, None)
-        if removed_peer:
-            self.peer_order_list.pop(removed_peer.order, None)
-
         return removed_peer
 
     def remove_peer(self, peer_id):

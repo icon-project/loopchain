@@ -260,6 +260,7 @@ class ChannelService:
         self.__radio_station_stub = None
 
     async def _load_peers(self):
+        utils.logger.notice(f"_load_peers")
         if not self.is_support_node_function(conf.NodeFunction.Vote):
             await self.__peer_manager.load_peers_from_rest_call()
         else:

@@ -734,17 +734,15 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
-        new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 
-        if not new_leader_id:
-            new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-                current_leader_peer_id=complained_leader_id
-            )
-            new_leader_id = new_leader.peer_id if new_leader else None
+        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
+            current_leader_peer_id=complained_leader_id
+        )
+        new_leader_id = new_leader.peer_id if new_leader else None
 
-            if not isinstance(new_leader_id, str):
-                new_leader_id = ""
+        if not isinstance(new_leader_id, str):
+            new_leader_id = ""
 
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
