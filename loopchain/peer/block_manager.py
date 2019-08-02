@@ -683,8 +683,7 @@ class BlockManager:
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         peer_target = ChannelProperty().peer_target
         peer_manager = ObjectManager().channel_service.peer_manager
-        target_dict = peer_manager.get_IP_of_peers_dict()
-        target_list = [peer_target for peer_id, peer_target in target_dict.items()
+        target_list = [peer.target for peer_id, peer in peer_manager.peer_list.items()
                        if peer_id != ChannelProperty().peer_id]
 
         for target in target_list:

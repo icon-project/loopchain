@@ -183,8 +183,9 @@ class PeerManager:
 
     def show_peers(self):
         util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
-        for peer in self.get_IP_of_peers_in_group():
-            util.logger.debug("peer_target: " + peer)
+        for peer_id in list(self.peer_list):
+            peer = self.peer_list[peer_id]
+            util.logger.debug(f"peer_target: {peer.order}:{peer.target}")
 
     def get_quorum(self):
         peer_count = self.get_peer_count()
@@ -498,37 +499,3 @@ class PeerManager:
             logging.debug("no peer list")
 
         return peers, peer_list
-
-    def peer_list_full_print_out_for_debug(self):
-        """peer list 의 data 목록을 전체 출력한다.
-        디버깅을 위한 함수로 필요한 구간에서만 호출한 후 제거할 것
-
-        """
-        peer_list = self.peer_list
-        logging.warning("peer_list: " + str(peer_list.items()))
-        peer_leader = self.peer_list_data.peer_leader
-        logging.warning("peer_leader: " + str(peer_leader))
-        peer_order_list = self.peer_order_list
-        logging.warning("peer_order_list: " + str(peer_order_list.items()))
-
-        for peer_id in peer_list:
-            peer_each = peer_list[peer_id]
-            logging.warning("peer_each: " + str(peer_each))
-            # peer_each.dump()
-
-    def get_IP_of_peers_in_group(self, status=None):
-        """
-
-        :param status: peer online status
-        :return: peer들의 IP들의 list.
-        """
-        ip_list = []
-        for peer_id in self.peer_list:
-            peer_each = self.peer_list[peer_id]
-            if status is None or status == peer_each.status:
-                ip_list.append(str(peer_each.order)+":"+peer_each.target)
-
-        return ip_list
-
-    def get_IP_of_peers_dict(self):
-        return {peer_id: peer.target for peer_id, peer in self.peer_list.items()}
