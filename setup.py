@@ -1,12 +1,10 @@
 #!/usr/bin/env python
 import os
+import re
 
-from setuptools import setup, find_packages
-from setuptools.command.build_py import build_py as _build_py
-from setuptools.command.develop import develop as _develop
-
-with open('requirements.txt') as requirements:
-    requires = list(requirements)
+from setuptools import setup, find_packages, Command
+from setuptools.command.build_py import build_py
+from setuptools.command.develop import develop
 
 version = os.environ.get('VERSION')
 
@@ -14,32 +12,47 @@ if version is None:
     with open(os.path.join('.', 'VERSION')) as version_file:
         version = version_file.read().strip()
 
+install_requires = []
+setup_requires = []
 
-def generate_proto():
-    import grpc_tools.protoc
+with open('requirements.txt') as requirements:
+    regex = re.compile('(grpcio)|(protobuf).+')
+    for line in requirements:
+        req = line.strip()
+        install_requires.append(req)
+        if regex.search(req):
+            setup_requires.append(req)
 
-    proto_path = './loopchain/protos'
-    proto_file = os.path.join(proto_path, 'loopchain.proto')
-
-    grpc_tools.protoc.main([
-        'grcp_tools.protoc',
-        f'-I{proto_path}',
-        f'--python_out={proto_path}',
-        f'--grpc_python_out={proto_path}',
-        f'{proto_file}'
-    ])
+setup_requires.append('pytest-runner')
 
 
-class build_py(_build_py):
+class BuildPackageProtos(Command):
+    """Command to generate project *_pb2.py modules from proto files."""
+
+    description = 'build grpc protobuf modules'
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
     def run(self):
-        generate_proto()
-        _build_py.run(self)
+        import grpc_tools.command
+        grpc_tools.command.build_package_protos(self.distribution.package_dir[''])
 
 
-class develop(_develop):
+class BuildPyCommand(build_py):
     def run(self):
-        generate_proto()
-        _develop.run(self)
+        self.run_command('build_proto_modules')
+        build_py.run(self)
+
+
+class DevelopCommand(develop):
+    def run(self):
+        self.run_command('build_proto_modules')
+        develop.run(self)
 
 
 setup_options = {
@@ -48,8 +61,10 @@ setup_options = {
     'description': 'Blockchain consensus engine based on LFT',
     'author': 'ICON foundation',
     'packages': find_packages(),
+    'package_dir': {'': '.'},
     'license': "Apache License 2.0",
-    'install_requires': requires,
+    'setup_requires': setup_requires,
+    'install_requires': install_requires,
     'extras_require': {
         'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1'],
     },
@@ -59,11 +74,11 @@ setup_options = {
             'loopchain=loopchain.__main__:main'
         ],
     },
-    'setup_requires': ['pytest-runner'],
     'tests_require': ['pytest'],
     'cmdclass': {
-        'build_py': build_py,
-        'develop': develop
+        'build_proto_modules': BuildPackageProtos,
+        'build_py': BuildPyCommand,
+        'develop': DevelopCommand
     },
     'classifiers': [
         'Development Status :: 5 - Production/Stable',
