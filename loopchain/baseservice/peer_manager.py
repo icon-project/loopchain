@@ -80,10 +80,9 @@ class PeerListData:
 
 
 class PeerManager:
-    def __init__(self, channel_name):
+    def __init__(self):
         """Manage peer list in operation."""
         self.peer_list_data = PeerListData()
-        self.__channel_name = channel_name
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
@@ -389,11 +388,8 @@ class PeerManager:
         removed_peer = self.__remove_peer_from_group(peer_id)
         if removed_peer:
             util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
-            if ObjectManager().rs_service:
-                ObjectManager().rs_service.channel_manager.remove_audience(self.__channel_name, removed_peer)
-            else:
-                broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-                broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, removed_peer.target)
+            broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
+            broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, removed_peer.target)
             return True
 
         return False

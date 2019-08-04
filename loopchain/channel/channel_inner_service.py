@@ -770,10 +770,6 @@ class ChannelInnerTask:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def delete_peer(self, peer_id) -> None:
-        self._channel_service.peer_manager.remove_peer(peer_id)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:
         try:
             vote_serialized = json.loads(vote_dumped)

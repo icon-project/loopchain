@@ -42,7 +42,7 @@ class ChannelManager:
 
         if channel is None:
             channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
-        peer_manager = PeerManager(channel)
+        peer_manager = PeerManager()
         self.__peer_managers[channel] = peer_manager
 
     def __start_broadcast_scheduler(self, channel):

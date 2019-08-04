@@ -198,7 +198,7 @@ class ChannelService:
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().node_type = conf.NodeType(kwargs.get('node_type'))
 
-        self.__peer_manager = PeerManager(ChannelProperty().name)
+        self.__peer_manager = PeerManager()
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
