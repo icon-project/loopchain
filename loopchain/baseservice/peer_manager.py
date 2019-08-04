@@ -78,52 +78,48 @@ class PeerListData:
             util.logger.warning(f"peer_id({peer_id}) not in peer_list")
             return None
 
+    def last_peer(self) -> Optional[Peer]:
+        """get last peer in peer_list
+
+        :return:
+        """
+        if len(self.peer_list) > 0:
+            return list(self.peer_list.values())[-1]
+        return None
+
 
 class PeerManager:
     def __init__(self):
         """Manage peer list in operation."""
-        self.peer_list_data = PeerListData()
+        self._peer_list_data = PeerListData()
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
 
     @property
     def peer_list(self) -> dict:
-        """
+        """return peer_list of peer_list_data
 
-        :return: { peer_id:PeerInfo }
+        :return: self.peer_list_data.peer_list
         """
-        return self.peer_list_data.peer_list
+        return self._peer_list_data.peer_list
 
-    def get_peer_last(self) -> Optional[Peer]:
-        """get last peer in peer_list
+    def rep_hash(self) -> str:
+        """return hexdigest of reps root hash as a string.
 
         :return:
         """
-        peer_list = list(self.peer_list_data.peer_list.values())
-        if len(peer_list) > 0:
-            return peer_list[-1]
-        return None
+        # TODO change this hashing,
+        #  see. https://github.com/icon-project/icon-service/blob/develop/iconservice/prep/engine.py line:310
+        reps_addressed_for_roothash = ''
+        for peer in self._peer_list_data.peer_list.values():
+            reps_addressed_for_roothash += peer.peer_id
 
-    def peer_ids_hash(self):
-        """ It's temporary develop for Prep test net. This value will replace with Prep root hash.
+        return hashlib.sha256(reps_addressed_for_roothash.encode(encoding='UTF-8')).hexdigest()
 
-        :return:
-        """
-        peer_ids = ""
-
-        for peer in self.peer_list.values():
-
-            util.logger.debug(f"peer_order({peer.order}), peer_id({peer.peer_id}), peer_target({peer.target})")
-            peer_ids += peer.peer_id
-
-        return self.get_peer_ids_hash(peer_ids)
-
-    @staticmethod
-    def get_peer_ids_hash(peer_ids):
-        peer_ids_hash = hashlib.sha256(peer_ids.encode(encoding='UTF-8')).hexdigest()
-        util.logger.debug(f"peer ids hash({peer_ids_hash})")
-        return peer_ids_hash
+    def serialize_as_preps(self) -> list:
+        return [{'id': peer_id, 'p2pEndpoint': peer.target}
+                for peer_id, peer in self._peer_list_data.peer_list.items()]
 
     def load_peers_from_iiss(self):
         request = {
@@ -140,10 +136,10 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        util.logger.notice(f"load_peers_from_iiss "
-                           f"reps_root_hash({response['result']['rootHash']}) and "
-                           f"peer_ids_hash({self.peer_ids_hash()})")
-        if response["result"]["rootHash"] == self.peer_ids_hash():
+        util.logger.debug(f"load_peers_from_iiss "
+                          f"result roothash({response['result']['rootHash']}) and "
+                          f"peer_list roothash({self.rep_hash()})")
+        if response["result"]["rootHash"] == self.rep_hash():
             util.logger.debug(f"There is no change in peers.")
             return
 
@@ -156,7 +152,7 @@ class PeerManager:
         self._add_reps(reps)
 
     async def load_peers_from_file(self):
-        util.logger.notice(f"load_peers_from_file")
+        util.logger.debug(f"load_peers_from_file")
         channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
         for peer in reps:
@@ -210,16 +206,16 @@ class PeerManager:
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
-            last_peer = self.get_peer_last()
+            last_peer = self._peer_list_data.last_peer()
             if last_peer and peer.order <= last_peer.order:
                 util.logger.warning(f"Fail add peer order({peer.order}), last peer order({last_peer.order})"
-                                    f"\npeers({self.peer_list_data.peer_list})")
+                                    f"\npeers({self._peer_list_data.peer_list})")
                 return None
 
             # set to leader peer
-            if not self.peer_list_data.leader_id or len(self.peer_list) == 0:
+            if not self._peer_list_data.leader_id or len(self.peer_list) == 0:
                 logging.debug("Set Group Leader Peer: " + str(peer.order))
-                self.peer_list_data.leader_id = peer.peer_id
+                self._peer_list_data.leader_id = peer.peer_id
 
             self.peer_list[peer.peer_id] = peer
 
@@ -239,7 +235,7 @@ class PeerManager:
         if self.get_peer(peer.peer_id) is None:
             self.add_peer(peer)
 
-        self.peer_list_data.leader_id = peer.peer_id
+        self._peer_list_data.leader_id = peer.peer_id
 
     def get_leader_peer(self, is_peer=True) -> Optional[Peer]:
         """
@@ -247,7 +243,7 @@ class PeerManager:
         :return:
         """
 
-        leader_peer = self.get_peer(self.peer_list_data.leader_id)
+        leader_peer = self.get_peer(self._peer_list_data.leader_id)
         if not leader_peer and is_peer and \
                 ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             util.exit_and_msg(f"Fail to find a leader of this network!")
@@ -262,7 +258,7 @@ class PeerManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             return None
 
-        return self.peer_list_data.leader_id
+        return self._peer_list_data.leader_id
 
     def get_next_leader_peer(self, current_leader_peer_id=None):
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
@@ -272,7 +268,7 @@ class PeerManager:
         else:
             leader_peer = self.get_peer(current_leader_peer_id)
 
-        return self.peer_list_data.next_peer(leader_peer.peer_id)
+        return self._peer_list_data.next_peer(leader_peer.peer_id)
 
     def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
         logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
@@ -379,13 +375,9 @@ class PeerManager:
             logging.debug(self.get_peers_for_debug())
             return None
 
-    def __remove_peer_from_group(self, peer_id):
-        removed_peer = self.peer_list.pop(peer_id, None)
-        return removed_peer
-
     def remove_peer(self, peer_id):
         logging.debug(f"remove peer : {peer_id}")
-        removed_peer = self.__remove_peer_from_group(peer_id)
+        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
         if removed_peer:
             util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
             broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler

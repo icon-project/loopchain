@@ -248,7 +248,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
             status, reason = message_code.get_response(message_code.Response.fail)
 
         if peer_order > 0:
-            peer_list_dumped = peer_manager.peer_list_data.dump()
+            peer_list_dumped = peer_manager.serialize_as_preps()
             status, reason = message_code.get_response(message_code.Response.success)
 
         # save current peer_manager after ConnectPeer from new peer.
@@ -273,7 +273,7 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
 
         if channel_name in channel_manager.get_channel_list():
             peer_manager: PeerManager = channel_manager.get_peer_manager(channel_name)
-            peer_list_dumped = peer_manager.peer_list_data.dump()
+            peer_list_dumped = peer_manager.serialize_as_preps()
         else:
             peer_list_dumped = PeerListData().dump()
 

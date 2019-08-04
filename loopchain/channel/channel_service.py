@@ -260,7 +260,6 @@ class ChannelService:
         self.__radio_station_stub = None
 
     async def _load_peers(self):
-        utils.logger.notice(f"_load_peers")
         if not self.is_support_node_function(conf.NodeFunction.Vote):
             await self.__peer_manager.load_peers_from_rest_call()
         else:
@@ -280,6 +279,19 @@ class ChannelService:
                     await self.__peer_manager.load_peers_from_file()
             else:
                 await self.__peer_manager.load_peers_from_file()
+
+        reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(
+            self.__peer_manager.rep_hash()
+        )
+
+        if not reps_in_db:
+            utils.logger.spam(f"in _load_peers serialize_as_preps("
+                              f"{self.__peer_manager.serialize_as_preps()})")
+            self.block_manager.get_blockchain().save_preps(
+                self.__peer_manager.rep_hash(),
+                self.__peer_manager.serialize_as_preps()
+            )
+
         self.__peer_manager.show_peers()
 
     def _is_role_switched(self) -> bool:

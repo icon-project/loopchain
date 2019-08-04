@@ -237,6 +237,21 @@ class BlockChain:
 
         return bytes()
 
+    def find_preps_by_roothash(self, roothash: str) -> bytes:
+        hash_encoded = roothash.encode(encoding='UTF-8')
+        try:
+            return bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + hash_encoded))
+        except KeyError:
+            return bytes()
+
+    def save_preps(self, roothash: str, preps: dict, batch=None):
+        write_target = batch or self._blockchain_store
+
+        write_target.put(
+            BlockChain.PREPS_KEY + roothash.encode(encoding=conf.HASH_KEY_ENCODING),
+            json.dumps(preps).encode(encoding=conf.PEER_DATA_ENCODING)
+        )
+
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
@@ -361,8 +376,6 @@ class BlockChain:
             block_height_bytes
         )
 
-        return batch
-
     def __write_block_data(self, block: Block, confirm_info, receipts, next_prep):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
@@ -387,15 +400,12 @@ class BlockChain:
             block_hash_encoded)
 
         if receipts:
-            batch = self.__add_tx_to_block_db(block, receipts, batch)
+            self.__add_tx_to_block_db(block, receipts, batch)
 
         if next_prep:
             utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
                               f"\npreps({next_prep['preps']})")
-            batch.put(
-                BlockChain.PREPS_KEY + next_prep['rootHash'].encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(next_prep['preps']).encode(encoding=conf.PEER_DATA_ENCODING)
-            )
+            self.save_preps(next_prep['rootHash'], next_prep['preps'], batch)
 
         if confirm_info:
             batch.put(
