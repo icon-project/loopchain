@@ -218,7 +218,6 @@ class ChannelService:
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
-        await self._load_peers()
         await self._select_node_type()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
@@ -260,37 +259,21 @@ class ChannelService:
         self.__radio_station_stub = None
 
     async def _load_peers(self):
-        if not self.is_support_node_function(conf.NodeFunction.Vote):
-            await self.__peer_manager.load_peers_from_rest_call()
-        else:
-            if conf.ENABLE_IISS:
-                block_height = self.__block_manager.get_blockchain().block_height
-                if self._is_genesis_node() and block_height == 0:
-                    peer_info = {
-                        'id': ChannelProperty().peer_id,
-                        'peer_target': ChannelProperty().peer_target,
-                        'order': 1
-                    }
-                    self.__peer_manager.add_peer(peer_info)
-                else:
-                    self.__peer_manager.load_peers_from_iiss()
+        self.__peer_manager.load_peers_from_iiss()
 
-                if not conf.LOAD_PEERS_FROM_IISS:
-                    await self.__peer_manager.load_peers_from_file()
-            else:
+        if not self.__peer_manager.peer_list:
+            if self.is_support_node_function(conf.NodeFunction.Vote):
                 await self.__peer_manager.load_peers_from_file()
+            else:
+                await self.__peer_manager.load_peers_from_rest_call()
 
-        reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(
-            self.__peer_manager.reps_hash()
-        )
+        reps_hash = self.__peer_manager.reps_hash()
+        reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(reps_hash)
 
         if not reps_in_db:
-            utils.logger.spam(f"in _load_peers serialize_as_preps("
-                              f"{self.__peer_manager.serialize_as_preps()})")
-            self.block_manager.get_blockchain().write_preps(
-                self.__peer_manager.reps_hash(),
-                self.__peer_manager.serialize_as_preps()
-            )
+            preps = self.__peer_manager.serialize_as_preps()
+            utils.logger.spam(f"in _load_peers serialize_as_preps({preps})")
+            self.block_manager.get_blockchain().write_preps(reps_hash, preps)
 
         self.__peer_manager.show_peers()
 
@@ -325,8 +308,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        if conf.ENABLE_IISS:
-            self.__peer_manager.load_peers_from_iiss()
+        self.__peer_manager.load_peers_from_iiss()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

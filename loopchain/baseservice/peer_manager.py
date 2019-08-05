@@ -152,13 +152,12 @@ class PeerManager:
                           f"\nresult roothash({response['result']['rootHash']})"
                           f"\npeer_list roothash({self.reps_hash().hex_0x()})")
 
-        if not conf.LOAD_PEERS_FROM_IISS:
-            return
-
         self.remove_all_peers()
 
         reps = response["result"]["preps"]
-        self._add_reps(reps)
+        for order, rep_info in enumerate(reps, 1):
+            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
+            self.add_peer(peer)
 
     async def load_peers_from_file(self):
         util.logger.debug(f"load_peers_from_file")
@@ -168,19 +167,22 @@ class PeerManager:
             self.add_peer(peer)
 
     async def load_peers_from_rest_call(self):
-        # FIXME temporarily disable GetReps API for legacy support
-        # response = ObjectManager().channel_service.radio_station_stub.call("GetReps")
-        # reps = response.get('rep')
-        # self._add_reps(reps)
-        response = ObjectManager().channel_service.radio_station_stub.call("GetChannelInfos")
+        rest_stub = ObjectManager().channel_service.radio_station_stub
+        if conf.CREP_ROOT_HASH:
+            reps = rest_stub.call(
+                "GetReps",
+                {"repsHash": conf.CREP_ROOT_HASH}
+            )
+            logging.debug(f"reps by c-rep root hash: {reps}")
+            for order, rep_info in enumerate(reps, 1):
+                peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
+                self.add_peer(peer)
+            return
+
+        response = rest_stub.call("GetChannelInfos")
         reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
         for peer_info in reps:
             self.add_peer(peer_info)
-
-    def _add_reps(self, reps: list):
-        for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
-            self.add_peer(peer)
 
     def show_peers(self):
         util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
