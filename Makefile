@@ -1,15 +1,5 @@
 UNAME := $(shell uname)
-USER_MAKEFILE := user.mk
-
-PIP_INSTALL := pip3 install
-ifeq ($(wildcard $(USER_MAKEFILE)),)
-	INSTALL_REQUIRES := requires
-	PIP_INSTALL_CMD := $(PIP_INSTALL) -e .
-	PIP_INSTALL_DEVELOP_CMD := $(PIP_INSTALL_CMD)[tests]
-else
-	include $(USER_MAKEFILE)
-endif
-PIP_INSTALL += -U
+PIP_INSTALL := pip3 install -U
 
 ifeq ($(UNAME), Darwin)
 	RABBITMQ_CMD := rabbitmqctl
@@ -35,24 +25,11 @@ requirements:
 all: install generate-key
 
 # pip install packages
-requires:
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
-	$(PIP_INSTALL) tbears
+install:
+	$(PIP_INSTALL) .
 
-install: $(INSTALL_REQUIRES)
-	$(PIP_INSTALL_CMD)
-
-# pip install packages
-requires-dev:
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@develop
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
-	$(PIP_INSTALL) tbears
-
-develop: requires-dev
-	$(PIP_INSTALL_DEVELOP_CMD)
+develop:
+	$(PIP_INSTALL) .[icon_dev]
 
 # Generate python gRPC proto
 generate-proto:
