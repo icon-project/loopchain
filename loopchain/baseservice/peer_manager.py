@@ -13,7 +13,6 @@
 # limitations under the License.
 """A module for managing peer list"""
 
-import hashlib
 import json
 import logging
 import math
@@ -25,6 +24,9 @@ from typing import Union, cast
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
+from loopchain.blockchain.blocks import BlockProverType
+from loopchain.blockchain.blocks.v0_3 import BlockProver
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -112,17 +114,14 @@ class PeerManager:
         return self._peer_list_data.leader_id
 
     def rep_hash(self) -> str:
-        """return hexdigest of reps root hash as a string.
+        """return reps root hash as a string.
 
         :return:
         """
-        # TODO change this hashing,
-        #  see. https://github.com/icon-project/icon-service/blob/develop/iconservice/prep/engine.py line:310
-        reps_addressed_for_roothash = ''
-        for peer in self._peer_list_data.peer_list.values():
-            reps_addressed_for_roothash += peer.peer_id
-
-        return hashlib.sha256(reps_addressed_for_roothash.encode(encoding='UTF-8')).hexdigest()
+        block_prover = BlockProver((ExternalAddress.fromhex_address(peer.peer_id).extend()
+                                    for peer in self._peer_list_data.peer_list.values()),
+                                   BlockProverType.Rep)
+        return block_prover.get_proof_root().hex_0x()
 
     def serialize_as_preps(self) -> list:
         return [{'id': peer_id, 'p2pEndpoint': peer.target}
@@ -143,12 +142,13 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        util.logger.debug(f"load_peers_from_iiss "
-                          f"result roothash({response['result']['rootHash']}) and "
-                          f"peer_list roothash({self.rep_hash()})")
         if response["result"]["rootHash"] == self.rep_hash():
-            util.logger.debug(f"There is no change in peers.")
+            util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
+
+        util.logger.debug(f"There is change in load_peers_from_iiss."
+                          f"\nresult roothash({response['result']['rootHash']})"
+                          f"\npeer_list roothash({self.rep_hash()})")
 
         if not conf.LOAD_PEERS_FROM_IISS:
             return
