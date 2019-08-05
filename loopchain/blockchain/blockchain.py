@@ -33,7 +33,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStore
+from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
@@ -237,6 +237,21 @@ class BlockChain:
 
         return bytes()
 
+    def find_preps_by_roothash(self, roothash: str) -> bytes:
+        hash_encoded = roothash.encode(encoding='UTF-8')
+        try:
+            return bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + hash_encoded))
+        except KeyError:
+            return bytes()
+
+    def write_preps(self, roothash: str, preps: dict, batch: KeyValueStoreWriteBatch = None):
+        write_target = batch or self._blockchain_store
+
+        write_target.put(
+            BlockChain.PREPS_KEY + roothash.encode(encoding=conf.HASH_KEY_ENCODING),
+            json.dumps(preps).encode(encoding=conf.PEER_DATA_ENCODING)
+        )
+
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
@@ -316,7 +331,7 @@ class BlockChain:
 
             return True
 
-    def __add_tx_to_block_db(self, block, receipts, batch=None):
+    def _write_tx(self, block, receipts, batch=None):
         """save additional information of transactions to efficient searching and support user APIs.
 
         :param block:
@@ -350,7 +365,7 @@ class BlockChain:
             tx_queue.pop(tx_hash, None)
 
             if block.header.height > 0:
-                self.__save_tx_by_address(tx, batch)
+                self._write_tx_by_address(tx, batch)
 
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
@@ -360,8 +375,6 @@ class BlockChain:
             BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
             block_height_bytes
         )
-
-        return batch
 
     def __write_block_data(self, block: Block, confirm_info, receipts, next_prep):
         # a condition for the exception case of genesis block.
@@ -387,15 +400,12 @@ class BlockChain:
             block_hash_encoded)
 
         if receipts:
-            batch = self.__add_tx_to_block_db(block, receipts, batch)
+            self._write_tx(block, receipts, batch)
 
         if next_prep:
             utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
                               f"\npreps({next_prep['preps']})")
-            batch.put(
-                BlockChain.PREPS_KEY + next_prep['rootHash'].encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(next_prep['preps']).encode(encoding=conf.PEER_DATA_ENCODING)
-            )
+            self.write_preps(next_prep['rootHash'], next_prep['preps'], batch)
 
         if confirm_info:
             batch.put(
@@ -444,7 +454,7 @@ class BlockChain:
                 invoke_block, receipts = \
                     self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
-                self.__add_tx_to_block_db(invoke_block, receipts)
+                self._write_tx(invoke_block, receipts)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
@@ -490,7 +500,7 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: 'Transaction', batch):
+    def _write_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
         address = tx.from_address.hex_hx()
@@ -969,7 +979,7 @@ class BlockChain:
 
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.notice(f"in score invoke next_prep({next_prep})")
+            utils.logger.debug(f"in score invoke next_prep({next_prep})")
             conf.LOAD_PEERS_FROM_IISS = True
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)

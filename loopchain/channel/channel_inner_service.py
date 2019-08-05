@@ -595,7 +595,7 @@ class ChannelInnerTask:
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
-        status_data["leader"] = self._channel_service.peer_manager.get_leader_id() or ""
+        status_data["leader"] = self._channel_service.peer_manager.leader_id or ""
         status_data["epoch_leader"] = block_manager.epoch.leader_id if block_manager.epoch else ""
 
         return status_data
@@ -768,10 +768,6 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def remove_audience(self, peer_target) -> None:
         self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def delete_peer(self, peer_id) -> None:
-        self._channel_service.peer_manager.remove_peer(peer_id)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:

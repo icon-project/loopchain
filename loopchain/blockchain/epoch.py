@@ -115,35 +115,6 @@ class Epoch:
         else:
             return None
 
-    def pop_complained_candidate_leader(self):
-        voters = self.complain_votes[self.round].reps
-        if ExternalAddress.fromhex_address(ChannelProperty().peer_id) not in voters:
-            # Processing to complain leader
-            return None
-
-        # Complained by myself but not completed.
-
-        # I want to pop candidate leader with this method but this method can't pop, just get but will be pop
-        # self.__complain_vote = Vote(Epoch.COMPLAIN_VOTE_HASH, ObjectManager().channel_service.peer_manager)
-
-        peer_order_list = ObjectManager().channel_service.peer_manager.peer_order_list
-        peer_order_len = len(peer_order_list)
-        start_order = 1  # ObjectManager().channel_service.peer_manager.get_peer(self.leader_id).order
-
-        for i in range(peer_order_len):
-            index = (i + start_order) % (peer_order_len + 1)
-
-            try:
-                peer_id = peer_order_list[index]
-            except KeyError:
-                peer_id = None
-
-            if peer_id in voters:
-                utils.logger.info(f"set epoch new leader id({peer_id}), voters length={len(voters)}")
-                return peer_id
-
-        return None
-
     def _check_unconfirmed_block(self):
         blockchain = self.__block_manager.get_blockchain()
         # utils.logger.debug(f"-------------------_check_unconfirmed_block, "

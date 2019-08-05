@@ -683,8 +683,7 @@ class BlockManager:
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         peer_target = ChannelProperty().peer_target
         peer_manager = ObjectManager().channel_service.peer_manager
-        target_dict = peer_manager.get_IP_of_peers_dict()
-        target_list = [peer_target for peer_id, peer_target in target_dict.items()
+        target_list = [peer.target for peer_id, peer in peer_manager.peer_list.items()
                        if peer_id != ChannelProperty().peer_id]
 
         for target in target_list:
@@ -735,17 +734,15 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
     def leader_complain(self):
-        new_leader_id = self.epoch.pop_complained_candidate_leader()
         complained_leader_id = self.epoch.leader_id
 
-        if not new_leader_id:
-            new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-                current_leader_peer_id=complained_leader_id
-            )
-            new_leader_id = new_leader.peer_id if new_leader else None
+        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
+            current_leader_peer_id=complained_leader_id
+        )
+        new_leader_id = new_leader.peer_id if new_leader else None
 
-            if not isinstance(new_leader_id, str):
-                new_leader_id = ""
+        if not isinstance(new_leader_id, str):
+            new_leader_id = ""
 
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
