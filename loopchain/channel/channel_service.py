@@ -287,7 +287,7 @@ class ChannelService:
         if not reps_in_db:
             utils.logger.spam(f"in _load_peers serialize_as_preps("
                               f"{self.__peer_manager.serialize_as_preps()})")
-            self.block_manager.get_blockchain().save_preps(
+            self.block_manager.get_blockchain().write_preps(
                 self.__peer_manager.rep_hash(),
                 self.__peer_manager.serialize_as_preps()
             )

@@ -244,7 +244,7 @@ class BlockChain:
         except KeyError:
             return bytes()
 
-    def save_preps(self, roothash: str, preps: dict, batch: KeyValueStoreWriteBatch = None):
+    def write_preps(self, roothash: str, preps: dict, batch: KeyValueStoreWriteBatch = None):
         write_target = batch or self._blockchain_store
 
         write_target.put(
@@ -331,7 +331,7 @@ class BlockChain:
 
             return True
 
-    def __add_tx_to_block_db(self, block, receipts, batch=None):
+    def _write_tx(self, block, receipts, batch=None):
         """save additional information of transactions to efficient searching and support user APIs.
 
         :param block:
@@ -365,7 +365,7 @@ class BlockChain:
             tx_queue.pop(tx_hash, None)
 
             if block.header.height > 0:
-                self.__save_tx_by_address(tx, batch)
+                self._write_tx_by_address(tx, batch)
 
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
@@ -400,12 +400,12 @@ class BlockChain:
             block_hash_encoded)
 
         if receipts:
-            self.__add_tx_to_block_db(block, receipts, batch)
+            self._write_tx(block, receipts, batch)
 
         if next_prep:
             utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
                               f"\npreps({next_prep['preps']})")
-            self.save_preps(next_prep['rootHash'], next_prep['preps'], batch)
+            self.write_preps(next_prep['rootHash'], next_prep['preps'], batch)
 
         if confirm_info:
             batch.put(
@@ -454,7 +454,7 @@ class BlockChain:
                 invoke_block, receipts = \
                     self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
-                self.__add_tx_to_block_db(invoke_block, receipts)
+                self._write_tx(invoke_block, receipts)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
@@ -500,7 +500,7 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: 'Transaction', batch):
+    def _write_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
         address = tx.from_address.hex_hx()
