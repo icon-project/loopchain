@@ -43,8 +43,7 @@ class PeerListData:
         self.leader_id: BlockHeader.peer_id = None  # leader_peer_id
 
     def serialize(self) -> dict:
-        peer_list_serialized = {peer_id: peer.serialize()
-                                for peer_id, peer in self.peer_list.items()}
+        peer_list_serialized = [peer.serialize() for peer_id, peer in self.peer_list.items()]
 
         return {
             'peer_list': peer_list_serialized,
@@ -53,8 +52,11 @@ class PeerListData:
 
     @staticmethod
     def deserialize(peer_list_data_serialized: dict) -> 'PeerListData':
-        peer_list = {peer_id: Peer.deserialize(peer_serialized)
-                     for peer_id, peer_serialized in peer_list_data_serialized['peer_list'].items()}
+        peers_as_list = [Peer.deserialize(peer_serialized)
+                         for peer_id, peer_serialized in peer_list_data_serialized['peer_list']]
+        sorted(peers_as_list, key=lambda peer: peer.order)
+
+        peer_list = OrderedDict([(peer.peer_id, peer) for peer in peers_as_list])
 
         peer_list_data = PeerListData()
         peer_list_data.peer_list = peer_list
