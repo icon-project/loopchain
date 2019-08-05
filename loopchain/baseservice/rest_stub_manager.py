@@ -64,12 +64,13 @@ class RestStubManager:
             version = self._method_versions[method_name]
             url = self._version_urls[version]
             method_name = self._method_names[method_name]
+            timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
 
             if version == conf.ApiVersion.v1:
                 url += method_name
                 response = requests.get(url=url,
                                         params={'channel': self._channel_name},
-                                        timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                                        timeout=timeout)
                 if response.status_code != 200:
                     raise ConnectionError
                 response = response.json()
@@ -81,7 +82,7 @@ class RestStubManager:
                     request = Request(method_name)
 
                 try:
-                    response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                    response = self._http_clients[url].send(request, timeout=timeout)
                 except Exception as e:
                     raise ConnectionError(e)
             util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")

@@ -155,12 +155,16 @@ class PeerManager:
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
-        self.reset_peers(check_status=False)
+        self.reset_peers()
 
         reps = response["result"]["preps"]
-        self._add_reps(reps)
+        for order, rep_info in enumerate(reps, 1):
+            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
+            self.add_peer(peer)
 
     async def load_peers_from_file(self):
+        self.reset_peers()
+
         util.logger.debug(f"load_peers_from_file")
         channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
@@ -168,19 +172,22 @@ class PeerManager:
             self.add_peer(peer)
 
     async def load_peers_from_rest_call(self):
-        # FIXME temporarily disable GetReps API for legacy support
-        # response = ObjectManager().channel_service.radio_station_stub.call("GetReps")
-        # reps = response.get('rep')
-        # self._add_reps(reps)
-        response = ObjectManager().channel_service.radio_station_stub.call("GetChannelInfos")
-        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
-        for peer_info in reps:
-            self.add_peer(peer_info)
-
-    def _add_reps(self, reps: list):
-        for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
-            self.add_peer(peer)
+        self.reset_peers()
+        try:
+            response = ObjectManager().channel_service.radio_station_stub.call(
+                "GetReps",
+                timeout=conf.METHOD_CHECK_TIMEOUT
+            )
+        except ConnectionError:
+            response = ObjectManager().channel_service.radio_station_stub.call("GetChannelInfos")
+            reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
+            for peer_info in reps:
+                self.add_peer(peer_info)
+        else:
+            reps = response.get('rep')
+            for order, rep_info in enumerate(reps, 1):
+                peer = Peer(rep_info['id'], rep_info['target'], order=order)
+                self.add_peer(peer)
 
     def show_peers(self):
         util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
@@ -325,28 +332,11 @@ class PeerManager:
 
         return most_height_peer
 
-    def reset_peers(self, reset_action=None, check_status=True):
+    def reset_peers(self):
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
         for peer_id in list(self.peer_list):
             peer_each = self.peer_list[peer_id]
-
-            do_remove_peer = False
-
-            if check_status:
-                try:
-                    stub_manager = self.get_peer_stub_manager(peer_each)
-                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
-                                      is_stub_reuse=True)
-                except Exception as e:
-                    logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
-                    do_remove_peer = True
-            else:
-                do_remove_peer = True
-
-            if do_remove_peer:
-                self.remove_peer(peer_each.peer_id)
-                if reset_action is not None:
-                    reset_action(peer_each.peer_id, peer_each.target)
+            self.remove_peer(peer_each.peer_id)
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.

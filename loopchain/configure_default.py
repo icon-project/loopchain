@@ -216,6 +216,7 @@ DEFAULT_SSL_CERT_PATH = 'resources/ssl_test_cert/ssl.crt'
 DEFAULT_SSL_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
+METHOD_CHECK_TIMEOUT = 5
 REST_PROXY_DEFAULT_PORT = 5000
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
