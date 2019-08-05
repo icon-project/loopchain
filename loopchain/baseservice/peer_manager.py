@@ -22,12 +22,11 @@ from collections import OrderedDict
 from typing import TYPE_CHECKING, Optional
 from typing import Union, cast
 
-import loopchain_pb2
-
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.protos import loopchain_pb2
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
@@ -100,9 +99,17 @@ class PeerManager:
     def peer_list(self) -> dict:
         """return peer_list of peer_list_data
 
-        :return: self.peer_list_data.peer_list
+        :return:
         """
         return self._peer_list_data.peer_list
+
+    @property
+    def leader_id(self) -> Optional[str]:
+        """return leader's peer id
+
+        :return:
+        """
+        return self._peer_list_data.leader_id
 
     def rep_hash(self) -> str:
         """return hexdigest of reps root hash as a string.
@@ -249,16 +256,6 @@ class PeerManager:
             util.exit_and_msg(f"Fail to find a leader of this network!")
 
         return leader_peer
-
-    def get_leader_id(self) -> Optional[str]:
-        """get leader's peer id
-
-        :return: leader peer_id
-        """
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            return None
-
-        return self._peer_list_data.leader_id
 
     def get_next_leader_peer(self, current_leader_peer_id=None):
         util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")

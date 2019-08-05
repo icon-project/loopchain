@@ -33,7 +33,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStore
+from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
@@ -244,7 +244,7 @@ class BlockChain:
         except KeyError:
             return bytes()
 
-    def save_preps(self, roothash: str, preps: dict, batch=None):
+    def save_preps(self, roothash: str, preps: dict, batch: KeyValueStoreWriteBatch = None):
         write_target = batch or self._blockchain_store
 
         write_target.put(
