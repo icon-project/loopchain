@@ -133,7 +133,7 @@ class BlockBuilder(BaseBlockBuilder):
         return self.reps_hash
 
     def _build_reps_hash(self):
-        block_prover = BlockProver(self.reps, BlockProverType.Rep)
+        block_prover = BlockProver((rep.extend() for rep in self.reps), BlockProverType.Rep)
         return block_prover.get_proof_root()
 
     def build_leader_votes_hash(self):
