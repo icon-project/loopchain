@@ -693,7 +693,7 @@ class BlockManager:
                 stub = loopchain_pb2_grpc.PeerServiceStub(channel)
                 try:
                     response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                        request="",
+                        request="block_sync",
                         channel=self.__channel_name,
                     ), conf.GRPC_TIMEOUT_SHORT)
 

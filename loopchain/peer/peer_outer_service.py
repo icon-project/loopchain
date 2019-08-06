@@ -190,11 +190,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.Message(code=message_code.Response.not_treat_message_code)
 
+    def __set_status_cache(self, channel, status):
+        self.__status_cache_update_time[channel] = datetime.datetime.now()
+        self.peer_service.status_cache[channel] = status
+
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
         utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
-        self.__status_cache_update_time[channel] = datetime.datetime.now()
-        self.peer_service.status_cache[channel] = future.result()
+        self.__set_status_cache(channel, future.result())
 
     def __get_status_data(self, channel: str):
         return self.__get_status_from_cache(channel)
@@ -239,18 +242,31 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            raise ChannelStatusError(f"Invalid channel({channel_name})")
 
-            callback = partial(self.__status_update, channel_name)
-            future = asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().get_status(),
-                self.peer_service.inner_service.loop
-            )
-            future.add_done_callback(callback)
+        status_data = None
+        if request.request == 'block_sync':
+            try:
+                status_data = channel_stub.sync_task().get_status()
+                logging.debug(f"Got status for block_sync. status_data={status_data}")
+            except BaseException as e:
+                logging.error(f"Peer GetStatus(block_sync) Exception : {e}")
+            else:
+                if status_data is not None:
+                    self.__set_status_cache(channel_name, status_data)
+        else:
+            try:
+                callback = partial(self.__status_update, channel_name)
+                future = asyncio.run_coroutine_threadsafe(
+                    channel_stub.async_task().get_status(),
+                    self.peer_service.inner_service.loop)
+                future.add_done_callback(callback)
+            except BaseException as e:
+                logging.error(f"Peer GetStatus Exception : {e}")
 
-        except BaseException as e:
-            logging.error(f"Peer GetStatus Exception : {e}")
+            status_data = self.__get_status_data(channel_name)
 
-        status_data = self.__get_status_data(channel_name)
         if status_data is None:
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
 
