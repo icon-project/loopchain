@@ -649,8 +649,8 @@ class BlockManager:
     def start_epoch(self):
         curr_block_header = self.__current_last_block().header
         current_height = curr_block_header.height
-        next_leader = curr_block_header.next_leader
-        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
+        next_leader = self.__blockchain.get_next_leader()
+        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader)
         if leader_peer:
             self.epoch = Epoch.new_epoch(leader_peer.peer_id)
         elif self.epoch and self.epoch.height < current_height:

@@ -113,7 +113,7 @@ class ConsensusSiever(ConsensusBase):
         await self.__add_block(last_unconfirmed_block)
         self.__remove_duplicate_tx_when_turn_to_leader(block_builder, last_unconfirmed_block)
         self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-        return last_unconfirmed_block.header.next_leader
+        return self._blockchain.get_next_leader()
 
     def __remove_duplicate_tx_when_turn_to_leader(self, block_builder, last_unconfirmed_block):
         if self._blockchain.my_made_block_count == 0:
@@ -185,7 +185,8 @@ class ConsensusSiever(ConsensusBase):
                         (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
                 elif last_unconfirmed_block:
-                    next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
+                    next_leader_as_str = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
+                    next_leader = ExternalAddress.fromhex_address(next_leader_as_str)
             except NotEnoughVotes:
                 need_next_call = True
             finally:

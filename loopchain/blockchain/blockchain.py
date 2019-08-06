@@ -102,22 +102,26 @@ class BlockChain:
             self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
     @property
-    def leader_made_block_count(self):
+    def leader_made_block_count(self) -> int:
         if self.__last_block:
             return self.__last_leader_made_block_count[self.__last_block.header.peer_id]
         return -1
 
     @property
-    def my_made_block_count(self):
+    def my_made_block_count(self) -> int:
         return self.__last_leader_made_block_count[ChannelProperty().peer_address]
 
     def _up_leader_made_block_count(self):
-        self.__last_leader_made_block_count[self.__last_block.header.peer_id] += 1
+        if ObjectManager().channel_service.peer_manager.leader_id != ChannelProperty().peer_id \
+                or self.__last_block.header.peer_id == ChannelProperty().peer_address:
+            self.__last_leader_made_block_count[self.__last_block.header.peer_id] += 1
+        utils.logger.notice(f"up made block count\n{self.__last_leader_made_block_count}")
 
     def reset_leader_made_block_count(self):
+        utils.logger.notice(f"reset_leader_made_block_count\n{self.__last_leader_made_block_count}")
         self.__last_leader_made_block_count.clear()
 
-    def get_next_leader(self):
+    def get_next_leader(self) -> str:
         """get next leader by leader_made_block_count
 
         :return: new leader's peer_id as hex_hx(str)
@@ -126,6 +130,13 @@ class BlockChain:
         if self.__last_leader_made_block_count[self.__last_block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1):
             # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
             # next unconfirmed block height is 10.
+
+            utils.logger.notice(f"in get_next_leader there is new. "
+                                f"last block height({self.__last_block.header.height})"
+                                f"\nlast block peer_id({self.__last_block.header.peer_id})"
+                                f"\nlast_leader_made_block_count("
+                                f"{self.__last_leader_made_block_count[self.__last_block.header.peer_id]})"
+                                f"\npeer_manager leader_id({peer_manager.leader_id})")
             return peer_manager.get_next_leader_peer().peer_id
 
         return peer_manager.leader_id
