@@ -572,6 +572,7 @@ class ChannelInnerTask:
         status_data = dict()
         block_manager = self._channel_service.block_manager
         status_data["made_block_count"] = block_manager.made_block_count
+        status_data["leader_made_block_count"] = block_manager.get_blockchain().leader_made_block_count
 
         block_height = 0
         unconfirmed_block_height = None

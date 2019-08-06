@@ -301,6 +301,7 @@ class BlockManager:
 
     def rebuild_block(self):
         self.__blockchain.rebuild_transaction_count()
+        self.__blockchain.rebuild_made_block_count()
 
         nid = self.get_blockchain().find_nid()
         if nid is None:

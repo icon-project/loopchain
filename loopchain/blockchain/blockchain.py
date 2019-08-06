@@ -17,6 +17,7 @@ import json
 import pickle
 import threading
 import zlib
+from collections import Counter
 from enum import Enum
 from typing import Union, List, cast, Optional
 
@@ -70,6 +71,8 @@ class BlockChain:
         self.__block_height = -1
         # last block in block db
         self.__last_block = None
+        self.__last_leader_made_block_count: Counter = Counter()
+
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
@@ -99,6 +102,21 @@ class BlockChain:
             self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
     @property
+    def leader_made_block_count(self):
+        if self.__last_block:
+            return self.__last_leader_made_block_count[self.__last_block.header.peer_id]
+        return -1
+
+    @property
+    def my_made_block_count(self):
+        return self.__last_leader_made_block_count[ChannelProperty().peer_id]
+
+    def _up_leader_made_block_count(self):
+        if self.__last_leader_made_block_count[self.__last_block.header.peer_id] == 0:
+            self.__last_leader_made_block_count.clear()
+        self.__last_leader_made_block_count[self.__last_block.header.peer_id] += 1
+
+    @property
     def block_height(self):
         return self.__block_height
 
@@ -126,6 +144,30 @@ class BlockChain:
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
+
+    def rebuild_made_block_count(self):
+        """rebuild leader's made block count
+
+        :return:
+        """
+        block_hash = self.__last_block.header.hash.hex()
+        block_height = self.__last_block.header.height
+        start_block_height = self.__last_block.header.height
+
+        while block_hash != "":
+            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+            block = block_serializer.deserialize(json.loads(block_dump))
+
+            self.__last_leader_made_block_count[block.header.peer_id] += 1
+
+            if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
+                break
+
+            # next loop
+            block_height = block.header.height - 1
+            block_hash = block.header.prev_hash.hex()
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -315,6 +357,9 @@ class BlockChain:
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
+
+            self._up_leader_made_block_count()
+
             logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
                           f"last_block({self.__last_block.header.hash.hex()})")
             logging.info(

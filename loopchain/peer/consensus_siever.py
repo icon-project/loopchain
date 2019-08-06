@@ -16,6 +16,7 @@
 import asyncio
 import json
 from functools import partial
+from typing import TYPE_CHECKING
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -28,15 +29,20 @@ from loopchain.blockchain.exception import NotEnoughVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
+if TYPE_CHECKING:
+    from loopchain.peer import BlockManager
+
 
 class ConsensusSiever(ConsensusBase):
-    def __init__(self, block_manager):
+    def __init__(self, block_manager: 'BlockManager'):
         super().__init__(block_manager)
         self.__block_generation_timer = None
         self.__lock = None
 
         self._loop: asyncio.BaseEventLoop = None
         self._vote_queue: asyncio.Queue = None
+
+        self._made_block_count = block_manager.get_blockchain().my_made_block_count
 
     def start_timer(self, timer_service: TimerService):
         self._loop = timer_service.get_event_loop()
@@ -161,7 +167,7 @@ class ConsensusSiever(ConsensusBase):
 
                     block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
                     self._made_block_count += 1
-                elif self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
+                elif self._made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
                     if last_unconfirmed_block:
                         await self.__add_block(last_unconfirmed_block)
                         peer_manager = ObjectManager().channel_service.peer_manager
@@ -169,7 +175,8 @@ class ConsensusSiever(ConsensusBase):
                             current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                         util.logger.spam(f"next_leader in siever({next_leader})")
                     else:
-                        util.logger.info(f"This leader already made {self.made_block_count} blocks. "
+                        util.logger.info(f"This leader already made "
+                                         f"{self._made_block_count} blocks. "
                                          f"MAX_MADE_BLOCK_COUNT is {conf.MAX_MADE_BLOCK_COUNT} "
                                          f"There is no more right. Consensus loop will return.")
                         return
@@ -210,7 +217,7 @@ class ConsensusSiever(ConsensusBase):
                 ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
-                if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
+                if self._made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
                     ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
                     
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
