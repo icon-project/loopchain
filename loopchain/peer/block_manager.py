@@ -231,7 +231,7 @@ class BlockManager:
             self.epoch = Epoch.new_epoch()
 
         # reset leader
-        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
+        self.__channel_service.reset_leader(self.__blockchain.get_next_leader())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block

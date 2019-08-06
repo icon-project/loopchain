@@ -117,6 +117,19 @@ class BlockChain:
     def reset_leader_made_block_count(self):
         self.__last_leader_made_block_count.clear()
 
+    def get_next_leader(self):
+        """get next leader by leader_made_block_count
+
+        :return: new leader's peer_id as hex_hx(str)
+        """
+        peer_manager = ObjectManager().channel_service.peer_manager
+        if self.__last_leader_made_block_count[self.__last_block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1):
+            # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
+            # next unconfirmed block height is 10.
+            return peer_manager.get_next_leader_peer().peer_id
+
+        return peer_manager.leader_id
+
     @property
     def block_height(self):
         return self.__block_height

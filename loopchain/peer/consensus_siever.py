@@ -219,7 +219,7 @@ class ConsensusSiever(ConsensusBase):
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self._blockchain.my_made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
-                    # (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
+                    # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
                     # next unconfirmed block height is 10.
                     ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
                     

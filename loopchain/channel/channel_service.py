@@ -475,25 +475,13 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        blockchain = self.__block_manager.get_blockchain()
-        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
-
-        leader_id = None
-        if last_block and last_block.header.next_leader is not None:
-            leader_id = last_block.header.next_leader.hex_hx()
-            peer = self.peer_manager.get_peer(leader_id)
-            if peer is None:
-                leader_id = None
-            else:
-                self.peer_manager.set_leader_peer(peer)
-        if leader_id is None:
-            leader_id = self.peer_manager.get_leader_peer().peer_id
-        logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
+        leader_id = self.__block_manager.get_blockchain().get_next_leader()
+        utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
         if ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
-            logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+            utils.logger.info(f"Set Peer Type Leader! channel({ChannelProperty().name})")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
         else:
             logger_preset.is_leader = False
