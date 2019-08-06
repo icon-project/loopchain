@@ -226,7 +226,7 @@ class ChannelService:
     async def evaluate_network(self):
         await self._select_node_type()
         await self.__init_network()
-        self.__ready_to_height_sync()
+        await self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -559,20 +559,6 @@ class ChannelService:
         """
         self.__block_manager.set_peer_type(peer_type)
 
-    def save_peer_manager(self, peer_manager):
-        """Save peer_list to leveldb
-
-        :param peer_manager:
-        """
-        level_db_key_name = str.encode(conf.LEVEL_DB_KEY_FOR_PEER_LIST)
-
-        try:
-            dump = peer_manager.dump()
-            key_value_store = self.__block_manager.get_key_value_store()
-            key_value_store.put(level_db_key_name, dump)
-        except AttributeError as e:
-            logging.warning("Fail Save Peer_list: " + str(e))
-
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
         blockchain = self.__block_manager.get_blockchain()
@@ -608,12 +594,12 @@ class ChannelService:
         return ('genesis_data_path' in self.get_channel_option()
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
-    def __ready_to_height_sync(self):
+    async def __ready_to_height_sync(self):
         blockchain = self.block_manager.get_blockchain()
-        blockchain.init_blockchain()
+        await blockchain.init_blockchain()
 
         if blockchain.block_height >= 0:
-            self.block_manager.rebuild_block()
+            await self.block_manager.rebuild_block()
         else:
             if self._is_genesis_node():
                 self.generate_genesis_block()

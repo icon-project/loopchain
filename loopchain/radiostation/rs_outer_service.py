@@ -266,9 +266,6 @@ class OuterService(loopchain_pb2_grpc.RadioStationServicer):
             peer_list_dumped = peer_manager.peer_list_data.dump()
             status, reason = message_code.get_response(message_code.Response.success)
 
-        # save current peer_manager after ConnectPeer from new peer.
-        # ObjectManager().rs_service.admin_manager.save_peer_manager(channel_name, peer_manager)
-
         return loopchain_pb2.ConnectPeerReply(
             status=status,
             peer_list=peer_list_dumped,

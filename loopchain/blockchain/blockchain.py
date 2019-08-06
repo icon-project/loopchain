@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Block chain class with authorized blocks only"""
-
+import asyncio
 import json
 import pickle
 import threading
@@ -32,7 +32,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.store.key_value_store import KeyValueStore
+from loopchain.store.key_value_store import AsyncKeyValueStore
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -63,6 +63,8 @@ class BlockChain:
     def __init__(self, channel_name=None, store_id=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
+
+        self._loop = asyncio.get_event_loop()
 
         self.__block_height = -1
         # last block in block db
@@ -118,34 +120,34 @@ class BlockChain:
     def get_blockchain_store(self):
         return self._blockchain_store
 
-    def close_blockchain_store(self):
-        print(f"close blockchain_store = {self._blockchain_store}")
+    async def close_blockchain_store(self):
+        logging.debug(f"close blockchain_store = {self._blockchain_store}")
         if self._blockchain_store:
-            self._blockchain_store.close()
-            self._blockchain_store: KeyValueStore = None
+            await self._blockchain_store.close()
+            self._blockchain_store: AsyncKeyValueStore = None
 
     def clear_all_blocks(self):
         import shutil
         logging.debug(f"clear key value store({self._blockchain_store_path})")
         shutil.rmtree(self._blockchain_store_path)
 
-    def rebuild_transaction_count(self):
+    async def rebuild_transaction_count(self):
         if self.__last_block is not None:
             # rebuild blocks to Genesis block.
             logging.info("re-build transaction count from DB....")
 
             if conf.READ_CACHED_TX_COUNT:
                 try:
-                    self.__total_tx = self._rebuild_transaction_count_from_cached()
+                    self.__total_tx = await self._rebuild_transaction_count_from_cached()
                 except Exception as e:
                     if isinstance(e, KeyError):
                         logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
                     else:
                         logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
                                         f"Exception : {type(e)}, {e}")
-                    self.__total_tx = self._rebuild_transaction_count_from_blocks()
+                    self.__total_tx = await self._rebuild_transaction_count_from_blocks()
             else:
-                self.__total_tx = self._rebuild_transaction_count_from_blocks()
+                self.__total_tx = await self._rebuild_transaction_count_from_blocks()
 
             logging.info(f"rebuilt blocks, total_tx: {self.__total_tx}")
             logging.info(
@@ -156,13 +158,13 @@ class BlockChain:
             logging.info("There is no block.")
             return False
 
-    def _rebuild_transaction_count_from_blocks(self):
+    async def _rebuild_transaction_count_from_blocks(self):
         total_tx = 0
         block_hash = self.__last_block.header.hash.hex()
         block_height = self.__last_block.header.height
 
         while block_hash != "":
-            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
+            block_dump = await self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
             block_version = self.__block_versioner.get_version(block_height)
             block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
@@ -176,13 +178,13 @@ class BlockChain:
             block_hash = block.header.prev_hash.hex()
         return total_tx
 
-    def _rebuild_transaction_count_from_cached(self):
-        tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
+    async def _rebuild_transaction_count_from_cached(self):
+        tx_count_bytes = await self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
         return int.from_bytes(tx_count_bytes, byteorder='big')
 
-    def __find_block_by_key(self, key):
+    async def __find_block_by_key(self, key):
         try:
-            block_bytes = self._blockchain_store.get(key)
+            block_bytes = await self._blockchain_store.get(key)
             block_dumped = json.loads(block_bytes)
             block_height = self.__block_versioner.get_height(block_dumped)
             block_version = self.__block_versioner.get_version(block_height)
@@ -192,7 +194,7 @@ class BlockChain:
 
         return None
 
-    def find_block_by_hash(self, block_hash: Union[str, Hash32]):
+    async def find_block_by_hash(self, block_hash: Union[str, Hash32]):
         """find block by block hash.
 
         :param block_hash: plain string,
@@ -201,9 +203,9 @@ class BlockChain:
         """
         if isinstance(block_hash, Hash32):
             block_hash = block_hash.hex()
-        return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
+        return await self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
 
-    def find_block_by_height(self, block_height):
+    async def find_block_by_height(self, block_height):
         """find block by its height
 
         :param block_height: int,
@@ -214,39 +216,39 @@ class BlockChain:
             return self.__last_block
 
         try:
-            key = self._blockchain_store.get(BlockChain.BLOCK_HEIGHT_KEY +
-                                             block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
+            key = await self._blockchain_store.get(BlockChain.BLOCK_HEIGHT_KEY +
+                                                   block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'))
         except KeyError:
             if self.last_unconfirmed_block:
                 if self.last_unconfirmed_block.header.height == block_height:
                     return self.last_unconfirmed_block
             return None
 
-        return self.__find_block_by_key(key)
+        return await self.__find_block_by_key(key)
 
-    def find_confirm_info_by_hash(self, block_hash) -> bytes:
+    async def find_confirm_info_by_hash(self, block_hash) -> bytes:
         hash_encoded = block_hash.hex().encode(encoding='UTF-8')
 
         try:
-            return bytes(self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded))
+            return bytes(await self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded))
         except KeyError:
             return bytes()
 
-    def find_confirm_info_by_height(self, height) -> bytes:
-        block = self.find_block_by_height(height)
+    async def find_confirm_info_by_height(self, height) -> bytes:
+        block = await self.find_block_by_height(height)
         if block:
-            return bytes(self.find_confirm_info_by_hash(block.header.hash))
+            return bytes(await self.find_confirm_info_by_hash(block.header.hash))
 
         return bytes()
 
     # TODO The current Citizen node sync by announce_confirmed_block message.
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
-    def add_block(self,
-                  block: Block,
-                  confirm_info=None,
-                  need_to_write_tx_info=True,
-                  need_to_score_invoke=True) -> bool:
+    async def add_block(self,
+                        block: Block,
+                        confirm_info=None,
+                        need_to_write_tx_info=True,
+                        need_to_score_invoke=True) -> bool:
         """
 
         :param block:
@@ -256,8 +258,8 @@ class BlockChain:
         :return:
         """
         with self.__add_block_lock:
-            if need_to_write_tx_info and need_to_score_invoke and \
-                    not self.prevent_next_block_mismatch(block.header.height):
+            mismatch = await self.prevent_next_block_mismatch(block.header.height)
+            if need_to_write_tx_info and need_to_score_invoke and not mismatch:
                 return True
 
             peer_id = ChannelProperty().peer_id
@@ -270,9 +272,9 @@ class BlockChain:
                     'block_hash': block.header.hash.hex(),
                     'total_tx': self.total_tx}})
 
-            return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
+            return await self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
+    async def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None and need_to_score_invoke:
@@ -283,7 +285,7 @@ class BlockChain:
 
             try:
                 if need_to_write_tx_info:
-                    self.__add_tx_to_block_db(block, invoke_results)
+                    await self.__add_tx_to_block_db(block, invoke_results)
                 if need_to_score_invoke:
                     ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
@@ -292,7 +294,7 @@ class BlockChain:
                 raise e
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
-            next_total_tx = self.__write_block_data(block, confirm_info)
+            next_total_tx = await self.__write_block_data(block, confirm_info)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
@@ -322,7 +324,7 @@ class BlockChain:
 
             return True
 
-    def __write_block_data(self, block: Block, confirm_info):
+    async def __write_block_data(self, block: Block, confirm_info):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -336,7 +338,8 @@ class BlockChain:
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
-        batch = self._blockchain_store.write_batch()
+        """
+        batch = await self._blockchain_store.write_batch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
         batch.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
         batch.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
@@ -356,11 +359,30 @@ class BlockChain:
             prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
             batch.delete(prev_block_confirm_info_key)
 
-        batch.write()
+        await batch.write()
+        """
+        await self._blockchain_store.put(block_hash_encoded, block_serialized.encode("utf-8"))
+        await self._blockchain_store.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
+        await self._blockchain_store.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
+        await self._blockchain_store.put(
+            BlockChain.BLOCK_HEIGHT_KEY +
+            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+            block_hash_encoded)
+
+        if confirm_info:
+            await self._blockchain_store.put(
+                BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
+                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
+            )
+
+        if block.header.prev_hash:
+            prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
+            prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
+            await self._blockchain_store.delete(prev_block_confirm_info_key)
 
         return next_total_tx
 
-    def prevent_next_block_mismatch(self, next_height: int) -> bool:
+    async def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
         score_stub = StubCollection().icon_score_stubs[self.__channel_name]
         request = {
@@ -377,7 +399,7 @@ class BlockChain:
                               f"score_last_block_height({score_last_block_height}) "
                               f"next_block_height({next_height})")
 
-                invoke_block = self.find_block_by_height(invoke_block_height)
+                invoke_block = await self.find_block_by_height(invoke_block_height)
                 if invoke_block is None:
                     raise RuntimeError("Error raised during prevent mismatch block, "
                                        f"Cannot find block({invoke_block_height}")
@@ -387,7 +409,7 @@ class BlockChain:
                 else:
                     invoke_block, invoke_block_result = ObjectManager().channel_service.score_invoke(invoke_block)
 
-                self.__add_tx_to_block_db(invoke_block, invoke_block_result)
+                await self.__add_tx_to_block_db(invoke_block, invoke_block_result)
                 ObjectManager().channel_service.score_write_precommit_state(invoke_block)
 
             return True
@@ -399,7 +421,7 @@ class BlockChain:
         elif score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
-                    self._blockchain_store.get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
+                    await self._blockchain_store.get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
                 if invoke_result_block_height == next_height:
@@ -414,7 +436,7 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    def __add_tx_to_block_db(self, block, invoke_results):
+    async def __add_tx_to_block_db(self, block, invoke_results):
         """block db 에 block_hash - block_object 를 저장할때, tx_hash - block_hash 를 저장한다.
         get tx by tx_hash 시 해당 block 을 효율적으로 찾기 위해서
         :param block:
@@ -440,7 +462,7 @@ class BlockChain:
                 'result': invoke_result
             }
 
-            self._blockchain_store.put(
+            await self._blockchain_store.put(
                 tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
                 json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
 
@@ -454,15 +476,15 @@ class BlockChain:
             # utils.logger.spam(f"pop tx from queue:{tx_hash}")
 
             if block.header.height > 0:
-                self.__save_tx_by_address(tx)
+                await self.__save_tx_by_address(tx)
 
-        self.__save_invoke_result_block_height(block.header.height)
+        await self.__save_invoke_result_block_height(block.header.height)
 
-    def __save_invoke_result_block_height(self, height):
+    async def __save_invoke_result_block_height(self, height):
         bit_length = height.bit_length()
         byte_length = (bit_length + 7) // 8
         block_height_bytes = height.to_bytes(byte_length, byteorder='big')
-        self._blockchain_store.put(
+        await self._blockchain_store.put(
             BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
             block_height_bytes
         )
@@ -486,19 +508,19 @@ class BlockChain:
                 except KeyError as e:
                     logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
 
-    def __save_tx_by_address(self, tx: 'Transaction'):
+    async def __save_tx_by_address(self, tx: 'Transaction'):
         address = tx.from_address.hex_hx()
-        return self.add_tx_to_list_by_address(address, tx.hash.hex())
+        return await self.add_tx_to_list_by_address(address, tx.hash.hex())
 
     @staticmethod
     def __get_tx_list_key(address, index):
         return conf.TX_LIST_ADDRESS_PREFIX + (address + str(index)).encode(encoding=conf.HASH_KEY_ENCODING)
 
-    def get_tx_list_by_address(self, address, index=0):
+    async def get_tx_list_by_address(self, address, index=0):
         list_key = self.__get_tx_list_key(address, index)
 
         try:
-            tx_list = pickle.loads(self._blockchain_store.get(list_key))
+            tx_list = pickle.loads(await self._blockchain_store.get(list_key))
             next_index = tx_list[-1]
         except KeyError:
             tx_list = [0]  # 0 means there is no more list after this.
@@ -506,33 +528,34 @@ class BlockChain:
 
         return tx_list, next_index
 
-    def get_precommit_block(self):
-        return self.__find_block_by_key(BlockChain.PRECOMMIT_BLOCK_KEY)
+    async def get_precommit_block(self):
+        return await self.__find_block_by_key(BlockChain.PRECOMMIT_BLOCK_KEY)
 
     def find_nid(self):
         try:
             if self.__nid is not None:
                 return self.__nid
 
-            nid = self._blockchain_store.get(BlockChain.NID_KEY)
+            future = asyncio.run_coroutine_threadsafe(self._blockchain_store.get(BlockChain.NID_KEY), self._loop)
+            nid = future.result()
             self.__nid = nid.decode(conf.HASH_KEY_ENCODING)
             return self.__nid
         except KeyError as e:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
 
-    def add_tx_to_list_by_address(self, address, tx_hash):
-        current_list, current_index = self.get_tx_list_by_address(address, 0)
+    async def add_tx_to_list_by_address(self, address, tx_hash):
+        current_list, current_index = await self.get_tx_list_by_address(address, 0)
 
         if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
             new_index = current_index + 1
             new_list_key = self.__get_tx_list_key(address, new_index)
-            self._blockchain_store.put(new_list_key, pickle.dumps(current_list))
+            await self._blockchain_store.put(new_list_key, pickle.dumps(current_list))
             current_list = [new_index]
 
         current_list.insert(0, tx_hash)
         list_key = self.__get_tx_list_key(address, 0)
-        self._blockchain_store.put(list_key, pickle.dumps(current_list))
+        await self._blockchain_store.put(list_key, pickle.dumps(current_list))
 
         return True
 
@@ -587,8 +610,11 @@ class BlockChain:
             tx_hash_key = tx_hash_key.hex()
 
         try:
-            tx_info = self._blockchain_store.get(
-                tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
+            future = asyncio.run_coroutine_threadsafe(
+                self._blockchain_store.get(tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING)),
+                self._loop
+            )
+            tx_info = future.result()
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
@@ -631,9 +657,14 @@ class BlockChain:
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
-        self.add_block(block)
+        asyncio.run_coroutine_threadsafe(self.add_block(block), self._loop)
 
-    def put_precommit_block(self, precommit_block: Block):
+    async def put_precommit_block(self, precommit_block: Block):
+        """
+        FIXME : not use?
+        :param precommit_block:
+        :return:
+        """
         # write precommit block to DB
         logging.debug(
             f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
@@ -645,7 +676,7 @@ class BlockChain:
             block_serialized = block_serializer.serialize(precommit_block)
             block_serialized = json.dumps(block_serialized)
             block_serialized = block_serialized.encode('utf-8')
-            results = self._blockchain_store.put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
+            results = await self._blockchain_store.put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
 
             utils.logger.spam(f"result of to write to db ({results})")
             logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.header.height} , "
@@ -659,7 +690,7 @@ class BlockChain:
 
         return results
 
-    def put_nid(self, nid: str):
+    async def put_nid(self, nid: str):
         """
         write nid to DB
         :param nid: Network ID
@@ -669,7 +700,7 @@ class BlockChain:
         if nid is None:
             return
 
-        results = self._blockchain_store.put(BlockChain.NID_KEY, nid.encode(encoding=conf.HASH_KEY_ENCODING))
+        results = await self._blockchain_store.put(BlockChain.NID_KEY, nid.encode(encoding=conf.HASH_KEY_ENCODING))
         utils.logger.spam(f"result of to write to db ({results})")
 
         return results
@@ -719,26 +750,26 @@ class BlockChain:
             # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
-            self.add_block(unconfirmed_block, confirm_info)
+            asyncio.run_coroutine_threadsafe(self.add_block(unconfirmed_block, confirm_info), self._loop)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
             return unconfirmed_block
 
-    def init_blockchain(self):
+    async def init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
         try:
-            last_block_key = self._blockchain_store.get(BlockChain.LAST_BLOCK_KEY, verify_checksums=True)
+            last_block_key = await self._blockchain_store.get(BlockChain.LAST_BLOCK_KEY, verify_checksums=True)
         except KeyError:
             last_block_key = None
         logging.debug("LAST BLOCK KEY : %s", last_block_key)
 
         if last_block_key:
-            block_dump = self._blockchain_store.get(last_block_key)
+            block_dump = await self._blockchain_store.get(last_block_key)
             block_dump = json.loads(block_dump)
             block_height = self.__block_versioner.get_height(block_dump)
             block_version = self.__block_versioner.get_version(block_height)
-            confirm_info = self.find_confirm_info_by_hash(self.__block_versioner.get_hash(block_dump))
+            confirm_info = await self.find_confirm_info_by_hash(self.__block_versioner.get_hash(block_dump))
             block_dump["confirm_prev_block"] = confirm_info is not b''
             self.__last_block = BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dump)
 
@@ -769,18 +800,13 @@ class BlockChain:
             exit(f"cannot find key name of {e} in genesis data file.")
 
         self.__add_genesis_block(tx_info, reps)
-        self.put_nid(nid)
+        asyncio.run_coroutine_threadsafe(self.put_nid(nid), self._loop)
         ChannelProperty().nid = nid
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
     def set_invoke_results(self, block_hash, invoke_results):
         self.__invoke_results[block_hash] = invoke_results
-
-    def invoke_for_precommit(self, precommit_block: Block):
-        invoke_results = \
-            self.__score_invoke_with_state_integrity(precommit_block, precommit_block.commit_state)
-        self.__add_tx_to_block_db(precommit_block, invoke_results)
 
     def block_dumps(self, block: Block) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
@@ -808,14 +834,14 @@ class BlockChain:
         block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
         return block_serializer.deserialize(block_serialized)
 
-    def get_transaction_proof(self, tx_hash: Hash32):
+    async def get_transaction_proof(self, tx_hash: Hash32):
         try:
             tx_info = self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
 
         block_hash = tx_info["block_hash"]
-        block = self.find_block_by_hash(block_hash)
+        block = await self.find_block_by_hash(block_hash)
 
         if block.header.version == "0.1a":
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
@@ -823,14 +849,14 @@ class BlockChain:
         block_prover = BlockProver.new(block.header.version, block.body.transactions, BlockProverType.Transaction)
         return block_prover.get_proof(tx_hash)
 
-    def prove_transaction(self, tx_hash: Hash32, proof: list):
+    async def prove_transaction(self, tx_hash: Hash32, proof: list):
         try:
             tx_info = self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
 
         block_hash = tx_info["block_hash"]
-        block = self.find_block_by_hash(block_hash)
+        block = await self.find_block_by_hash(block_hash)
 
         if block.header.version == "0.1a":
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
@@ -838,7 +864,7 @@ class BlockChain:
         block_prover = BlockProver.new(block.header.version, None, BlockProverType.Transaction)  # Do not need txs
         return block_prover.prove(tx_hash, block.header.transactions_hash, proof)
 
-    def get_receipt_proof(self, tx_hash: Hash32):
+    async def get_receipt_proof(self, tx_hash: Hash32):
         try:
             tx_info = self.find_tx_info(tx_hash.hex())
         except KeyError:
@@ -846,7 +872,7 @@ class BlockChain:
         tx_result = tx_info["result"]
 
         block_hash = tx_info["block_hash"]
-        block = self.find_block_by_hash(block_hash)
+        block = await self.find_block_by_hash(block_hash)
 
         if block.header.version == "0.1a":
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
@@ -856,7 +882,7 @@ class BlockChain:
         receipts_hash = block_prover.to_hash32(tx_result)
         return block_prover.get_proof(receipts_hash)
 
-    def prove_receipt(self, tx_hash: Hash32, proof: list):
+    async def prove_receipt(self, tx_hash: Hash32, proof: list):
         try:
             tx_info = self.find_tx_info(tx_hash.hex())
         except KeyError:
@@ -864,7 +890,7 @@ class BlockChain:
         tx_result = tx_info["result"]
 
         block_hash = tx_info["block_hash"]
-        block = self.find_block_by_hash(block_hash)
+        block = await self.find_block_by_hash(block_hash)
 
         if block.header.version == "0.1a":
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")

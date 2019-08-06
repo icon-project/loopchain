@@ -503,8 +503,8 @@ class ChannelInnerTask:
                     await self._citizen_condition_new_block.wait()
 
             new_block_height = subscriber_block_height + 1
-            new_block = blockchain.find_block_by_height(new_block_height)
-            confirm_info: bytes = blockchain.find_confirm_info_by_height(new_block_height)
+            new_block = await blockchain.find_block_by_height(new_block_height)
+            confirm_info: bytes = await blockchain.find_confirm_info_by_height(new_block_height)
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -729,15 +729,15 @@ class ChannelInnerTask:
                 util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
 
     @message_queue_task
-    def block_sync(self, block_hash, block_height):
+    async def block_sync(self, block_hash, block_height):
         blockchain = self._channel_service.block_manager.get_blockchain()
 
         response_message = None
         block: Block = None
         if block_hash != "":
-            block = blockchain.find_block_by_hash(block_hash)
+            block = await blockchain.find_block_by_hash(block_hash)
         elif block_height != -1:
-            block = blockchain.find_block_by_height(block_height)
+            block = await blockchain.find_block_by_height(block_height)
         else:
             response_message = message_code.Response.fail_not_enough_data
 
@@ -753,7 +753,7 @@ class ChannelInnerTask:
 
         confirm_info = None
         if block.header.height <= blockchain.block_height:
-            confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
+            confirm_info = await blockchain.find_confirm_info_by_hash(block.header.hash)
 
         return message_code.Response.success, block.header.height, blockchain.block_height, unconfirmed_block_height,\
             confirm_info, blockchain.block_dumps(block)
@@ -783,8 +783,6 @@ class ChannelInnerTask:
         peer_manager = self._channel_service.peer_manager
         peer_manager.add_peer(peer_info)
 
-        logging.debug("Try save peer list...")
-        # self._channel_service.save_peer_manager(peer_manager)
         self._channel_service.show_peers()
 
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
@@ -927,13 +925,13 @@ class ChannelInnerTask:
         confirm_info = b''
         fail_response_code = None
         if block_hash:
-            block = blockchain.find_block_by_hash(block_hash)
-            confirm_info = blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
+            block = await blockchain.find_block_by_hash(block_hash)
+            confirm_info = await blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
         elif block_height != -1:
-            block = blockchain.find_block_by_height(block_height)
-            confirm_info = blockchain.find_confirm_info_by_height(block_height)
+            block = await blockchain.find_block_by_height(block_height)
+            confirm_info = await blockchain.find_confirm_info_by_height(block_height)
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_height
         else:
@@ -942,9 +940,9 @@ class ChannelInnerTask:
         return block, block_filter, block_hash, bytes(confirm_info), fail_response_code, tx_filter
 
     @message_queue_task
-    def get_precommit_block(self, last_block_height: int):
+    async def get_precommit_block(self, last_block_height: int):
         block_manager = self._channel_service.block_manager
-        precommit_block = block_manager.get_blockchain().get_precommit_block()
+        precommit_block = await block_manager.get_blockchain().get_precommit_block()
 
         if precommit_block is None:
             return message_code.Response.fail, "there is no precommit block.", b""
@@ -955,9 +953,9 @@ class ChannelInnerTask:
         return message_code.Response.success, "success", block_dumped
 
     @message_queue_task
-    def get_tx_by_address(self, address, index):
+    async def get_tx_by_address(self, address, index):
         block_manager = self._channel_service.block_manager
-        tx_list, next_index = block_manager.get_blockchain().get_tx_list_by_address(address=address, index=index)
+        tx_list, next_index = await block_manager.get_blockchain().get_tx_list_by_address(address=address, index=index)
 
         return tx_list, next_index
 
@@ -985,7 +983,7 @@ class ChannelInnerTask:
     async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:
         blockchain = self._channel_service.block_manager.get_blockchain()
         try:
-            proof = blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
+            proof = await blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
@@ -1003,7 +1001,8 @@ class ChannelInnerTask:
             return make_error_response(JsonError.INTERNAL_ERROR, str(e))
 
         try:
-            return "0x1" if blockchain.prove_transaction(Hash32.fromhex(tx_hash), proof) else "0x0"
+            proved = await blockchain.prove_transaction(Hash32.fromhex(tx_hash), proof)
+            return "0x1" if proved else "0x0"
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
@@ -1011,7 +1010,7 @@ class ChannelInnerTask:
     async def get_receipt_proof(self, tx_hash: str) -> Union[list, dict]:
         blockchain = self._channel_service.block_manager.get_blockchain()
         try:
-            proof = blockchain.get_receipt_proof(Hash32.fromhex(tx_hash))
+            proof = await blockchain.get_receipt_proof(Hash32.fromhex(tx_hash))
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
@@ -1029,7 +1028,8 @@ class ChannelInnerTask:
             return make_error_response(JsonError.INTERNAL_ERROR, str(e))
 
         try:
-            return "0x1" if blockchain.prove_receipt(Hash32.fromhex(tx_hash), proof) else "0x0"
+            proved = await blockchain.prove_receipt(Hash32.fromhex(tx_hash), proof)
+            return "0x1" if proved else "0x0"
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 

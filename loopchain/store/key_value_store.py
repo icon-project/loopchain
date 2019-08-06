@@ -138,6 +138,7 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
 
 class KeyValueStore(abc.ABC):
+    STORE_TYPE_REDIS = 'redis'
     STORE_TYPE_PLYVEL = 'plyvel'
     STORE_TYPE_LEVELDB = 'leveldb'
     STORE_TYPE_DICT = 'dict'
@@ -151,8 +152,8 @@ class KeyValueStore(abc.ABC):
 
         if store_type == KeyValueStore.STORE_TYPE_REDIS:
             utils.logger.debug(f"New KeyValueStoreRedis.")
-            from loopchain.store.store_redis import KeyValueStoreRedis
-            return KeyValueStoreRedis(uri, **kwargs)
+            from loopchain.store.store_redis import StoreRedis
+            return StoreRedis(uri, **kwargs)
         elif store_type == KeyValueStore.STORE_TYPE_PLYVEL:
             utils.logger.debug(f"New KeyValueStorePlyvel.")
             from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
@@ -258,7 +259,7 @@ def _validate_args_bytes_without_first(func):
 
 
 class AsyncKeyValueStore(abc.ABC):
-    STORE_TYPE_REDIS = 'redis'
+    STORE_TYPE_REDIS = 'async-redis'
 
     @staticmethod
     def new(uri: str, store_type: str = None, **kwargs) -> 'AsyncKeyValueStore':
@@ -271,3 +272,75 @@ class AsyncKeyValueStore(abc.ABC):
             utils.logger.debug(f"New KeyValueStoreRedis.")
             from loopchain.store.store_redis import AsyncStoreRedis
             return AsyncStoreRedis(uri, **kwargs)
+
+    @abc.abstractmethod
+    async def get(self, key: bytes, *, default=None, **kwargs) -> bytes:
+        """Get a value of the key
+
+        :param key:
+        :param default: default (bytes)
+        :param kwargs:
+        :return: a value of the key
+        """
+        raise NotImplementedError("get() function is interface method")
+
+    @abc.abstractmethod
+    async def put(self, key: bytes, value: bytes, *, sync=False, **kwargs):
+        """Add or modify a value of the key.
+
+        :param key:
+        :param value:
+        :param sync:
+        """
+        raise NotImplementedError("put() function is interface method")
+
+    @abc.abstractmethod
+    async def delete(self, key: bytes, *, sync=False, **kwargs):
+        """Delete a record of the key.
+
+        :param key:
+        :param sync:
+        """
+        raise NotImplementedError("delete() function is interface method")
+
+    @abc.abstractmethod
+    async def close(self):
+        """Close explicitly.
+        Will be closed automatically when this instance is deleted.
+        """
+        raise NotImplementedError("close() function is interface method")
+
+    @abc.abstractmethod
+    async def destroy_store(self):
+        """Destroy store data.
+        If the data are files, the files may be deleted.
+        """
+        raise NotImplementedError("destroy_store() function is interface method")
+
+    @abc.abstractmethod
+    async def write_batch(self, sync=False) -> KeyValueStoreWriteBatch:
+        """Make a KeyValueStoreWriteBatch instance for this instance"""
+        raise NotImplementedError("WriteBatch constructor is not implemented in KeyValueStore class")
+
+    @abc.abstractmethod
+    async def cancelable_write_batch(self, sync=False) -> KeyValueStoreCancelableWriteBatch:
+        """Make a KeyValueStoreCancelableWriteBatch instance for this instance"""
+        raise NotImplementedError("CancelableWriteBatch constructor is not implemented in KeyValueStore class")
+
+    @abc.abstractmethod
+    async def iterator(self, start_key: bytes = None, stop_key: bytes = None, include_value: bool = True, **kwargs):
+        """Return iterator
+
+        :param start_key: a start key (inclusive)
+        :param stop_key: a stop key (inclusive)
+        :param include_value: include value (for key, value in store_instance.Iterator(include_value=True):)
+        :return: iterator
+        """
+        # TODO: make KeyValueStoreIterator class. Currently, Iterator can be used in for-loop.
+        raise NotImplementedError("Iterator constructor is not implemented in KeyValueStore class")
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        await self.close()

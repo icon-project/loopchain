@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A management class for blockchain."""
-
+import asyncio
 import json
 import logging
 import threading
@@ -38,7 +38,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.store.key_value_store import KeyValueStore
+from loopchain.store.key_value_store import AsyncKeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
 
@@ -54,6 +54,8 @@ class BlockManager:
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
     def __init__(self, name: str, channel_service, peer_id, channel_name, store_identity):
+        self._loop = asyncio.get_event_loop()
+
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
         self.__pre_validate_strategy = self.__pre_validate
@@ -127,7 +129,7 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    def get_key_value_store(self) -> KeyValueStore:
+    def get_key_value_store(self) -> AsyncKeyValueStore:
         return self.__blockchain.get_blockchain_store()
 
     def set_peer_type(self, peer_type):
@@ -303,14 +305,17 @@ class BlockManager:
             util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
             return
 
-        self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
+        asyncio.run_coroutine_threadsafe(
+            self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info),
+            self._loop
+        )
 
-    def rebuild_block(self):
-        self.__blockchain.rebuild_transaction_count()
+    async def rebuild_block(self):
+        await self.__blockchain.rebuild_transaction_count()
 
         nid = self.get_blockchain().find_nid()
         if nid is None:
-            genesis_block = self.get_blockchain().find_block_by_height(0)
+            genesis_block = await self.__blockchain.find_block_by_height(0)
             self.__rebuild_nid(genesis_block)
         else:
             ChannelProperty().nid = nid
@@ -330,7 +335,7 @@ class BlockManager:
         if isinstance(nid, int):
             nid = hex(nid)
 
-        self.get_blockchain().put_nid(nid)
+        asyncio.run_coroutine_threadsafe(self.get_blockchain().put_nid(nid), self._loop)
         ChannelProperty().nid = nid
 
     def block_height_sync(self):
@@ -510,7 +515,11 @@ class BlockManager:
                 raise exc
 
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
+        future = asyncio.run_coroutine_threadsafe(
+            self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke),
+            self._loop
+        )
+        return future.result()
 
     def __confirm_prev_block_by_sync(self, block_):
         prev_block = self.__blockchain.last_unconfirmed_block
@@ -531,7 +540,8 @@ class BlockManager:
                                                        self.__blockchain,
                                                        reps=reps)
         self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
-        return self.__blockchain.add_block(prev_block, confirm_info)
+        future = asyncio.run_coroutine_threadsafe(self.__blockchain.add_block(prev_block, confirm_info), self._loop)
+        return future.result()
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
@@ -584,7 +594,9 @@ class BlockManager:
                         if block.header.height == 0:
                             self.__rebuild_nid(block)
                         elif self.__blockchain.find_nid() is None:
-                            genesis_block = self.get_blockchain().find_block_by_height(0)
+                            future = asyncio.run_coroutine_threadsafe(
+                                self.get_blockchain().find_block_by_height(0), self._loop)
+                            genesis_block = future.result()
                             self.__rebuild_nid(genesis_block)
 
                 except KeyError as e:
@@ -641,7 +653,10 @@ class BlockManager:
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
         # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
+        asyncio.run_coroutine_threadsafe(
+            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1),
+            self._loop
+        )
 
         try:
             if peer_stubs:
@@ -730,7 +745,7 @@ class BlockManager:
 
     def stop(self):
         # for reuse key value store when restart channel.
-        self.__blockchain.close_blockchain_store()
+        asyncio.run_coroutine_threadsafe(self.__blockchain.close_blockchain_store(), self._loop)
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()

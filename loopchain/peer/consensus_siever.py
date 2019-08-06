@@ -96,7 +96,10 @@ class ConsensusSiever(ConsensusBase):
         if not vote_result:
             raise NotEnoughVotes
 
-        self._block_manager.get_blockchain().add_block(block, confirm_info=vote.votes)
+        asyncio.run_coroutine_threadsafe(
+            self._block_manager.get_blockchain().add_block(block, confirm_info=vote.votes),
+            self._loop
+        )
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
         self._made_block_count += 1
@@ -143,7 +146,7 @@ class ConsensusSiever(ConsensusBase):
                 complain_votes = None
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-            last_block_votes = self.get_votes(last_block.header.hash)
+            last_block_votes = await self.get_votes(last_block.header.hash)
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
@@ -163,7 +166,10 @@ class ConsensusSiever(ConsensusBase):
                     """
                     # It should be enhanced after coming up for compatibility of versions.
                     self._blockchain.last_unconfirmed_block = None
-                    dumped_votes = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
+                    dumped_votes = asyncio.run_coroutine_threadsafe(
+                        self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash),
+                        self._loop
+                    )
                     if block_builder.version == '0.1a':
                         votes = dumped_votes
                     else:
@@ -260,7 +266,7 @@ class ConsensusSiever(ConsensusBase):
                                     str(util.diff_in_seconds(candidate_block.header.timestamp)))
                 return None
 
-    def get_votes(self, block_hash: Hash32):
+    async def get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
         except KeyError:
@@ -269,7 +275,10 @@ class ConsensusSiever(ConsensusBase):
         if prev_votes:
             prev_votes_list = prev_votes.votes
         else:
-            prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
+            prev_votes_dumped = asyncio.run_coroutine_threadsafe(
+                self._blockchain.find_confirm_info_by_hash(block_hash),
+                self._loop
+            )
             try:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
             except json.JSONDecodeError:  # handle exception for old votes
