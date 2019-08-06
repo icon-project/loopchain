@@ -553,6 +553,13 @@ class ChannelInnerTask:
         return peer_manager.get_reps()
 
     @message_queue_task
+    async def get_reps_by_hash(self, reps_hash: str) -> List[Dict[str, str]]:
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        new_reps_hash = Hash32.fromhex(reps_hash)
+        preps = blockchain.find_preps_by_roothash(new_reps_hash)
+        return preps
+
+    @message_queue_task
     def get_peer_list(self):
         peer_manager = self._channel_service.peer_manager
         return str(peer_manager.peer_list), str(peer_manager.peer_list)

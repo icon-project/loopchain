@@ -281,14 +281,14 @@ class ChannelService:
                 await self.__peer_manager.load_peers_from_file()
 
         reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(
-            self.__peer_manager.rep_hash()
+            self.__peer_manager.reps_hash()
         )
 
         if not reps_in_db:
             utils.logger.spam(f"in _load_peers serialize_as_preps("
                               f"{self.__peer_manager.serialize_as_preps()})")
             self.block_manager.get_blockchain().write_preps(
-                self.__peer_manager.rep_hash(),
+                self.__peer_manager.reps_hash(),
                 self.__peer_manager.serialize_as_preps()
             )
 
