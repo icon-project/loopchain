@@ -102,12 +102,6 @@ class BlockManager:
         return self.__peer_type
 
     @property
-    def made_block_count(self):
-        if self.__consensus_algorithm:
-            return self.__consensus_algorithm.made_block_count
-        return 0
-
-    @property
     def consensus(self):
         return self.__consensus
 

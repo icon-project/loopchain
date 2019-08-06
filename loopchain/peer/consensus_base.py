@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """A base class of consensus for the loopchain"""
+
 from abc import ABCMeta, abstractmethod
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from loopchain.blockchain import BlockChain
 
 
 class ConsensusBase(metaclass=ABCMeta):
@@ -22,12 +27,7 @@ class ConsensusBase(metaclass=ABCMeta):
     def __init__(self, block_manager):
         self._block_manager = block_manager
         self._channel_name = block_manager.channel_name
-        self._made_block_count = 0
-        self._blockchain = self._block_manager.get_blockchain()
-
-    @property
-    def made_block_count(self):
-        return self._made_block_count
+        self._blockchain: 'BlockChain' = self._block_manager.get_blockchain()
 
     def stop(self):
         pass

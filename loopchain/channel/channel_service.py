@@ -196,6 +196,7 @@ class ChannelService:
         ChannelProperty().rest_target = kwargs.get('rest_target')
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
 
         # FIXME this is temporary setting for node_type.
         if ChannelProperty().radio_station_target:
@@ -525,8 +526,18 @@ class ChannelService:
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
-        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
-                          f"complained={complained}")
+        # utils.logger.notice(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
+        #                     f"complained={complained}")
+        if self.block_manager.epoch.leader_id != new_leader_id:
+            utils.logger.notice(f"epoch leader is {self.block_manager.epoch.leader_id}\n"
+                                f"new leader is {new_leader_id}"
+                                f"leader_made_block_count("
+                                f"{self.block_manager.get_blockchain().leader_made_block_count}"
+                                f")")
+        else:
+            utils.logger.notice(f"no need reset leader_"
+                                f"made_block_count({self.block_manager.get_blockchain().leader_made_block_count})")
+
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
         if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:

@@ -109,12 +109,13 @@ class BlockChain:
 
     @property
     def my_made_block_count(self):
-        return self.__last_leader_made_block_count[ChannelProperty().peer_id]
+        return self.__last_leader_made_block_count[ChannelProperty().peer_address]
 
     def _up_leader_made_block_count(self):
-        if self.__last_leader_made_block_count[self.__last_block.header.peer_id] == 0:
-            self.__last_leader_made_block_count.clear()
         self.__last_leader_made_block_count[self.__last_block.header.peer_id] += 1
+
+    def reset_leader_made_block_count(self):
+        self.__last_leader_made_block_count.clear()
 
     @property
     def block_height(self):
