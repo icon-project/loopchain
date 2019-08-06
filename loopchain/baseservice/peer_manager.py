@@ -26,7 +26,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
-from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -115,15 +115,15 @@ class PeerManager:
         """
         return self._peer_list_data.leader_id
 
-    def rep_hash(self) -> str:
-        """return reps root hash as a string.
+    def rep_hash(self) -> Hash32:
+        """return reps root hash.
 
         :return:
         """
         block_prover = BlockProver((ExternalAddress.fromhex_address(peer.peer_id).extend()
                                     for peer in self._peer_list_data.peer_list.values()),
                                    BlockProverType.Rep)
-        return block_prover.get_proof_root().hex_0x()
+        return block_prover.get_proof_root()
 
     def serialize_as_preps(self) -> list:
         return [{'id': peer_id, 'p2pEndpoint': peer.target}
@@ -144,13 +144,13 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        if response["result"]["rootHash"] == self.rep_hash():
+        if response["result"]["rootHash"] == self.rep_hash().hex_0x():
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
         util.logger.debug(f"There is change in load_peers_from_iiss."
                           f"\nresult roothash({response['result']['rootHash']})"
-                          f"\npeer_list roothash({self.rep_hash()})")
+                          f"\npeer_list roothash({self.rep_hash().hex_0x()})")
 
         if not conf.LOAD_PEERS_FROM_IISS:
             return

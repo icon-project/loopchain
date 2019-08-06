@@ -135,13 +135,13 @@ class NodeSubscriber:
 
             block_verifier = BlockVerifier.new(block_version, blockchain.tx_versioner)
             block_verifier.invoke_func = blockchain.score_invoke
-            reps = ObjectManager().channel_service.get_rep_ids()
+            reps_getter = blockchain.find_preps_addresses_by_roothash
             try:
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
                                       blockchain.last_block.header.next_leader,
-                                      reps=reps)
+                                      reps_getter=reps_getter)
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:

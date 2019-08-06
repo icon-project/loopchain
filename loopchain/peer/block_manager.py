@@ -480,11 +480,11 @@ class BlockManager:
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
         block_verifier.invoke_func = self.__blockchain.get_invoke_func(block_.header.height)
 
-        reps = self.__channel_service.get_rep_ids()
+        reps_getter = self.__blockchain.find_preps_addresses_by_roothash
         block_verifier.verify_loosely(block_,
                                       self.__blockchain.last_block,
                                       self.__blockchain,
-                                      reps=reps)
+                                      reps_getter=reps_getter)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
             if isinstance(exc, TransactionDuplicatedHashError):
@@ -512,11 +512,11 @@ class BlockManager:
         block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
         block_verifier.invoke_func = self.__blockchain.get_invoke_func(prev_block.header.height)
 
-        reps = self.__channel_service.get_rep_ids()
+        reps_getter = self.__blockchain.find_preps_addresses_by_roothash
         block_verifier.verify_loosely(prev_block,
                                       self.__blockchain.last_block,
                                       self.__blockchain,
-                                      reps=reps)
+                                      reps_getter=reps_getter)
         return self.__blockchain.add_block(prev_block, confirm_info)
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
@@ -810,13 +810,14 @@ class BlockManager:
             block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
             block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
             block_verifier.invoke_func = self.__blockchain.score_invoke
-            reps = self.__channel_service.get_rep_ids()
+            reps_getter = self.__blockchain.find_preps_addresses_by_roothash
+
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
             block_verifier.verify(unconfirmed_block,
                                   self.__blockchain.last_block,
                                   self.__blockchain,
                                   self.__blockchain.last_block.header.next_leader,
-                                  reps=reps)
+                                  reps_getter=reps_getter)
         except Exception as e:
             exc = e
             logging.error(e)
