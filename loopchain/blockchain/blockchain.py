@@ -137,7 +137,7 @@ class BlockChain:
                                 f"\nlast_leader_made_block_count("
                                 f"{self.__last_leader_made_block_count[self.__last_block.header.peer_id]})"
                                 f"\npeer_manager leader_id({peer_manager.leader_id})")
-            return peer_manager.get_next_leader_peer().peer_id
+            return peer_manager.get_next_leader_peer(self.__last_block.header.peer_id.hex_hx()).peer_id
 
         return peer_manager.leader_id
 
@@ -175,11 +175,16 @@ class BlockChain:
 
         :return:
         """
+        self.reset_leader_made_block_count()
+
         block_hash = self.__last_block.header.hash.hex()
         block_height = self.__last_block.header.height
         start_block_height = self.__last_block.header.height
 
         while block_hash != "":
+            if block_height <= 0:
+                return
+
             block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
             block_version = self.__block_versioner.get_version(block_height)
             block_serializer = BlockSerializer.new(block_version, self.tx_versioner)

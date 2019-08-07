@@ -114,7 +114,7 @@ class CandidateBlocks:
                 self.blocks[block.header.hash].block = block
 
     def remove_block(self, block_hash):
-        if self.blocks[block_hash].block:
+        if block_hash in self.blocks and self.blocks[block_hash].block:
             prev_block_hash = self.blocks[block_hash].block.header.prev_hash
 
             for _block_hash in list(self.blocks.keys()):
