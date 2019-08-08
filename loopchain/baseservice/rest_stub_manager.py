@@ -54,34 +54,32 @@ class RestStubManager:
             "GetBlockByHeight": "node_getBlockByHeight",
             "Status": "/status/peer/",
             "GetLastBlock": "icx_getLastBlock",
-            "GetReps": "rep_getList"
+            "GetReps": "rep_getListByHash"
         }
 
         self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
 
-    def call(self, method_name, message=None, timeout=None, is_stub_reuse=True, is_raise=False) -> dict:
+    def call(self, method_name, params=None, timeout=None, is_stub_reuse=True, is_raise=False) -> dict:
         try:
             version = self._method_versions[method_name]
             url = self._version_urls[version]
             method_name = self._method_names[method_name]
+            timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
 
             if version == conf.ApiVersion.v1:
                 url += method_name
                 response = requests.get(url=url,
                                         params={'channel': self._channel_name},
-                                        timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                                        timeout=timeout)
                 if response.status_code != 200:
                     raise ConnectionError
                 response = response.json()
             else:
                 # using jsonRPC client request.
-                if message:
-                    request = Request(method_name, message)
-                else:
-                    request = Request(method_name)
+                request = Request(method_name, params) if params else Request(method_name)
 
                 try:
-                    response = self._http_clients[url].send(request, timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                    response = self._http_clients[url].send(request, timeout=timeout)
                 except Exception as e:
                     raise ConnectionError(e)
             util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
@@ -91,20 +89,8 @@ class RestStubManager:
             logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
             raise e
 
-    def call_async(self, method_name, message=None, call_back=None, timeout=None, is_stub_reuse=True):
-        future = self._executor.submit(self.call, method_name, message, timeout, is_stub_reuse)
+    def call_async(self, method_name, params=None, call_back=None, timeout=None, is_stub_reuse=True):
+        future = self._executor.submit(self.call, method_name, params, timeout, is_stub_reuse)
         if call_back:
             future.add_done_callback(call_back)
         return future
-
-    def call_in_times(self, method_name, message=None, retry_times=None, is_stub_reuse=True, timeout=conf.GRPC_TIMEOUT):
-        retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-
-        exception = None
-        for i in range(retry_times):
-            try:
-                return self.call(method_name, message)
-            except Exception as e:
-                exception = e
-
-        raise exception

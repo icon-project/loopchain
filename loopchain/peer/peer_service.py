@@ -113,10 +113,6 @@ class PeerService:
         return self._radio_station_target
 
     @property
-    def radio_station_stub(self):
-        return self._radio_station_stub
-
-    @property
     def peer_port(self):
         return self._peer_port
 
@@ -136,12 +132,7 @@ class PeerService:
 
     def _get_channel_infos(self):
         if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.LOAD_PEERS_FROM_IISS:
-                # this is temporary code for legacy support, and will be removed at next release.
-                return {channel: {'score_package': DEFAULT_SCORE_PACKAGE}
-                        for channel in conf.CHANNEL_OPTION}
-            else:
-                return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
+            return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         else:
             response = self._radio_station_stub.call("GetChannelInfos")
             return {channel: value for channel, value in response["channel_infos"].items()}

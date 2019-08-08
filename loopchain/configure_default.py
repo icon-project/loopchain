@@ -256,6 +256,8 @@ SUBSCRIBE_USE_HTTPS = False
 SHUTDOWN_TIMER = 60 * 120
 GET_LAST_BLOCK_TIMER = 30
 BLOCK_SYNC_RETRY_NUMBER = 5
+TIMEOUT_FOR_LEADER_COMPLAIN = 60
+MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
 
 
 class NodeFunction(IntEnum):
@@ -301,7 +303,6 @@ CHANNEL_BUILTIN = True
 # IISS ###
 ##########
 ENABLE_IISS = True
-LOAD_PEERS_FROM_IISS = False
 
 
 ########
@@ -419,8 +420,7 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-TIMEOUT_FOR_LEADER_COMPLAIN = 60
-MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
+CREP_ROOT_HASH = ''
 
 ####################
 # QOS ####

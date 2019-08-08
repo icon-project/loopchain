@@ -970,11 +970,11 @@ class BlockChain:
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators':
                 self.find_preps_ids_by_roothash(prev_block.header.reps_hash)
-                if conf.LOAD_PEERS_FROM_IISS
+                if prev_block.header.version != "0.1a"
                 else [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
         }
 
-        if conf.ENABLE_IISS:
+        if is_block_editable:
             request_origin['isBlockEditable'] = hex(is_block_editable)
 
         request = convert_params(request_origin, ParamType.invoke)
@@ -991,13 +991,11 @@ class BlockChain:
         next_prep = response.get("prep")
         if next_prep:
             utils.logger.debug(f"in score invoke next_prep({next_prep})")
-            conf.LOAD_PEERS_FROM_IISS = True
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
         else:
             next_preps_hash = None
-            reps = ObjectManager().channel_service.get_rep_ids()
 
-        if conf.LOAD_PEERS_FROM_IISS:
+        if prev_block.header.version != "0.1a":
             reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
         else:
             reps = ObjectManager().channel_service.get_rep_ids()
