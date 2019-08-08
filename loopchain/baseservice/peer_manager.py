@@ -115,7 +115,7 @@ class PeerManager:
         """
         return self._peer_list_data.leader_id
 
-    def rep_hash(self) -> Hash32:
+    def reps_hash(self) -> Hash32:
         """return reps root hash.
 
         :return:
@@ -144,13 +144,13 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        if response["result"]["rootHash"] == self.rep_hash().hex_0x():
+        if response["result"]["rootHash"] == self.reps_hash().hex_0x():
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
         util.logger.debug(f"There is change in load_peers_from_iiss."
                           f"\nresult roothash({response['result']['rootHash']})"
-                          f"\npeer_list roothash({self.rep_hash().hex_0x()})")
+                          f"\npeer_list roothash({self.reps_hash().hex_0x()})")
 
         if not conf.LOAD_PEERS_FROM_IISS:
             return
