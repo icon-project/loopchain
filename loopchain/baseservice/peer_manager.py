@@ -155,7 +155,7 @@ class PeerManager:
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
-        self.reset_peers(check_status=False)
+        self.remove_all_peers()
 
         reps = response["result"]["preps"]
         self._add_reps(reps)
@@ -325,28 +325,9 @@ class PeerManager:
 
         return most_height_peer
 
-    def reset_peers(self, reset_action=None, check_status=True):
-        # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
+    def remove_all_peers(self):
         for peer_id in list(self.peer_list):
-            peer_each = self.peer_list[peer_id]
-
-            do_remove_peer = False
-
-            if check_status:
-                try:
-                    stub_manager = self.get_peer_stub_manager(peer_each)
-                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
-                                      is_stub_reuse=True)
-                except Exception as e:
-                    logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
-                    do_remove_peer = True
-            else:
-                do_remove_peer = True
-
-            if do_remove_peer:
-                self.remove_peer(peer_each.peer_id)
-                if reset_action is not None:
-                    reset_action(peer_each.peer_id, peer_each.target)
+            self.remove_peer(peer_id)
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
