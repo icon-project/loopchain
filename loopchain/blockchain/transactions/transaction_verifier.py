@@ -1,13 +1,55 @@
+import functools
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
-from loopchain.crypto.signature import SignVerifier
-from loopchain.crypto.hashing import build_hash_generator
+
 from loopchain.blockchain.exception import TransactionDuplicatedHashError, TransactionInvalidHashError
 from loopchain.blockchain.exception import TransactionInvalidSignatureError
-
+from loopchain.crypto.hashing import build_hash_generator
+from loopchain.crypto.signature import SignVerifier
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import Transaction, TransactionVersioner
+
+
+def cache_result(tv_func):
+    """Cache verified result to Transaction.
+
+    If Transaction verified successfully, cache its result.
+    If Transaction verified failed with exception, cache its exception.
+    If Transaction didn't verified at all, its attribute may not exist.
+    """
+    @functools.wraps(tv_func)
+    def _wrapper(*args, **kwargs):
+        tv: TransactionVerifier = args[0]
+        tx: Transaction = args[1]
+
+        attr_name = "_cache_" + tv_func.__name__
+        cached_result = getattr(tx, attr_name, False)
+
+        if isinstance(cached_result, Exception):
+            tv._handle_exceptions(cached_result)
+            return
+        elif cached_result:
+            return
+
+        if tv._raise_exceptions:
+            try:
+                tv_func(*args, **kwargs)
+            except Exception as e:
+                object.__setattr__(tx, attr_name, e)
+                raise
+            else:
+                object.__setattr__(tx, attr_name, True)
+        else:
+            orig_exceptions = set(tv.exceptions)
+            tv_func(*args, **kwargs)
+            if len(orig_exceptions) != len(tv.exceptions):
+                exceptions = set(tv.exceptions) - orig_exceptions
+                object.__setattr__(tx, attr_name, next(iter(exceptions)))
+            else:
+                object.__setattr__(tx, attr_name, True)
+
+    return _wrapper
 
 
 class TransactionVerifier(ABC):
@@ -38,6 +80,7 @@ class TransactionVerifier(ABC):
             exception = TransactionDuplicatedHashError(tx)
             self._handle_exceptions(exception)
 
+    @cache_result
     def verify_hash(self, tx: 'Transaction'):
         params = self._tx_serializer.to_origin_data(tx)
         tx_hash_expected = self._hash_generator.generate_hash(params)
@@ -45,6 +88,7 @@ class TransactionVerifier(ABC):
             exception = TransactionInvalidHashError(tx, tx_hash_expected)
             self._handle_exceptions(exception)
 
+    @cache_result
     def verify_signature(self, tx: 'Transaction'):
         if self._allow_unsigned and not tx.is_signed():
             return
