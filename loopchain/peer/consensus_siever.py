@@ -115,13 +115,6 @@ class ConsensusSiever(ConsensusBase):
             for tx_hash_in_unconfirmed_block in last_unconfirmed_block.body.transactions:
                 block_builder.transactions.pop(tx_hash_in_unconfirmed_block, None)
 
-    def __makeup_block(self, complained_result):
-        prev_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-        block_height = prev_block.header.height + 1
-        block_version = self._blockchain.block_versioner.get_version(block_height)
-
-        return self._block_manager.epoch.makeup_block(prev_block, block_version, complained_result)
-
     async def consensus(self):
         util.logger.debug(f"-------------------consensus "
                           f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")

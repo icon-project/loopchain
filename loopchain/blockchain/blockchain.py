@@ -237,18 +237,27 @@ class BlockChain:
 
         return bytes()
 
-    def find_preps_by_roothash(self, roothash: str) -> bytes:
-        hash_encoded = roothash.encode(encoding='UTF-8')
-        try:
-            return bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + hash_encoded))
-        except KeyError:
-            return bytes()
+    def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
+        preps = self.find_preps_by_roothash(roothash)
+        return [prep["id"] for prep in preps]
 
-    def write_preps(self, roothash: str, preps: dict, batch: KeyValueStoreWriteBatch = None):
+    def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
+        preps_ids = self.find_preps_ids_by_roothash(roothash)
+        return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
+
+    def find_preps_by_roothash(self, roothash: Hash32) -> list:
+        try:
+            preps_dumped = bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + roothash))
+        except KeyError:
+            return []
+        else:
+            return json.loads(preps_dumped)
+
+    def write_preps(self, roothash: Hash32, preps: list, batch: KeyValueStoreWriteBatch = None):
         write_target = batch or self._blockchain_store
 
         write_target.put(
-            BlockChain.PREPS_KEY + roothash.encode(encoding=conf.HASH_KEY_ENCODING),
+            BlockChain.PREPS_KEY + roothash,
             json.dumps(preps).encode(encoding=conf.PEER_DATA_ENCODING)
         )
 
@@ -405,7 +414,7 @@ class BlockChain:
         if next_prep:
             utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
                               f"\npreps({next_prep['preps']})")
-            self.write_preps(next_prep['rootHash'], next_prep['preps'], batch)
+            self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
 
         if confirm_info:
             batch.put(
@@ -960,7 +969,9 @@ class BlockChain:
             'transactions': transactions,
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators':
-                [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
+                self.find_preps_ids_by_roothash(prev_block.header.reps_hash)
+                if conf.LOAD_PEERS_FROM_IISS
+                else [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
         }
 
         if conf.ENABLE_IISS:
@@ -981,6 +992,15 @@ class BlockChain:
         if next_prep:
             utils.logger.debug(f"in score invoke next_prep({next_prep})")
             conf.LOAD_PEERS_FROM_IISS = True
+            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+        else:
+            next_preps_hash = None
+            reps = ObjectManager().channel_service.get_rep_ids()
+
+        if conf.LOAD_PEERS_FROM_IISS:
+            reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
+        else:
+            reps = ObjectManager().channel_service.get_rep_ids()
 
         block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
         block_builder.reset_cache()
@@ -1008,7 +1028,9 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        block_builder.reps = reps
+        block_builder.next_reps_hash = next_preps_hash
+
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:

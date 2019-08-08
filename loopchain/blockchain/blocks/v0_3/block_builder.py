@@ -19,6 +19,7 @@ class BlockBuilder(BaseBlockBuilder):
 
         # Attributes that must be assigned
         self.reps: List[ExternalAddress] = None
+        self.next_reps_hash: Hash32 = None
         self.leader_votes: List[LeaderVote] = []
         self.prev_votes: List[BlockVote] = None
         self.next_leader: 'ExternalAddress' = None
@@ -85,6 +86,7 @@ class BlockBuilder(BaseBlockBuilder):
             "state_hash": self.state_hash,
             "receipts_hash": self.receipts_hash,
             "reps_hash": self.reps_hash,
+            "next_reps_hash": self.next_reps_hash,
             "leader_votes_hash": self.leader_votes_hash,
             "prev_votes_hash": self.prev_votes_hash,
             "logs_bloom": self.logs_bloom,
@@ -126,11 +128,15 @@ class BlockBuilder(BaseBlockBuilder):
         return block_prover.get_proof_root()
 
     def build_reps_hash(self):
-        if self.reps_hash is not None:
-            return self.reps_hash
+        try:
+            if self.reps_hash is not None:
+                return self.reps_hash
 
-        self.reps_hash = self._build_reps_hash()
-        return self.reps_hash
+            self.reps_hash = self._build_reps_hash()
+            return self.reps_hash
+        finally:
+            if self.next_reps_hash is None:
+                self.next_reps_hash = self.reps_hash
 
     def _build_reps_hash(self):
         block_prover = BlockProver((rep.extend() for rep in self.reps), BlockProverType.Rep)
@@ -206,6 +212,7 @@ class BlockBuilder(BaseBlockBuilder):
             self.receipts_hash,
             self.state_hash,
             self.reps_hash,
+            self.next_reps_hash,
             self.leader_votes_hash,
             self.prev_votes_hash,
             self.logs_bloom,
@@ -227,6 +234,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.state_hash = header.state_hash
         self.receipts_hash = header.receipts_hash
         self.reps_hash = header.reps_hash
+        self.next_reps_hash = header.next_reps_hash
         self.leader_votes_hash = header.leader_votes_hash
         self.prev_votes_hash = header.prev_votes_hash
         self.logs_bloom = header.logs_bloom

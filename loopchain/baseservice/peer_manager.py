@@ -26,7 +26,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
-from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -115,15 +115,15 @@ class PeerManager:
         """
         return self._peer_list_data.leader_id
 
-    def rep_hash(self) -> str:
-        """return reps root hash as a string.
+    def rep_hash(self) -> Hash32:
+        """return reps root hash.
 
         :return:
         """
         block_prover = BlockProver((ExternalAddress.fromhex_address(peer.peer_id).extend()
                                     for peer in self._peer_list_data.peer_list.values()),
                                    BlockProverType.Rep)
-        return block_prover.get_proof_root().hex_0x()
+        return block_prover.get_proof_root()
 
     def serialize_as_preps(self) -> list:
         return [{'id': peer_id, 'p2pEndpoint': peer.target}
@@ -144,18 +144,18 @@ class PeerManager:
             util.logger.debug(f"There is no preps in result.")
             return
 
-        if response["result"]["rootHash"] == self.rep_hash():
+        if response["result"]["rootHash"] == self.rep_hash().hex_0x():
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
         util.logger.debug(f"There is change in load_peers_from_iiss."
                           f"\nresult roothash({response['result']['rootHash']})"
-                          f"\npeer_list roothash({self.rep_hash()})")
+                          f"\npeer_list roothash({self.rep_hash().hex_0x()})")
 
         if not conf.LOAD_PEERS_FROM_IISS:
             return
 
-        self.reset_peers(check_status=False)
+        self.remove_all_peers()
 
         reps = response["result"]["preps"]
         self._add_reps(reps)
@@ -325,28 +325,9 @@ class PeerManager:
 
         return most_height_peer
 
-    def reset_peers(self, reset_action=None, check_status=True):
-        # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
+    def remove_all_peers(self):
         for peer_id in list(self.peer_list):
-            peer_each = self.peer_list[peer_id]
-
-            do_remove_peer = False
-
-            if check_status:
-                try:
-                    stub_manager = self.get_peer_stub_manager(peer_each)
-                    stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request="reset peers in group"),
-                                      is_stub_reuse=True)
-                except Exception as e:
-                    logging.warning(f"gRPC Exception({str(e)}) remove this peer({str(peer_each.target)})")
-                    do_remove_peer = True
-            else:
-                do_remove_peer = True
-
-            if do_remove_peer:
-                self.remove_peer(peer_each.peer_id)
-                if reset_action is not None:
-                    reset_action(peer_each.peer_id, peer_each.target)
+            self.remove_peer(peer_id)
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.

@@ -21,5 +21,7 @@
   },
   "mainPRepCount": 4,
   "mainAndSubPRepCount": 4,
-  "decentralizeTrigger": 0
+  "decentralizeTrigger": 0,
+  "iissCalculatePeriod": 10,
+  "termPeriod": 10
 }
