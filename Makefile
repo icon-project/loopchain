@@ -18,7 +18,7 @@ else ifeq ($(UNAME), Linux)
 	RABBITMQ_CMD := sudo rabbitmqctl
 endif
 
-CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test clean-proto
+CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test
 
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}'\
@@ -79,7 +79,7 @@ check:
 test:
 	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
 
-## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test clean-proto
+## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check
 
 clean-process:
