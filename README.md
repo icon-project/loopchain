@@ -1,4 +1,6 @@
 # Loopchain
+[![Master Build Status](https://travis-ci.org/icon-project/loopchain.svg?branch=master)](https://travis-ci.org/icon-project/loopchain)
+[![Develop Build Status](https://travis-ci.org/icon-project/loopchain.svg?branch=develop)](https://travis-ci.org/icon-project/loopchain)
 
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
  
