@@ -1,4 +1,10 @@
 # Loopchain
+| Info | Status |
+|:---:|---|
+| License | ![GitHub](https://img.shields.io/github/license/icon-project/loopchain) |
+| Release Version | ![GitHub release](https://img.shields.io/github/release/icon-project/loopchain) |
+| Status (master) | [![Build Status](https://travis-ci.org/icon-project/loopchain.svg?branch=master)](https://travis-ci.org/icon-project/loopchain) |
+| Status (develop) | [![Build Status](https://travis-ci.org/icon-project/loopchain.svg?branch=develop)](https://travis-ci.org/icon-project/loopchain) |
 
 [![loopchain](https://snapcraft.io/loopchain/badge.svg)](https://snapcraft.io/loopchain)
 
