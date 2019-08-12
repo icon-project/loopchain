@@ -113,7 +113,6 @@ class ConsensusSiever(ConsensusBase):
         await self.__add_block(last_unconfirmed_block)
         self.__remove_duplicate_tx_when_turn_to_leader(block_builder, last_unconfirmed_block)
         self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-        return self._blockchain.get_next_leader()
 
     def __remove_duplicate_tx_when_turn_to_leader(self, block_builder, last_unconfirmed_block):
         if self._blockchain.my_made_block_count == 0:
@@ -143,8 +142,6 @@ class ConsensusSiever(ConsensusBase):
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-            next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
-
             need_next_call = False
             try:
                 complained_result = self._block_manager.epoch.complained_result
@@ -170,11 +167,6 @@ class ConsensusSiever(ConsensusBase):
                     # next unconfirmed block height is 10.
                     if last_unconfirmed_block:
                         await self.__add_block(last_unconfirmed_block)
-                        peer_manager = ObjectManager().channel_service.peer_manager
-                        next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
-                            current_leader_peer_id=ChannelProperty().peer_id).peer_id)
-                        util.logger.notice(f"next_leader in siever({next_leader}) made_block_count("
-                                           f"{self._blockchain.leader_made_block_count})")
                     else:
                         util.logger.info(f"This leader already made "
                                          f"{self._blockchain.my_made_block_count} blocks. "
@@ -185,24 +177,24 @@ class ConsensusSiever(ConsensusBase):
                         (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
                 elif last_unconfirmed_block:
-                    next_leader_as_str = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
-                    next_leader = ExternalAddress.fromhex_address(next_leader_as_str)
+                    await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
             except NotEnoughVotes:
                 need_next_call = True
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
-            candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
+            next_leader = self._blockchain.get_next_leader()
+            candidate_block = self.__build_candidate_block(
+                block_builder, ExternalAddress.fromhex_address(next_leader), vote_result)
 
             candidate_block, invoke_results = self._blockchain.score_invoke(
-                candidate_block, last_block, conf.ENABLE_IISS
-            )
+                candidate_block, last_block, is_block_editable=True)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
             self._blockchain.last_unconfirmed_block = candidate_block
-            self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
+            self._block_manager.epoch = Epoch.new_epoch(next_leader)
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._blockchain.last_unconfirmed_block = candidate_block
@@ -212,19 +204,19 @@ class ConsensusSiever(ConsensusBase):
             if await self._wait_for_voting(candidate_block) is None:
                 return
 
-            if next_leader.hex_hx() != ChannelProperty().peer_id:
+            if next_leader != ChannelProperty().peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
-                                 f"next_leader({next_leader.hex_hx()}) "
+                                 f"next_leader({next_leader}) "
                                  f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
+                ObjectManager().channel_service.reset_leader(next_leader)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self._blockchain.my_made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
                     # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
                     # next unconfirmed block height is 10.
-                    ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
+                    ObjectManager().channel_service.reset_leader(next_leader)
                     
-                self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
+                self._block_manager.epoch = Epoch.new_epoch(next_leader)
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
                 else:

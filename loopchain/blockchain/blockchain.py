@@ -71,7 +71,7 @@ class BlockChain:
         self.__block_height = -1
         # last block in block db
         self.__last_block = None
-        self.__last_leader_made_block_count: Counter = Counter()
+        self.__made_block_count: Counter = Counter()
 
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
@@ -104,22 +104,23 @@ class BlockChain:
     @property
     def leader_made_block_count(self) -> int:
         if self.__last_block:
-            return self.__last_leader_made_block_count[self.__last_block.header.peer_id]
+            return self.__made_block_count[self.__last_block.header.peer_id]
         return -1
 
     @property
     def my_made_block_count(self) -> int:
-        return self.__last_leader_made_block_count[ChannelProperty().peer_address]
+        return self.__made_block_count[ChannelProperty().peer_address]
 
-    def _up_leader_made_block_count(self):
+    def _up_made_block_count(self, peer_id: ExternalAddress) -> None:
+        # prevent count up after reset.
         if ObjectManager().channel_service.peer_manager.leader_id != ChannelProperty().peer_id \
                 or self.__last_block.header.peer_id == ChannelProperty().peer_address:
-            self.__last_leader_made_block_count[self.__last_block.header.peer_id] += 1
-        utils.logger.notice(f"up made block count\n{self.__last_leader_made_block_count}")
+            self.__made_block_count[peer_id] += 1
+            utils.logger.notice(f"up made block count\n{self.__made_block_count}")
 
     def reset_leader_made_block_count(self):
-        utils.logger.notice(f"reset_leader_made_block_count\n{self.__last_leader_made_block_count}")
-        self.__last_leader_made_block_count.clear()
+        utils.logger.notice(f"reset_leader_made_block_count\n{self.__made_block_count}")
+        self.__made_block_count.clear()
 
     def get_next_leader(self) -> str:
         """get next leader by leader_made_block_count
@@ -127,7 +128,7 @@ class BlockChain:
         :return: new leader's peer_id as hex_hx(str)
         """
         peer_manager = ObjectManager().channel_service.peer_manager
-        if self.__last_leader_made_block_count[self.__last_block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1):
+        if self.__made_block_count[self.__last_block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1):
             # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
             # next unconfirmed block height is 10.
 
@@ -135,7 +136,7 @@ class BlockChain:
                                 f"last block height({self.__last_block.header.height})"
                                 f"\nlast block peer_id({self.__last_block.header.peer_id})"
                                 f"\nlast_leader_made_block_count("
-                                f"{self.__last_leader_made_block_count[self.__last_block.header.peer_id]})"
+                                f"{self.__made_block_count[self.__last_block.header.peer_id]})"
                                 f"\npeer_manager leader_id({peer_manager.leader_id})")
             return peer_manager.get_next_leader_peer(self.__last_block.header.peer_id.hex_hx()).peer_id
 
@@ -190,7 +191,7 @@ class BlockChain:
             block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
-            self.__last_leader_made_block_count[block.header.peer_id] += 1
+            self.__made_block_count[block.header.peer_id] += 1
 
             if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
                 break
@@ -388,7 +389,7 @@ class BlockChain:
             self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
 
-            self._up_leader_made_block_count()
+            self._up_made_block_count(block.header.peer_id)
 
             logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
                           f"last_block({self.__last_block.header.hash.hex()})")
@@ -1041,6 +1042,7 @@ class BlockChain:
                 'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
                 'timestamp': _block.header.timestamp
             },
+            'isBlockEditable': hex(is_block_editable),
             'transactions': transactions,
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators':
@@ -1048,9 +1050,6 @@ class BlockChain:
                 if prev_block.header.version != "0.1a"
                 else [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
         }
-
-        if is_block_editable:
-            request_origin['isBlockEditable'] = hex(is_block_editable)
 
         request = convert_params(request_origin, ParamType.invoke)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
