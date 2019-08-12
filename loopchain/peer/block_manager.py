@@ -359,11 +359,11 @@ class BlockManager:
             traceback.print_exc()
             raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
-        votes_dumped = response.confirm_info
-        if isinstance(votes_dumped, list):
+        votes_dumped: bytes = response.confirm_info
+        try:
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
-        else:
+        except json.JSONDecodeError:
             votes = None
 
         return (
@@ -383,11 +383,11 @@ class BlockManager:
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        votes_dumped = get_block_result.get('confirm_info', None)
-        if isinstance(votes_dumped, list):
+        votes_dumped: str = get_block_result.get('confirm_info', '')
+        try:
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
-        else:
+        except json.JSONDecodeError:
             votes = None
         return block, max_height, -1, votes, message_code.Response.success
 

@@ -119,11 +119,11 @@ class NodeSubscriber:
             else:
                 return ObjectManager().channel_service.shutdown_peer(message=kwargs.get('error'))
 
-        block_dict, confirm_info = kwargs.get('block'), kwargs.get('confirm_info')
-        if confirm_info:
-            votes_serialized = json.loads(confirm_info)
+        block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
+        try:
+            votes_serialized = json.loads(votes_dumped)
             vote = BlockVotes.deserialize_votes(votes_serialized)
-        else:
+        except json.JSONDecodeError:
             vote = None
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
@@ -146,7 +146,7 @@ class NodeSubscriber:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:
                 logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
-                              f"hash({confirmed_block.header.hash.hex()}), confirm_info({confirm_info})")
+                              f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped})")
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
 
