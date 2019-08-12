@@ -19,6 +19,8 @@ env:
     - TEST_DIR="testcase/integration"
 
 before_install:
+    echo "CREDENTIAL?"
+    exit 1
     # Basic dependencies
     - sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev automake libtool lsof
 
@@ -50,6 +52,7 @@ script:
     - pytest $TEST_DIR -vv
 
 notifications:
+    slack: $SLACK_NOTIFY
     email:
     # - t_core@icon.foundation
 
