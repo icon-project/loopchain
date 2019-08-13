@@ -391,31 +391,6 @@ class BlockManager:
             votes = None
         return block, max_height, -1, votes, message_code.Response.success
 
-    def __precommit_block_request(self, peer_stub, last_block_height):
-        """request precommit block by gRPC
-
-        :param peer_stub:
-        :param block_height:
-        :return block, max_block_height, response_code
-        """
-        response = peer_stub.GetPrecommitBlock(loopchain_pb2.PrecommitBlockRequest(
-            last_block_height=last_block_height,
-            channel=self.__channel_name
-        ), conf.GRPC_TIMEOUT)
-
-        if response.block == b"":
-            return None, response.response_code, response.response_message
-        else:
-            try:
-                precommit_block = self.blockchain.block_loads(response.block)
-            except Exception as e:
-                traceback.print_exc()
-                raise exception.BlockError(f"Received block is invalid: original exception={e}")
-            # util.logger.spam(
-            #     f"GetPrecommitBlock:response::{response.response_code}/{response.response_message}/"
-            #     f"{precommit_block}/{precommit_block.confirmed_transaction_list}")
-            return precommit_block, response.response_code, response.response_message
-
     def __start_block_height_sync_timer(self):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
@@ -464,7 +439,7 @@ class BlockManager:
 
     def __add_block_by_sync(self, block_, confirm_info=None):
         logging.debug(f"block_manager.py >> block_height_sync :: "
-                      f"height({block_.header.height}) confirm_info({confirm_info})")
+                      f"height({block_.header.height}) hash({block_.header.hash})")
 
         block_version = self.blockchain.block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner, raise_exceptions=False)
