@@ -37,16 +37,16 @@ develop: install-dev generate-proto
 
 # pip install packages
 requires:
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@master
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@1.3.3
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@1.1.0
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@1.3.4
 	$(PIP_INSTALL) tbears
 
 install: requires
 	$(PIP_INSTALL_REQUIREMENTS)
 
 install-dev: requires
-	$(PIP_INSTALL_REQUIREMENTS)[tests]
+	$(PIP_INSTALL_REQUIREMENTS)
 
 # Generate python gRPC proto and generate a key
 generate: generate-proto generate-key
@@ -100,6 +100,7 @@ clean-pyc:
 clean-db:
 	@echo "Cleaning up all DB..."
 	@rm -rf .storage*
+	@rm -rf $(HOME)/tmp/db_data/loopchain*
 
 clean-log:
 	@echo "Cleaning up logs..."
