@@ -24,9 +24,8 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
-from loopchain.baseservice import TimerService
-from loopchain.peermanager import PeerManager
 from loopchain.baseservice import RestStubManager, NodeSubscriber
+from loopchain.baseservice import TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
@@ -35,6 +34,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
+from loopchain.peermanager import PeerManager, PeerLoader
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -298,7 +298,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.__peer_manager.load_peers()
+        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

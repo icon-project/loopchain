@@ -35,7 +35,7 @@ class PeerLoader:
 
     @staticmethod
     async def load(peer_manager: 'PeerManager'):
-        PeerLoader._load_peers_from_iiss(peer_manager)
+        PeerLoader.load_peers_from_iiss(peer_manager)
 
         if not peer_manager.peer_list:
             if conf.NodeType.is_support_node_function(conf.NodeFunction.Vote, ChannelProperty().node_type):
@@ -49,7 +49,7 @@ class PeerLoader:
             utils.logger.debug(f"peer_target: {peer.order}:{peer.target}")
 
     @staticmethod
-    def _load_peers_from_iiss(peer_manager: 'PeerManager'):
+    def load_peers_from_iiss(peer_manager: 'PeerManager'):
         request = {
             "method": "ise_getPRepList"
         }

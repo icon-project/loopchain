@@ -107,16 +107,10 @@ class BlockChain:
             return self.__made_block_count[self.__last_block.header.peer_id]
         return -1
 
-    @property
-    def my_made_block_count(self) -> int:
-        return self.__made_block_count[ChannelProperty().peer_address]
-
     def _up_made_block_count(self, peer_id: ExternalAddress) -> None:
-        # prevent count up after reset.
-        if ObjectManager().channel_service.peer_manager.leader_id != ChannelProperty().peer_id \
-                or self.__last_block.header.peer_id == ChannelProperty().peer_address:
-            self.__made_block_count[peer_id] += 1
-            utils.logger.notice(f"up made block count\n{self.__made_block_count}")
+        self.__made_block_count[peer_id] += 1
+        if self.__made_block_count[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
+            self.__made_block_count[peer_id] %= conf.MAX_MADE_BLOCK_COUNT
 
     def reset_leader_made_block_count(self):
         utils.logger.notice(f"reset_leader_made_block_count\n{self.__made_block_count}")
@@ -128,8 +122,8 @@ class BlockChain:
         :return: new leader's peer_id as hex_hx(str)
         """
         peer_manager = ObjectManager().channel_service.peer_manager
-        if self.__made_block_count[self.__last_block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1):
-            # In here! (conf.MAX_MADE_BLOCK_COUNT - 1) means if my_made_block_count is 9,
+        if self.__block_manager.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
+            # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
             # next unconfirmed block height is 10.
 
             utils.logger.notice(f"in get_next_leader there is new. "

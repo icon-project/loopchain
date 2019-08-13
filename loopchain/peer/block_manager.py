@@ -102,6 +102,12 @@ class BlockManager:
         return self.__peer_type
 
     @property
+    def made_block_count(self):
+        if self.__consensus_algorithm:
+            return self.__consensus_algorithm.made_block_count
+        return 0
+
+    @property
     def consensus(self):
         return self.__consensus
 
@@ -231,7 +237,7 @@ class BlockManager:
             self.epoch = Epoch.new_epoch()
 
         # reset leader
-        self.__channel_service.reset_leader(self.__blockchain.get_next_leader())
+        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
@@ -648,10 +654,12 @@ class BlockManager:
     def start_epoch(self):
         curr_block_header = self.__current_last_block().header
         current_height = curr_block_header.height
+        next_leader = curr_block_header.next_leader
+        leader_peer = \
+            self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
 
-        leader_id = self.__blockchain.get_next_leader()
-        if leader_id:
-            self.epoch = Epoch.new_epoch(leader_id)
+        if leader_peer:
+            self.epoch = Epoch.new_epoch(leader_peer.peer_id)
         elif self.epoch and self.epoch.height < current_height:
             self.epoch = Epoch.new_epoch()
 

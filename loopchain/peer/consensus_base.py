@@ -28,6 +28,7 @@ class ConsensusBase(metaclass=ABCMeta):
         self._block_manager = block_manager
         self._channel_name = block_manager.channel_name
         self._blockchain: 'BlockChain' = self._block_manager.get_blockchain()
+        self.made_block_count = 0
 
     def stop(self):
         pass
