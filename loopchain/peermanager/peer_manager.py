@@ -17,9 +17,7 @@ import json
 import logging
 import math
 import threading
-from collections import OrderedDict
-from typing import TYPE_CHECKING, Optional
-from typing import Union
+from typing import Optional, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -27,66 +25,8 @@ from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
-from loopchain.peermanager import Peer, PeerLoader
+from loopchain.peermanager import Peer, PeerLoader, PeerListData
 from loopchain.protos import loopchain_pb2
-
-if TYPE_CHECKING:
-    from loopchain.blockchain.blocks import BlockHeader
-
-
-class PeerListData:
-    """Manage peer list as serializable data."""
-    def __init__(self):
-        self.peer_list: OrderedDict[BlockHeader.peer_id, Peer] = OrderedDict()  # { peer_id:Peer }
-        self.leader_id: BlockHeader.peer_id = None  # leader_peer_id
-
-    def serialize(self) -> dict:
-        peer_list_serialized = [peer.serialize() for peer_id, peer in self.peer_list.items()]
-
-        return {
-            'peer_list': peer_list_serialized,
-            'leader_id': self.leader_id
-        }
-
-    @staticmethod
-    def deserialize(peer_list_data_serialized: dict) -> 'PeerListData':
-        peers_as_list = [Peer.deserialize(peer_serialized)
-                         for peer_id, peer_serialized in peer_list_data_serialized['peer_list']]
-        sorted(peers_as_list, key=lambda peer: peer.order)
-
-        peer_list = OrderedDict([(peer.peer_id, peer) for peer in peers_as_list])
-
-        peer_list_data = PeerListData()
-        peer_list_data.peer_list = peer_list
-        peer_list_data.leader_id = peer_list_data_serialized['leader_id']
-        return peer_list_data
-
-    def dump(self) -> bytes:
-        serialized = self.serialize()
-        return json.dumps(serialized).encode(encoding=conf.PEER_DATA_ENCODING)
-
-    @staticmethod
-    def load(peer_list_data_dumped: bytes):
-        serialized = json.loads(peer_list_data_dumped.decode(encoding=conf.PEER_DATA_ENCODING))
-        return PeerListData.deserialize(serialized)
-
-    def next_peer(self, peer_id) -> Optional[Peer]:
-        try:
-            return list(self.peer_list.values())[list(self.peer_list.keys()).index(peer_id) + 1]
-        except IndexError:
-            return list(self.peer_list.values())[0]
-        except ValueError:
-            util.logger.warning(f"peer_id({peer_id}) not in peer_list")
-            return None
-
-    def last_peer(self) -> Optional[Peer]:
-        """get last peer in peer_list
-
-        :return:
-        """
-        if len(self.peer_list) > 0:
-            return list(self.peer_list.values())[-1]
-        return None
 
 
 class PeerManager:

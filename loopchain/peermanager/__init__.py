@@ -15,4 +15,5 @@
 
 from .peer import *
 from .peer_loader import *
+from .peer_list_data import *
 from .peer_manager import *
