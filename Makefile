@@ -19,6 +19,7 @@ else ifeq ($(UNAME), Linux)
 endif
 
 CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test
+TEST_CMD := pytest -vv
 
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}'\
@@ -76,8 +77,15 @@ check:
 	@$(RABBITMQ_CMD) list_queues
 
 ## Run unittest
-test:
-	@python3 -m unittest discover testcase/unittest/ -p "test_*.py" || exit -1
+test: unittest integration-test
+
+unit-test:
+	@echo "Start unit test..."
+	$(TEST_CMD) testcase/unittest || exit -1
+
+integration-test:
+	@echo "Start integration test..."
+	$(TEST_CMD) testcase/integration || exit -1
 
 ## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check
