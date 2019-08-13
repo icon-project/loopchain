@@ -27,7 +27,7 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
-from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
+from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
@@ -314,19 +314,36 @@ class BlockChain:
 
         return self.__find_block_by_key(key)
 
-    def find_confirm_info_by_hash(self, block_hash) -> bytes:
-        hash_encoded = block_hash.hex().encode(encoding='UTF-8')
-
+    def find_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
+        if isinstance(block_hash, Hash32):
+            block_hash = block_hash.hex()
+        hash_encoded = block_hash.encode('UTF-8')
         try:
-            return bytes(self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded))
+            return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
-            return bytes()
+            block = self.find_block_by_hash(block_hash)
+            return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
-    def find_confirm_info_by_height(self, height) -> bytes:
+    def find_confirm_info_by_height(self, height: int) -> bytes:
         block = self.find_block_by_height(height)
-        if block:
-            return bytes(self.find_confirm_info_by_hash(block.header.hash))
+        hash_encoded = block.header.hash.hex().encode('UTF-8')
+        try:
+            return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
+        except KeyError:
+            return self.find_prev_confirm_info_by_height(block.header.height + 1)
 
+    def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
+        block = self.find_block_by_hash(block_hash)
+        if block and isinstance(block.body, v0_3.BlockBody):
+            votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
+            return json.dumps(votes_serialized).encode(encoding='UTF-8')
+        return bytes()
+
+    def find_prev_confirm_info_by_height(self, height: int) -> bytes:
+        block = self.find_block_by_height(height)
+        if block and isinstance(block.body, v0_3.BlockBody):
+            votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
+            return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
     def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
