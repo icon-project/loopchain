@@ -24,7 +24,8 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
-from loopchain.baseservice import PeerManager, TimerService
+from loopchain.baseservice import TimerService
+from loopchain.peermanager import PeerManager
 from loopchain.baseservice import RestStubManager, NodeSubscriber
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
@@ -216,7 +217,7 @@ class ChannelService:
     async def __init_network(self):
         if ChannelProperty().radio_station_target:
             self.__init_radio_station_stub()
-        await self._load_peers()
+        await self.__peer_manager.load_peers()
 
     async def evaluate_network(self):
         await self._select_node_type()
@@ -267,25 +268,6 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
-    async def _load_peers(self):
-        self.__peer_manager.load_peers_from_iiss()
-
-        if not self.__peer_manager.peer_list:
-            if self.is_support_node_function(conf.NodeFunction.Vote):
-                await self.__peer_manager.load_peers_from_file()
-            else:
-                await self.__peer_manager.load_peers_from_rest_call()
-
-        reps_hash = self.__peer_manager.reps_hash()
-        reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(reps_hash)
-
-        if not reps_in_db:
-            preps = self.__peer_manager.serialize_as_preps()
-            utils.logger.spam(f"in _load_peers serialize_as_preps({preps})")
-            self.block_manager.get_blockchain().write_preps(reps_hash, preps)
-
-        self.__peer_manager.show_peers()
-
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.get_blockchain().block_height
         if current_height < 0:
@@ -316,7 +298,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.__peer_manager.load_peers_from_iiss()
+        self.__peer_manager.load_peers()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

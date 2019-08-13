@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """ A class for Manage Channels """
+
 import logging
 
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastSchedulerFactory, BroadcastCommand, PeerManager, ObjectManager
+from loopchain.baseservice import BroadcastSchedulerFactory, BroadcastCommand, ObjectManager
+from loopchain.peermanager import PeerManager
 
 
 class ChannelManager:

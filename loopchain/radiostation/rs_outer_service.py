@@ -17,12 +17,12 @@ import json
 import logging
 import threading
 
-import loopchain_pb2
-
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import Peer, PeerListData, PeerManager, ObjectManager
+from loopchain.baseservice import ObjectManager
 from loopchain.configure_default import KeyLoadType
+from loopchain.peermanager import Peer, PeerListData, PeerManager
+from loopchain.protos import loopchain_pb2
 from loopchain.protos import loopchain_pb2_grpc, message_code
 
 

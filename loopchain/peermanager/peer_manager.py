@@ -19,18 +19,16 @@ import math
 import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Optional
-from typing import Union, cast
+from typing import Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager, Peer
+from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
-from loopchain.channel.channel_property import ChannelProperty
+from loopchain.peermanager import Peer, PeerLoader
 from loopchain.protos import loopchain_pb2
-from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
-from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.blockchain.blocks import BlockHeader
@@ -129,66 +127,18 @@ class PeerManager:
         return [{'id': peer_id, 'p2pEndpoint': peer.target}
                 for peer_id, peer in self._peer_list_data.peer_list.items()]
 
-    def load_peers_from_iiss(self):
-        request = {
-            "method": "ise_getPRepList"
-        }
+    async def load_peers(self) -> None:
+        await PeerLoader.load(peer_manager=self)
+        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
 
-        request = convert_params(request, ParamType.call)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response = cast(dict, stub.sync_task().call(request))
-        response_to_json_query(response)
+        reps_hash = self.reps_hash()
+        reps_in_db = blockchain.find_preps_by_roothash(
+            reps_hash)
 
-        util.logger.debug(f"in load_peers_from_iiss response({response})")
-        if 'preps' not in response['result']:
-            util.logger.debug(f"There is no preps in result.")
-            return
-
-        if response["result"]["rootHash"] == self.reps_hash().hex_0x():
-            util.logger.debug(f"There is no change in load_peers_from_iiss.")
-            return
-
-        util.logger.debug(f"There is change in load_peers_from_iiss."
-                          f"\nresult roothash({response['result']['rootHash']})"
-                          f"\npeer_list roothash({self.reps_hash().hex_0x()})")
-
-        self.remove_all_peers()
-
-        reps = response["result"]["preps"]
-        for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
-            self.add_peer(peer)
-
-    async def load_peers_from_file(self):
-        util.logger.debug(f"load_peers_from_file")
-        channel_info = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        reps: list = channel_info[ChannelProperty().name].get("peers")
-        for peer in reps:
-            self.add_peer(peer)
-
-    async def load_peers_from_rest_call(self):
-        rest_stub = ObjectManager().channel_service.radio_station_stub
-        if conf.CREP_ROOT_HASH:
-            reps = rest_stub.call(
-                "GetReps",
-                {"repsHash": conf.CREP_ROOT_HASH}
-            )
-            logging.debug(f"reps by c-rep root hash: {reps}")
-            for order, rep_info in enumerate(reps, 1):
-                peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
-                self.add_peer(peer)
-            return
-
-        response = rest_stub.call("GetChannelInfos")
-        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
-        for peer_info in reps:
-            self.add_peer(peer_info)
-
-    def show_peers(self):
-        util.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
-        for peer_id in list(self.peer_list):
-            peer = self.peer_list[peer_id]
-            util.logger.debug(f"peer_target: {peer.order}:{peer.target}")
+        if not reps_in_db:
+            preps = self.serialize_as_preps()
+            util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
+            blockchain.write_preps(reps_hash, preps)
 
     def get_quorum(self):
         peer_count = self.get_peer_count()
@@ -244,7 +194,7 @@ class PeerManager:
         """
 
         if self.get_peer(peer.peer_id) is None:
-            self.add_peer(peer)
+            raise Exception(f'{peer.peer_id} is not a member of reps!')
 
         self._peer_list_data.leader_id = peer.peer_id
 
