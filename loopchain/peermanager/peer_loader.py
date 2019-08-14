@@ -64,20 +64,17 @@ class PeerLoader:
             utils.logger.debug(f"There is no preps in result.")
             return
 
-        if response["result"]["rootHash"] == peer_manager.reps_hash().hex_0x():
+        if response["result"]["rootHash"] == peer_manager.reps_hash().hex():
             utils.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
-        utils.logger.debug(f"There is change in load_peers_from_iiss."
-                          f"\nresult roothash({response['result']['rootHash']})"
-                          f"\npeer_list roothash({peer_manager.reps_hash().hex_0x()})")
-
-        peer_manager.remove_all_peers()
+        utils.logger.debug(
+            f"There is change in load_peers_from_iiss."
+            f"\nresult roothash({response['result']['rootHash']})"
+            f"\npeer_list roothash({peer_manager.reps_hash().hex()})")
 
         reps = response["result"]["preps"]
-        for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
-            peer_manager.add_peer(peer)
+        peer_manager.reset_all_peers(reps)
 
     @staticmethod
     async def _load_peers_from_file(peer_manager: 'PeerManager'):

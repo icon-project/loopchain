@@ -125,7 +125,7 @@ class NodeSubscriber:
             vote = BlockVotes.deserialize_votes(votes_serialized)
         else:
             vote = None
-        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         new_block_height = blockchain.block_versioner.get_height(block_dict)
         if new_block_height > blockchain.block_height:

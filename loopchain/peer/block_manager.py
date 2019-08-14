@@ -61,7 +61,7 @@ class BlockManager:
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.__blockchain = BlockChain(channel_name, store_identity, self)
+        self.blockchain = BlockChain(channel_name, store_identity, self)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
@@ -102,12 +102,6 @@ class BlockManager:
         return self.__peer_type
 
     @property
-    def made_block_count(self):
-        if self.__consensus_algorithm:
-            return self.__consensus_algorithm.made_block_count
-        return 0
-
-    @property
     def consensus(self):
         return self.__consensus
 
@@ -128,7 +122,7 @@ class BlockManager:
         self.__precommit_block = block
 
     def get_key_value_store(self) -> KeyValueStore:
-        return self.__blockchain.get_blockchain_store()
+        return self.blockchain.get_blockchain_store()
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
@@ -148,10 +142,7 @@ class BlockManager:
 
         :return: 블럭체인안의 transaction total count
         """
-        return self.__blockchain.total_tx
-
-    def get_blockchain(self):
-        return self.__blockchain
+        return self.blockchain.total_tx
 
     def pre_validate(self, tx: Transaction):
         return self.__pre_validate_strategy(tx)
@@ -175,7 +166,7 @@ class BlockManager:
                           f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
 
             # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
-            block_dumped = self.__blockchain.block_dumps(block_)
+            block_dumped = self.blockchain.block_dumps(block_)
 
             ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
                 "AnnounceUnconfirmedBlock",
@@ -196,7 +187,7 @@ class BlockManager:
         :param tx_hash: tx hash
         :return: tx object or None
         """
-        return self.__blockchain.find_tx_by_key(tx_hash)
+        return self.blockchain.find_tx_by_key(tx_hash)
 
     def get_tx_info(self, tx_hash) -> dict:
         """Get transaction info from block_db by tx_hash
@@ -204,7 +195,7 @@ class BlockManager:
         :param tx_hash: tx hash
         :return: {'block_hash': "", 'block_height': "", "transaction": "", "result": {"code": ""}}
         """
-        return self.__blockchain.find_tx_info(tx_hash)
+        return self.blockchain.find_tx_info(tx_hash)
 
     def get_invoke_result(self, tx_hash):
         """ get invoke result by tx
@@ -212,7 +203,7 @@ class BlockManager:
         :param tx_hash:
         :return:
         """
-        return self.__blockchain.find_invoke_result_by_tx_hash(tx_hash)
+        return self.blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     def get_tx_queue(self):
         return self.__txQueue
@@ -225,7 +216,7 @@ class BlockManager:
         return len(self.__txQueue)
 
     def confirm_prev_block(self, current_block: Block):
-        confirmed_block = self.__blockchain.confirm_prev_block(current_block)
+        confirmed_block = self.blockchain.confirm_prev_block(current_block)
         if confirmed_block is None:
             return
 
@@ -240,7 +231,7 @@ class BlockManager:
         self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
-        last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
+        last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
         try:
             candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
         except KeyError:
@@ -265,7 +256,7 @@ class BlockManager:
         logging.info(f"unconfirmed_block {unconfirmed_block.header.height}")
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
-        last_unconfirmed_block: Block = self.__blockchain.last_unconfirmed_block
+        last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
 
         reps = self.__channel_service.get_rep_ids()
 
@@ -282,10 +273,10 @@ class BlockManager:
             if need_to_confirm:
                 self.confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
-                if self.__blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
+                if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
 
-                self.__blockchain.last_unconfirmed_block = unconfirmed_block
+                self.blockchain.last_unconfirmed_block = unconfirmed_block
                 self.__channel_service.stop_leader_complain_timer()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
@@ -297,14 +288,14 @@ class BlockManager:
             util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
             return
 
-        self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info)
+        self.blockchain.add_block(confirmed_block, confirm_info=confirm_info)
 
     def rebuild_block(self):
-        self.__blockchain.rebuild_transaction_count()
+        self.blockchain.rebuild_transaction_count()
 
-        nid = self.get_blockchain().find_nid()
+        nid = self.blockchain.find_nid()
         if nid is None:
-            genesis_block = self.get_blockchain().find_block_by_height(0)
+            genesis_block = self.blockchain.find_block_by_height(0)
             self.__rebuild_nid(genesis_block)
         else:
             ChannelProperty().nid = nid
@@ -324,7 +315,7 @@ class BlockManager:
         if isinstance(nid, int):
             nid = hex(nid)
 
-        self.get_blockchain().put_nid(nid)
+        self.blockchain.put_nid(nid)
         ChannelProperty().nid = nid
 
     def block_height_sync(self):
@@ -364,7 +355,7 @@ class BlockManager:
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
         try:
-            block = self.__blockchain.block_loads(response.block)
+            block = self.blockchain.block_loads(response.block)
         except Exception as e:
             traceback.print_exc()
             raise exception.BlockError(f"Received block is invalid: original exception={e}")
@@ -389,9 +380,9 @@ class BlockManager:
             }
         )
         last_block = rs_rest_stub.call("GetLastBlock")
-        max_height = self.__blockchain.block_versioner.get_height(last_block)
-        block_version = self.__blockchain.block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, self.get_blockchain().tx_versioner)
+        max_height = self.blockchain.block_versioner.get_height(last_block)
+        block_version = self.blockchain.block_versioner.get_version(block_height)
+        block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
         votes_dumped = get_block_result.get('confirm_info', None)
         if isinstance(votes_dumped, list):
@@ -417,7 +408,7 @@ class BlockManager:
             return None, response.response_code, response.response_message
         else:
             try:
-                precommit_block = self.__blockchain.block_loads(response.block)
+                precommit_block = self.blockchain.block_loads(response.block)
             except Exception as e:
                 traceback.print_exc()
                 raise exception.BlockError(f"Received block is invalid: original exception={e}")
@@ -463,27 +454,27 @@ class BlockManager:
             self.__consensus_algorithm.stop()
 
     def __current_block_height(self):
-        if self.__blockchain.last_unconfirmed_block and \
-                self.__blockchain.last_unconfirmed_block.header.height == self.__blockchain.block_height + 1:
-            return self.__blockchain.block_height + 1
+        if self.blockchain.last_unconfirmed_block and \
+                self.blockchain.last_unconfirmed_block.header.height == self.blockchain.block_height + 1:
+            return self.blockchain.block_height + 1
         else:
-            return self.__blockchain.block_height
+            return self.blockchain.block_height
 
     def __current_last_block(self):
-        return self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
+        return self.blockchain.last_unconfirmed_block or self.blockchain.last_block
 
     def __add_block_by_sync(self, block_, confirm_info=None):
         logging.debug(f"block_manager.py >> block_height_sync :: "
                       f"height({block_.header.height}) confirm_info({confirm_info})")
 
-        block_version = self.get_blockchain().block_versioner.get_version(block_.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner, raise_exceptions=False)
-        block_verifier.invoke_func = self.__blockchain.get_invoke_func(block_.header.height)
+        block_version = self.blockchain.block_versioner.get_version(block_.header.height)
+        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner, raise_exceptions=False)
+        block_verifier.invoke_func = self.blockchain.get_invoke_func(block_.header.height)
 
-        reps_getter = self.__blockchain.find_preps_addresses_by_roothash
+        reps_getter = self.blockchain.find_preps_addresses_by_roothash
         block_verifier.verify_loosely(block_,
-                                      self.__blockchain.last_block,
-                                      self.__blockchain,
+                                      self.blockchain.last_block,
+                                      self.blockchain,
                                       reps_getter=reps_getter)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
@@ -500,24 +491,24 @@ class BlockManager:
             else:
                 raise exc
 
-        return self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
+        return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
-        prev_block = self.__blockchain.last_unconfirmed_block
+        prev_block = self.blockchain.last_unconfirmed_block
         confirm_info = block_.body.confirm_prev_block
 
         logging.debug(f"block_manager.py >> block_height_sync :: height({prev_block.header.height})")
 
-        block_version = self.get_blockchain().block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.get_blockchain().tx_versioner)
-        block_verifier.invoke_func = self.__blockchain.get_invoke_func(prev_block.header.height)
+        block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
+        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
+        block_verifier.invoke_func = self.blockchain.get_invoke_func(prev_block.header.height)
 
-        reps_getter = self.__blockchain.find_preps_addresses_by_roothash
+        reps_getter = self.blockchain.find_preps_addresses_by_roothash
         block_verifier.verify_loosely(prev_block,
-                                      self.__blockchain.last_block,
-                                      self.__blockchain,
+                                      self.blockchain.last_block,
+                                      self.blockchain,
                                       reps_getter=reps_getter)
-        return self.__blockchain.add_block(prev_block, confirm_info)
+        return self.blockchain.add_block(prev_block, confirm_info)
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
@@ -561,7 +552,7 @@ class BlockManager:
                     if max_height == unconfirmed_block_height == block.header.height \
                             and max_height > 0 and not confirm_info:
                         self.candidate_blocks.add_block(block)
-                        self.__blockchain.last_unconfirmed_block = block
+                        self.blockchain.last_unconfirmed_block = block
                         result = True
                     else:
                         result = self.__add_block_by_sync(block, confirm_info)
@@ -569,8 +560,8 @@ class BlockManager:
                     if result:
                         if block.header.height == 0:
                             self.__rebuild_nid(block)
-                        elif self.__blockchain.find_nid() is None:
-                            genesis_block = self.get_blockchain().find_block_by_height(0)
+                        elif self.blockchain.find_nid() is None:
+                            genesis_block = self.blockchain.find_block_by_height(0)
                             self.__rebuild_nid(genesis_block)
 
                 except KeyError as e:
@@ -616,15 +607,15 @@ class BlockManager:
             _handle_exception(exc)
             return False
 
-        if self.__blockchain.last_unconfirmed_block is not None:
-            self.candidate_blocks.remove_block(self.__blockchain.last_unconfirmed_block.header.hash)
-        self.__blockchain.last_unconfirmed_block = None
+        if self.blockchain.last_unconfirmed_block is not None:
+            self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
+        self.blockchain.last_unconfirmed_block = None
 
         my_height = self.__current_block_height()
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
         # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-        self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
+        self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
 
         try:
             if peer_stubs:
@@ -678,7 +669,7 @@ class BlockManager:
             rest_stub = ObjectManager().channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
             last_block = rest_stub.call("GetLastBlock")
-            max_height = self.__blockchain.block_versioner.get_height(last_block)
+            max_height = self.blockchain.block_versioner.get_height(last_block)
 
             return max_height, unconfirmed_block_height, peer_stubs
 
@@ -714,7 +705,7 @@ class BlockManager:
 
     def stop(self):
         # for reuse key value store when restart channel.
-        self.__blockchain.close_blockchain_store()
+        self.blockchain.close_blockchain_store()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
@@ -796,7 +787,7 @@ class BlockManager:
         if not check_unconfirmed_block_has_valid_confirm_info_for_prev_block:
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
-        my_height = self.__blockchain.block_height
+        my_height = self.blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(f"trigger block sync in _vote my_height({my_height}), "
                                                   f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
@@ -809,16 +800,19 @@ class BlockManager:
     async def _vote(self, unconfirmed_block: Block):
         exc = None
         try:
-            block_version = self.__blockchain.block_versioner.get_version(unconfirmed_block.header.height)
-            block_verifier = BlockVerifier.new(block_version, self.__blockchain.tx_versioner)
-            block_verifier.invoke_func = self.__blockchain.score_invoke
-            reps_getter = self.__blockchain.find_preps_addresses_by_roothash
+            block_version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
+            block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
+            block_verifier.invoke_func = self.blockchain.score_invoke
+            reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
+
             block_verifier.verify(unconfirmed_block,
-                                  self.__blockchain.last_block,
-                                  self.__blockchain,
-                                  self.__blockchain.last_block.header.next_leader,
+                                  self.blockchain.last_block,
+                                  self.blockchain,
+                                  ExternalAddress.fromhex_address(
+                                      self.blockchain.get_expected_generator(unconfirmed_block)
+                                  ),
                                   reps_getter=reps_getter)
         except Exception as e:
             exc = e

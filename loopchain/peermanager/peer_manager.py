@@ -69,7 +69,7 @@ class PeerManager:
 
     async def load_peers(self) -> None:
         await PeerLoader.load(peer_manager=self)
-        blockchain = ObjectManager().channel_service.block_manager.get_blockchain()
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         reps_hash = self.reps_hash()
         reps_in_db = blockchain.find_preps_by_roothash(
@@ -217,9 +217,15 @@ class PeerManager:
 
         return most_height_peer
 
-    def remove_all_peers(self):
+    def reset_all_peers(self, reps):
         for peer_id in list(self.peer_list):
             self.remove_peer(peer_id)
+
+        for order, rep_info in enumerate(reps, 1):
+            peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
+            self.add_peer(peer)
+
+        ObjectManager().channel_service.block_manager.blockchain.reset_leader_made_block_count()
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
