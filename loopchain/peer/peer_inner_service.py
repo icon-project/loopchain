@@ -42,8 +42,7 @@ class PeerInnerTask:
             'peer_target': self._peer_service.peer_target,
             'rest_target': self._peer_service.rest_target,
             'rs_target': self._peer_service.radio_station_target,
-            'peer_id': self._peer_service.peer_id,
-            'node_type': self._peer_service.node_type.value,
+            'peer_id': self._peer_service.peer_id
         }
 
     @message_queue_task
@@ -87,10 +86,6 @@ class PeerInnerTask:
             await stub.async_task().stop(message)
 
         util.exit_and_msg(message)
-
-    @message_queue_task
-    async def change_node_type(self, node_type):
-        await self._peer_service.change_node_type(node_type)
 
 
 class PeerInnerService(MessageQueueService[PeerInnerTask]):

@@ -95,9 +95,9 @@ class Epoch:
 
     def add_complain(self, leader_vote: LeaderVote):
         utils.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
-                          f"new_leader_id({leader_vote.new_leader}), "
-                          f"block_height({leader_vote.block_height}), "
-                          f"peer_id({leader_vote.rep})")
+                           f"new_leader_id({leader_vote.new_leader}), "
+                           f"block_height({leader_vote.block_height}), "
+                           f"peer_id({leader_vote.rep})")
         try:
             self.complain_votes[self.round].add_vote(leader_vote)
         except RuntimeError as e:
@@ -127,7 +127,7 @@ class Epoch:
             vote_result = vote.get_result(blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
             if not vote_result:
                 utils.logger.debug(f"last_unconfirmed_block({blockchain.last_unconfirmed_block.header.hash}), "
-                                  f"vote result({vote_result})")
+                                   f"vote result({vote_result})")
 
     def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()
@@ -150,8 +150,8 @@ class Epoch:
 
             if not utils.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK):
                 utils.logger.info(f"fail add tx to block by ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK"
-                                 f"({conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
-                                 f"tx({tx.hash}), timestamp({tx.timestamp})")
+                                  f"({conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
+                                  f"tx({tx.hash}), timestamp({tx.timestamp})")
                 continue
 
             tv = TransactionVerifier.new(tx.version, tx.type(), tx_versioner)

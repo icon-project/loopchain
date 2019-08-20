@@ -42,26 +42,13 @@ class PeerService:
     """Main class of peer service having outer & inner gRPC interface
 
     """
-    def __init__(self, radio_station_target=None, node_type=None):
+    def __init__(self, radio_station_target=None):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
         :param radio_station_target: IP:Port of Radio Station
-        :param node_type: node type
         :return:
         """
-        node_type = node_type or conf.NodeType.CommunityNode
-
-        self.is_support_node_function = \
-            partial(conf.NodeType.is_support_node_function, node_type=node_type)
-
-        utils.logger.spam(f"Your Peer Service runs on debugging MODE!")
-        utils.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
-
-        self._node_type = node_type
-
         self._radio_station_target = radio_station_target
-        logging.info("Set Radio Station target is " + self._radio_station_target)
-
         self._radio_station_stub = None
         self._peer_id = None
         self._node_key = bytes()
@@ -105,12 +92,12 @@ class PeerService:
         return self._channel_infos
 
     @property
-    def node_type(self):
-        return self._node_type
-
-    @property
     def radio_station_target(self):
         return self._radio_station_target
+
+    @property
+    def radio_station_stub(self):
+        return self._radio_station_stub
 
     @property
     def peer_port(self):
@@ -131,11 +118,11 @@ class PeerService:
         self._radio_station_stub = RestStubManager(self._radio_station_target)
 
     def _get_channel_infos(self):
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        else:
+        if self._radio_station_target:
             response = self._radio_station_stub.call("GetChannelInfos")
             return {channel: value for channel, value in response["channel_infos"].items()}
+        else:
+            return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
 
     def _init_port(self, port):
         # service 초기화 작업
@@ -229,7 +216,8 @@ class PeerService:
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        self._init_radio_station_stub()
+        if self._radio_station_target:
+            self._init_radio_station_stub()
         self._load_channel_infos()
 
         self._run_rest_services(port)
@@ -314,16 +302,3 @@ class PeerService:
 
     def _load_channel_infos(self):
         self._channel_infos = self._get_channel_infos()
-
-    async def change_node_type(self, node_type):
-        if self._node_type.value == node_type:
-            utils.logger.warning(f"There's no change in node type.")
-            return
-
-        self._node_type = conf.NodeType(node_type)
-        self.is_support_node_function = \
-            partial(conf.NodeType.is_support_node_function, node_type=node_type)
-
-        self._radio_station_stub = None
-
-        self._load_channel_infos()
