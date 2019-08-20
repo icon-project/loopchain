@@ -1,11 +1,11 @@
 # Loopchain
 
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
- 
- In order to run a loopchain node, you need to install [ICON Service] 
-that runs a smart contract and interacts with loopchain engine, 
-and [ICON RPC Server] that processes HTTP requests from clients. 
- 
+
+ In order to run a loopchain node, you need to install [ICON Service]
+that runs a smart contract and interacts with loopchain engine,
+and [ICON RPC Server] that processes HTTP requests from clients.
+
  For details, refer to the guide below.
 
 ## Table of Contents
@@ -17,7 +17,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 * [See Also...](#see-also)
     + [Documentation](#documentation)
     + [License](#license)
-    
+
 ## Getting Started
 
 ### Requirements
@@ -34,14 +34,20 @@ and [ICON RPC Server] that processes HTTP requests from clients.
     ```
 
     > **_NOTE:_** We will support 3.7.x only in the future. Please upgrade python version to 3.7.x
-    
-2. **RabbitMQ 3.7+**
+
+1. **RabbitMQ 3.7+**
 
     Loopchain requires RabbitMQ.
 
     For the reliable installation, please visit: [Downloading and Installing RabbitMQ]
 
-3. Other Dependencies
+1. **Reward Calculator**
+
+    [Reward calculator] is a daemon which calculates I-Score of ICONists to support IISS.
+
+    Please visit [Reward calculator] github repository to install it.
+
+1. Other Dependencies
 
     - **MacOS**
     
@@ -91,8 +97,8 @@ and [ICON RPC Server] that processes HTTP requests from clients.
     * packages: installs all necessary python packages via `setup.py`.
     * gRPC proto: generates python gRPC code from protocol buffer which is defined in `loopchain.proto`
     * keystore: generates a keystore file.
-    
-    > **_NOTE_**: Password must be at least 8 characters long including alphabet, number, and special character.  
+
+    > **_NOTE_**: Password must be at least 8 characters long including alphabet, number, and special character.
     > Please be careful not to forget the password since you will need it to run the Citizen Node.
 
 1. Run Citizen
@@ -134,6 +140,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 <!--Dependencies-->
 [ICON Service]: https://github.com/icon-project/icon-service
 [ICON RPC Server]: https://github.com/icon-project/icon-rpc-server
+[Reward Calculator]: https://github.com/icon-project/rewardcalculator
 [virtualenv]: https://virtualenv.pypa.io/en/stable/
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
 [install loopchain via snap]: https://snapcraft.io/loopchain
