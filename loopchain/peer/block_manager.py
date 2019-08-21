@@ -821,10 +821,13 @@ class BlockManager:
         else:
             self.candidate_blocks.add_block(unconfirmed_block)
         finally:
-            is_validate = exc is None
-            vote = self.vote_unconfirmed_block(unconfirmed_block, is_validate)
+            is_validated = exc is None
+            vote = self.vote_unconfirmed_block(unconfirmed_block, is_validated)
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
+
+            if is_validated:
+                self.__channel_service.turn_on_leader_complain_timer()
 
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock
@@ -842,5 +845,3 @@ class BlockManager:
             await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
-
-        self.__channel_service.turn_on_leader_complain_timer()
