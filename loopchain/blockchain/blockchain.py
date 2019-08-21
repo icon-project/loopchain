@@ -131,8 +131,6 @@ class BlockChain:
         else:
             self.__made_block_counter[block.header.peer_id] += 1
 
-        utils.logger.spam(f"({block.header.height})made_block_count:\n{self.__made_block_counter}")
-
     def reset_leader_made_block_count(self):
         self.__made_block_counter.clear()
 

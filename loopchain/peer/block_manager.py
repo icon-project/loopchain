@@ -290,7 +290,6 @@ class BlockManager:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
 
                 self.blockchain.last_unconfirmed_block = unconfirmed_block
-                self.__channel_service.stop_leader_complain_timer()
         except BlockchainError as e:
             logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
