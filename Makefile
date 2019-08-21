@@ -77,7 +77,7 @@ check:
 	@$(RABBITMQ_CMD) list_queues
 
 ## Run unittest
-test: unittest integration-test
+test: unit-test integration-test
 
 unit-test:
 	@echo "Start unit test..."
