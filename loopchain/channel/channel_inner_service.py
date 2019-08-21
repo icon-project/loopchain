@@ -14,12 +14,11 @@
 
 import json
 import multiprocessing as mp
-import re
 import signal
 from asyncio import Condition
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import Union, Dict, List
+from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
 
@@ -838,71 +837,61 @@ class ChannelInnerTask:
             return message_code.Response.fail, None
 
     @message_queue_task
-    async def get_block_v2(self, block_height, block_hash, block_data_filter, tx_data_filter):
+    async def get_block_v2(self, block_height, block_hash) -> Tuple[int, str, str]:
         # This is a temporary function for v2 support of exchanges.
-        block, block_filter, block_hash, _, fail_response_code, tx_filter = \
-            await self.__get_block(block_data_filter, block_hash, block_height, tx_data_filter)
+        block, block_hash, _, fail_response_code = await self.__get_block(block_hash, block_height)
         if fail_response_code:
-            return fail_response_code, block_hash, json.dumps({}), ""
+            return fail_response_code, block_hash, json.dumps({})
 
         tx_versioner = self._blockchain.tx_versioner
         bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_data_dict = bs.serialize(block)
 
         if block.header.height == 0:
-            return message_code.Response.success, block_hash, json.dumps(block_data_dict), []
+            return message_code.Response.success, block_hash, json.dumps(block_data_dict)
 
-        confirmed_tx_list = block_data_dict["confirmed_transaction_list"]
         confirmed_tx_list_without_fail = []
-
-        tss = {
-            "genesis": TransactionSerializer.new("genesis", tx_versioner),
-            "0x2": TransactionSerializer.new("0x2", tx_versioner),
-            "0x3": TransactionSerializer.new("0x3", tx_versioner)
-        }
-
-        for tx in confirmed_tx_list:
-            version = tx_versioner.get_version(tx)
-            tx_hash = tss[version].get_hash(tx)
-
-            invoke_result = self._block_manager.get_invoke_result(tx_hash)
+        for tx in block.body.transactions.values():
+            invoke_result = self._block_manager.get_invoke_result(tx.hash)
 
             if 'failure' in invoke_result:
                 continue
 
-            if tx_versioner.get_version(tx) == "0x3":
+            ts = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
+            full_data = ts.to_full_data(tx)
+            if tx.version == "0x3":
                 step_used, step_price = int(invoke_result["stepUsed"], 16), int(invoke_result["stepPrice"], 16)
-                tx["fee"] = hex(step_used * step_price)
+                full_data["fee"] = hex(step_used * step_price)
 
-            confirmed_tx_list_without_fail.append(tx)
+            confirmed_tx_list_without_fail.append(full_data)
 
-        # Replace the existing confirmed_tx_list with v2 ver.
-        block_data_dict["confirmed_transaction_list"] = confirmed_tx_list_without_fail
+        # Replace the existing confirmed_transactions with v2 ver.
+        if block.header.version == "0.1a":
+            block_data_dict["confirmed_transaction_list"] = confirmed_tx_list_without_fail
+        else:
+            block_data_dict["transactions"] = confirmed_tx_list_without_fail
         block_data_json = json.dumps(block_data_dict)
 
         if fail_response_code:
-            return fail_response_code, block_hash, json.dumps({}), []
+            return fail_response_code, block_hash, json.dumps({})
 
-        return message_code.Response.success, block_hash, block_data_json, []
+        return message_code.Response.success, block_hash, block_data_json
 
     @message_queue_task
-    async def get_block(self, block_height, block_hash, block_data_filter, tx_data_filter):
-        block, block_filter, block_hash, confirm_info, fail_response_code, tx_filter = \
-            await self.__get_block(block_data_filter, block_hash, block_height, tx_data_filter)
+    async def get_block(self, block_height, block_hash) -> Tuple[int, str, bytes, str]:
+        block, block_hash, confirm_info, fail_response_code = await self.__get_block(block_hash, block_height)
 
         if fail_response_code:
-            return fail_response_code, block_hash, b"", json.dumps({}), ""
+            return fail_response_code, block_hash, b"", json.dumps({})
 
         tx_versioner = self._blockchain.tx_versioner
         bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_dict = bs.serialize(block)
-        return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict), []
+        return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict)
 
-    async def __get_block(self, block_data_filter, block_hash, block_height, tx_data_filter):
+    async def __get_block(self, block_hash, block_height):
         if block_hash == "" and block_height == -1:
             block_hash = self._blockchain.last_block.header.hash.hex()
-        block_filter = re.sub(r'\s', '', block_data_filter).split(",")
-        tx_filter = re.sub(r'\s', '', tx_data_filter).split(",")
 
         block = None
         confirm_info = b''
@@ -920,7 +909,7 @@ class ChannelInnerTask:
         else:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
-        return block, block_filter, block_hash, bytes(confirm_info), fail_response_code, tx_filter
+        return block, block_hash, bytes(confirm_info), fail_response_code
 
     @message_queue_task
     def get_precommit_block(self, last_block_height: int):
