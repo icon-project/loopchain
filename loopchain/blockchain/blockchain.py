@@ -410,13 +410,11 @@ class BlockChain:
             self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
 
-            logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
-                          f"last_block({self.__last_block.header.hash.hex()})")
             logging.info(
                 f"ADD BLOCK HEIGHT : {block.header.height} , "
                 f"HASH : {block.header.hash.hex()} , "
                 f"CHANNEL : {self.__channel_name}")
-            logging.debug(f"ADDED BLOCK HEADER : {block.header}")
+            utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
 
             utils.apm_event(self.__peer_id, {
                 'event_type': 'AddBlock',

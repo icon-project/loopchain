@@ -253,7 +253,6 @@ class BlockManager:
 
         :param unconfirmed_block:
         """
-        logging.info(f"unconfirmed_block {unconfirmed_block.header.height}")
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
@@ -805,7 +804,7 @@ class BlockManager:
             block_verifier.invoke_func = self.blockchain.score_invoke
             reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
-            logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
+            util.logger.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
 
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
@@ -832,9 +831,10 @@ class BlockManager:
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock
         """
-        util.logger.debug(f"in vote_as_peer "
-                          f"height({unconfirmed_block.header.height}) "
-                          f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+        util.logger.debug(
+            f"in vote_as_peer "
+            f"height({unconfirmed_block.header.height}) "
+            f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
 
         try:
             self.add_unconfirmed_block(unconfirmed_block)
