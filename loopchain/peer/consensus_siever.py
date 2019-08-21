@@ -81,13 +81,13 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug("Cannot vote before starting consensus.")
         # raise RuntimeError("Cannot vote before starting consensus.")
 
-    def __build_candidate_block(self, block_builder, next_leader, vote_result):
+    def __build_candidate_block(self, block_builder, next_leader):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
         block_builder.next_leader = next_leader
         block_builder.signer = ChannelProperty().peer_auth
-        block_builder.confirm_prev_block = vote_result or (next_leader == ChannelProperty().peer_address)
+        block_builder.confirm_prev_block = (block_builder.version == '0.1a')
         block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
         return block_builder.build()
@@ -125,7 +125,6 @@ class ConsensusSiever(ConsensusBase):
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
-            vote_result = None
 
             need_next_call = False
             try:
@@ -172,7 +171,7 @@ class ConsensusSiever(ConsensusBase):
 
             next_leader = self._blockchain.get_next_leader()
             candidate_block = self.__build_candidate_block(
-                block_builder, ExternalAddress.fromhex_address(next_leader), vote_result)
+                block_builder, ExternalAddress.fromhex_address(next_leader))
 
             candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, last_block, is_block_editable=True)
