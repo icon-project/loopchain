@@ -24,7 +24,7 @@ class BlockVersioner:
         self._versions.append(BlockVersion(height, version_name))
         self._versions.sort(key=lambda version: version.height)
 
-    def get_version(self, height: int):
+    def get_version(self, height: int) -> str:
         try:
             version = next(version for version in reversed(self._versions) if version.height <= height)
         except StopIteration:
@@ -32,7 +32,7 @@ class BlockVersioner:
         else:
             return version.name
 
-    def get_height(self, block_dumped: Union[str, dict]):
+    def get_height(self, block_dumped: Union[str, dict]) -> int:
         if isinstance(block_dumped, str):
             block_dumped = json.loads(block_dumped)
         height = block_dumped["height"]
