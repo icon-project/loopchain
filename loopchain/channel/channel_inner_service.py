@@ -63,7 +63,7 @@ class ChannelTxCreatorInnerTask:
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
 
     def __pre_validate(self, tx: Transaction):
-        if not util.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND):
+        if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
             raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
 
     def cleanup(self):

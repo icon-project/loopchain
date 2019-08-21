@@ -213,9 +213,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __get_status_from_cache(self, channel: str):
         if channel in self.peer_service.status_cache:
             if channel in self.__status_cache_update_time:
-                if utils.datetime_diff_in_mins(
-                        self.__status_cache_update_time[channel]) \
-                        > conf.ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
+                update_time = self.__status_cache_update_time[channel]
+                if utils.datetime_diff_in_mins(update_time) > conf.STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
                     return None
             status_data = self.peer_service.status_cache[channel]
         else:

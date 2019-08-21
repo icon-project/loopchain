@@ -146,9 +146,9 @@ class Epoch:
             if tx is None:
                 break
 
-            if not utils.is_in_time_boundary(tx.timestamp, conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK):
-                utils.logger.info(f"fail add tx to block by ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK"
-                                  f"({conf.ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
+            if not utils.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK):
+                utils.logger.info(f"fail add tx to block by TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK"
+                                  f"({conf.TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
                                   f"tx({tx.hash}), timestamp({tx.timestamp})")
                 continue
 
