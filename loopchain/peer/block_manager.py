@@ -364,7 +364,7 @@ class BlockManager:
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
-            votes = None
+            votes = votes_dumped
 
         return (
             block, response.max_block_height, response.unconfirmed_block_height,
@@ -388,7 +388,7 @@ class BlockManager:
             votes_serialized = json.loads(votes_dumped)
             votes = BlockVotes.deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
-            votes = None
+            votes = votes_dumped
         return block, max_height, -1, votes, message_code.Response.success
 
     def __start_block_height_sync_timer(self):

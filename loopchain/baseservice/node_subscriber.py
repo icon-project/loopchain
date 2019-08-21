@@ -124,7 +124,7 @@ class NodeSubscriber:
             votes_serialized = json.loads(votes_dumped)
             vote = BlockVotes.deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
-            vote = None
+            vote = votes_dumped
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         new_block_height = blockchain.block_versioner.get_height(block_dict)
