@@ -19,6 +19,7 @@ import threading
 import zlib
 from collections import Counter
 from enum import Enum
+from os import linesep
 from typing import Union, List, cast, Optional
 
 from loopchain import configure as conf
@@ -52,12 +53,7 @@ class NID(Enum):
 
 class MadeBlockCounter(Counter):
     def __str__(self):
-        str_ = ''
-        for i, v in self.items():
-            if str_ != '':
-                str_ += '\n'
-            str_ += f'{i}: {v}'
-        return str_
+        return linesep.join(f"{k}: {v}" for k, v in self.items())
 
 
 class BlockChain:
@@ -81,7 +77,7 @@ class BlockChain:
         self.__block_height = -1
         # last block in block db
         self.__last_block = None
-        self.__made_block_count: Counter = MadeBlockCounter()
+        self.__made_block_counter = MadeBlockCounter()
 
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
@@ -114,14 +110,14 @@ class BlockChain:
     @property
     def leader_made_block_count(self) -> int:
         if self.__last_block:
-            return self.__made_block_count[self.__last_block.header.peer_id]
+            return self.__made_block_counter[self.__last_block.header.peer_id]
         return -1
 
     @property
     def my_made_block_count(self) -> int:
-        return self.__made_block_count[ChannelProperty().peer_address]
+        return self.__made_block_counter[ChannelProperty().peer_address]
 
-    def _up_made_block_count(self, block: Block) -> None:
+    def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
 
         :param block:
@@ -131,14 +127,14 @@ class BlockChain:
             return
 
         if self.__last_block.header.peer_id != block.header.peer_id:
-            self.__made_block_count[block.header.peer_id] = 1
+            self.__made_block_counter[block.header.peer_id] = 1
         else:
-            self.__made_block_count[block.header.peer_id] += 1
+            self.__made_block_counter[block.header.peer_id] += 1
 
-        utils.logger.spam(f"({block.header.height})made_block_count:\n{self.__made_block_count}")
+        utils.logger.spam(f"({block.header.height})made_block_count:\n{self.__made_block_counter}")
 
     def reset_leader_made_block_count(self):
-        self.__made_block_count.clear()
+        self.__made_block_counter.clear()
 
     def get_next_leader(self) -> str:
         """get next leader by leader_made_block_count
@@ -154,16 +150,16 @@ class BlockChain:
 
         return peer_manager.leader_id
 
-    def get_expected_generator(self, unconfirmed_block: Block) -> str:
+    def get_expected_generator(self, peer_id: ExternalAddress) -> str:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
         peer_manager = ObjectManager().channel_service.peer_manager
-        if self.__made_block_count[unconfirmed_block.header.peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            return peer_manager.get_next_leader_peer(unconfirmed_block.header.peer_id).peer_id
-        return unconfirmed_block.header.peer_id.hex_hx()
+        if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
+            return peer_manager.get_next_leader_peer(peer_id).peer_id
+        return peer_id.hex_hx()
 
     @property
     def block_height(self):
@@ -214,7 +210,7 @@ class BlockChain:
             block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
-            self.__made_block_count[block.header.peer_id] += 1
+            self.__made_block_counter[block.header.peer_id] += 1
 
             if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
                 break
@@ -408,7 +404,7 @@ class BlockChain:
 
             self.__invoke_results.pop(block.header.hash, None)
 
-            self._up_made_block_count(block)
+            self._increase_made_block_count(block)
 
             self.__last_block = block
             self.__block_height = self.__last_block.header.height

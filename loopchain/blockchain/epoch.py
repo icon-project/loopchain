@@ -165,6 +165,13 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
+    def remove_duplicate_tx_when_turn_to_leader(self):
+        if self.__blockchain.last_unconfirmed_block and \
+                self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
+            tx_queue = self.__block_manager.get_tx_queue()
+            for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
+                tx_queue.pop(tx_hash_in_unconfirmed_block.hex(), None)
+
     def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1

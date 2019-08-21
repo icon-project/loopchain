@@ -811,7 +811,7 @@ class BlockManager:
                                   self.blockchain.last_block,
                                   self.blockchain,
                                   ExternalAddress.fromhex_address(
-                                      self.blockchain.get_expected_generator(unconfirmed_block)
+                                      self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id)
                                   ),
                                   reps_getter=reps_getter)
         except Exception as e:

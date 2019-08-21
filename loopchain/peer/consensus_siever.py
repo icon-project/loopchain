@@ -101,11 +101,6 @@ class ConsensusSiever(ConsensusBase):
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
 
-    def __remove_duplicate_tx_when_turn_to_leader(self, block_builder, last_unconfirmed_block):
-        if last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
-            for tx_hash_in_unconfirmed_block in last_unconfirmed_block.body.transactions:
-                block_builder.transactions.pop(tx_hash_in_unconfirmed_block, None)
-
     async def consensus(self):
         async with self.__lock:
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
@@ -123,14 +118,17 @@ class ConsensusSiever(ConsensusBase):
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
             last_block_votes = self.get_votes(last_block.header.hash)
+            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+            complained_result = self._block_manager.epoch.complained_result
+
+            if not complained_result:
+                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
-            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
 
             need_next_call = False
             try:
-                complained_result = self._block_manager.epoch.complained_result
                 if complained_result:
                     util.logger.spam("consensus block_builder.complained")
                     """
@@ -165,7 +163,6 @@ class ConsensusSiever(ConsensusBase):
                     need_next_call = True
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
-                    self.__remove_duplicate_tx_when_turn_to_leader(block_builder, last_unconfirmed_block)
                     self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
             except NotEnoughVotes:
                 need_next_call = True
