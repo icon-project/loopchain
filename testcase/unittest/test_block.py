@@ -16,19 +16,19 @@
 # limitations under the License.
 """Test Block functions"""
 
-import logging
 import json
+import logging
 import os
 import random
 import sys
 import unittest
 
-from loopchain import utils
 import testcase.unittest.test_util as test_util
-
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.baseservice import ObjectManager
+from loopchain.blockchain import InvalidBlock
 from loopchain.crypto.signature import Signer
 from testcase.unittest.mock_peer import set_mock
 
@@ -124,7 +124,7 @@ class TestBlock(unittest.TestCase):
         invalid_signature_block = self.__generate_invalid_block()
 
         # WHEN THEN
-        with self.assertRaises(BlockInValidError):
+        with self.assertRaises(InvalidBlock):
             Block.validate(invalid_signature_block)
 
     @unittest.skip("BVS")

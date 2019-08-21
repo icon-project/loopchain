@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -94,6 +94,11 @@ class ConsensusSiever(ConsensusBase):
 
     async def __add_block(self, block: Block):
         vote = await self._wait_for_voting(block)
+        if not vote:
+            raise NotEnoughVotes
+        elif not vote.get_result():
+            raise InvalidBlock
+
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
@@ -111,8 +116,7 @@ class ConsensusSiever(ConsensusBase):
     async def consensus(self):
         async with self.__lock:
             util.logger.debug(
-                f"-------------------consensus "
-                f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
+                f"-------------------consensus-------------------")
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
                 util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
                 return
@@ -166,7 +170,7 @@ class ConsensusSiever(ConsensusBase):
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
                     self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-            except NotEnoughVotes:
+            except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
                 util.logger.debug(

@@ -14,15 +14,15 @@
 """A module of exceptions for errors on block chain"""
 
 from typing import TYPE_CHECKING
-from loopchain.protos import message_code
 
+from loopchain.protos import message_code
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import Transaction
     from loopchain.blockchain.types import Hash32
 
 
-class BlockInValidError(Exception):
+class InvalidBlock(Exception):
     """블럭 검증오류
     검증되지 않은 블럭이 블럭체인에 추가되거나, 검증시 hash값이 다르다면 발생한다
     """
