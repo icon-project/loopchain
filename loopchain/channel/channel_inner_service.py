@@ -396,6 +396,9 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 class ChannelInnerTask:
     def __init__(self, channel_service: 'ChannelService'):
         self._channel_service = channel_service
+        self._block_manager = None
+        self._blockchain = None
+
         self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
         # Citizen
@@ -415,7 +418,10 @@ class ChannelInnerTask:
             raise RuntimeError("Channel sub services need a loop")
         self.__loop_for_sub_services = loop
 
-        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        self._block_manager = self._channel_service.block_manager
+        self._blockchain = self._channel_service.block_manager.blockchain
+
+        tx_versioner = self._blockchain.tx_versioner
 
         def crash_callback_in_join_thread(process: ModuleProcess):
             asyncio.run_coroutine_threadsafe(self.__handle_crash_sub_services(process), loop)
@@ -465,18 +471,15 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
-        block_manager = self._channel_service.block_manager
-        blockchain = block_manager.get_blockchain()
-
         for tx in tx_list:
-            if tx.hash.hex() in block_manager.get_tx_queue():
+            if tx.hash.hex() in self._block_manager.get_tx_queue():
                 util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
                 continue
-            if blockchain.find_tx_by_key(tx.hash.hex()):
+            if self._blockchain.find_tx_by_key(tx.hash.hex()):
                 util.logger.warning(f"hash {tx.hash.hex()} already exists in blockchain. tx({tx})")
                 continue
 
-            block_manager.add_tx_obj(tx)
+            self._block_manager.add_tx_obj(tx)
             util.apm_event(ChannelProperty().peer_id, {
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
@@ -493,17 +496,15 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):
-        blockchain = self._channel_service.block_manager.get_blockchain()
-
         while True:
-            my_block_height = blockchain.block_height
+            my_block_height = self._blockchain.block_height
             if subscriber_block_height >= my_block_height:
                 async with self._citizen_condition_new_block:
                     await self._citizen_condition_new_block.wait()
 
             new_block_height = subscriber_block_height + 1
-            new_block = blockchain.find_block_by_height(new_block_height)
-            confirm_info: bytes = blockchain.find_confirm_info_by_height(new_block_height)
+            new_block = self._blockchain.find_block_by_height(new_block_height)
+            confirm_info: bytes = self._blockchain.find_confirm_info_by_height(new_block_height)
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
@@ -511,7 +512,7 @@ class ChannelInnerTask:
                 continue
 
             logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
-            bs = BlockSerializer.new(new_block.header.version, blockchain.tx_versioner)
+            bs = BlockSerializer.new(new_block.header.version, self._blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
@@ -553,9 +554,8 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def get_reps_by_hash(self, reps_hash: str) -> List[Dict[str, str]]:
-        blockchain = self._channel_service.block_manager.get_blockchain()
         new_reps_hash = Hash32.fromhex(reps_hash)
-        preps = blockchain.find_preps_by_roothash(new_reps_hash)
+        preps = self._blockchain.find_preps_by_roothash(new_reps_hash)
         return preps
 
     @message_queue_task
@@ -570,13 +570,13 @@ class ChannelInnerTask:
     @message_queue_task(priority=255)
     async def get_status(self):
         status_data = dict()
-        block_manager = self._channel_service.block_manager
-        status_data["made_block_count"] = block_manager.made_block_count
+        status_data["made_block_count"] = self._blockchain.my_made_block_count
+        status_data["leader_made_block_count"] = self._blockchain.leader_made_block_count
 
         block_height = 0
         unconfirmed_block_height = None
-        last_block = block_manager.get_blockchain().last_block
-        last_unconfirmed_block = block_manager.get_blockchain().last_unconfirmed_block
+        last_block = self._blockchain.last_block
+        last_unconfirmed_block = self._blockchain.last_unconfirmed_block
 
         if last_block:
             block_height = last_block.header.height
@@ -584,25 +584,26 @@ class ChannelInnerTask:
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
-        status_data["status"] = block_manager.service_status
+        status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
-        status_data["service_available"]: bool = (status_data["state"] in
-                                                  self._channel_service.state_machine.service_available_states)
-        status_data["peer_type"] = str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
+        status_data["service_available"]: bool = \
+            (status_data["state"] in self._channel_service.state_machine.service_available_states)
+        status_data["peer_type"] = \
+            str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
         status_data["peer_id"] = str(ChannelProperty().peer_id)
         status_data["block_height"] = block_height
-        status_data["round"] = block_manager.epoch.round if block_manager.epoch else -1
-        status_data["epoch_height"] = block_manager.epoch.height if block_manager.epoch else -1
+        status_data["round"] = self._block_manager.epoch.round if self._block_manager.epoch else -1
+        status_data["epoch_height"] = self._block_manager.epoch.height if self._block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
-        status_data["total_tx"] = block_manager.get_total_tx()
-        status_data["unconfirmed_tx"] = block_manager.get_count_of_unconfirmed_tx()
+        status_data["total_tx"] = self._block_manager.get_total_tx()
+        status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
         status_data["leader"] = self._channel_service.peer_manager.leader_id or ""
-        status_data["epoch_leader"] = block_manager.epoch.leader_id if block_manager.epoch else ""
+        status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
 
         return status_data
 
@@ -646,7 +647,7 @@ class ChannelInnerTask:
     def add_tx(self, request) -> None:
         tx_json = request.tx_json
 
-        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        tx_versioner = self._blockchain.tx_versioner
         tx_version, tx_type = tx_versioner.get_version(tx_json)
 
         ts = TransactionSerializer.new(tx_version, tx_type, tx_versioner)
@@ -656,7 +657,7 @@ class ChannelInnerTask:
         tv.verify(tx)
 
         if tx is not None:
-            self._channel_service.block_manager.add_tx_obj(tx)
+            self._block_manager.add_tx_obj(tx)
             util.apm_event(ChannelProperty().peer_id, {
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
@@ -669,14 +670,13 @@ class ChannelInnerTask:
 
     @message_queue_task
     def get_tx(self, tx_hash):
-        return self._channel_service.block_manager.get_tx(tx_hash)
+        return self._block_manager.get_tx(tx_hash)
 
     @message_queue_task
     def get_tx_info(self, tx_hash):
-        tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
+        tx = self._block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
-            blockchain = self._channel_service.block_manager.get_blockchain()
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), blockchain.tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self._blockchain.tx_versioner)
             tx_origin = tx_serializer.to_origin_data(tx)
 
             logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
@@ -688,7 +688,7 @@ class ChannelInnerTask:
             return message_code.Response.success, tx_info
         else:
             try:
-                return message_code.Response.success, self._channel_service.block_manager.get_tx_info(tx_hash)
+                return message_code.Response.success, self._block_manager.get_tx_info(tx_hash)
             except KeyError as e:
                 logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
                 response_code = message_code.Response.fail_invalid_key_error
@@ -697,7 +697,7 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped) -> None:
         try:
-            unconfirmed_block = self._channel_service.block_manager.get_blockchain().block_loads(block_dumped)
+            unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
             traceback.print_exc()
             logging.error(f"announce_unconfirmed_block: {e}")
@@ -708,22 +708,21 @@ class ChannelInnerTask:
                       f"height({unconfirmed_block.header.height})\n"
                       f"hash({unconfirmed_block.header.hash.hex()})")
 
-        last_block = self._channel_service.block_manager.get_blockchain().last_block
+        last_block = self._blockchain.last_block
         if last_block is None:
             util.logger.debug("BlockChain has not been initialized yet.")
             return
 
         try:
-            self._channel_service.block_manager.verify_confirm_info(unconfirmed_block)
+            self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid:
             # TODO
             pass
         except ConfirmInfoInvalidNeedBlockSync as e:
             util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
-            block_manager = self._channel_service.block_manager
             if self._channel_service.state_machine.state == "BlockGenerate" and (
-                    block_manager.consensus_algorithm and block_manager.consensus_algorithm.is_running):
-                block_manager.consensus_algorithm.stop()
+                    self._block_manager.consensus_algorithm and self._block_manager.consensus_algorithm.is_running):
+                self._block_manager.consensus_algorithm.stop()
             else:
                 self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
@@ -736,33 +735,32 @@ class ChannelInnerTask:
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
-        blockchain = self._channel_service.block_manager.get_blockchain()
-
         response_message = None
         block: Block = None
         if block_hash != "":
-            block = blockchain.find_block_by_hash(block_hash)
+            block = self._blockchain.find_block_by_hash(block_hash)
         elif block_height != -1:
-            block = blockchain.find_block_by_height(block_height)
+            block = self._blockchain.find_block_by_height(block_height)
         else:
             response_message = message_code.Response.fail_not_enough_data
 
-        if blockchain.last_unconfirmed_block is None:
+        if self._blockchain.last_unconfirmed_block is None:
             unconfirmed_block_height = -1
         else:
-            unconfirmed_block_height = blockchain.last_unconfirmed_block.header.height
+            unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
         if block is None:
             if response_message is None:
                 response_message = message_code.Response.fail_wrong_block_hash
-            return response_message, -1, blockchain.block_height, unconfirmed_block_height, None, None
+            return response_message, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
-        if block.header.height <= blockchain.block_height:
-            confirm_info = blockchain.find_confirm_info_by_hash(block.header.hash)
+        if block.header.height <= self._blockchain.block_height:
+            confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
 
-        return message_code.Response.success, block.header.height, blockchain.block_height, unconfirmed_block_height,\
-            confirm_info, blockchain.block_dumps(block)
+        return \
+            message_code.Response.success, block.header.height, self._blockchain.block_height,\
+            unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_audience(self, peer_target) -> None:
@@ -789,24 +787,23 @@ class ChannelInnerTask:
                              f"({ChannelProperty().name}) block_hash({vote.block_hash})")
 
             util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
-            self._channel_service.block_manager.candidate_blocks.add_vote(vote)
+            self._block_manager.candidate_blocks.add_vote(vote)
 
-            block_manager = self._channel_service.block_manager
-            if self._channel_service.state_machine.state == "BlockGenerate" and block_manager.consensus_algorithm:
-                block_manager.consensus_algorithm.vote(vote)
+            if self._channel_service.state_machine.state == "BlockGenerate" and \
+                    self._block_manager.consensus_algorithm:
+                self._block_manager.consensus_algorithm.vote(vote)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
         vote_serialized = json.loads(vote_dumped)
         vote = LeaderVote.deserialize(vote_serialized)
 
-        block_manager = self._channel_service.block_manager
-        block_manager.add_complain(vote)
+        self._block_manager.add_complain(vote)
 
     @message_queue_task
     def get_invoke_result(self, tx_hash):
         try:
-            invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
+            invoke_result = self._block_manager.get_invoke_result(tx_hash)
             invoke_result_str = json.dumps(invoke_result)
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
@@ -848,7 +845,7 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, json.dumps({}), ""
 
-        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        tx_versioner = self._blockchain.tx_versioner
         bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_data_dict = bs.serialize(block)
 
@@ -868,7 +865,7 @@ class ChannelInnerTask:
             version = tx_versioner.get_version(tx)
             tx_hash = tss[version].get_hash(tx)
 
-            invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
+            invoke_result = self._block_manager.get_invoke_result(tx_hash)
 
             if 'failure' in invoke_result:
                 continue
@@ -896,15 +893,14 @@ class ChannelInnerTask:
         if fail_response_code:
             return fail_response_code, block_hash, b"", json.dumps({}), ""
 
-        tx_versioner = self._channel_service.block_manager.get_blockchain().tx_versioner
+        tx_versioner = self._blockchain.tx_versioner
         bs = BlockSerializer.new(block.header.version, tx_versioner)
         block_dict = bs.serialize(block)
         return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict), []
 
     async def __get_block(self, block_data_filter, block_hash, block_height, tx_data_filter):
-        blockchain = self._channel_service.block_manager.get_blockchain()
         if block_hash == "" and block_height == -1:
-            block_hash = blockchain.last_block.header.hash.hex()
+            block_hash = self._blockchain.last_block.header.hash.hex()
         block_filter = re.sub(r'\s', '', block_data_filter).split(",")
         tx_filter = re.sub(r'\s', '', tx_data_filter).split(",")
 
@@ -912,13 +908,13 @@ class ChannelInnerTask:
         confirm_info = b''
         fail_response_code = None
         if block_hash:
-            block = blockchain.find_block_by_hash(block_hash)
-            confirm_info = blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
+            block = self._blockchain.find_block_by_hash(block_hash)
+            confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
         elif block_height != -1:
-            block = blockchain.find_block_by_height(block_height)
-            confirm_info = blockchain.find_confirm_info_by_height(block_height)
+            block = self._blockchain.find_block_by_height(block_height)
+            confirm_info = self._blockchain.find_confirm_info_by_height(block_height)
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_height
         else:
@@ -928,21 +924,19 @@ class ChannelInnerTask:
 
     @message_queue_task
     def get_precommit_block(self, last_block_height: int):
-        block_manager = self._channel_service.block_manager
-        precommit_block = block_manager.get_blockchain().get_precommit_block()
+        precommit_block = self._blockchain.get_precommit_block()
 
         if precommit_block is None:
             return message_code.Response.fail, "there is no precommit block.", b""
         if precommit_block.height != last_block_height + 1:
             return message_code.Response.fail, "need block height sync.", b""
 
-        block_dumped = block_manager.get_blockchain().block_dumps(precommit_block)
+        block_dumped = self._blockchain.block_dumps(precommit_block)
         return message_code.Response.success, "success", block_dumped
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
-        block_manager = self._channel_service.block_manager
-        tx_list, next_index = block_manager.get_blockchain().get_tx_list_by_address(address=address, index=index)
+        tx_list, next_index = self._blockchain.get_tx_list_by_address(address=address, index=index)
 
         return tx_list, next_index
 
@@ -968,9 +962,8 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:
-        blockchain = self._channel_service.block_manager.get_blockchain()
         try:
-            proof = blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
+            proof = self._blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
@@ -981,22 +974,20 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def prove_tx(self, tx_hash: str, proof: list) -> Union[str, dict]:
-        blockchain = self._channel_service.block_manager.get_blockchain()
         try:
             proof = make_proof_deserializable(proof)
         except Exception as e:
             return make_error_response(JsonError.INTERNAL_ERROR, str(e))
 
         try:
-            return "0x1" if blockchain.prove_transaction(Hash32.fromhex(tx_hash), proof) else "0x0"
+            return "0x1" if self._blockchain.prove_transaction(Hash32.fromhex(tx_hash), proof) else "0x0"
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
     @message_queue_task
     async def get_receipt_proof(self, tx_hash: str) -> Union[list, dict]:
-        blockchain = self._channel_service.block_manager.get_blockchain()
         try:
-            proof = blockchain.get_receipt_proof(Hash32.fromhex(tx_hash))
+            proof = self._blockchain.get_receipt_proof(Hash32.fromhex(tx_hash))
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 
@@ -1007,14 +998,13 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def prove_receipt(self, tx_hash: str, proof: list) -> Union[str, dict]:
-        blockchain = self._channel_service.block_manager.get_blockchain()
         try:
             proof = make_proof_deserializable(proof)
         except Exception as e:
             return make_error_response(JsonError.INTERNAL_ERROR, str(e))
 
         try:
-            return "0x1" if blockchain.prove_receipt(Hash32.fromhex(tx_hash), proof) else "0x0"
+            return "0x1" if self._blockchain.prove_receipt(Hash32.fromhex(tx_hash), proof) else "0x0"
         except Exception as e:
             return make_error_response(JsonError.INVALID_PARAMS, str(e))
 

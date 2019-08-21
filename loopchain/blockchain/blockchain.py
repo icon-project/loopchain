@@ -17,7 +17,9 @@ import json
 import pickle
 import threading
 import zlib
+from collections import Counter
 from enum import Enum
+from os import linesep
 from typing import Union, List, cast, Optional
 
 from loopchain import configure as conf
@@ -49,6 +51,11 @@ class NID(Enum):
     unknown = "0x3"
 
 
+class MadeBlockCounter(Counter):
+    def __str__(self):
+        return linesep.join(f"{k}: {v}" for k, v in self.items())
+
+
 class BlockChain:
     """Block chain with only committed blocks."""
 
@@ -70,6 +77,8 @@ class BlockChain:
         self.__block_height = -1
         # last block in block db
         self.__last_block = None
+        self.__made_block_counter = MadeBlockCounter()
+
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
@@ -99,6 +108,60 @@ class BlockChain:
             self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
 
     @property
+    def leader_made_block_count(self) -> int:
+        if self.__last_block:
+            return self.__made_block_counter[self.__last_block.header.peer_id]
+        return -1
+
+    @property
+    def my_made_block_count(self) -> int:
+        return self.__made_block_counter[ChannelProperty().peer_address]
+
+    def _increase_made_block_count(self, block: Block) -> None:
+        """This is must called before changing self.__last_block!
+
+        :param block:
+        :return:
+        """
+        if block.header.height == 0:
+            return
+
+        if self.__last_block.header.peer_id != block.header.peer_id:
+            self.__made_block_counter[block.header.peer_id] = 1
+        else:
+            self.__made_block_counter[block.header.peer_id] += 1
+
+        utils.logger.spam(f"({block.header.height})made_block_count:\n{self.__made_block_counter}")
+
+    def reset_leader_made_block_count(self):
+        self.__made_block_counter.clear()
+
+    def get_next_leader(self) -> str:
+        """get next leader by leader_made_block_count
+
+        :return: new leader's peer_id as hex_hx(str)
+        """
+
+        peer_manager = ObjectManager().channel_service.peer_manager
+        if self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
+            # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
+            # next unconfirmed block height is 10 and It has to have changed next leader.
+            return peer_manager.get_next_leader_peer(self.__last_block.header.peer_id.hex_hx()).peer_id
+
+        return peer_manager.leader_id
+
+    def get_expected_generator(self, peer_id: ExternalAddress) -> str:
+        """get expected generator to vote unconfirmed block
+
+        :return: expected generator's id by made block count.
+        """
+
+        peer_manager = ObjectManager().channel_service.peer_manager
+        if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
+            return peer_manager.get_next_leader_peer(peer_id).peer_id
+        return peer_id.hex_hx()
+
+    @property
     def block_height(self):
         return self.__block_height
 
@@ -126,6 +189,35 @@ class BlockChain:
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
+
+    def rebuild_made_block_count(self):
+        """rebuild leader's made block count
+
+        :return:
+        """
+        self.reset_leader_made_block_count()
+
+        block_hash = self.__last_block.header.hash.hex()
+        block_height = self.__last_block.header.height
+        start_block_height = self.__last_block.header.height
+
+        while block_hash != "":
+            if block_height <= 0:
+                return
+
+            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
+            block = block_serializer.deserialize(json.loads(block_dump))
+
+            self.__made_block_counter[block.header.peer_id] += 1
+
+            if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
+                break
+
+            # next loop
+            block_height = block.header.height - 1
+            block_hash = block.header.prev_hash.hex()
 
     def rebuild_transaction_count(self):
         if self.__last_block is not None:
@@ -162,7 +254,7 @@ class BlockChain:
         while block_hash != "":
             block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
             block_version = self.__block_versioner.get_version(block_height)
-            block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
             # Count only normal block`s tx count, not genesis block`s
@@ -184,7 +276,7 @@ class BlockChain:
             block_dumped = json.loads(block_bytes)
             block_height = self.__block_versioner.get_height(block_dumped)
             block_version = self.__block_versioner.get_version(block_height)
-            return BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dumped)
+            return BlockSerializer.new(block_version, self.__tx_versioner).deserialize(block_dumped)
         except KeyError as e:
             logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
@@ -312,9 +404,12 @@ class BlockChain:
 
             self.__invoke_results.pop(block.header.hash, None)
 
+            self._increase_made_block_count(block)
+
             self.__last_block = block
             self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
+
             logging.debug(f"blockchain add_block set block_height({self.__block_height}), "
                           f"last_block({self.__last_block.header.hash.hex()})")
             logging.info(
@@ -395,7 +490,7 @@ class BlockChain:
         byte_length = (bit_length + 7) // 8
         next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
-        block_serializer = BlockSerializer.new(block.header.version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
 
@@ -581,8 +676,8 @@ class BlockChain:
             return None
 
         tx_data = tx_info_json["transaction"]
-        tx_version, tx_type = self.tx_versioner.get_version(tx_data)
-        tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
+        tx_version, tx_type = self.__tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
         return tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
@@ -631,7 +726,7 @@ class BlockChain:
         :return:
         """
         logging.info("Make Genesis Block....")
-        tx_builder = TransactionBuilder.new("genesis", "", self.tx_versioner)
+        tx_builder = TransactionBuilder.new("genesis", "", self.__tx_versioner)
 
         nid = tx_info.get("nid")
         if nid is not None:
@@ -642,7 +737,7 @@ class BlockChain:
         tx = tx_builder.build(False)
 
         block_version = self.block_versioner.get_version(0)
-        block_builder = BlockBuilder.new(block_version, self.tx_versioner)
+        block_builder = BlockBuilder.new(block_version, self.__tx_versioner)
         block_builder.height = 0
         block_builder.fixed_timestamp = utils.get_now_time_stamp()
         block_builder.next_leader = ExternalAddress.fromhex(self.__peer_id)
@@ -665,7 +760,7 @@ class BlockChain:
             self.__precommit_tx(precommit_block)
             utils.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
 
-            block_serializer = BlockSerializer.new(precommit_block.header.version, self.tx_versioner)
+            block_serializer = BlockSerializer.new(precommit_block.header.version, self.__tx_versioner)
             block_serialized = block_serializer.serialize(precommit_block)
             block_serialized = json.dumps(block_serialized)
             block_serialized = block_serialized.encode('utf-8')
@@ -763,7 +858,7 @@ class BlockChain:
             block_version = self.__block_versioner.get_version(block_height)
             confirm_info = self.find_confirm_info_by_hash(self.__block_versioner.get_hash(block_dump))
             block_dump["confirm_prev_block"] = confirm_info is not b''
-            self.__last_block = BlockSerializer.new(block_version, self.tx_versioner).deserialize(block_dump)
+            self.__last_block = BlockSerializer.new(block_version, self.__tx_versioner).deserialize(block_dump)
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
@@ -799,7 +894,7 @@ class BlockChain:
 
     def block_dumps(self, block: Block) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         block_serialized = block_serializer.serialize(block)
 
         """
@@ -820,7 +915,7 @@ class BlockChain:
         block_serialized = json.loads(block_json)
         block_height = self.__block_versioner.get_height(block_serialized)
         block_version = self.__block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, self.tx_versioner)
+        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         return block_serializer.deserialize(block_serialized)
 
     def get_transaction_proof(self, tx_hash: Hash32):
@@ -898,8 +993,7 @@ class BlockChain:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
-                                                      self.__block_manager.get_blockchain().tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
             transaction = {
                 "method": method,
                 "params": {
@@ -923,7 +1017,7 @@ class BlockChain:
         response_to_json_query(response)
 
         tx_receipts = response["txResults"]
-        block_builder = BlockBuilder.from_new(block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder = BlockBuilder.from_new(block, self.__tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
         block_builder.commit_state = {
@@ -950,9 +1044,7 @@ class BlockChain:
         transactions = []
 
         for tx in _block.body.transactions.values():
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(),
-                                                      self.__block_manager.get_blockchain().tx_versioner)
-
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
             transaction = {
                 "method": method,
                 "params": tx_serializer.to_full_data(tx)
@@ -966,6 +1058,7 @@ class BlockChain:
                 'prevBlockHash': _block.header.prev_hash.hex() if _block.header.prev_hash else '',
                 'timestamp': _block.header.timestamp
             },
+            'isBlockEditable': hex(is_block_editable),
             'transactions': transactions,
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
             'prevBlockValidators':
@@ -973,9 +1066,6 @@ class BlockChain:
                 if prev_block.header.version != "0.1a"
                 else [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
         }
-
-        if is_block_editable:
-            request_origin['isBlockEditable'] = hex(is_block_editable)
 
         request = convert_params(request_origin, ParamType.invoke)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
@@ -1000,7 +1090,7 @@ class BlockChain:
         else:
             reps = ObjectManager().channel_service.get_rep_ids()
 
-        block_builder = BlockBuilder.from_new(_block, self.__block_manager.get_blockchain().tx_versioner)
+        block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
 
@@ -1012,10 +1102,8 @@ class BlockChain:
             for tx_receipt in tx_receipts_origin:
                 try:
                     tx_data = added_transactions[tx_receipt['txHash']]
-                    tx_version, tx_type = self.__block_manager.get_blockchain().tx_versioner.get_version(tx_data)
-
-                    ts = TransactionSerializer.new(tx_version, tx_type,
-                                                   self.__block_manager.get_blockchain().tx_versioner)
+                    tx_version, tx_type = self.__tx_versioner.get_version(tx_data)
+                    ts = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
                     tx = ts.from_(tx_data)
                 except KeyError:
                     tx = original_transactions[Hash32(bytes.fromhex(tx_receipt['txHash']))]

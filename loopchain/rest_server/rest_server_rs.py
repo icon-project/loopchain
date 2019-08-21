@@ -25,7 +25,7 @@ from sanic import Sanic, response
 from sanic.views import HTTPMethodView
 
 from loopchain import configure as conf, utils
-from loopchain.baseservice import PeerListData, PeerManager, Peer
+from loopchain.peermanager import PeerListData, PeerManager, Peer
 from loopchain.baseservice import StubManager
 from loopchain.baseservice.ca_service import CAService
 from loopchain.components import SingletonMetaClass

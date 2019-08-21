@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,10 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""package for block chain objects"""
+"""package for PeerManager"""
 
-from .blockchain import *
-from .exception import *
-from .score_base import *
-from .candidate_blocks import *
-from .epoch import *
+from .peer import *
+from .peer_loader import *
+from .peer_list_data import *
+from .peer_manager import *

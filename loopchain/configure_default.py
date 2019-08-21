@@ -299,12 +299,6 @@ CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
 
 
-##########
-# IISS ###
-##########
-ENABLE_IISS = True
-
-
 ########
 # MQ ###
 ########

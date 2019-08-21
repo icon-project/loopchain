@@ -29,14 +29,13 @@ from loopchain.channel.channel_property import ChannelProperty
 
 class Epoch:
     def __init__(self, block_manager, leader_id=None):
-        blockchain = block_manager.get_blockchain()
-        if blockchain.last_block:
-            self.height = blockchain.last_block.header.height + 1
+        self.__block_manager = block_manager
+        self.__blockchain = block_manager.blockchain
+        if self.__blockchain.last_block:
+            self.height = self.__blockchain.last_block.header.height + 1
         else:
             self.height = 1
         self.leader_id = leader_id
-        self.__block_manager = block_manager
-        self.__blockchain = self.__block_manager.get_blockchain()
         utils.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
 
         # TODO using Epoch in BlockManager instead using candidate_blocks directly.
@@ -116,18 +115,17 @@ class Epoch:
             return None
 
     def _check_unconfirmed_block(self):
-        blockchain = self.__block_manager.get_blockchain()
-        # utils.logger.debug(f"-------------------_check_unconfirmed_block, "
-        #                    f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
-        if blockchain.last_unconfirmed_block:
-            vote = self.__block_manager.candidate_blocks.get_votes(blockchain.last_unconfirmed_block.header.hash)
-            # utils.logger.debug(f"-------------------_check_unconfirmed_block, "
-            #                    f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block.header.hash}), "
-            #                    f"vote({vote.votes})")
-            vote_result = vote.get_result(blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
+        if self.__blockchain.last_unconfirmed_block:
+            vote = self.__block_manager.candidate_blocks.get_votes(
+                self.__blockchain.last_unconfirmed_block.header.hash)
+            vote_result = vote.get_result(
+                self.__blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
+
             if not vote_result:
-                utils.logger.debug(f"last_unconfirmed_block({blockchain.last_unconfirmed_block.header.hash}), "
-                                   f"vote result({vote_result})")
+                utils.logger.debug(
+                    f"last_unconfirmed_block"
+                    f"({self.__blockchain.last_unconfirmed_block.header.hash}), "
+                    f"vote result({vote_result})")
 
     def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()
@@ -166,6 +164,13 @@ class Epoch:
             else:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
+
+    def remove_duplicate_tx_when_turn_to_leader(self):
+        if self.__blockchain.last_unconfirmed_block and \
+                self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
+            tx_queue = self.__block_manager.get_tx_queue()
+            for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
+                tx_queue.pop(tx_hash_in_unconfirmed_block.hex(), None)
 
     def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block

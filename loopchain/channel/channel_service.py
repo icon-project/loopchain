@@ -24,8 +24,8 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
 from loopchain.baseservice import ObjectManager, CommonSubprocess
-from loopchain.baseservice import PeerManager, TimerService
 from loopchain.baseservice import RestStubManager, NodeSubscriber
+from loopchain.baseservice import TimerService
 from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
@@ -34,6 +34,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
+from loopchain.peermanager import PeerManager, PeerLoader
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -196,6 +197,7 @@ class ChannelService:
         ChannelProperty().rest_target = kwargs.get('rest_target')
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
 
         # FIXME this is temporary setting for node_type.
         if ChannelProperty().radio_station_target:
@@ -215,7 +217,7 @@ class ChannelService:
     async def __init_network(self):
         if ChannelProperty().radio_station_target:
             self.__init_radio_station_stub()
-        await self._load_peers()
+        await self.__peer_manager.load_peers()
 
     async def evaluate_network(self):
         await self._select_node_type()
@@ -237,8 +239,10 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.turn_on_leader_complain_timer()
 
+        self.__block_manager.blockchain.rebuild_made_block_count()
+
     def update_sub_services_properties(self):
-        nid = self.__block_manager.get_blockchain().find_nid()
+        nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
     def __get_role_switch_block_height(self):
@@ -264,27 +268,8 @@ class ChannelService:
 
         self.__radio_station_stub = None
 
-    async def _load_peers(self):
-        self.__peer_manager.load_peers_from_iiss()
-
-        if not self.__peer_manager.peer_list:
-            if self.is_support_node_function(conf.NodeFunction.Vote):
-                await self.__peer_manager.load_peers_from_file()
-            else:
-                await self.__peer_manager.load_peers_from_rest_call()
-
-        reps_hash = self.__peer_manager.reps_hash()
-        reps_in_db = self.block_manager.get_blockchain().find_preps_by_roothash(reps_hash)
-
-        if not reps_in_db:
-            preps = self.__peer_manager.serialize_as_preps()
-            utils.logger.spam(f"in _load_peers serialize_as_preps({preps})")
-            self.block_manager.get_blockchain().write_preps(reps_hash, preps)
-
-        self.__peer_manager.show_peers()
-
     def _is_role_switched(self) -> bool:
-        current_height = self.__block_manager.get_blockchain().block_height
+        current_height = self.__block_manager.blockchain.block_height
         if current_height < 0:
             utils.logger.debug(f"Need to sync block, current_height({current_height})")
             return False
@@ -313,7 +298,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.__peer_manager.load_peers_from_iiss()
+        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -409,13 +394,12 @@ class ChannelService:
                 for peer_id in self.__peer_manager.peer_list]
 
     def generate_genesis_block(self):
-        blockchain = self.__block_manager.get_blockchain()
-        if blockchain.block_height > -1:
+        if self.__block_manager.blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
         reps = self.get_rep_ids()
-        blockchain.generate_genesis_block(reps)
+        self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
@@ -441,7 +425,7 @@ class ChannelService:
 
         # try websocket connection, and handle exception in callback
         asyncio.ensure_future(self.__node_subscriber.subscribe(
-            block_height=self.__block_manager.get_blockchain().block_height,
+            block_height=self.__block_manager.blockchain.block_height,
             event=subscribe_event
         )).add_done_callback(_handle_exception)
         await subscribe_event.wait()
@@ -474,25 +458,13 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        blockchain = self.__block_manager.get_blockchain()
-        last_block = blockchain.last_unconfirmed_block or blockchain.last_block
-
-        leader_id = None
-        if last_block and last_block.header.next_leader is not None:
-            leader_id = last_block.header.next_leader.hex_hx()
-            peer = self.peer_manager.get_peer(leader_id)
-            if peer is None:
-                leader_id = None
-            else:
-                self.peer_manager.set_leader_peer(peer)
-        if leader_id is None:
-            leader_id = self.peer_manager.get_leader_peer().peer_id
-        logging.debug(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
+        leader_id = self.__block_manager.blockchain.get_next_leader()
+        utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
         if ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
-            logging.debug(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+            utils.logger.info(f"Set Peer Type Leader! channel({ChannelProperty().name})")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
         else:
             logger_preset.is_leader = False
@@ -505,10 +477,9 @@ class ChannelService:
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
     def __ready_to_height_sync(self):
-        blockchain = self.block_manager.get_blockchain()
-        blockchain.init_blockchain()
+        self.block_manager.blockchain.init_blockchain()
 
-        if blockchain.block_height >= 0:
+        if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
         else:
             if self._is_genesis_node():
@@ -525,14 +496,12 @@ class ChannelService:
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
             utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
 
-        utils.logger.info(f"RESET LEADER channel({ChannelProperty().name}) leader_id({new_leader_id}), "
-                          f"complained={complained}")
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
-        if block_height > 0 and block_height != self.block_manager.get_blockchain().last_block.header.height + 1:
+        if block_height > 0 and block_height != self.block_manager.blockchain.last_block.header.height + 1:
             utils.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
                                  f"last_block.header.height("
-                                 f"{self.block_manager.get_blockchain().last_block.header.height})")
+                                 f"{self.block_manager.blockchain.last_block.header.height})")
             return
 
         if leader_peer is None:
@@ -544,17 +513,18 @@ class ChannelService:
         self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer)
         if complained:
+            self.__block_manager.blockchain.reset_leader_made_block_count()
             self.__block_manager.epoch.new_round(leader_peer.peer_id)
         else:
             self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
         logging.info(f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
-            logging.debug("Set Peer Type Leader!")
+            utils.logger.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
         else:
-            logging.debug("Set Peer Type Peer!")
+            utils.logger.debug("Set Peer Type Peer!")
             peer_type = loopchain_pb2.PEER
             self.state_machine.turn_to_peer()
 
@@ -566,7 +536,7 @@ class ChannelService:
         # complained_leader = self.peer_manager.get_leader_peer()
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
-        if block_height > 0 and block_height != self.__block_manager.get_blockchain().last_block.height + 1:
+        if block_height > 0 and block_height != self.__block_manager.blockchain.last_block.height + 1:
             logging.warning(f"height behind peer can not take leader role.")
             return
 
