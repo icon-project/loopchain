@@ -41,8 +41,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_balance: self.__handler_get_balance,
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
             message_code.Request.get_total_supply: self.__handler_get_total_supply,
-            message_code.Request.peer_peer_list: self.__handler_peer_list,
-            message_code.Request.peer_restart_channel: self.__handler_restart_channel
+            message_code.Request.peer_peer_list: self.__handler_peer_list
         }
 
         self.__status_cache_update_time = {}
@@ -169,16 +168,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.Message(code=message_code.Response.success,
                                      meta=str(next_index),
                                      object=tx_list_dumped)
-
-    def __handler_restart_channel(self, request, context):
-        logging.debug(f"Restart_channel({request.channel}) code({request.code}), message({request.message})")
-
-        ObjectManager().peer_service.start_channel(
-            channel=request.channel,
-            is_restart=True
-        )
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
 
     def Request(self, request, context):
         # utils.logger.debug(f"Peer Service got request({request.code})")
