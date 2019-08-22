@@ -702,10 +702,11 @@ class ChannelInnerTask:
             logging.error(f"announce_unconfirmed_block: {e}")
             return
 
-        logging.debug(f"#block \n"
-                      f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
-                      f"height({unconfirmed_block.header.height})\n"
-                      f"hash({unconfirmed_block.header.hash.hex()})")
+        util.logger.notice(
+            f"announce_unconfirmed_block \n"
+            f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
+            f"height({unconfirmed_block.header.height})\n"
+            f"hash({unconfirmed_block.header.hash.hex()})")
 
         last_block = self._blockchain.last_block
         if last_block is None:

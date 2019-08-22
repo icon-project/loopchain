@@ -494,8 +494,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        utils.logger.debug(f"peer_outer_service::AnnounceUnconfirmedBlock channel({channel_name})")
-
         channel_stub = StubCollection().channel_stubs[channel_name]
         asyncio.run_coroutine_threadsafe(
             channel_stub.async_task().announce_unconfirmed_block(request.block),

@@ -74,9 +74,12 @@ class Epoch:
         self.new_votes()
 
     def new_votes(self):
-        audience = ObjectManager().channel_service.peer_manager.peer_list
-        rep_info = sorted(audience.values(), key=lambda peer: peer.order)
-        self.reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
+        if self.__blockchain.last_block.header.version != '0.1a':
+            reps_hash = self.__blockchain.last_block.header.next_reps_hash
+        else:
+            reps_hash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+
+        self.reps = self.__blockchain.find_preps_addresses_by_roothash(reps_hash)
 
         leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,

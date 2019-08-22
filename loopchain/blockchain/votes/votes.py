@@ -41,6 +41,8 @@ class Votes(ABC, Generic[TVote]):
             self.verify_vote(vote)
         except VoteSafeDuplicateError:
             pass
+        except ValueError:
+            pass
         else:
             index = self.reps.index(vote.rep)
             self.votes[index] = vote

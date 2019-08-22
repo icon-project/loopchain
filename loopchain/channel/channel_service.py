@@ -34,7 +34,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.peermanager import PeerManager, PeerLoader
+from loopchain.peermanager import PeerManager
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -284,7 +284,13 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
-        if self._get_node_type_by_peer_list() == ChannelProperty().node_type:
+        new_node_type = self._get_node_type_by_peer_list()
+        if ChannelProperty().node_type == conf.NodeType.CommunityNode \
+                and new_node_type == conf.NodeType.CitizenNode:
+            utils.logger.warning(f"prep right expired...")
+            return False
+
+        if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 

@@ -219,7 +219,7 @@ class _Broadcaster:
         try:
             del self.__audience[audience_target]
         except KeyError:
-            logging.warning(f"Already deleted peer: {audience_target}")
+            logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
 
     def __handler_broadcast(self, broadcast_param):
         # logging.debug("BroadcastThread received broadcast command")
@@ -336,6 +336,7 @@ class _Broadcaster:
 class BroadcastScheduler(metaclass=abc.ABCMeta):
     def __init__(self):
         self.__schedule_listeners = dict()
+        self.__audience_reps_hash = None
 
     @abc.abstractmethod
     def start(self):
@@ -390,12 +391,40 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
+    def _update_audience(self, reps_hash, update_command=None):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+
+        if update_command:
+            update_reps = blockchain.find_preps_by_roothash(reps_hash)
+            util.logger.notice(
+                f"update audience command({update_command})"
+                f"\nupdate_reps({update_reps})"
+            )
+            for rep in update_reps:
+                self.schedule_job(update_command, rep['p2pEndpoint'])
+            return
+
+        self._update_audience(self.__audience_reps_hash, BroadcastCommand.UNSUBSCRIBE)
+        self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
+        self.__audience_reps_hash = reps_hash
+
+    def schedule_broadcast(
+            self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
+
+        if not self.__audience_reps_hash:
+            self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
+            self._update_audience(self.__audience_reps_hash)
+
+        if reps_hash and reps_hash != self.__audience_reps_hash:
+            self._update_audience(reps_hash)
+
         kwargs = {}
-        if retry_times is not None:
+        if retry_times:
             kwargs['retry_times'] = retry_times
-        if timeout is not None:
+        if timeout:
             kwargs['timeout'] = timeout
+
+        util.logger.notice(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
 

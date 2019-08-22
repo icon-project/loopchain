@@ -143,6 +143,14 @@ class BlockChain:
         """
 
         peer_manager = ObjectManager().channel_service.peer_manager
+
+        if (self.last_block.header.version != '0.1a') and \
+                (self.last_block.header.reps_hash != self.last_block.header.next_reps_hash):
+            utils.logger.notice(
+                f"in get_next_leader new reps leader is "
+                f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
+            return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
+
         if self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
             # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
             # next unconfirmed block height is 10 and It has to have changed next leader.
@@ -1095,7 +1103,8 @@ class BlockChain:
 
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.debug(f"in score invoke next_prep({next_prep})")
+            utils.logger.notice(
+                f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)

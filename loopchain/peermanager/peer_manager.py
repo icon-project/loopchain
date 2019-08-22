@@ -21,7 +21,7 @@ from typing import Optional, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager
+from loopchain.baseservice import ObjectManager, StubManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -41,6 +41,8 @@ class PeerManager:
         # reps_hash, reps for reset_all_peers
         self._reps_reset_data: Optional[tuple] = None
 
+        self._prepared_reps_hash = None
+
     @property
     def peer_list(self) -> dict:
         """return peer_list of peer_list_data
@@ -56,6 +58,10 @@ class PeerManager:
         :return:
         """
         return self._peer_list_data.leader_id
+
+    @property
+    def prepared_reps_hash(self):
+        return self._prepared_reps_hash
 
     def reps_hash(self) -> Hash32:
         """return reps root hash.
@@ -123,11 +129,19 @@ class PeerManager:
                 self._peer_list_data.leader_id = peer.peer_id
 
             self.peer_list[peer.peer_id] = peer
-
-        broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer.target)
+            self._prepared_reps_hash = self.reps_hash()
 
         return peer.order
+
+    def remove_peer(self, peer_id):
+        logging.debug(f"remove peer : {peer_id}")
+        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
+        if removed_peer:
+            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
+            self._prepared_reps_hash = self.reps_hash()
+            return True
+
+        return False
 
     def set_leader_peer(self, peer):
         """리더 피어를 지정한다.
@@ -274,17 +288,6 @@ class PeerManager:
             logging.warning(f"there is no peer by id({str(peer_id)})")
             logging.debug(self.get_peers_for_debug())
             return None
-
-    def remove_peer(self, peer_id):
-        logging.debug(f"remove peer : {peer_id}")
-        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
-        if removed_peer:
-            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
-            broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-            broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, removed_peer.target)
-            return True
-
-        return False
 
     def get_peer_count(self):
         count = 0
