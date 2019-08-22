@@ -81,7 +81,7 @@ test: unit-test integration-test
 
 unit-test:
 	@echo "Start unit test..."
-	$(TEST_CMD) testcase/unittest || exit -1
+	$(TEST_CMD) testcase/unittest --benchmark-disable || exit -1
 
 integration-test:
 	@echo "Start integration test..."
