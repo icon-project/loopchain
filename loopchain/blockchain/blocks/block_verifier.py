@@ -68,6 +68,10 @@ class BlockVerifier(ABC):
         return self._verify_common(block, prev_block, generator, **kwargs)
 
     @abstractmethod
+    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
+        raise NotImplementedError
+
+    @abstractmethod
     def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         raise NotImplementedError
 

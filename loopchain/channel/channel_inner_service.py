@@ -715,9 +715,8 @@ class ChannelInnerTask:
 
         try:
             self._block_manager.verify_confirm_info(unconfirmed_block)
-        except ConfirmInfoInvalid:
-            # TODO
-            pass
+        except ConfirmInfoInvalid as e:
+            util.logger.debug(f"ConfirmInfoInvalid {e}")
         except ConfirmInfoInvalidNeedBlockSync as e:
             util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
             if self._channel_service.state_machine.state == "BlockGenerate" and (

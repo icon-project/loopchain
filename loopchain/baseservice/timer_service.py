@@ -239,7 +239,7 @@ class TimerService(CommonThread):
         try:
             timer_in_list = self.__timer_list[key]
         except KeyError:
-            util.logger.spam(f"There is no timer of {key} in {self.__timer_list}")
+            util.logger.spam(f"There is no timer of {key} in {self.__timer_list.keys()}")
         else:
             if timer is not timer_in_list:
                 util.logger.spam(f"Different timer object.")

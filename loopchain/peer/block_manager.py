@@ -17,9 +17,10 @@ import json
 import logging
 import threading
 import traceback
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict
+
+from collections import defaultdict
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -233,9 +234,6 @@ class BlockManager:
         confirmed_block = self.blockchain.confirm_prev_block(current_block)
         if confirmed_block is None:
             return
-
-        # stop leader complain timer
-        self.__channel_service.stop_leader_complain_timer()
 
         # start new epoch
         if not (current_block.header.complained and self.epoch.complained_result):
@@ -774,11 +772,6 @@ class BlockManager:
         return vote
 
     def verify_confirm_info(self, unconfirmed_block: Block):
-        # TODO set below variable with right result.
-        check_unconfirmed_block_has_valid_confirm_info_for_prev_block = True
-        if not check_unconfirmed_block_has_valid_confirm_info_for_prev_block:
-            raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
-
         my_height = self.blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(f"trigger block sync in _vote my_height({my_height}), "
@@ -788,6 +781,22 @@ class BlockManager:
         if my_height >= unconfirmed_block.header.height:
             raise ConfirmInfoInvalidAddedBlock(f"block is already added my_height({my_height}), "
                                                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+
+        block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
+        last_unconfirmed_block = self.blockchain.last_unconfirmed_block
+        prev_block = last_unconfirmed_block if last_unconfirmed_block else self.blockchain.last_block
+        reps_getter = self.blockchain.find_preps_addresses_by_roothash
+        try:
+            if unconfirmed_block.header.height > 1:
+                if prev_block.header.version != "0.1a":
+                    prev_reps = reps_getter(prev_block.header.reps_hash)
+                else:
+                    prev_reps = reps_getter(unconfirmed_block.header.reps_hash)
+                block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
+        except Exception as e:
+            logging.warning(e)
+            traceback.print_exc()
+            raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
     async def _vote(self, unconfirmed_block: Block):
         exc = None
