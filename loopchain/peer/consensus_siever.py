@@ -190,9 +190,10 @@ class ConsensusSiever(ConsensusBase):
                 return
 
             if next_leader != ChannelProperty().peer_id:
-                util.logger.spam(f"-------------------turn_to_peer "
-                                 f"next_leader({next_leader}) "
-                                 f"peer_id({ChannelProperty().peer_id})")
+                util.logger.spam(
+                    f"-------------------turn_to_peer "
+                    f"next_leader({next_leader}) "
+                    f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:

@@ -1097,6 +1097,8 @@ class BlockChain:
         if next_prep:
             utils.logger.debug(f"in score invoke next_prep({next_prep})")
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
             next_preps_hash = None
 

@@ -64,17 +64,7 @@ class PeerLoader:
             utils.logger.debug(f"There is no preps in result.")
             return
 
-        if response["result"]["rootHash"] == peer_manager.reps_hash().hex():
-            utils.logger.debug(f"There is no change in load_peers_from_iiss.")
-            return
-
-        utils.logger.debug(
-            f"There is change in load_peers_from_iiss."
-            f"\nresult roothash({response['result']['rootHash']})"
-            f"\npeer_list roothash({peer_manager.reps_hash().hex()})")
-
-        reps = response["result"]["preps"]
-        peer_manager.reset_all_peers(reps)
+        peer_manager.reset_all_peers(response["result"]["rootHash"], response["result"]["preps"])
 
     @staticmethod
     async def _load_peers_from_file(peer_manager: 'PeerManager'):

@@ -588,7 +588,8 @@ class BlockManager:
         my_height = self.__current_block_height()
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
-        # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
+        # prevent_next_block_mismatch until last_block_height in block DB.
+        # (excludes last_unconfirmed_block_height)
         self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
 
         try:

@@ -298,7 +298,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
+        self.peer_manager.update_all_peers()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

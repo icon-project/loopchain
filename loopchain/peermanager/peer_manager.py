@@ -32,10 +32,14 @@ from loopchain.protos import loopchain_pb2
 class PeerManager:
     def __init__(self):
         """Manage peer list in operation."""
+
         self._peer_list_data = PeerListData()
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
+
+        # reps_hash, reps for reset_all_peers
+        self._reps_reset_data: Optional[tuple] = None
 
     @property
     def peer_list(self) -> dict:
@@ -217,7 +221,20 @@ class PeerManager:
 
         return most_height_peer
 
-    def reset_all_peers(self, reps):
+    def reset_all_peers(self, reps_hash, reps, update_now=True):
+        if not update_now:
+            self._reps_reset_data = (reps_hash, reps)
+            return
+
+        if reps_hash == self.reps_hash().hex():
+            util.logger.debug(f"There is no change in load_peers_from_iiss.")
+            return
+
+        util.logger.debug(
+            f"There is change in load_peers_from_iiss."
+            f"\nresult roothash({reps_hash})"
+            f"\npeer_list roothash({self.reps_hash().hex()})")
+
         for peer_id in list(self.peer_list):
             self.remove_peer(peer_id)
 
@@ -226,6 +243,11 @@ class PeerManager:
             self.add_peer(peer)
 
         ObjectManager().channel_service.block_manager.blockchain.reset_leader_made_block_count()
+
+    def update_all_peers(self):
+        if self._reps_reset_data:
+            self.reset_all_peers(*self._reps_reset_data, update_now=True)
+            self._reps_reset_data = None
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
