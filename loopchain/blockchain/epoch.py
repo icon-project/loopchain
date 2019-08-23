@@ -167,7 +167,7 @@ class Epoch:
 
     def remove_duplicate_tx_when_turn_to_leader(self):
         if self.__blockchain.last_unconfirmed_block and \
-                self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
+                self.__blockchain.last_unconfirmed_block.header.peer_id != self.__blockchain.peer_address:
             tx_queue = self.__block_manager.get_tx_queue()
             for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
                 tx_queue.pop(tx_hash_in_unconfirmed_block.hex(), None)

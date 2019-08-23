@@ -70,7 +70,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, peer_id=None, store_id=None, block_manager=None):
+    def __init__(self, channel_name=None, peer_id=None, peer_address=None, store_id=None, block_manager=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -83,6 +83,7 @@ class BlockChain:
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
         self.__peer_id = peer_id
+        self.__peer_address = peer_address
         self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
@@ -115,7 +116,7 @@ class BlockChain:
 
     @property
     def my_made_block_count(self) -> int:
-        return self.__made_block_counter[ChannelProperty().peer_address]
+        return self.__made_block_counter[self.__peer_address]
 
     def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
@@ -184,6 +185,10 @@ class BlockChain:
     @property
     def peer_id(self):
         return self.__peer_id
+
+    @property
+    def peer_address(self):
+        return self.__peer_address
 
     def get_blockchain_store(self):
         return self._blockchain_store
