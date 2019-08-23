@@ -58,6 +58,7 @@ class BlockManager:
         self.__channel_name = channel_name
         self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
+        self.__nid = None
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
@@ -297,7 +298,7 @@ class BlockManager:
             genesis_block = self.blockchain.find_block_by_height(0)
             self.__rebuild_nid(genesis_block)
         else:
-            ChannelProperty().nid = nid
+            self.__nid = nid
 
     def __rebuild_nid(self, block: Block):
         nid = NID.unknown.value
@@ -315,7 +316,7 @@ class BlockManager:
             nid = hex(nid)
 
         self.blockchain.put_nid(nid)
-        ChannelProperty().nid = nid
+        self.__nid = nid
 
     def block_height_sync(self):
         def _print_exception(fut):

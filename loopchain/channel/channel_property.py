@@ -21,4 +21,3 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.peer_id = None
         self.peer_address = None
         self.peer_auth = None
-        self.nid = None
