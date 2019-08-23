@@ -48,7 +48,7 @@ class Epoch:
         self.reps = []  # init by self.new_votes()
 
         self.new_votes()
-        self.new_round(leader_id, 0)
+        self.new_round(leader_id, self.__blockchain.peer_id, 0)
 
     @property
     def complain_duration(self):
@@ -60,9 +60,9 @@ class Epoch:
         leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
         return Epoch(block_manager, leader_id)
 
-    def new_round(self, new_leader_id, round_=None):
+    def new_round(self, new_leader_id, peer_id, round_=None):
         is_complained = round_ != 0
-        self.set_epoch_leader(new_leader_id, is_complained)
+        self.set_epoch_leader(new_leader_id, peer_id, is_complained)
 
         if round_ is None:
             self.round += 1
@@ -84,10 +84,10 @@ class Epoch:
                                    ExternalAddress.fromhex_address(self.leader_id))
         self.complain_votes[self.round] = leader_votes
 
-    def set_epoch_leader(self, leader_id, complained=False):
+    def set_epoch_leader(self, leader_id, peer_id, complained=False):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
-        if complained and leader_id == ChannelProperty().peer_id:
+        if complained and leader_id == peer_id:
             self.complained_result = complained
         else:
             self.complained_result = None

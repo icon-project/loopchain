@@ -65,7 +65,7 @@ class NodeSubscriber:
                 logging.debug("Closing websocket connection...")
                 await websocket.close()
 
-    async def subscribe(self, block_height, event: Event):
+    async def subscribe(self, block_height, event: Event, peer_id):
         self._exception = None
         self._subscribe_event = event
         await self.close()
@@ -80,7 +80,7 @@ class NodeSubscriber:
             request = Request(
                 method="node_ws_Subscribe",
                 height=block_height,
-                peer_id=ChannelProperty().peer_id
+                peer_id=peer_id
             )
             await self._websocket.send(json.dumps(request))
             await self._subscribe_loop(self._websocket)

@@ -70,7 +70,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None, block_manager=None):
+    def __init__(self, channel_name=None, peer_id=None, store_id=None, block_manager=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -82,7 +82,7 @@ class BlockChain:
         # last unconfirmed block that the leader broadcast.
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
-        self.__peer_id = ChannelProperty().peer_id
+        self.__peer_id = peer_id
         self.__block_manager: BlockManager = block_manager
 
         store_id = f"{store_id}_{channel_name}"
@@ -180,6 +180,10 @@ class BlockChain:
     @property
     def tx_versioner(self):
         return self.__tx_versioner
+
+    @property
+    def peer_id(self):
+        return self.__peer_id
 
     def get_blockchain_store(self):
         return self._blockchain_store
@@ -374,7 +378,7 @@ class BlockChain:
                     not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            peer_id = ChannelProperty().peer_id
+            peer_id = self.__peer_id
             utils.apm_event(peer_id, {
                 'event_type': 'TotalTx',
                 'peer_id': peer_id,
@@ -1024,7 +1028,7 @@ class BlockChain:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = ObjectManager().channel_service.get_rep_ids()
-        if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+        if block.header.peer_id and block.header.peer_id.hex_hx() == self.__peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
             block_builder.signature = block.header.signature
@@ -1115,7 +1119,7 @@ class BlockChain:
         block_builder.reps = reps
         block_builder.next_reps_hash = next_preps_hash
 
-        if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
+        if _block.header.peer_id.hex_hx() == self.__peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
             block_builder.signature = _block.header.signature

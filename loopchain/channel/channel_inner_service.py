@@ -396,7 +396,7 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 
 class ChannelInnerTask:
     def __init__(self, channel_service: 'ChannelService'):
-        self._channel_service = channel_service
+        self._channel_service: 'ChannelService' = channel_service
         self._block_manager = None
         self._blockchain = None
 
@@ -484,9 +484,9 @@ class ChannelInnerTask:
                 continue
 
             self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
+            util.apm_event(self._channel_service.peer_id, {
                 'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
+                'peer_id': self._channel_service.peer_id,
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self._channel_service.channel_name,
                 'data': {'tx_hash': tx.hash.hex()}})
@@ -596,7 +596,7 @@ class ChannelInnerTask:
             str(1 if self._channel_service.state_machine.state == "BlockGenerate" else 0)
         status_data["audience_count"] = "0"
         status_data["consensus"] = str(conf.CONSENSUS_ALGORITHM.name)
-        status_data["peer_id"] = str(ChannelProperty().peer_id)
+        status_data["peer_id"] = str(self._channel_service.peer_id)
         status_data["block_height"] = block_height
         status_data["round"] = self._block_manager.epoch.round if self._block_manager.epoch else -1
         status_data["epoch_height"] = self._block_manager.epoch.height if self._block_manager.epoch else -1
@@ -626,7 +626,7 @@ class ChannelInnerTask:
                           f"cause : {e}")
 
         send_tx_type = self._channel_service.get_channel_option()["send_tx_type"]
-        tx.init_meta(ChannelProperty().peer_id, score_id, score_version, self._channel_service.channel_name, send_tx_type)
+        tx.init_meta(self._channel_service.peer_id, score_id, score_version, self._channel_service.channel_name, send_tx_type)
         tx.put_data(data)
         tx.sign_hash(ChannelProperty().peer_auth)
 
@@ -637,9 +637,9 @@ class ChannelInnerTask:
         except Exception as e:
             data_log = {'tx_hash': tx.tx_hash}
 
-        util.apm_event(ChannelProperty().peer_id, {
+        util.apm_event(self._channel_service.peer_id, {
             'event_type': 'CreateTx',
-            'peer_id': ChannelProperty().peer_id,
+            'peer_id': self._channel_service.peer_id,
             'peer_name': conf.PEER_NAME,
             'channel_name': self._channel_service.channel_name,
             'tx_hash': tx.tx_hash,
@@ -662,9 +662,9 @@ class ChannelInnerTask:
 
         if tx is not None:
             self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
+            util.apm_event(self._channel_service.peer_id, {
                 'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
+                'peer_id': self._channel_service.peer_id,
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self._channel_service.channel_name,
                 'data': {'tx_hash': tx.tx_hash}})
@@ -812,9 +812,9 @@ class ChannelInnerTask:
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
 
-            util.apm_event(ChannelProperty().peer_id, {
+            util.apm_event(self._channel_service.peer_id, {
                 'event_type': 'GetInvokeResult',
-                'peer_id': ChannelProperty().peer_id,
+                'peer_id': self._channel_service.peer_id,
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self._channel_service.channel_name,
                 'data': {'invoke_result': invoke_result, 'tx_hash': tx_hash}})
@@ -830,9 +830,9 @@ class ChannelInnerTask:
             return response_code, invoke_result_str
         except BaseException as e:
             logging.error(f"get invoke result error : {e}")
-            util.apm_event(ChannelProperty().peer_id, {
+            util.apm_event(self._channel_service.peer_id, {
                 'event_type': 'Error',
-                'peer_id': ChannelProperty().peer_id,
+                'peer_id': self._channel_service.peer_id,
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self._channel_service.channel_name,
                 'data': {

@@ -60,6 +60,7 @@ class ChannelService:
         self.__radio_station_target = None
         self.__peer_port = None
         self.__peer_target = None
+        self.__peer_id = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -106,6 +107,10 @@ class ChannelService:
     @property
     def peer_target(self):
         return self.__peer_target
+
+    @property
+    def peer_id(self):
+        return self.__peer_id
 
     @property
     def channel_name(self):
@@ -210,8 +215,8 @@ class ChannelService:
         self.__peer_target = kwargs.get('peer_target')
         self.__rest_target = kwargs.get('rest_target')
         self.__radio_station_target = kwargs.get('rs_target')
-        ChannelProperty().peer_id = kwargs.get('peer_id')
-        ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
+        self.__peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_address = ExternalAddress.fromhex_address(self.__peer_id)
 
         # FIXME this is temporary setting for node_type.
         if self.__radio_station_target:
@@ -264,7 +269,7 @@ class ChannelService:
         return self.get_channel_option().get('role_switch_block_height', -1)
 
     def _get_node_type_by_peer_list(self):
-        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+        if self.__peer_manager.get_peer(self.__peer_id):
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
@@ -336,7 +341,7 @@ class ChannelService:
             self.__block_manager = BlockManager(
                 name="loopchain.peer.BlockManager",
                 channel_service=self,
-                peer_id=ChannelProperty().peer_id,
+                peer_id=self.__peer_id,
                 channel_name=self.__channel_name,
                 store_identity=self.__peer_target
             )
@@ -441,7 +446,8 @@ class ChannelService:
         # try websocket connection, and handle exception in callback
         asyncio.ensure_future(self.__node_subscriber.subscribe(
             block_height=self.__block_manager.blockchain.block_height,
-            event=subscribe_event
+            event=subscribe_event,
+            peer_id=self.__peer_id
         )).add_done_callback(_handle_exception)
         await subscribe_event.wait()
 
@@ -477,7 +483,7 @@ class ChannelService:
         utils.logger.info(f"channel({self.__channel_name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
-        if ChannelProperty().peer_id == leader_id:
+        if self.__peer_id == leader_id:
             logger_preset.is_leader = True
             utils.logger.info(f"Set Peer Type Leader! channel({self.__channel_name})")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
@@ -508,8 +514,8 @@ class ChannelService:
         :param complained:
         :return:
         """
-        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+        if not self.__peer_manager.get_peer(self.__peer_id):
+            utils.exit_and_msg(f"Prep({self.__peer_id}) test right was expired.")
 
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
@@ -525,11 +531,11 @@ class ChannelService:
 
         utils.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
+        self_peer_object = self.peer_manager.get_peer(self.__peer_id)
         self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
-            self.__block_manager.epoch.new_round(leader_peer.peer_id)
+            self.__block_manager.epoch.new_round(leader_peer.peer_id, self.__peer_id)
         else:
             self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
         logging.info(f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
@@ -561,7 +567,7 @@ class ChannelService:
 
         utils.logger.spam(f"channel_service:set_new_leader::leader_target({leader_peer.target})")
 
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
+        self_peer_object = self.peer_manager.get_peer(self.__peer_id)
         self.peer_manager.set_leader_peer(leader_peer)
 
         peer_leader = self.peer_manager.get_leader_peer()

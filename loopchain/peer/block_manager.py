@@ -62,7 +62,7 @@ class BlockManager:
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                     default_item_status=TransactionStatusInQueue.normal)
-        self.blockchain = BlockChain(channel_name, store_identity, self)
+        self.blockchain = BlockChain(channel_name, peer_id, store_identity, self)
         self.__peer_type = None
         self.__consensus = None
         self.__consensus_algorithm = None
@@ -677,7 +677,7 @@ class BlockManager:
         peer_target = self.__channel_service.peer_target
         peer_manager = ObjectManager().channel_service.peer_manager
         target_list = [peer.target for peer_id, peer in peer_manager.peer_list.items()
-                       if peer_id != ChannelProperty().peer_id]
+                       if peer_id != self.__channel_service.peer_id]
 
         for target in target_list:
             if target != peer_target:
@@ -722,7 +722,7 @@ class BlockManager:
                 util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
                 # In this case, a new leader can't be elected by the consensus of leader complaint.
                 # That's why the leader of current `round` is set to the next `round` again.
-                self.epoch.new_round(self.epoch.leader_id)
+                self.epoch.new_round(self.epoch.leader_id, self.__peer_id)
         elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
 

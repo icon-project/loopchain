@@ -103,7 +103,7 @@ class ConsensusSiever(ConsensusBase):
 
     async def consensus(self):
         async with self.__lock:
-            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
+            if self._block_manager.epoch.leader_id != self._blockchain.peer_id:
                 util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
                 return
 
@@ -162,7 +162,7 @@ class ConsensusSiever(ConsensusBase):
                     need_next_call = True
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
-                    self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+                    self._block_manager.epoch = Epoch.new_epoch(self._blockchain.peer_id)
             except NotEnoughVotes:
                 need_next_call = True
             finally:
@@ -189,10 +189,10 @@ class ConsensusSiever(ConsensusBase):
             if await self._wait_for_voting(candidate_block) is None:
                 return
 
-            if next_leader != ChannelProperty().peer_id:
+            if next_leader != self._blockchain.peer_id:
                 util.logger.spam(f"-------------------turn_to_peer "
                                  f"next_leader({next_leader}) "
-                                 f"peer_id({ChannelProperty().peer_id})")
+                                 f"peer_id({self._blockchain.peer_id})")
                 ObjectManager().channel_service.reset_leader(next_leader)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
