@@ -316,7 +316,7 @@ class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
 
 class _ChannelTxCreatorProcess(ModuleProcess):
     def __init__(self, tx_versioner: TransactionVersioner, broadcast_scheduler: BroadcastScheduler,
-                 crash_callback_in_join_thread):
+                 crash_callback_in_join_thread, peer_target):
         super().__init__()
 
         self.__broadcast_queue = self.Queue()
@@ -325,7 +325,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
         args = (ChannelProperty().name,
                 StubCollection().amqp_target,
                 StubCollection().amqp_key,
-                ChannelProperty().peer_target,
+                peer_target,
                 tx_versioner,
                 self.__broadcast_queue)
         super().start(target=ChannelTxCreatorInnerService.main,
@@ -429,7 +429,8 @@ class ChannelInnerTask:
         broadcast_scheduler = self._channel_service.broadcast_scheduler
         tx_creator_process = _ChannelTxCreatorProcess(tx_versioner,
                                                       broadcast_scheduler,
-                                                      crash_callback_in_join_thread)
+                                                      crash_callback_in_join_thread,
+                                                      self._channel_service.peer_target)
         self.__sub_processes.append(tx_creator_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Creator: initialized")
 
@@ -599,7 +600,7 @@ class ChannelInnerTask:
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = self._block_manager.get_total_tx()
         status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
-        status_data["peer_target"] = ChannelProperty().peer_target
+        status_data["peer_target"] = self._channel_service.peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
         status_data["leader"] = self._channel_service.peer_manager.leader_id or ""

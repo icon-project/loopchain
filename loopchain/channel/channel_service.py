@@ -59,6 +59,7 @@ class ChannelService:
         self.__rest_target = None
         self.__radio_station_target = None
         self.__peer_port = None
+        self.__peer_target = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -101,6 +102,10 @@ class ChannelService:
     @property
     def peer_manager(self):
         return self.__peer_manager
+
+    @property
+    def peer_target(self):
+        return self.__peer_target
 
     @property
     def broadcast_scheduler(self):
@@ -198,7 +203,7 @@ class ChannelService:
         loggers.get_preset().update_logger()
 
         self.__peer_port = kwargs.get('peer_port')
-        ChannelProperty().peer_target = kwargs.get('peer_target')
+        self.__peer_target = kwargs.get('peer_target')
         self.__rest_target = kwargs.get('rest_target')
         self.__radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
@@ -328,19 +333,19 @@ class ChannelService:
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
-                store_identity=ChannelProperty().peer_target
+                store_identity=self.__peer_target
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
 
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
-                                                  self_target=ChannelProperty().peer_target)
+                                                  self_target=self.__peer_target)
         scheduler.start()
 
         self.__broadcast_scheduler = scheduler
 
-        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
+        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, self.__peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def __init_radio_station_stub(self):
