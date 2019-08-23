@@ -20,7 +20,6 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.name = None
         self.peer_target = None
         self.amqp_target = None
-        self.peer_port = None
         self.peer_id = None
         self.peer_address = None
         self.peer_auth = None

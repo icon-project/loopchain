@@ -58,6 +58,7 @@ class ChannelService:
         self.__node_type: conf.NodeType = None
         self.__rest_target = None
         self.__radio_station_target = None
+        self.__peer_port = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -196,7 +197,7 @@ class ChannelService:
         loggers.get_preset().peer_id = kwargs.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = kwargs.get('peer_port')
+        self.__peer_port = kwargs.get('peer_port')
         ChannelProperty().peer_target = kwargs.get('peer_target')
         self.__rest_target = kwargs.get('rest_target')
         self.__radio_station_target = kwargs.get('rs_target')
