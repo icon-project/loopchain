@@ -54,6 +54,7 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        # FIXME: Members of ChannelProperty. Relocate to those members to proper location
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
