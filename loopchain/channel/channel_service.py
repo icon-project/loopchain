@@ -55,6 +55,7 @@ class ChannelService:
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
         # FIXME: Members of ChannelProperty. Relocate to those members to proper location
+        self.__node_type: conf.NodeType = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -202,9 +203,9 @@ class ChannelService:
 
         # FIXME this is temporary setting for node_type.
         if ChannelProperty().radio_station_target:
-            ChannelProperty().node_type = conf.NodeType.CitizenNode
+            self.__node_type = conf.NodeType.CitizenNode
         else:
-            ChannelProperty().node_type = conf.NodeType.CommunityNode
+            self.__node_type = conf.NodeType.CommunityNode
 
         self.__peer_manager = PeerManager()
         await self.__init_peer_auth()
@@ -218,7 +219,7 @@ class ChannelService:
     async def __init_network(self):
         if ChannelProperty().radio_station_target:
             self.__init_radio_station_stub()
-        await self.__peer_manager.load_peers()
+        await self.__peer_manager.load_peers(node_type=self.__node_type)
 
     async def evaluate_network(self):
         await self._select_node_type()
@@ -285,8 +286,8 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
-        if self._get_node_type_by_peer_list() == ChannelProperty().node_type:
-            utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
+        if self._get_node_type_by_peer_list() == self.__node_type:
+            utils.logger.debug(f"By peer manager, maintains the current node type({self.__node_type})")
             return False
 
         return True
@@ -295,8 +296,8 @@ class ChannelService:
         if self._is_role_switched():
             new_node_type = self._get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
-            ChannelProperty().node_type = new_node_type
-        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
+            self.__node_type = new_node_type
+        self.__inner_service.update_sub_services_properties(node_type=self.__node_type.value)
 
     def switch_role(self):
         PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
@@ -385,7 +386,7 @@ class ChannelService:
         return None
 
     def is_support_node_function(self, node_function):
-        return conf.NodeType.is_support_node_function(node_function, ChannelProperty().node_type)
+        return conf.NodeType.is_support_node_function(node_function, self.__node_type)
 
     def get_channel_option(self) -> dict:
         return conf.CHANNEL_OPTION[ChannelProperty().name]
@@ -408,7 +409,7 @@ class ChannelService:
             traceback.print_tb(exc.__traceback__)
             logging.debug(f"error: {type(exc)}, {str(exc)}")
 
-            if ChannelProperty().node_type != conf.NodeType.CitizenNode:
+            if self.__node_type != conf.NodeType.CitizenNode:
                 logging.debug(f"This node is not Citizen anymore.")
                 return
 
