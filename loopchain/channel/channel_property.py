@@ -19,7 +19,6 @@ class ChannelProperty(metaclass=SingletonMetaClass):
     def __init__(self):
         self.name = None
         self.peer_target = None
-        self.rest_target = None
         self.radio_station_target = None
         self.amqp_target = None
         self.peer_port = None

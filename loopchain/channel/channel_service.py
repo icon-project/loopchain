@@ -56,6 +56,7 @@ class ChannelService:
         self.__node_subscriber: NodeSubscriber = None
         # FIXME: Members of ChannelProperty. Relocate to those members to proper location
         self.__node_type: conf.NodeType = None
+        self.__rest_target = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -196,7 +197,7 @@ class ChannelService:
 
         ChannelProperty().peer_port = kwargs.get('peer_port')
         ChannelProperty().peer_target = kwargs.get('peer_target')
-        ChannelProperty().rest_target = kwargs.get('rest_target')
+        self.__rest_target = kwargs.get('rest_target')
         ChannelProperty().radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
@@ -423,7 +424,7 @@ class ChannelService:
                     self.__state_machine.subscribe_network()
 
         subscribe_event = asyncio.Event()
-        utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
+        utils.logger.spam(f"try subscribe_call_by_citizen target({self.__rest_target})")
 
         # try websocket connection, and handle exception in callback
         asyncio.ensure_future(self.__node_subscriber.subscribe(
