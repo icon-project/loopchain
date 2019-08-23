@@ -57,6 +57,7 @@ class ChannelService:
         # FIXME: Members of ChannelProperty. Relocate to those members to proper location
         self.__node_type: conf.NodeType = None
         self.__rest_target = None
+        self.__radio_station_target = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -198,12 +199,12 @@ class ChannelService:
         ChannelProperty().peer_port = kwargs.get('peer_port')
         ChannelProperty().peer_target = kwargs.get('peer_target')
         self.__rest_target = kwargs.get('rest_target')
-        ChannelProperty().radio_station_target = kwargs.get('rs_target')
+        self.__radio_station_target = kwargs.get('rs_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
 
         # FIXME this is temporary setting for node_type.
-        if ChannelProperty().radio_station_target:
+        if self.__radio_station_target:
             self.__node_type = conf.NodeType.CitizenNode
         else:
             self.__node_type = conf.NodeType.CommunityNode
@@ -218,7 +219,7 @@ class ChannelService:
         await self.__init_sub_services()
 
     async def __init_network(self):
-        if ChannelProperty().radio_station_target:
+        if self.__radio_station_target:
             self.__init_radio_station_stub()
         await self.__peer_manager.load_peers(node_type=self.__node_type)
 
@@ -343,7 +344,7 @@ class ChannelService:
 
     def __init_radio_station_stub(self):
         self.__radio_station_stub = RestStubManager(
-            ChannelProperty().radio_station_target,
+            self.__radio_station_target,
             ChannelProperty().name
         )
 
@@ -365,7 +366,7 @@ class ChannelService:
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(
             channel=ChannelProperty().name,
-            rs_target=ChannelProperty().radio_station_target
+            rs_target=self.__radio_station_target
         )
 
     async def __run_score_container(self):
