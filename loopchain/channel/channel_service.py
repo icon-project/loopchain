@@ -114,6 +114,10 @@ class ChannelService:
         return self.__peer_id
 
     @property
+    def peer_auth(self):
+        return self.__peer_auth
+
+    @property
     def channel_name(self):
         return self.__channel_name
 
@@ -332,7 +336,6 @@ class ChannelService:
         try:
             node_key: bytes = await StubCollection().peer_stub.async_task().get_node_key()
             self.__peer_auth = Signer.from_prikey(node_key)
-            ChannelProperty().peer_auth = self.__peer_auth
         except Exception as e:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
@@ -420,7 +423,7 @@ class ChannelService:
             return
 
         reps = self.get_rep_ids()
-        self.__block_manager.blockchain.generate_genesis_block(reps)
+        self.__block_manager.blockchain.generate_genesis_block(reps, self.__peer_auth)
 
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):

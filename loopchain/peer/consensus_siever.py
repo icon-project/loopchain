@@ -86,7 +86,7 @@ class ConsensusSiever(ConsensusBase):
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
         block_builder.next_leader = next_leader
-        block_builder.signer = ChannelProperty().peer_auth
+        block_builder.signer = self._blockchain.peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
         block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
