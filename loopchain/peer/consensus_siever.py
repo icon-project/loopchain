@@ -26,7 +26,6 @@ from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.exception import NotEnoughVotes
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
 if TYPE_CHECKING:

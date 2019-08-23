@@ -30,7 +30,6 @@ from loopchain.blockchain import Epoch, AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager

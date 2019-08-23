@@ -31,7 +31,6 @@ from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes.v0_1a import BlockVotes
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
 config.log_requests = False

@@ -34,7 +34,6 @@ from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes.v0_1a import BlockVotes
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection

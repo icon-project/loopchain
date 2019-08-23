@@ -34,7 +34,6 @@ from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code

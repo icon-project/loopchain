@@ -33,7 +33,6 @@ from loopchain.blockchain.transactions import (Transaction, TransactionSerialize
                                                TransactionVersioner)
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.rest_server.json_rpc import JsonError

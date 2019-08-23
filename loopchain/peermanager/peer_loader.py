@@ -20,7 +20,6 @@ from typing import cast
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager
-from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peermanager import Peer
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
