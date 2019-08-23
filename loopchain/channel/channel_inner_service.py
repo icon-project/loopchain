@@ -316,13 +316,13 @@ class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
 
 class _ChannelTxCreatorProcess(ModuleProcess):
     def __init__(self, tx_versioner: TransactionVersioner, broadcast_scheduler: BroadcastScheduler,
-                 crash_callback_in_join_thread, peer_target):
+                 crash_callback_in_join_thread, channel_name, peer_target):
         super().__init__()
 
         self.__broadcast_queue = self.Queue()
         self.__broadcast_queue.cancel_join_thread()
 
-        args = (ChannelProperty().name,
+        args = (channel_name,
                 StubCollection().amqp_target,
                 StubCollection().amqp_key,
                 peer_target,
@@ -349,7 +349,8 @@ class _ChannelTxCreatorProcess(ModuleProcess):
 
 
 class _ChannelTxReceiverProcess(ModuleProcess):
-    def __init__(self, tx_versioner: TransactionVersioner, add_tx_list_callback, loop, crash_callback_in_join_thread):
+    def __init__(self, tx_versioner: TransactionVersioner, add_tx_list_callback, loop, crash_callback_in_join_thread,
+                 channel_name):
         super().__init__()
 
         self.__is_running = True
@@ -372,7 +373,7 @@ class _ChannelTxReceiverProcess(ModuleProcess):
         self.__receive_thread = threading.Thread(target=_receive_tx_list, args=(self.__tx_queue,))
         self.__receive_thread.start()
 
-        args = (ChannelProperty().name,
+        args = (channel_name,
                 StubCollection().amqp_target,
                 StubCollection().amqp_key,
                 tx_versioner,
@@ -430,23 +431,25 @@ class ChannelInnerTask:
         tx_creator_process = _ChannelTxCreatorProcess(tx_versioner,
                                                       broadcast_scheduler,
                                                       crash_callback_in_join_thread,
+                                                      self._channel_service.channel_name,
                                                       self._channel_service.peer_target)
         self.__sub_processes.append(tx_creator_process)
-        logging.info(f"Channel({ChannelProperty().name}) TX Creator: initialized")
+        logging.info(f"Channel({self._channel_service.channel_name}) TX Creator: initialized")
 
         tx_receiver_process = _ChannelTxReceiverProcess(tx_versioner,
                                                         self.__add_tx_list,
                                                         loop,
-                                                        crash_callback_in_join_thread)
+                                                        crash_callback_in_join_thread,
+                                                        self._channel_service.channel_name)
         self.__sub_processes.append(tx_receiver_process)
-        logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
+        logging.info(f"Channel({self._channel_service.channel_name}) TX Receiver: initialized")
 
     def update_sub_services_properties(self, **properties):
         logging.info(f"properties {properties}")
-        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        stub = StubCollection().channel_tx_creator_stubs[self._channel_service.channel_name]
         asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
 
-        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        stub = StubCollection().channel_tx_receiver_stubs[self._channel_service.channel_name]
         asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
 
     def cleanup_sub_services(self):
@@ -485,7 +488,7 @@ class ChannelInnerTask:
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
                 'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
+                'channel_name': self._channel_service.channel_name,
                 'data': {'tx_hash': tx.hash.hex()}})
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
@@ -623,7 +626,7 @@ class ChannelInnerTask:
                           f"cause : {e}")
 
         send_tx_type = self._channel_service.get_channel_option()["send_tx_type"]
-        tx.init_meta(ChannelProperty().peer_id, score_id, score_version, ChannelProperty().name, send_tx_type)
+        tx.init_meta(ChannelProperty().peer_id, score_id, score_version, self._channel_service.channel_name, send_tx_type)
         tx.put_data(data)
         tx.sign_hash(ChannelProperty().peer_auth)
 
@@ -638,7 +641,7 @@ class ChannelInnerTask:
             'event_type': 'CreateTx',
             'peer_id': ChannelProperty().peer_id,
             'peer_name': conf.PEER_NAME,
-            'channel_name': ChannelProperty().name,
+            'channel_name': self._channel_service.channel_name,
             'tx_hash': tx.tx_hash,
             'data': data_log})
 
@@ -663,7 +666,7 @@ class ChannelInnerTask:
                 'event_type': 'AddTx',
                 'peer_id': ChannelProperty().peer_id,
                 'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
+                'channel_name': self._channel_service.channel_name,
                 'data': {'tx_hash': tx.tx_hash}})
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
@@ -785,7 +788,7 @@ class ChannelInnerTask:
             vote = BlockVote.deserialize(vote_serialized)
 
             util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
-                             f"({ChannelProperty().name}) block_hash({vote.block_hash})")
+                             f"({self._channel_service.channel_name}) block_hash({vote.block_hash})")
 
             util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
             self._block_manager.candidate_blocks.add_vote(vote)
@@ -813,7 +816,7 @@ class ChannelInnerTask:
                 'event_type': 'GetInvokeResult',
                 'peer_id': ChannelProperty().peer_id,
                 'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
+                'channel_name': self._channel_service.channel_name,
                 'data': {'invoke_result': invoke_result, 'tx_hash': tx_hash}})
 
             if 'code' in invoke_result:
@@ -831,7 +834,7 @@ class ChannelInnerTask:
                 'event_type': 'Error',
                 'peer_id': ChannelProperty().peer_id,
                 'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
+                'channel_name': self._channel_service.channel_name,
                 'data': {
                     'error_type': 'InvokeResultError',
                     'code': message_code.Response.fail,

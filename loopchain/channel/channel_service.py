@@ -70,7 +70,7 @@ class ChannelService:
 
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
 
-        ChannelProperty().name = channel_name
+        self.__channel_name = channel_name
         self.__amqp_target = amqp_target
 
         StubCollection().amqp_key = amqp_key
@@ -108,6 +108,10 @@ class ChannelService:
         return self.__peer_target
 
     @property
+    def channel_name(self):
+        return self.__channel_name
+
+    @property
     def broadcast_scheduler(self):
         return self.__broadcast_scheduler
 
@@ -136,7 +140,7 @@ class ChannelService:
 
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
-            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
+            logging.info(f'channel_service: init complete channel: {self.__channel_name}, '
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
@@ -227,7 +231,8 @@ class ChannelService:
     async def __init_network(self):
         if self.__radio_station_target:
             self.__init_radio_station_stub()
-        await self.__peer_manager.load_peers(node_type=self.__node_type)
+
+        await self.__peer_manager.load_peers(channel_name=self.__channel_name, node_type=self.__node_type)
 
     async def evaluate_network(self):
         await self._select_node_type()
@@ -308,7 +313,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=self.__node_type.value)
 
     def switch_role(self):
-        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
+        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager, channel_name=self.__channel_name)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -326,20 +331,20 @@ class ChannelService:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
     def __init_block_manager(self):
-        logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
+        logging.debug(f"__load_block_manager_each channel({self.__channel_name})")
         try:
             self.__block_manager = BlockManager(
                 name="loopchain.peer.BlockManager",
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
-                channel_name=ChannelProperty().name,
+                channel_name=self.__channel_name,
                 store_identity=self.__peer_target
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
 
     def __init_broadcast_scheduler(self):
-        scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
+        scheduler = BroadcastSchedulerFactory.new(channel=self.__channel_name,
                                                   self_target=self.__peer_target)
         scheduler.start()
 
@@ -351,7 +356,7 @@ class ChannelService:
     def __init_radio_station_stub(self):
         self.__radio_station_stub = RestStubManager(
             self.__radio_station_target,
-            ChannelProperty().name
+            self.__channel_name
         )
 
     async def __init_score_container(self):
@@ -366,19 +371,19 @@ class ChannelService:
 
     async def __init_sub_services(self):
         self.__inner_service.init_sub_services()
-        await StubCollection().create_channel_tx_creator_stub(ChannelProperty().name)
-        await StubCollection().create_channel_tx_receiver_stub(ChannelProperty().name)
+        await StubCollection().create_channel_tx_creator_stub(self.__channel_name)
+        await StubCollection().create_channel_tx_receiver_stub(self.__channel_name)
 
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(
-            channel=ChannelProperty().name,
+            channel=self.__channel_name,
             rs_target=self.__radio_station_target
         )
 
     async def __run_score_container(self):
         if conf.RUN_ICON_IN_LAUNCHER:
             process_args = ['python3', '-m', 'loopchain', 'score',
-                            '--channel', ChannelProperty().name]
+                            '--channel', self.__channel_name]
             process_args += command_arguments.get_raw_commands_by_filter(
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
@@ -388,16 +393,16 @@ class ChannelService:
             )
             self.__score_container = CommonSubprocess(process_args)
 
-        await StubCollection().create_icon_score_stub(ChannelProperty().name)
-        await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
-        await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
+        await StubCollection().create_icon_score_stub(self.__channel_name)
+        await StubCollection().icon_score_stubs[self.__channel_name].connect()
+        await StubCollection().icon_score_stubs[self.__channel_name].async_task().hello()
         return None
 
     def is_support_node_function(self, node_function):
         return conf.NodeType.is_support_node_function(node_function, self.__node_type)
 
     def get_channel_option(self) -> dict:
-        return conf.CHANNEL_OPTION[ChannelProperty().name]
+        return conf.CHANNEL_OPTION[self.__channel_name]
 
     def get_rep_ids(self) -> list:
         return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
@@ -469,12 +474,12 @@ class ChannelService:
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
         leader_id = self.__block_manager.blockchain.get_next_leader()
-        utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
+        utils.logger.info(f"channel({self.__channel_name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
         if ChannelProperty().peer_id == leader_id:
             logger_preset.is_leader = True
-            utils.logger.info(f"Set Peer Type Leader! channel({ChannelProperty().name})")
+            utils.logger.info(f"Set Peer Type Leader! channel({self.__channel_name})")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
         else:
             logger_preset.is_leader = False
@@ -541,7 +546,7 @@ class ChannelService:
         self.__block_manager.set_peer_type(peer_type)
 
     def set_new_leader(self, new_leader_id, block_height=0):
-        logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
+        logging.info(f"SET NEW LEADER channel({self.__channel_name}) leader_id({new_leader_id})")
 
         # complained_leader = self.peer_manager.get_leader_peer()
         leader_peer = self.peer_manager.get_peer(new_leader_id)
@@ -571,7 +576,7 @@ class ChannelService:
             logging.debug("I'm general Peer!")
 
     def score_write_precommit_state(self, block: Block):
-        logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")
+        logging.debug(f"call score commit {self.__channel_name} {block.header.height} {block.header.hash.hex()}")
 
         new_block_hash = block.header.hash
         try:
@@ -587,7 +592,7 @@ class ChannelService:
         }
         request = convert_params(request, ParamType.write_precommit_state)
 
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_score_stubs[self.__channel_name]
         stub.sync_task().write_precommit_state(request)
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
@@ -595,7 +600,7 @@ class ChannelService:
 
     def score_remove_precommit_state(self, block: Block):
         invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-        stub = StubCollection().score_stubs[ChannelProperty().name]
+        stub = StubCollection().score_stubs[self.__channel_name]
         stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 

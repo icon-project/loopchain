@@ -776,7 +776,7 @@ class BlockManager:
 
         vote_serialized = vote.serialize()
         vote_dumped = json.dumps(vote_serialized)
-        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
+        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=self.__channel_name)
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
         return vote
