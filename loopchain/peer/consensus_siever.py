@@ -114,9 +114,8 @@ class ConsensusSiever(ConsensusBase):
         return self._block_manager.epoch.makeup_block(complain_votes, votes)
 
     async def consensus(self):
+        util.logger.debug(f"-------------------consensus-------------------")
         async with self.__lock:
-            util.logger.debug(
-                f"-------------------consensus-------------------")
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
                 util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
                 return
@@ -125,13 +124,19 @@ class ConsensusSiever(ConsensusBase):
 
             if self._block_manager.epoch.round > 0:
                 complain_votes = self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
-                # util.logger.info(f"complain_votes : {complain_votes}")
-
             else:
                 complain_votes = None
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
             last_block_votes = self.get_votes(last_block.header.hash)
+
+            if last_block.header.height > 0 \
+                    and last_block.header.peer_id != ChannelProperty().peer_id \
+                    and not last_block_votes:
+                prev_votes = self._block_manager.candidate_blocks.get_votes(last_block.header.hash)
+                if not (prev_votes and prev_votes.is_complete()):
+                    return
+
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             complained_result = self._block_manager.epoch.complained_result
 
@@ -223,14 +228,14 @@ class ConsensusSiever(ConsensusBase):
                 else:
                     self.__block_generation_timer.call()
 
-    async def _wait_for_voting(self, candidate_block: 'Block'):
+    async def _wait_for_voting(self, block: 'Block'):
         """Waiting validator's vote for the candidate_block.
 
-        :param candidate_block:
+        :param block:
         :return: vote_result or None
         """
         while True:
-            vote = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
+            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash)
             if not vote:
                 raise ThereIsNoCandidateBlock
 
@@ -240,7 +245,7 @@ class ConsensusSiever(ConsensusBase):
                 return vote
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
-            timeout_timestamp = candidate_block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
+            timeout_timestamp = block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
             timeout = -util.diff_in_seconds(timeout_timestamp)
             try:
                 if timeout < 0:
@@ -251,13 +256,14 @@ class ConsensusSiever(ConsensusBase):
 
             except asyncio.TimeoutError:
                 util.logger.warning("Timed Out Block not confirmed duration: " +
-                                    str(util.diff_in_seconds(candidate_block.header.timestamp)))
+                                    str(util.diff_in_seconds(block.header.timestamp)))
                 raise NotEnoughVotes
 
     def get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
-        except KeyError:
+        except KeyError as e:
+            util.logger.spam(f"{e}")
             prev_votes = None
 
         if prev_votes:
@@ -266,9 +272,11 @@ class ConsensusSiever(ConsensusBase):
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
             try:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
-            except json.JSONDecodeError:  # handle exception for old votes
+            except json.JSONDecodeError as e:  # handle exception for old votes
+                util.logger.spam(f"{e}")
                 prev_votes_list = []
-            except TypeError:  # handle exception for not existing (NoneType) votes
+            except TypeError as e:  # handle exception for not existing (NoneType) votes
+                util.logger.spam(f"{e}")
                 prev_votes_list = []
             else:
                 prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)

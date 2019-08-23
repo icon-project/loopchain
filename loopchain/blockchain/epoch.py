@@ -141,9 +141,10 @@ class Epoch:
         tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:
             if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
-                logging.debug(f"consensus_base total size({block_builder.size()}) "
-                              f"count({len(block_builder.transactions)}) "
-                              f"_txQueue size ({len(tx_queue)})")
+                logging.warning(
+                    f"consensus_base total size({block_builder.size()}) "
+                    f"count({len(block_builder.transactions)}) "
+                    f"_txQueue size ({len(tx_queue)})")
                 break
 
             tx: 'Transaction' = tx_queue.get_item_in_status(

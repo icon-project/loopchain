@@ -781,10 +781,6 @@ class ChannelInnerTask:
             raise
         else:
             vote = BlockVote.deserialize(vote_serialized)
-
-            util.logger.spam(f"channel_inner_service:vote_unconfirmed_block "
-                             f"({ChannelProperty().name}) block_hash({vote.block_hash})")
-
             util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
             self._block_manager.candidate_blocks.add_vote(vote)
 

@@ -830,10 +830,6 @@ class BlockChain:
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
-        # utils.logger.debug(f"-------------------confirm_prev_block---current_block is "
-        #                    f"tx count({len(current_block.body.transactions)}), "
-        #                    f"height({current_block.header.height})")
-
         candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
@@ -865,8 +861,6 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
-            #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
@@ -910,7 +904,6 @@ class BlockChain:
             with open(genesis_data_path, encoding="utf-8") as json_file:
                 tx_info = json.load(json_file)["transaction_data"]
                 nid = tx_info["nid"]
-                # utils.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
 
         except FileNotFoundError as e:
             exit(f"cannot open json file in ({genesis_data_path}): {e}")
