@@ -77,6 +77,18 @@ class DuplicationUnconfirmedBlock(Exception):
     pass
 
 
+class NotInReps(Exception):
+    """
+    """
+    pass
+
+
+class NotCandidateBlock(Exception):
+    """
+    """
+    pass
+
+
 class AnnounceNewBlockError(Exception):
     message_code = message_code.Response.fail_announce_block
 

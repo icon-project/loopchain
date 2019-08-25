@@ -271,27 +271,27 @@ class ChannelService:
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.blockchain.block_height
         if current_height < 0:
-            utils.logger.debug(f"Need to sync block, current_height({current_height})")
+            utils.logger.notice(f"Need to sync block, current_height({current_height})")
             return False
 
         if current_height == 0 and self._is_genesis_node():
-            logging.debug(f"It's GenesisNode, but not registered yet")
+            utils.logger.notice(f"It's GenesisNode, but not registered yet")
             return False
 
         switch_block_height = self.__get_role_switch_block_height()
         if switch_block_height != -1 and current_height < switch_block_height:
-            utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
+            utils.logger.notice(f"Waiting for role switch block height({switch_block_height}), "
                                f"current_height({current_height})")
             return False
 
         new_node_type = self._get_node_type_by_peer_list()
         if ChannelProperty().node_type == conf.NodeType.CommunityNode \
                 and new_node_type == conf.NodeType.CitizenNode:
-            utils.logger.warning(f"prep right expired...")
+            utils.logger.notice(f"prep right expired...")
             return False
 
         if new_node_type == ChannelProperty().node_type:
-            utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
+            utils.logger.notice(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
         return True
@@ -299,11 +299,12 @@ class ChannelService:
     async def _select_node_type(self):
         if self._is_role_switched():
             new_node_type = self._get_node_type_by_peer_list()
-            utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
+            utils.logger.notice(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
+        utils.logger.notice(f"switch_role")
         self.peer_manager.update_all_peers()
         if self._is_role_switched():
             self.__state_machine.switch_role()
@@ -619,10 +620,10 @@ class ChannelService:
             self.start_leader_complain_timer()
 
     def start_leader_complain_timer(self, duration=None):
-        if not duration:
+        if duration is None:
             duration = self.__block_manager.epoch.complain_duration
-        # utils.logger.spam(
-        #     f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
+        utils.logger.notice(
+            f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
         if self.state_machine.state in ("Vote", "LeaderComplain"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,

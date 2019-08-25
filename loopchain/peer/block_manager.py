@@ -27,7 +27,8 @@ from loopchain.baseservice import TimerService, ObjectManager, Timer
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
-from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, TransactionOutOfTimeBound
+from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
+    TransactionOutOfTimeBound, NotInReps
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction
@@ -174,7 +175,7 @@ class BlockManager:
                 loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
                 reps_hash=self.blockchain.last_block.header.reps_hash
                 if self.blockchain.last_block.header.version != '0.1a' else
-                ObjectManager().channel_service.peer_manager.prepared_reps_hash
+                self.__channel_service.peer_manager.prepared_reps_hash
             )
 
     def add_tx_obj(self, tx):
@@ -653,8 +654,7 @@ class BlockManager:
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         peer_target = ChannelProperty().peer_target
-        peer_manager = ObjectManager().channel_service.peer_manager
-        target_list = [peer.target for peer_id, peer in peer_manager.peer_list.items()
+        target_list = [peer.target for peer_id, peer in self.__channel_service.peer_manager.peer_list.items()
                        if peer_id != ChannelProperty().peer_id]
 
         for target in target_list:
@@ -689,6 +689,7 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def add_complain(self, vote: LeaderVote):
+        util.logger.notice(f"add_complain vote({vote})")
         if self.epoch.height == vote.block_height:
             self.epoch.add_complain(vote)
 
@@ -735,11 +736,13 @@ class BlockManager:
             channel=self.channel_name
         )
 
-        util.logger.debug(f"leader complain "
-                          f"complained_leader_id({complained_leader_id}), "
-                          f"new_leader_id({new_leader_id})")
+        util.logger.notice(
+            f"leader complain "
+            f"complained_leader_id({complained_leader_id}), "
+            f"new_leader_id({new_leader_id})")
 
-        self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader", request)
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
+            "ComplainLeader", request, reps_hash=self.__channel_service.peer_manager.prepared_reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
@@ -783,7 +786,7 @@ class BlockManager:
             block_verifier.invoke_func = self.blockchain.score_invoke
             reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
-            util.logger.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
+            util.logger.notice(f"unconfirmed_block.header({unconfirmed_block.header})")
 
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
@@ -792,6 +795,11 @@ class BlockManager:
                                       self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id)
                                   ),
                                   reps_getter=reps_getter)
+        except NotInReps as e:
+            util.logger.notice(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
+            self.__channel_service.switch_role()
+            self.__channel_service.broadcast_scheduler.update_audience(
+                self.__channel_service.peer_manager.prepared_reps_hash)
         except Exception as e:
             exc = e
             logging.error(e)

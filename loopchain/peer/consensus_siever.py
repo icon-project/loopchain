@@ -22,10 +22,10 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
-from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import NotEnoughVotes, NotCandidateBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
-from loopchain.blockchain.exception import NotEnoughVotes
+from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -94,15 +94,15 @@ class ConsensusSiever(ConsensusBase):
 
     async def __add_block(self, block: Block):
         vote = await self._wait_for_voting(block)
-        if not vote:
-            raise NotEnoughVotes
-
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
 
     async def consensus(self):
         async with self.__lock:
+            util.logger.notice(
+                f"-------------------consensus "
+                f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
                 util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
                 return
@@ -165,6 +165,18 @@ class ConsensusSiever(ConsensusBase):
                     self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
             except NotEnoughVotes:
                 need_next_call = True
+            except NotCandidateBlock:
+                util.logger.notice(
+                    f"+++\n+++\n+++\n+++\nNot Candidate Block height({last_unconfirmed_block.header.height})")
+                self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+                self._blockchain.last_unconfirmed_block = None
+                dumped_votes = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
+                if block_builder.version == '0.1a':
+                    votes = dumped_votes
+                else:
+                    votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+
+                block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
@@ -186,7 +198,10 @@ class ConsensusSiever(ConsensusBase):
 
             broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
             self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
-            if await self._wait_for_voting(candidate_block) is None:
+            try:
+                await self._wait_for_voting(candidate_block)
+            except NotEnoughVotes:
+                # just do wait more.
                 return
 
             if next_leader != ChannelProperty().peer_id:
@@ -216,6 +231,9 @@ class ConsensusSiever(ConsensusBase):
         """
         while True:
             vote = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
+            if not vote:
+                raise NotCandidateBlock
+
             util.logger.info(f"Votes : {vote.get_summary()}")
             if vote.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
@@ -229,12 +247,12 @@ class ConsensusSiever(ConsensusBase):
                     raise asyncio.TimeoutError
 
                 if not await asyncio.wait_for(self._vote_queue.get(), timeout=timeout):  # sentinel
-                    return None
+                    raise NotEnoughVotes
 
             except asyncio.TimeoutError:
                 util.logger.warning("Timed Out Block not confirmed duration: " +
                                     str(util.diff_in_seconds(candidate_block.header.timestamp)))
-                return None
+                raise NotEnoughVotes
 
     def get_votes(self, block_hash: Hash32):
         try:

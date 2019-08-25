@@ -166,8 +166,12 @@ class BlockChain:
 
         peer_manager = ObjectManager().channel_service.peer_manager
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            return peer_manager.get_next_leader_peer(peer_id).peer_id
-        return peer_id.hex_hx()
+            expected_generator = peer_manager.get_next_leader_peer(peer_id).peer_id
+        else:
+            expected_generator = peer_id.hex_hx()
+
+        utils.logger.notice(f"get_expected_generator ({expected_generator})")
+        return expected_generator
 
     @property
     def block_height(self):

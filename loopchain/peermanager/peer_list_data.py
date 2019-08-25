@@ -65,6 +65,8 @@ class PeerListData:
         try:
             return list(self.peer_list.values())[list(self.peer_list.keys()).index(peer_id) + 1]
         except IndexError:
+            util.logger.notice(
+                f"there is no peer_id({peer_id}) set index[0] peer({list(self.peer_list.values())[0]}) to leader")
             return list(self.peer_list.values())[0]
         except ValueError:
             util.logger.warning(f"peer_id({peer_id}) not in peer_list")
