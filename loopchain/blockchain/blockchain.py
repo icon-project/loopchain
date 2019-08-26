@@ -146,6 +146,9 @@ class BlockChain:
 
         if (self.last_block.header.version != '0.1a') and \
                 (self.last_block.header.reps_hash != self.last_block.header.next_reps_hash):
+            # TODO It needs additional features for new reps.
+            # - Keep order when changing list by penalty
+            # - If the list is changed due to the term, reset to order = 0
             utils.logger.notice(
                 f"in get_next_leader new reps leader is "
                 f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
@@ -158,7 +161,7 @@ class BlockChain:
 
         return peer_manager.leader_id
 
-    def get_expected_generator(self, peer_id: ExternalAddress) -> str:
+    def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
@@ -166,11 +169,12 @@ class BlockChain:
 
         peer_manager = ObjectManager().channel_service.peer_manager
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            expected_generator = peer_manager.get_next_leader_peer(peer_id).peer_id
+            expected_generator = ExternalAddress.fromhex_address(
+                peer_manager.get_next_leader_peer(peer_id).peer_id)
         else:
-            expected_generator = peer_id.hex_hx()
+            expected_generator = peer_id
 
-        utils.logger.notice(f"get_expected_generator ({expected_generator})")
+        utils.logger.debug(f"get_expected_generator ({expected_generator})")
         return expected_generator
 
     @property
@@ -1107,7 +1111,7 @@ class BlockChain:
 
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.notice(
+            utils.logger.debug(
                 f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(

@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -155,14 +155,16 @@ class BlockVerifier(BaseBlockVerifier):
                 # FIXME : leader_votes.verify does not verify all votes when raising an exception.
                 self._handle_exception(e)
         else:
-            pass
-            # prev_block_header: BlockHeader = prev_block.header
-            # if prev_block_header.next_leader != block.header.peer_id:
-            #     exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-            #                              f"Leader({block.header.peer_id.hex_xx()}), "
-            #                              f"Expected({prev_block_header.next_leader.hex_xx()}).\n "
-            #                              f"LeaderVotes({body.leader_votes}")
-            #     self._handle_exception(exception)
+            prev_block_header: BlockHeader = prev_block.header
+            if prev_block_header.next_leader != block.header.peer_id:
+                if prev_block_header.next_leader not in reps and block.header.peer_id == reps[0]:
+                    # prep term changed!
+                    return
+                exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                         f"Leader({block.header.peer_id.hex_xx()}), "
+                                         f"Expected({prev_block_header.next_leader.hex_xx()}).\n "
+                                         f"LeaderVotes({body.leader_votes}")
+                self._handle_exception(exception)
 
     def verify_prev_votes(self, block: 'Block', prev_reps: Sequence[ExternalAddress]):
         header: BlockHeader = block.header

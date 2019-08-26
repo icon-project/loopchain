@@ -30,7 +30,8 @@ from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
     TransactionOutOfTimeBound, NotInReps
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
+    ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -162,10 +163,21 @@ class BlockManager:
         """생성된 unconfirmed block 을 피어들에게 broadcast 하여 검증을 요청한다.
         """
         if self.__channel_service.state_machine.state == "BlockGenerate":
-            util.logger.notice(
+            last_block: Block = self.blockchain.last_block
+            if last_block.header.version != '0.1a':
+                # TODO This logic needs to be modified in a more efficient way.
+                if block_.header.peer_id in self.blockchain.find_preps_addresses_by_roothash(last_block.header.reps_hash):
+                    target_reps_hash = last_block.header.reps_hash
+                else:
+                    target_reps_hash = block_.header.reps_hash
+            else:
+                target_reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
+
+            util.logger.debug(
                 f"BroadCast AnnounceUnconfirmedBlock "
                 f"height({block_.header.height}) block({block_.header.hash}) peers: "
-                f"{ObjectManager().channel_service.peer_manager.get_peer_count()}")
+                f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
+                f"target_reps_hash({target_reps_hash})")
 
             # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
             block_dumped = self.blockchain.block_dumps(block_)
@@ -173,9 +185,7 @@ class BlockManager:
             ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
                 "AnnounceUnconfirmedBlock",
                 loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
-                reps_hash=self.blockchain.last_block.header.reps_hash
-                if self.blockchain.last_block.header.version != '0.1a' else
-                self.__channel_service.peer_manager.prepared_reps_hash
+                reps_hash=target_reps_hash
             )
 
     def add_tx_obj(self, tx):
@@ -590,7 +600,7 @@ class BlockManager:
         self.blockchain.last_unconfirmed_block = None
 
         my_height = self.__current_block_height()
-        logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
+        util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
         # prevent_next_block_mismatch until last_block_height in block DB.
         # (excludes last_unconfirmed_block_height)
@@ -632,6 +642,8 @@ class BlockManager:
             self.epoch = Epoch.new_epoch(leader_peer.peer_id)
         elif self.epoch and self.epoch.height < current_height:
             self.epoch = Epoch.new_epoch()
+
+        util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
 
     def __get_peer_stub_list(self):
         """It updates peer list for block manager refer to peer list on the loopchain network.
@@ -689,7 +701,7 @@ class BlockManager:
             self.consensus_algorithm.stop()
 
     def add_complain(self, vote: LeaderVote):
-        util.logger.notice(f"add_complain vote({vote})")
+        util.logger.spam(f"add_complain vote({vote})")
         if self.epoch.height == vote.block_height:
             self.epoch.add_complain(vote)
 
@@ -736,7 +748,7 @@ class BlockManager:
             channel=self.channel_name
         )
 
-        util.logger.notice(
+        util.logger.debug(
             f"leader complain "
             f"complained_leader_id({complained_leader_id}), "
             f"new_leader_id({new_leader_id})")
@@ -786,20 +798,19 @@ class BlockManager:
             block_verifier.invoke_func = self.blockchain.score_invoke
             reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
-            util.logger.notice(f"unconfirmed_block.header({unconfirmed_block.header})")
+            util.logger.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
 
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
                                   self.blockchain,
-                                  ExternalAddress.fromhex_address(
-                                      self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id)
-                                  ),
+                                  self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
                                   reps_getter=reps_getter)
         except NotInReps as e:
-            util.logger.notice(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
+            util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
             self.__channel_service.switch_role()
             self.__channel_service.broadcast_scheduler.update_audience(
                 self.__channel_service.peer_manager.prepared_reps_hash)
+            return
         except Exception as e:
             exc = e
             logging.error(e)

@@ -57,7 +57,7 @@ class Epoch:
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
-        leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
+        leader_id = leader_id or ObjectManager().channel_service.block_manager.blockchain.get_next_leader()
         return Epoch(block_manager, leader_id)
 
     def new_round(self, new_leader_id, round_=None):

@@ -204,7 +204,7 @@ class _Broadcaster:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_subscribe(self, audience_target):
-        util.logger.notice(f"_Broadcaster received subscribe command audience_target({audience_target})")
+        util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -215,7 +215,7 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        logging.debug(f"BroadcastThread received unsubscribe command peer_target({audience_target})")
+        util.logger.debug(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:
@@ -396,7 +396,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
         if update_command:
             update_reps = blockchain.find_preps_by_roothash(reps_hash)
-            util.logger.notice(
+            util.logger.info(
                 f"update audience command({update_command})"
                 f"\nupdate_reps({update_reps})"
             )
@@ -422,12 +422,12 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
             self._update_audience(reps_hash)
 
         kwargs = {}
-        if retry_times:
+        if retry_times is not None:
             kwargs['retry_times'] = retry_times
-        if timeout:
+        if timeout is not None:
             kwargs['timeout'] = timeout
 
-        util.logger.notice(f"broadcast method_name({method_name})")
+        util.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
 

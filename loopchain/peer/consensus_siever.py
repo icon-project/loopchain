@@ -23,7 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, NotCandidateBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -98,9 +98,19 @@ class ConsensusSiever(ConsensusBase):
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
 
+    def _makeup_new_block(self, block_version, complain_votes, block_hash):
+        self._blockchain.last_unconfirmed_block = None
+        dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
+        if block_version == '0.1a':
+            votes = dumped_votes
+        else:
+            votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+
+        return self._block_manager.epoch.makeup_block(complain_votes, votes)
+
     async def consensus(self):
         async with self.__lock:
-            util.logger.notice(
+            util.logger.debug(
                 f"-------------------consensus "
                 f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
@@ -136,16 +146,9 @@ class ConsensusSiever(ConsensusBase):
                         util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                         return
                     """
-                    # It should be enhanced after coming up for compatibility of versions.
-                    self._blockchain.last_unconfirmed_block = None
-                    dumped_votes = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
-                    if block_builder.version == '0.1a':
-                        votes = dumped_votes
-                    else:
-                        votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
-
-                    block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
-                elif self._blockchain.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
+                    block_builder = self._makeup_new_block(
+                        block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
+                elif self._blockchain.my_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
                     # (conf.MAX_MADE_BLOCK_COUNT - 2) means if made_block_count is 8,
                     # but after __add_block, it becomes 9
                     # so next unconfirmed block height is 10 (last).
@@ -165,18 +168,12 @@ class ConsensusSiever(ConsensusBase):
                     self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
             except NotEnoughVotes:
                 need_next_call = True
-            except NotCandidateBlock:
-                util.logger.notice(
-                    f"+++\n+++\n+++\n+++\nNot Candidate Block height({last_unconfirmed_block.header.height})")
+            except ThereIsNoCandidateBlock:
+                util.logger.debug(
+                    f"Not Candidate Block height({last_unconfirmed_block.header.height})")
                 self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-                self._blockchain.last_unconfirmed_block = None
-                dumped_votes = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
-                if block_builder.version == '0.1a':
-                    votes = dumped_votes
-                else:
-                    votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
-
-                block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
+                block_builder = self._makeup_new_block(
+                    block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
@@ -201,7 +198,6 @@ class ConsensusSiever(ConsensusBase):
             try:
                 await self._wait_for_voting(candidate_block)
             except NotEnoughVotes:
-                # just do wait more.
                 return
 
             if next_leader != ChannelProperty().peer_id:
@@ -232,7 +228,7 @@ class ConsensusSiever(ConsensusBase):
         while True:
             vote = self._block_manager.candidate_blocks.get_votes(candidate_block.header.hash)
             if not vote:
-                raise NotCandidateBlock
+                raise ThereIsNoCandidateBlock
 
             util.logger.info(f"Votes : {vote.get_summary()}")
             if vote.is_completed():

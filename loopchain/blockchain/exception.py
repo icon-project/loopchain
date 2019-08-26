@@ -83,7 +83,7 @@ class NotInReps(Exception):
     pass
 
 
-class NotCandidateBlock(Exception):
+class ThereIsNoCandidateBlock(Exception):
     """
     """
     pass

@@ -113,7 +113,7 @@ class PeerManager:
         if isinstance(peer, dict):
             peer = Peer(peer["id"], peer["peer_target"], order=peer["order"])
 
-        util.logger.notice(f"add peer id: {peer.peer_id}")
+        util.logger.debug(f"add peer id: {peer.peer_id}")
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
@@ -236,7 +236,7 @@ class PeerManager:
         return most_height_peer
 
     def reset_all_peers(self, reps_hash, reps, update_now=True):
-        util.logger.notice(
+        util.logger.debug(
             f"reset_all_peers."
             f"\nresult roothash({reps_hash})"
             f"\npeer_list roothash({self.reps_hash().hex()})"
@@ -247,7 +247,7 @@ class PeerManager:
             return
 
         if reps_hash == self.reps_hash().hex():
-            util.logger.notice(f"There is no change in load_peers_from_iiss.")
+            util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
         for peer_id in list(self.peer_list):
