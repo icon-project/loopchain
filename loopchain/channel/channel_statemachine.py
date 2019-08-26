@@ -144,14 +144,14 @@ class ChannelStateMachine(object):
 
     def _subscribe_network_on_enter(self, *args, **kwargs):
         self.__channel_service.start_subscribe_timer()
-        self.__channel_service.start_shutdown_timer()
+        self.__channel_service.start_shutdown_timer_when_fail_subscribe()
 
         self.__channel_service.update_sub_services_properties()
         self._run_coroutine_threadsafe(self.__channel_service.subscribe_network())
 
     def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
-        self.__channel_service.stop_shutdown_timer()
+        self.__channel_service.stop_shutdown_timer_when_fail_subscribe()
         self.__channel_service.block_manager.start_epoch()
 
     def _do_reset_network_on_enter(self):

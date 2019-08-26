@@ -501,7 +501,8 @@ class ChannelService:
         :return:
         """
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+            utils.logger.notice(f"This peer needs to switch to citizen.")
+            self.start_shutdown_timer_when_term_expired()
 
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
@@ -641,11 +642,18 @@ class ChannelService:
     def stop_subscribe_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
 
-    def start_shutdown_timer(self):
+    def start_shutdown_timer_when_fail_subscribe(self):
         error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE,
                                                   duration=conf.SHUTDOWN_TIMER, callback=self.shutdown_peer,
                                                   callback_kwargs={"message": error})
 
-    def stop_shutdown_timer(self):
+    def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
+
+    def start_shutdown_timer_when_term_expired(self):
+        error = f"Shutdown by expired term with timeout({conf.TIMEOUT_FOR_LEADER_COMPLAIN}) sec"
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED,
+                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                  callback=self.shutdown_peer,
+                                                  callback_kwargs={"message": error})
