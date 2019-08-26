@@ -787,7 +787,7 @@ class BlockManager:
         prev_block = last_unconfirmed_block if last_unconfirmed_block else self.blockchain.last_block
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
-            if unconfirmed_block.header.height > 1:
+            if unconfirmed_block.header.version != "0.1a" and unconfirmed_block.header.height > 1:
                 if prev_block.header.version != "0.1a":
                     prev_reps = reps_getter(prev_block.header.reps_hash)
                 else:

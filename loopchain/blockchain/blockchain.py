@@ -335,6 +335,7 @@ class BlockChain:
         try:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
+            utils.logger.spam(f"There is no block by hash: {block_hash}")
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
@@ -698,9 +699,6 @@ class BlockChain:
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # This case is not an error.
-            # Client send wrong tx_hash..
-            # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
@@ -745,9 +743,6 @@ class BlockChain:
         except UnicodeDecodeError as e:
             logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
-        # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
-        #     return None
 
         return tx_info_json
 
