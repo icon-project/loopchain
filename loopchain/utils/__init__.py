@@ -45,7 +45,7 @@ apm_event = None
 logger = verboselogs.VerboseLogger("dev")
 
 
-def long_to_bytes (val, endianness='big'):
+def long_to_bytes(val, endianness='big'):
     """Use :ref:`string formatting` and :func:`~binascii.unhexlify` to
     convert ``val``, a :func:`long`, to a byte :func:`str`.
 
