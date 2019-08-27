@@ -810,7 +810,6 @@ class BlockManager:
             self.__channel_service.switch_role()
             self.__channel_service.broadcast_scheduler.update_audience(
                 self.__channel_service.peer_manager.prepared_reps_hash)
-            return
         except Exception as e:
             exc = e
             logging.error(e)

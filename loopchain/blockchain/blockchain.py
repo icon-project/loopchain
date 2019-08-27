@@ -174,7 +174,7 @@ class BlockChain:
         else:
             expected_generator = peer_id
 
-        utils.logger.debug(f"get_expected_generator ({expected_generator})")
+        utils.logger.debug(f"get_expected_generator ({expected_generator.hex_hx()})")
         return expected_generator
 
     @property

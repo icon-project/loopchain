@@ -391,7 +391,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def _update_audience(self, reps_hash, update_command=None):
+    def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         if update_command:
