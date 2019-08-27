@@ -450,64 +450,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                                         public_key=response_public_key,
                                         more_info=response_msg)
 
-    def GetLastBlockHash(self, request, context):
-        """ 마지막 블럭 조회
-
-        :param request: 블럭요청
-        :param context:
-        :return: 마지막 블럭
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        # Peer To Client
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_block(
-                block_height=-1,
-                block_hash='',
-                block_data_filter='block_hash',
-                tx_data_filter=''
-            ), self.peer_service.inner_service.loop
-        )
-        response_code, block_hash, _, block_data_json, tx_data_json_list = future.result()
-        response_code, response_msg = message_code.get_response(response_code)
-
-        return loopchain_pb2.BlockReply(response_code=response_code,
-                                        message=response_msg,
-                                        block_hash=block_hash)
-
-    def GetBlock(self, request, context):
-        """Block 정보를 조회한다.
-
-        :param request: loopchain.proto 의 GetBlockRequest 참고
-         request.block_hash: 조회할 block 의 hash 값, "" 로 조회하면 마지막 block 의 hash 값을 리턴한다.
-         request.block_data_filter: block 정보 중 조회하고 싶은 key 값 목록 "key1, key2, key3" 형식의 string
-         request.tx_data_filter: block 에 포함된 transaction(tx) 중 조회하고 싶은 key 값 목록
-        "key1, key2, key3" 형식의 string
-        :param context:
-        :return: loopchain.proto 의 GetBlockReply 참고,
-        block_hash, block 정보 json, block 에 포함된 tx 정보의 json 리스트를 받는다.
-        포함되는 정보는 param 의 filter 에 따른다.
-        """
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_block(
-                block_height=request.block_height,
-                block_hash=request.block_hash,
-                block_data_filter=request.block_data_filter,
-                tx_data_filter=request.tx_data_filter
-            ), self.peer_service.inner_service.loop
-        )
-        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = future.result()
-
-        return loopchain_pb2.GetBlockReply(response_code=response_code,
-                                           block_hash=block_hash,
-                                           block_data_json=block_data_json,
-                                           confirm_info=confirm_info,
-                                           tx_data_json=tx_data_json_list)
-
     def GetPrecommitBlock(self, request, context):
         """Return the precommit bock.
 

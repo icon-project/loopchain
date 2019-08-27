@@ -53,28 +53,6 @@ class PeerServiceStub(metaclass=SingletonMetaClass):
 
         return status_json_data
 
-    def get_last_block_hash(self, channel: str) -> str:
-        response = self.call("GetLastBlockHash",
-                             loopchain_pb2.CommonRequest(request="", channel=channel),
-                             self.REST_GRPC_TIMEOUT)
-        return str(response.block_hash)
-
-    def get_block(self, channel: str, block_hash: str= "", block_height: int=-1):
-        block_data_filter = "prev_block_hash, height, block_hash, merkle_tree_root_hash," \
-                            " time_stamp, peer_id, signature"
-        tx_data_filter = "icx_origin_data"
-
-        response = self.call("GetBlock",
-                             loopchain_pb2.GetBlockRequest(
-                                  block_hash=block_hash,
-                                  block_height=block_height,
-                                  block_data_filter=block_data_filter,
-                                  tx_data_filter=tx_data_filter,
-                                  channel=channel),
-                             self.REST_GRPC_TIMEOUT)
-
-        return response
-
     def get_transaction(self, tx_hash: str, channel: str):
         return self.call("GetTx",
                          loopchain_pb2.GetTxRequest(tx_hash=tx_hash, channel=channel),
