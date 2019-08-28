@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from collections import Counter
 from typing import Iterable, List, Dict
+
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes import Votes as BaseVotes
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
