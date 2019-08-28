@@ -87,17 +87,16 @@ class Timer:
     def try_func(self):
         try:
             self.__callback(**self.__kwargs)
-        except:
+        except Exception:
             traceback.print_exc()
-            raise
 
     def try_coroutine(self):
         async def _try_coroutine():
             try:
                 await self.__callback(**self.__kwargs)
-            except:
+            except Exception:
                 traceback.print_exc()
-                raise
+
         asyncio.get_event_loop().create_task(_try_coroutine())
 
     def __repr__(self):
