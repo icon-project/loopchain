@@ -18,6 +18,8 @@ import threading
 import time
 import traceback
 from enum import Enum
+from typing import Dict, Callable, Awaitable, Union
+
 from loopchain import utils as util
 from loopchain.baseservice import CommonThread
 
@@ -44,14 +46,14 @@ class Timer:
         """
         self.target = kwargs.get("target")
         self.duration = kwargs.get("duration")
-        self.is_run_at_start = kwargs.get("is_run_at_start", False)
-        self.is_repeat = kwargs.get("is_repeat", False)
+        self.is_run_at_start: bool = kwargs.get("is_run_at_start", False)
+        self.is_repeat: bool = kwargs.get("is_repeat", False)
 
         self.__start_time = time.time()
-        self.__callback = kwargs.get("callback", None)
+        self.__callback: Union[Callable, Awaitable] = kwargs.get("callback", None)
         self.__kwargs = kwargs.get("callback_kwargs") or {}
 
-    def is_timeout(self):
+    def is_timeout(self) -> bool:
         if time.time() - self.__start_time < self.duration:
             return False
 
@@ -62,7 +64,7 @@ class Timer:
         self.__start_time = time.time()
         util.logger.spam(f"reset_timer: {self.target}")
 
-    def remain_time(self):
+    def remain_time(self) -> Union[int, float]:
         end_time = self.__start_time + self.duration
         remain = end_time - time.time()
         return remain if remain > 0 else 0
@@ -117,7 +119,7 @@ class TimerService(CommonThread):
 
     def __init__(self):
         CommonThread.__init__(self)
-        self.__timer_list = {}
+        self.__timer_list: Dict[str, Timer] = {}
         self.__loop: asyncio.BaseEventLoop = asyncio.new_event_loop()
         # self.__loop.set_debug(True)
 
@@ -126,10 +128,10 @@ class TimerService(CommonThread):
         return self.__loop
 
     @property
-    def timer_list(self):
+    def timer_list(self) -> Dict[str, Timer]:
         return self.__timer_list
 
-    def add_timer(self, key, timer):
+    def add_timer(self, key, timer: Timer):
         """add timer to self.__timer_list
 
         :param key: key
@@ -167,7 +169,7 @@ class TimerService(CommonThread):
         else:
             logging.warning(f'({key}) is not in timer list.')
 
-    def get_timer(self, key):
+    def get_timer(self, key) -> Union[Timer]:
         """get a timer by key
 
         :param key: key
@@ -204,7 +206,7 @@ class TimerService(CommonThread):
         else:
             logging.warning(f"restart_timer:There is no value by this key: {key}")
 
-    def stop_timer(self, key, off_type=OffType.normal):
+    def stop_timer(self, key, off_type: OffType = OffType.normal):
         """stop timer
 
         :param key: key
