@@ -21,7 +21,7 @@ from typing import Optional, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import BroadcastCommand, ObjectManager, StubManager
+from loopchain.baseservice import ObjectManager, StubManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -32,10 +32,16 @@ from loopchain.protos import loopchain_pb2
 class PeerManager:
     def __init__(self):
         """Manage peer list in operation."""
+
         self._peer_list_data = PeerListData()
 
         # lock object for if add new peer don't have order that must locking
         self.__add_peer_lock: threading.Lock = threading.Lock()
+
+        # reps_hash, reps for reset_all_peers
+        self._reps_reset_data: Optional[tuple] = None
+
+        self._prepared_reps_hash = None
 
     @property
     def peer_list(self) -> dict:
@@ -52,6 +58,10 @@ class PeerManager:
         :return:
         """
         return self._peer_list_data.leader_id
+
+    @property
+    def prepared_reps_hash(self):
+        return self._prepared_reps_hash
 
     def reps_hash(self) -> Hash32:
         """return reps root hash.
@@ -103,7 +113,7 @@ class PeerManager:
         if isinstance(peer, dict):
             peer = Peer(peer["id"], peer["peer_target"], order=peer["order"])
 
-        logging.debug(f"add peer id: {peer.peer_id}")
+        util.logger.debug(f"add peer id: {peer.peer_id}")
 
         # add_peer logic must be atomic
         with self.__add_peer_lock:
@@ -119,11 +129,19 @@ class PeerManager:
                 self._peer_list_data.leader_id = peer.peer_id
 
             self.peer_list[peer.peer_id] = peer
-
-        broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-        broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer.target)
+            self._prepared_reps_hash = self.reps_hash()
 
         return peer.order
+
+    def remove_peer(self, peer_id):
+        logging.debug(f"remove peer : {peer_id}")
+        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
+        if removed_peer:
+            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
+            self._prepared_reps_hash = self.reps_hash()
+            return True
+
+        return False
 
     def set_leader_peer(self, peer):
         """리더 피어를 지정한다.
@@ -217,7 +235,21 @@ class PeerManager:
 
         return most_height_peer
 
-    def reset_all_peers(self, reps):
+    def reset_all_peers(self, reps_hash, reps, update_now=True):
+        util.logger.debug(
+            f"reset_all_peers."
+            f"\nresult roothash({reps_hash})"
+            f"\npeer_list roothash({self.reps_hash().hex()})"
+            f"\nupdate now({update_now})")
+
+        if not update_now:
+            self._reps_reset_data = (reps_hash, reps)
+            return
+
+        if reps_hash == self.reps_hash().hex():
+            util.logger.debug(f"There is no change in load_peers_from_iiss.")
+            return
+
         for peer_id in list(self.peer_list):
             self.remove_peer(peer_id)
 
@@ -226,6 +258,11 @@ class PeerManager:
             self.add_peer(peer)
 
         ObjectManager().channel_service.block_manager.blockchain.reset_leader_made_block_count()
+
+    def update_all_peers(self):
+        if self._reps_reset_data:
+            self.reset_all_peers(*self._reps_reset_data, update_now=True)
+            self._reps_reset_data = None
 
     def get_peer(self, peer_id) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
@@ -252,17 +289,6 @@ class PeerManager:
             logging.warning(f"there is no peer by id({str(peer_id)})")
             logging.debug(self.get_peers_for_debug())
             return None
-
-    def remove_peer(self, peer_id):
-        logging.debug(f"remove peer : {peer_id}")
-        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
-        if removed_peer:
-            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
-            broadcast_scheduler = ObjectManager().channel_service.broadcast_scheduler
-            broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, removed_peer.target)
-            return True
-
-        return False
 
     def get_peer_count(self):
         count = 0

@@ -80,24 +80,6 @@ class ChannelManager:
         else:
             logging.debug(f"channel_manager:remove_audience no channel({channel}) in broadcast_threads")
 
-    def broadcast(self, channel, method_name, method_param, response_handler=None, *, retry_times=None, timeout=None):
-        """등록된 모든 Peer 의 동일한 gRPC method 를 같은 파라미터로 호출한다.
-        """
-        # logging.warning("broadcast in process ==========================")
-
-        if channel in self.__broadcast_schedulers.keys():
-            kwargs = {}
-            if retry_times:
-                kwargs['retry_times'] = retry_times
-
-            if timeout:
-                kwargs['timeout'] = timeout
-
-            self.__broadcast_schedulers[channel].schedule_job(
-                BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
-        else:
-            logging.debug(f"channel_manager:broadcast no channel({channel}) in broadcast_threads")
-
     def authorized_channels(self, peer_id) -> list:
         authorized_channels = []
 

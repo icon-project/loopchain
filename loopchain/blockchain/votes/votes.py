@@ -41,6 +41,8 @@ class Votes(ABC, Generic[TVote]):
             self.verify_vote(vote)
         except VoteSafeDuplicateError:
             pass
+        except VoteError:
+            raise
         else:
             index = self.reps.index(vote.rep)
             self.votes[index] = vote
@@ -59,7 +61,10 @@ class Votes(ABC, Generic[TVote]):
     def verify_vote(self, vote: TVote):
         vote.verify()
 
-        index = self.reps.index(vote.rep)
+        try:
+            index = self.reps.index(vote.rep)
+        except ValueError:
+            raise VoteNoRightRep(f"This rep({vote.rep.hex_hx()}) has no right to vote")
 
         # FIXME Leave the evidence, Duplicate voting
         if self.votes[index]:
@@ -131,5 +136,13 @@ class VoteSafeDuplicateError(Exception):
     pass
 
 
-class VoteDuplicateError(Exception):
+class VoteError(Exception):
+    pass
+
+
+class VoteNoRightRep(VoteError):
+    pass
+
+
+class VoteDuplicateError(VoteError):
     pass

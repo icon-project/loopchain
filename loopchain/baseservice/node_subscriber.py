@@ -20,15 +20,15 @@ import traceback
 from asyncio import Event
 
 import websockets
-from websockets import WebSocketClientProtocol
 from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
+from websockets import WebSocketClientProtocol
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import AnnounceNewBlockError
+from loopchain.blockchain import AnnounceNewBlockError, ExternalAddress
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -140,7 +140,7 @@ class NodeSubscriber:
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
-                                      blockchain.last_block.header.next_leader,
+                                      blockchain.get_expected_generator(confirmed_block.header.peer_id),
                                       reps_getter=reps_getter)
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")

@@ -18,12 +18,14 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 import logging
 import traceback
 from typing import Dict, Optional
+
 from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
-from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
+from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
+from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
+from loopchain.blockchain.votes.votes import VoteError
 from loopchain.channel.channel_property import ChannelProperty
 
 
@@ -57,7 +59,7 @@ class Epoch:
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
-        leader_id = leader_id or ObjectManager().channel_service.block_manager.epoch.leader_id
+        leader_id = leader_id or ObjectManager().channel_service.block_manager.blockchain.get_next_leader()
         return Epoch(block_manager, leader_id)
 
     def new_round(self, new_leader_id, round_=None):
@@ -74,9 +76,12 @@ class Epoch:
         self.new_votes()
 
     def new_votes(self):
-        audience = ObjectManager().channel_service.peer_manager.peer_list
-        rep_info = sorted(audience.values(), key=lambda peer: peer.order)
-        self.reps = [ExternalAddress.fromhex(rep.peer_id) for rep in rep_info]
+        if self.__blockchain.last_block.header.version != '0.1a':
+            reps_hash = self.__blockchain.last_block.header.next_reps_hash
+        else:
+            reps_hash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+
+        self.reps = self.__blockchain.find_preps_addresses_by_roothash(reps_hash)
 
         leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,
@@ -99,6 +104,8 @@ class Epoch:
                            f"peer_id({leader_vote.rep})")
         try:
             self.complain_votes[self.round].add_vote(leader_vote)
+        except VoteError as e:
+            utils.logger.info(e)
         except RuntimeError as e:
             logging.warning(e)
 

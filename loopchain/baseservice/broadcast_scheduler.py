@@ -204,7 +204,7 @@ class _Broadcaster:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_subscribe(self, audience_target):
-        util.logger.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
+        util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -215,11 +215,11 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        logging.debug(f"BroadcastThread received unsubscribe command peer_target({audience_target})")
+        util.logger.debug(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:
-            logging.warning(f"Already deleted peer: {audience_target}")
+            logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
 
     def __handler_broadcast(self, broadcast_param):
         # logging.debug("BroadcastThread received broadcast command")
@@ -336,6 +336,7 @@ class _Broadcaster:
 class BroadcastScheduler(metaclass=abc.ABCMeta):
     def __init__(self):
         self.__schedule_listeners = dict()
+        self.__audience_reps_hash = None
 
     @abc.abstractmethod
     def start(self):
@@ -390,12 +391,43 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
+    def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+
+        if update_command:
+            update_reps = blockchain.find_preps_by_roothash(reps_hash)
+            util.logger.info(
+                f"update audience command({update_command})"
+                f"\nupdate_reps({update_reps})"
+            )
+            for rep in update_reps:
+                self.schedule_job(update_command, rep['p2pEndpoint'])
+            return
+
+        self._update_audience(self.__audience_reps_hash, BroadcastCommand.UNSUBSCRIBE)
+        self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
+        self.__audience_reps_hash = reps_hash
+
+    def update_audience(self, reps_hash):
+        self._update_audience(reps_hash)
+
+    def schedule_broadcast(
+            self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
+
+        if not self.__audience_reps_hash:
+            self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
+            self._update_audience(self.__audience_reps_hash)
+
+        if reps_hash and reps_hash != self.__audience_reps_hash:
+            self._update_audience(reps_hash)
+
         kwargs = {}
         if retry_times is not None:
             kwargs['retry_times'] = retry_times
         if timeout is not None:
             kwargs['timeout'] = timeout
+
+        util.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
 

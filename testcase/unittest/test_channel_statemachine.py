@@ -84,44 +84,27 @@ class MockChannelService:
     def start_subscribe_timer(self):
         pass
 
-    def start_shutdown_timer(self):
+    def start_shutdown_timer_when_fail_subscribe(self):
         pass
 
     def stop_subscribe_timer(self):
         pass
 
-    def stop_shutdown_timer(self):
+    def stop_shutdown_timer_when_fail_subscribe(self):
         pass
 
 
-class MockChannelServiceCitizen:
-    async def evaluate_network(self):
-        pass
-
-    async def subscribe_network(self):
-        pass
-
-    def update_sub_services_properties(self):
-        pass
-
-    def start_subscribe_timer(self):
-        pass
-
-    def start_shutdown_timer(self):
-        pass
-
-    def stop_subscribe_timer(self):
-        pass
-
-    def stop_shutdown_timer(self):
-        pass
+class MockChannelServiceCitizen(MockChannelService):
+    def __init__(self):
+        super().__init__()
+        self.block_manager = MockBlockManagerCitizen()
 
     def is_support_node_function(self, node_function):
         return False
 
-    @property
-    def block_manager(self):
-        return MockBlockManagerCitizen()
+    # @property
+    # def block_manager(self):
+    #     return MockBlockManagerCitizen()
 
 
 class TestChannelStateMachine(unittest.TestCase):

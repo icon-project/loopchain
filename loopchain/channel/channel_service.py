@@ -34,7 +34,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.peermanager import PeerManager, PeerLoader
+from loopchain.peermanager import PeerManager
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -275,7 +275,7 @@ class ChannelService:
             return False
 
         if current_height == 0 and self._is_genesis_node():
-            logging.debug(f"It's GenesisNode, but not registered yet")
+            utils.logger.debug(f"It's GenesisNode, but not registered yet")
             return False
 
         switch_block_height = self.__get_role_switch_block_height()
@@ -284,7 +284,13 @@ class ChannelService:
                                f"current_height({current_height})")
             return False
 
-        if self._get_node_type_by_peer_list() == ChannelProperty().node_type:
+        new_node_type = self._get_node_type_by_peer_list()
+        if ChannelProperty().node_type == conf.NodeType.CommunityNode \
+                and new_node_type == conf.NodeType.CitizenNode:
+            utils.logger.debug(f"prep right expired...")
+            return False
+
+        if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
@@ -298,7 +304,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        PeerLoader.load_peers_from_iiss(peer_manager=self.__peer_manager)
+        self.peer_manager.update_all_peers()
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -494,7 +500,8 @@ class ChannelService:
         :return:
         """
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
-            utils.exit_and_msg(f"Prep({ChannelProperty().peer_id}) test right was expired.")
+            utils.logger.warning(f"This peer needs to switch to citizen.")
+            self.start_shutdown_timer_when_term_expired()
 
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
@@ -613,10 +620,10 @@ class ChannelService:
             self.start_leader_complain_timer()
 
     def start_leader_complain_timer(self, duration=None):
-        if not duration:
+        if duration is None:
             duration = self.__block_manager.epoch.complain_duration
-        # utils.logger.spam(
-        #     f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
+        utils.logger.spam(
+            f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
         if self.state_machine.state in ("Vote", "LeaderComplain"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
@@ -634,11 +641,18 @@ class ChannelService:
     def stop_subscribe_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SUBSCRIBE)
 
-    def start_shutdown_timer(self):
+    def start_shutdown_timer_when_fail_subscribe(self):
         error = f"Shutdown by Subscribe retry timeout({conf.SHUTDOWN_TIMER} sec)"
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE,
                                                   duration=conf.SHUTDOWN_TIMER, callback=self.shutdown_peer,
                                                   callback_kwargs={"message": error})
 
-    def stop_shutdown_timer(self):
+    def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
+
+    def start_shutdown_timer_when_term_expired(self):
+        error = f"Shutdown by expired term with timeout({conf.TIMEOUT_FOR_LEADER_COMPLAIN}) sec"
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED,
+                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                  callback=self.shutdown_peer,
+                                                  callback_kwargs={"message": error})

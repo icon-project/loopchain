@@ -1,9 +1,26 @@
+# Copyright 2019 ICON Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""block verifier for version 0.3 block"""
+
 from typing import TYPE_CHECKING, Callable, Sequence
+
 from loopchain import configure as conf
 from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier, BlockBuilder
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
-from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
+from loopchain.blockchain.exception import NotInReps
 from loopchain.blockchain.types import ExternalAddress, Hash32
+from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
 
 if TYPE_CHECKING:
     from loopchain.blockchain.blocks import Block
@@ -21,13 +38,13 @@ class BlockVerifier(BaseBlockVerifier):
         # TODO It should check rep's order.
         reps = reps_getter(header.reps_hash)
         if header.peer_id not in reps:
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"Leader({header.peer_id}) is not in "
-                                     f"Reps({reps})")
+            exception = NotInReps(f"Block({header.height}, {header.hash.hex()}, "
+                                  f"Leader({header.peer_id}) is not in Reps({reps})")
             self._handle_exception(exception)
 
         if header.height > 0:
             self.verify_leader_votes(block, prev_block, reps)
+
         if header.height > 1:
             if prev_block.header.version != "0.1a":
                 prev_next_reps_hash = prev_block.header.next_reps_hash
@@ -140,6 +157,9 @@ class BlockVerifier(BaseBlockVerifier):
         else:
             prev_block_header: BlockHeader = prev_block.header
             if prev_block_header.next_leader != block.header.peer_id:
+                if prev_block_header.next_leader not in reps and block.header.peer_id == reps[0]:
+                    # prep term changed!
+                    return
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "
                                          f"Expected({prev_block_header.next_leader.hex_xx()}).\n "

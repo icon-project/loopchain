@@ -32,8 +32,7 @@ class AdminService(loopchain_pb2_grpc.RadioStationServicer):
         self.__admin_manager = admin_manager
         self.__handler_map = {
             message_code.Request.status: self.__handler_status,
-            message_code.Request.rs_send_channel_manage_info_to_rs: self.__handler_rs_send_channel_manage_info_to_rs,
-            message_code.Request.rs_restart_channel: self.__handler_restart_channel
+            message_code.Request.rs_send_channel_manage_info_to_rs: self.__handler_rs_send_channel_manage_info_to_rs
         }
 
     def __handler_status(self, request: loopchain_pb2.Message, context):
@@ -52,26 +51,6 @@ class AdminService(loopchain_pb2_grpc.RadioStationServicer):
         self.__admin_manager.save_channel_manage_data(json.loads(request.meta))
         logging.debug(f"rs_admin_service:__handler_rs_send_channel_manage_info_to_rs "
                       f"new channel_manage_data({self.__admin_manager.json_data})")
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
-
-    def __handler_restart_channel(self, request, context):
-        """
-
-        :param request:
-        :param context:
-        :return:
-        """
-        util.logger.spam(f"rs_admin_service:__handler_restart_channel")
-
-        message = loopchain_pb2.Message(
-            code=message_code.Request.peer_restart_channel,
-            channel=request.channel,
-            message="restart channel"
-        )
-
-        ObjectManager().rs_service.channel_manager.broadcast(
-            request.channel, "Request", message, timeout=conf.CHANNEL_RESTART_TIMEOUT)
 
         return loopchain_pb2.Message(code=message_code.Response.success)
 
