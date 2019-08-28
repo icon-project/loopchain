@@ -18,12 +18,14 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 import logging
 import traceback
 from typing import Dict, Optional
+
 from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
-from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
-from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
+from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
+from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
+from loopchain.blockchain.votes.votes import VoteError
 from loopchain.channel.channel_property import ChannelProperty
 
 
@@ -102,6 +104,8 @@ class Epoch:
                            f"peer_id({leader_vote.rep})")
         try:
             self.complain_votes[self.round].add_vote(leader_vote)
+        except VoteError as e:
+            utils.logger.info(e)
         except RuntimeError as e:
             logging.warning(e)
 

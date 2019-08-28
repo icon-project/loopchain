@@ -12,17 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Candidate Blocks"""
+
 import logging
 import threading
-import loopchain.utils as util
-
 from typing import Dict, List
+
+import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
+from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
-from loopchain.blockchain.blocks import Block
-
+from loopchain.blockchain.votes.votes import VoteError
 
 __all__ = ("CandidateBlockSetBlock", "CandidateBlock", "CandidateBlocks")
 
@@ -74,13 +75,16 @@ class CandidateBlock:
             for vote in self.votes_buffer:
                 try:
                     self.votes.add_vote(vote)
-                except:
-                    pass
+                except VoteError as e:
+                    util.logger.info(e)
             self.votes_buffer.clear()
 
     def add_vote(self, vote: BlockVote):
         if self.votes:
-            self.votes.add_vote(vote)
+            try:
+                self.votes.add_vote(vote)
+            except VoteError as e:
+                util.logger.info(e)
         else:
             self.votes_buffer.append(vote)
 
@@ -101,7 +105,10 @@ class CandidateBlocks:
         else:
             for block in self.blocks.values():
                 if block.height == vote.block_height:
-                    block.add_vote(vote)
+                    try:
+                        block.add_vote(vote)
+                    except VoteError as e:
+                        util.logger.info(e)
 
     def get_votes(self, block_hash):
         return self.blocks[block_hash].votes
