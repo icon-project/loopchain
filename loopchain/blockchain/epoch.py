@@ -177,15 +177,15 @@ class Epoch:
         if self.__blockchain.last_unconfirmed_block and \
                 self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
             tx_queue = self.__block_manager.get_tx_queue()
-            try:
-                for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
+
+            for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
+                try:
                     tx_queue.set_item_status(
                         tx_hash_in_unconfirmed_block.hex(),
                         TransactionStatusInQueue.added_to_block)
-                    # utils.logger.spam(f"remove duplicated tx. {tx_hash_in_unconfirmed_block.hex()}")
-            except KeyError:
-                # utils.logger.spam("There is no duplicated tx.")
-                return
+                except KeyError:
+                    continue
+            utils.logger.spam(f"There is no duplicated tx anymore.")
 
     def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block

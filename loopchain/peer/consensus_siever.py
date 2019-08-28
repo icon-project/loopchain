@@ -172,7 +172,7 @@ class ConsensusSiever(ConsensusBase):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
                 util.logger.debug(
-                    f"Not Candidate Block height({last_unconfirmed_block.header.height})")
+                    f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
                 self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
@@ -257,7 +257,7 @@ class ConsensusSiever(ConsensusBase):
             prev_votes = None
 
         if prev_votes:
-            if not (prev_votes and prev_votes.is_completed()):
+            if not prev_votes.is_completed():
                 self.__broadcast_block(self._blockchain.last_unconfirmed_block)
                 if await self._wait_for_voting(self._blockchain.last_unconfirmed_block) is None:
                     return None

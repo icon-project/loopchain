@@ -629,11 +629,10 @@ class BlockManager:
         return True
 
     def start_epoch(self):
-        curr_block_header = self.__current_last_block().header
-        current_height = curr_block_header.height
-        next_leader = curr_block_header.next_leader
-        leader_peer = \
-            self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
+        current_block_header = self.__current_last_block().header
+        current_height = current_block_header.height
+        next_leader = current_block_header.next_leader
+        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
 
         if leader_peer:
             self.epoch = Epoch.new_epoch(leader_peer.peer_id)
@@ -784,7 +783,7 @@ class BlockManager:
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
         last_unconfirmed_block = self.blockchain.last_unconfirmed_block
-        prev_block = last_unconfirmed_block if last_unconfirmed_block else self.blockchain.last_block
+        prev_block = last_unconfirmed_block or self.blockchain.last_block
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
             if unconfirmed_block.header.version != "0.1a" and unconfirmed_block.header.height > 1:

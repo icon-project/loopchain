@@ -23,8 +23,7 @@ if TYPE_CHECKING:
 
 
 class InvalidBlock(Exception):
-    """블럭 검증오류
-    검증되지 않은 블럭이 블럭체인에 추가되거나, 검증시 hash값이 다르다면 발생한다
+    """Raise when an invalid block tries to be added.
     """
     pass
 
