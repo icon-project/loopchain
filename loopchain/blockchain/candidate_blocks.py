@@ -105,10 +105,7 @@ class CandidateBlocks:
         else:
             for block in self.blocks.values():
                 if block.height == vote.block_height:
-                    try:
-                        block.add_vote(vote)
-                    except VoteError as e:
-                        util.logger.info(e)
+                    block.add_vote(vote)
 
     def get_votes(self, block_hash):
         return self.blocks[block_hash].votes
