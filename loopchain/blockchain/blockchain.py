@@ -26,6 +26,7 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
@@ -361,10 +362,12 @@ class BlockChain:
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
+    @lru_cache(maxsize=4, not_none_returns_only=True)
     def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
         preps = self.find_preps_by_roothash(roothash)
         return [prep["id"] for prep in preps]
 
+    @lru_cache(maxsize=4, not_none_returns_only=True)
     def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
