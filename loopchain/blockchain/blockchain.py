@@ -423,6 +423,7 @@ class BlockChain:
             receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
             if receipts is None and need_to_score_invoke:
                 self.get_invoke_func(block.header.height)(block, self.__last_block)
+                receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
 
             if not need_to_write_tx_info:
                 receipts = None
