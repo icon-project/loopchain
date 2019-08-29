@@ -18,6 +18,7 @@ import importlib
 import json
 import logging
 import re
+import pkg_resources
 
 import loopchain
 from loopchain.components.singleton import SingletonMetaClass
@@ -43,6 +44,7 @@ class Configure(metaclass=SingletonMetaClass):
         # configure_info_list = {configure_attr: configure_type}
         self.__configure_info_list = {}
         self.__load_configure(loopchain.configure_default, use_env=True)
+        self._set_package_version()
 
     @property
     def configure_info_list(self):
@@ -120,8 +122,8 @@ class Configure(metaclass=SingletonMetaClass):
         # turn configure value to int or float after some condition check.
         # cast type string to original type if it exists in the globals().
         target_value = value
-        if isinstance(value, str) and len(value) > 0 and \
-                target_value_type is not str:
+        if (isinstance(value, str) and len(value) > 0
+                and target_value_type is not str):
             if re.match("^\d+?\.\d+?$", value) is not None:
                 # print("float configure value")
                 try:
@@ -139,6 +141,13 @@ class Configure(metaclass=SingletonMetaClass):
                 dict_data[key] = value.value
             elif isinstance(value, dict):
                 self.__change_enum_to_int(value)
+
+    def _set_package_version(self):
+        installed_pkg = [package.project_name for package in pkg_resources.working_set]
+        filtered_pkg = [pkg for pkg in installed_pkg if pkg in globals()['ICON_VERSIONS'].keys()]
+        for package in filtered_pkg:
+            version = pkg_resources.get_distribution(package).version
+            globals()['ICON_VERSIONS'][package] = version
 
 
 def get_configuration(configure_name):
