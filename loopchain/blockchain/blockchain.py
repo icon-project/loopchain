@@ -543,9 +543,11 @@ class BlockChain:
             self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
 
         if confirm_info:
+            if isinstance(confirm_info, list):
+                confirm_info = json.dumps(BlockVotes.serialize_votes(confirm_info))
             batch.put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
+                confirm_info.encode("utf-8")
             )
 
         if block.header.prev_hash:

@@ -88,8 +88,7 @@ class NodeSubscriber:
             logging.error(f"{type(e)} during subscribe, caused by: {e}")
             raise e
         except Exception as e:
-            traceback.print_exc()
-            logging.error(f"{type(e)} during subscribe, caused by: {e}")
+            logging.info(f"{type(e)} during subscribe, caused by: {e}")
             raise ConnectionError
         finally:
             await self.close()
