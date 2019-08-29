@@ -69,34 +69,7 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            new_block, invoke_result = self.invoke_func(block, prev_block)
-            if header.state_hash != new_block.header.state_hash:
-                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"StateRootHash({header.state_hash}), "
-                                         f"Expected({new_block.header.state_hash}).")
-                self._handle_exception(exception)
-            if header.next_reps_hash != new_block.header.next_reps_hash:
-                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"NextRepsHash({header.next_reps_hash}), "
-                                         f"Expected({new_block.header.next_reps_hash}).")
-                self._handle_exception(exception)
-
-            builder.state_hash = new_block.header.state_hash
-
-            builder.receipts = invoke_result
-            builder.build_receipts_hash()
-            if header.receipts_hash != builder.receipts_hash:
-                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"ReceiptRootHash({header.receipts_hash.hex()}), "
-                                         f"Expected({builder.receipts_hash.hex()}).")
-                self._handle_exception(exception)
-
-            builder.build_logs_bloom()
-            if header.logs_bloom != builder.logs_bloom:
-                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                         f"LogsBloom({header.logs_bloom.hex()}), "
-                                         f"Expected({builder.logs_bloom.hex()}).")
-                self._handle_exception(exception)
+            self.verify_invoke(builder, block, prev_block)
 
         builder.build_transactions_hash()
         if header.transactions_hash != builder.transactions_hash:
@@ -130,6 +103,37 @@ class BlockVerifier(BaseBlockVerifier):
             self.verify_generator(block, generator)
 
         return invoke_result
+
+    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
+        header: BlockHeader = block.header
+        new_block, invoke_result = self.invoke_func(block, prev_block)
+        if header.state_hash != new_block.header.state_hash:
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"StateRootHash({header.state_hash}), "
+                                     f"Expected({new_block.header.state_hash}).")
+            self._handle_exception(exception)
+        if header.next_reps_hash != new_block.header.next_reps_hash:
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"NextRepsHash({header.next_reps_hash}), "
+                                     f"Expected({new_block.header.next_reps_hash}).")
+            self._handle_exception(exception)
+
+        builder.state_hash = new_block.header.state_hash
+
+        builder.receipts = invoke_result
+        builder.build_receipts_hash()
+        if header.receipts_hash != builder.receipts_hash:
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"ReceiptRootHash({header.receipts_hash.hex()}), "
+                                     f"Expected({builder.receipts_hash.hex()}).")
+            self._handle_exception(exception)
+
+        builder.build_logs_bloom()
+        if header.logs_bloom != builder.logs_bloom:
+            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                     f"LogsBloom({header.logs_bloom.hex()}), "
+                                     f"Expected({builder.logs_bloom.hex()}).")
+            self._handle_exception(exception)
 
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if not block.header.complained and block.header.peer_id != generator:

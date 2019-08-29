@@ -141,9 +141,10 @@ class Epoch:
         tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:
             if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
-                logging.debug(f"consensus_base total size({block_builder.size()}) "
-                              f"count({len(block_builder.transactions)}) "
-                              f"_txQueue size ({len(tx_queue)})")
+                logging.warning(
+                    f"consensus_base total size({block_builder.size()}) "
+                    f"count({len(block_builder.transactions)}) "
+                    f"_txQueue size ({len(tx_queue)})")
                 break
 
             tx: 'Transaction' = tx_queue.get_item_in_status(
@@ -176,8 +177,15 @@ class Epoch:
         if self.__blockchain.last_unconfirmed_block and \
                 self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
             tx_queue = self.__block_manager.get_tx_queue()
+
             for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
-                tx_queue.pop(tx_hash_in_unconfirmed_block.hex(), None)
+                try:
+                    tx_queue.set_item_status(
+                        tx_hash_in_unconfirmed_block.hex(),
+                        TransactionStatusInQueue.added_to_block)
+                except KeyError:
+                    continue
+            utils.logger.spam(f"There is no duplicated tx anymore.")
 
     def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block

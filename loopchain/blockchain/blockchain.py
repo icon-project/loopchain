@@ -131,8 +131,6 @@ class BlockChain:
         else:
             self.__made_block_counter[block.header.peer_id] += 1
 
-        utils.logger.spam(f"({block.header.height})made_block_count:\n{self.__made_block_counter}")
-
     def reset_leader_made_block_count(self):
         self.__made_block_counter.clear()
 
@@ -337,6 +335,7 @@ class BlockChain:
         try:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
+            utils.logger.spam(f"There is no block by hash: {block_hash}")
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
@@ -424,6 +423,7 @@ class BlockChain:
             receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
             if receipts is None and need_to_score_invoke:
                 self.get_invoke_func(block.header.height)(block, self.__last_block)
+                receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
 
             if not need_to_write_tx_info:
                 receipts = None
@@ -700,9 +700,6 @@ class BlockChain:
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # This case is not an error.
-            # Client send wrong tx_hash..
-            # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
@@ -747,9 +744,6 @@ class BlockChain:
         except UnicodeDecodeError as e:
             logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
-        # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
-        #     return None
 
         return tx_info_json
 
@@ -826,16 +820,16 @@ class BlockChain:
 
         return results
 
+    def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
+        reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
+        return unconfirmed_block_header.next_leader not in reps and current_block_header.peer_id == reps[0]
+
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
-        # utils.logger.debug(f"-------------------confirm_prev_block---current_block is "
-        #                    f"tx count({len(current_block.body.transactions)}), "
-        #                    f"height({current_block.header.height})")
-
         candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
@@ -853,8 +847,9 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if current_block.header.complained and self.__block_manager.epoch.complained_result:
-                        utils.logger.debug("reset last_unconfirmed_block by complain block")
+                    if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
+                            or self.__is_1st_block_of_new_term(self.last_block.header, current_block.header):
+                        utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
                     return None
                 else:
@@ -867,8 +862,6 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
-            #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
@@ -912,7 +905,6 @@ class BlockChain:
             with open(genesis_data_path, encoding="utf-8") as json_file:
                 tx_info = json.load(json_file)["transaction_data"]
                 nid = tx_info["nid"]
-                # utils.logger.spam(f"generate_genesis_block::tx_info >>>> {tx_info}")
 
         except FileNotFoundError as e:
             exit(f"cannot open json file in ({genesis_data_path}): {e}")
