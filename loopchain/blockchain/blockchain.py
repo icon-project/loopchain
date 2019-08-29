@@ -1082,6 +1082,15 @@ class BlockChain:
             }
             transactions.append(transaction)
 
+        if prev_block.header.version != "0.1a":
+            prev_block_validators = [vote.rep.hex_hx() for vote in _block.body.prev_votes
+                                     if vote.rep != prev_block.header.peer_id]
+        elif prev_block.header.height > 0:
+            prev_block_validators = [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()
+                                     if rep['id'] != prev_block.header.peer_id.hex_hx()]
+        else:
+            prev_block_validators = []
+
         request_origin = {
             'block': {
                 'blockHeight': _block.header.height,
@@ -1092,10 +1101,7 @@ class BlockChain:
             'isBlockEditable': hex(is_block_editable),
             'transactions': transactions,
             'prevBlockGenerator': prev_block.header.peer_id.hex_hx() if prev_block.header.peer_id else '',
-            'prevBlockValidators':
-                self.find_preps_ids_by_roothash(prev_block.header.reps_hash)
-                if prev_block.header.version != "0.1a"
-                else [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()]
+            'prevBlockValidators': prev_block_validators
         }
 
         request = convert_params(request_origin, ParamType.invoke)
