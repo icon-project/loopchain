@@ -1076,14 +1076,14 @@ class BlockChain:
             }
             transactions.append(transaction)
 
-        if prev_block.header.version != "0.1a":
+        if prev_block.header.height < 1:
+            prev_block_validators = []
+        elif prev_block.header.version != "0.1a":
             prev_block_validators = [vote.rep.hex_hx() for vote in _block.body.prev_votes
-                                     if vote.rep != prev_block.header.peer_id]
-        elif prev_block.header.height > 0:
+                                     if vote and vote.rep != prev_block.header.peer_id]
+        else:
             prev_block_validators = [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()
                                      if rep['id'] != prev_block.header.peer_id.hex_hx()]
-        else:
-            prev_block_validators = []
 
         request_origin = {
             'block': {
