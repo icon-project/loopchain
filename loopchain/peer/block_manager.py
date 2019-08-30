@@ -234,11 +234,9 @@ class BlockManager:
         if confirmed_block is None:
             return
 
-        # start new epoch
         if not (current_block.header.complained and self.epoch.complained_result):
             self.epoch = Epoch.new_epoch()
 
-        # reset leader
         self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
@@ -711,7 +709,6 @@ class BlockManager:
             elected_leader = self.epoch.complain_result()
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
-                self.__channel_service.reset_leader_complain_timer()
             elif elected_leader is False:
                 util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
                 # In this case, a new leader can't be elected by the consensus of leader complaint.
@@ -844,9 +841,6 @@ class BlockManager:
             vote = self.vote_unconfirmed_block(unconfirmed_block, is_validated)
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
-
-            if is_validated:
-                self.__channel_service.turn_on_leader_complain_timer()
 
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock

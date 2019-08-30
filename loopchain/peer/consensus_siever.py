@@ -137,9 +137,13 @@ class ConsensusSiever(ConsensusBase):
 
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             last_block = last_unconfirmed_block or self._blockchain.last_block
-            last_block_vote_list = await self.get_votes(last_block.header.hash)
-
             last_block_header = self._blockchain.last_block.header
+
+            try:
+                last_block_vote_list = await self.get_votes(last_block.header.hash)
+            except TimeoutError:
+                util.logger.warning(f"Timeout block of hash : {last_block.header.hash}")
+                return
 
             new_term = False
             if last_block_header.version != '0.1a':
@@ -200,12 +204,10 @@ class ConsensusSiever(ConsensusBase):
                 candidate_block, last_block, is_block_editable=True)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
-
-            self._blockchain.last_unconfirmed_block = candidate_block
             self._block_manager.candidate_blocks.add_block(candidate_block)
+            self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._blockchain.last_unconfirmed_block = candidate_block
-            self.__broadcast_block(candidate_block)
 
             try:
                 await self._wait_for_voting(candidate_block)
@@ -218,7 +220,6 @@ class ConsensusSiever(ConsensusBase):
                     f"next_leader({self._block_manager.epoch.leader_id}) "
                     f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
-                ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self._blockchain.just_before_max_made_block_count:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
@@ -253,19 +254,22 @@ class ConsensusSiever(ConsensusBase):
 
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
-            timeout_timestamp = block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
-            timeout = -util.diff_in_seconds(timeout_timestamp)
             try:
-                if timeout < 0:
-                    raise asyncio.TimeoutError
-
+                timeout = self.__check_timeout(block)
                 if not await asyncio.wait_for(self._vote_queue.get(), timeout=timeout):  # sentinel
                     raise NotEnoughVotes
-
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 util.logger.warning("Timed Out Block not confirmed duration: " +
                                     str(util.diff_in_seconds(block.header.timestamp)))
                 raise NotEnoughVotes
+
+    def __check_timeout(self, block):
+        timeout_timestamp = block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
+        timeout = -util.diff_in_seconds(timeout_timestamp)
+
+        if timeout < 0:
+            raise TimeoutError
+        return timeout
 
     async def get_votes(self, block_hash: Hash32):
         try:
@@ -276,9 +280,11 @@ class ConsensusSiever(ConsensusBase):
 
         if prev_votes:
             if not prev_votes.is_completed():
+                self.__check_timeout(self._blockchain.last_unconfirmed_block)
                 self.__broadcast_block(self._blockchain.last_unconfirmed_block)
                 if await self._wait_for_voting(self._blockchain.last_unconfirmed_block) is None:
                     return None
+
             prev_votes_list = prev_votes.votes
         else:
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
