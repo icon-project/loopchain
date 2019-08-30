@@ -288,6 +288,7 @@ class ChannelService:
         if ChannelProperty().node_type == conf.NodeType.CommunityNode \
                 and new_node_type == conf.NodeType.CitizenNode:
             utils.logger.debug(f"prep right expired...")
+            self.start_shutdown_timer_when_term_expired()
             return False
 
         if new_node_type == ChannelProperty().node_type:
@@ -501,7 +502,7 @@ class ChannelService:
         """
         if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
             utils.logger.warning(f"This peer needs to switch to citizen.")
-            self.start_shutdown_timer_when_term_expired()
+            return
 
         leader_peer = self.peer_manager.get_peer(new_leader_id)
 
