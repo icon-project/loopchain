@@ -825,7 +825,10 @@ class BlockChain:
 
     def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
         reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
-        return unconfirmed_block_header.next_leader not in reps and current_block_header.peer_id == reps[0]
+        if unconfirmed_block_header.version == '0.1a':
+            return False
+        return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
+                and current_block_header.peer_id == reps[0])
 
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block

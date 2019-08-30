@@ -134,14 +134,25 @@ class ConsensusSiever(ConsensusBase):
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             last_block = last_unconfirmed_block or self._blockchain.last_block
             last_block_vote_list = await self.get_votes(last_block.header.hash)
-            if last_unconfirmed_block and not last_block_vote_list:
+
+            last_block_header = self._blockchain.last_block.header
+
+            new_term = False
+            if last_block_header.version != '0.1a':
+                reps_switched = last_block_header.reps_hash != last_block_header.next_reps_hash
+                block_deprecated = (last_unconfirmed_block is None
+                                    or last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address)
+                if reps_switched and block_deprecated:
+                    new_term = True
+
+            if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_vote_list)
             need_next_call = False
             try:
-                if complained_result:
-                    util.logger.spam("consensus block_builder.complained")
+                if complained_result or new_term:
+                    util.logger.spam("consensus block_builder.complained or new term")
                     """
                     confirm_info = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
                     if not confirm_info and self._blockchain.last_block.header.height > 0:

@@ -161,7 +161,8 @@ class BlockVerifier(BaseBlockVerifier):
         else:
             prev_block_header: BlockHeader = prev_block.header
             if prev_block_header.next_leader != block.header.peer_id:
-                if prev_block_header.next_leader not in reps and block.header.peer_id == reps[0]:
+                if prev_block_header.reps_hash != prev_block_header.next_reps_hash \
+                        and block.header.peer_id == reps[0]:
                     # prep term changed!
                     return
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
