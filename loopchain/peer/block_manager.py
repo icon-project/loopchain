@@ -166,28 +166,27 @@ class BlockManager:
         if self.__channel_service.state_machine.state == "BlockGenerate":
             last_block: Block = self.blockchain.last_block
             if last_block.header.version != '0.1a':
-                # TODO This logic needs to be modified in a more efficient way.
-                if block_.header.peer_id in self.blockchain.find_preps_addresses_by_roothash(last_block.header.reps_hash):
-                    target_reps_hash = last_block.header.reps_hash
-                else:
-                    target_reps_hash = block_.header.reps_hash
+                if last_block.header.reps_hash != last_block.header.next_reps_hash:  # new term
+                    self._send_unconfirmed_block(block_, last_block.header.reps_hash)
+                self._send_unconfirmed_block(block_, block_.header.reps_hash)
             else:
-                target_reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
+                self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
 
-            util.logger.debug(
-                f"BroadCast AnnounceUnconfirmedBlock "
-                f"height({block_.header.height}) block({block_.header.hash}) peers: "
-                f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
-                f"target_reps_hash({target_reps_hash})")
+    def _send_unconfirmed_block(self, block_: Block, target_reps_hash):
+        util.logger.debug(
+            f"BroadCast AnnounceUnconfirmedBlock "
+            f"height({block_.header.height}) block({block_.header.hash}) peers: "
+            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
+            f"target_reps_hash({target_reps_hash})")
 
-            # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
-            block_dumped = self.blockchain.block_dumps(block_)
+        # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
+        block_dumped = self.blockchain.block_dumps(block_)
 
-            ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-                "AnnounceUnconfirmedBlock",
-                loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
-                reps_hash=target_reps_hash
-            )
+        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+            "AnnounceUnconfirmedBlock",
+            loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
+            reps_hash=target_reps_hash
+        )
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
