@@ -93,6 +93,9 @@ class ConsensusSiever(ConsensusBase):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = self._block_manager.epoch.reps
 
+        # to build temporary block
+        block_builder.next_reps = []
+
         return block_builder.build()
 
     async def __add_block(self, block: Block):

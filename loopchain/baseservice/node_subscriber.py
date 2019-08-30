@@ -182,8 +182,9 @@ class NodeSubscriber:
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
-                                      blockchain.get_expected_generator(confirmed_block.header.peer_id),
-                                      reps_getter=reps_getter)
+                                      generator=blockchain.get_expected_generator(confirmed_block.header.peer_id),
+                                      reps_getter=reps_getter,
+                                      next_leader=ExternalAddress.fromhex(blockchain.get_next_leader()))
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:

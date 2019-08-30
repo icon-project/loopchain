@@ -959,8 +959,9 @@ class BlockManager:
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
                                   self.blockchain,
-                                  self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
-                                  reps_getter=reps_getter)
+                                  generator=self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
+                                  reps_getter=reps_getter,
+                                  next_leader=ExternalAddress.fromhex(self.blockchain.get_next_leader()))
         except NotInReps as e:
             util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
         except Exception as e:

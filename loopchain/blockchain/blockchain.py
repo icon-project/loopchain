@@ -1064,7 +1064,7 @@ class BlockChain:
         else:
             return self.score_invoke
 
-    def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
+    def genesis_invoke(self, block: Block, prev_block_ = None) -> Tuple[Block, dict]:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
@@ -1119,7 +1119,7 @@ class BlockChain:
                      _block: Block,
                      prev_block: Block,
                      is_block_editable: bool = False,
-                     is_unrecorded_block: bool = False) -> dict or None:
+                     is_unrecorded_block: bool = False) -> Tuple[Block, dict]:
         method = "icx_sendTransaction"
         transactions = []
 
@@ -1184,7 +1184,12 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
+        block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
+        block_builder.reset_cache()
+        block_builder.peer_id = _block.header.peer_id
+
         next_leader = _block.header.next_leader
+        reps = self.find_preps_addresses_by_header(_block.header)
         next_prep = response.get("prep")
         if next_prep:
             # P-Rep list has been changed
@@ -1195,6 +1200,9 @@ class BlockChain:
             elif next_prep["state"] == PrepChangedReason.PENALTY:
                 pass
 
+            block_builder.next_leader = None  # to rebuild next_leader
+            block_builder.next_reps_change_reason = int(next_prep["state"], 16)
+            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
@@ -1204,10 +1212,10 @@ class BlockChain:
                 self.write_preps(next_preps_hash, next_prep['preps'])
         else:
             # P-Rep list has no changes
+            next_preps = reps
             next_preps_hash = Hash32.empty()
 
-        block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
-        block_builder.reset_cache()
+        block_builder.next_leader = next_leader
         block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
@@ -1236,7 +1244,8 @@ class BlockChain:
             block_builder.next_reps_hash = Hash32.empty()
         else:
             block_builder.next_leader = next_leader
-            block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+            block_builder.reps = reps
+            block_builder.next_reps = next_preps
             block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:

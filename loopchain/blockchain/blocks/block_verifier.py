@@ -23,7 +23,7 @@ from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
 
 if TYPE_CHECKING:
-    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.blocks import Block, BlockHeader, BlockBuilder
     from loopchain.blockchain.transactions import TransactionVersioner
 
 
@@ -37,16 +37,15 @@ class BlockVerifier(ABC):
         self.exceptions = []
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
         self.verify_transactions(block, blockchain)
-        return self.verify_common(block, prev_block, generator, **kwargs)
+        return self.verify_common(block, prev_block, **kwargs)
 
-    def verify_loosely(self, block: 'Block', prev_block: 'Block',
-                       blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
         self.verify_transactions_loosely(block, blockchain)
-        return self.verify_common(block, prev_block, generator, **kwargs)
+        return self.verify_common(block, prev_block, **kwargs)
 
-    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
+    def verify_common(self, block: 'Block', prev_block: 'Block', **kwargs):
         header: BlockHeader = block.header
 
         if header.timestamp is None:
@@ -65,14 +64,14 @@ class BlockVerifier(ABC):
         if prev_block:
             self.verify_prev_block(block, prev_block)
 
-        return self._verify_common(block, prev_block, generator, **kwargs)
+        return self._verify_common(block, prev_block, **kwargs)
 
     @abstractmethod
     def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
         raise NotImplementedError
 
     @abstractmethod
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', **kwargs):
         raise NotImplementedError
 
     def verify_transactions(self, block: 'Block', blockchain=None):
@@ -129,13 +128,6 @@ class BlockVerifier(ABC):
             exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                      f"Invalid Signature\n"
                                      f"{e}")
-            self._handle_exception(exception)
-
-    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        if block.header.peer_id != generator:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                     f"Generator({block.header.peer_id.hex_xx()}), "
-                                     f"Expected({generator.hex_xx()}).")
             self._handle_exception(exception)
 
     def _handle_exception(self, exception: Exception):
