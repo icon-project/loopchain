@@ -106,9 +106,6 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    def get_key_value_store(self) -> KeyValueStore:
-        return self.blockchain.get_blockchain_store()
-
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 

@@ -433,7 +433,7 @@ class ChannelService:
 
         try:
             dump = peer_manager.dump()
-            key_value_store = self.__block_manager.get_key_value_store()
+            key_value_store = self.__block_manager.blockchain.blockchain_store
             key_value_store.put(level_db_key_name, dump)
         except AttributeError as e:
             logging.warning("Fail Save Peer_list: " + str(e))

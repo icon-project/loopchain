@@ -231,7 +231,8 @@ class BlockChain:
     def tx_versioner(self):
         return self.__tx_versioner
 
-    def get_blockchain_store(self):
+    @property
+    def blockchain_store(self) -> KeyValueStore:
         return self._blockchain_store
 
     def close_blockchain_store(self):
