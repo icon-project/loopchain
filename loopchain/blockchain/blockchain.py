@@ -631,25 +631,6 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    def __precommit_tx(self, precommit_block):
-        """ change status of transactions in a precommit block
-        :param block:
-        """
-        # loop all tx in block
-        logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
-        tx_queue = self.__block_manager.get_tx_queue()
-        # utils.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
-
-        for tx in precommit_block.body.transactions.values():
-            tx_hash = tx.hash.hex()
-            if tx_queue.get_item_in_status(TransactionStatusInQueue.normal, TransactionStatusInQueue.normal):
-                try:
-                    tx_queue.set_item_status(tx_hash, TransactionStatusInQueue.precommited_to_block)
-                    # utils.logger.spam(
-                    #     f"blockchain:__precommit_tx::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
-                except KeyError as e:
-                    logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
-
     def _write_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
@@ -791,32 +772,6 @@ class BlockChain:
 
         block, invoke_results = self.genesis_invoke(block)
         self.add_block(block)
-
-    def put_precommit_block(self, precommit_block: Block):
-        # write precommit block to DB
-        logging.debug(
-            f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
-        if self.__last_block.header.height < precommit_block.header.height:
-            self.__precommit_tx(precommit_block)
-            utils.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
-
-            block_serializer = BlockSerializer.new(precommit_block.header.version, self.__tx_versioner)
-            block_serialized = block_serializer.serialize(precommit_block)
-            block_serialized = json.dumps(block_serialized)
-            block_serialized = block_serialized.encode('utf-8')
-            results = self._blockchain_store.put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
-
-            utils.logger.spam(f"result of to write to db ({results})")
-            logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.header.height} , "
-                         f"HASH : {precommit_block.header.hash.hex()}, CHANNEL : {self.__channel_name}")
-        else:
-            results = None
-            logging.debug(f"blockchain:put_precommit_block::this precommit block is not validate. "
-                          f"the height of precommit block must be bigger than the last block."
-                          f"(last block:{self.__last_block.header.height}/"
-                          f"precommit block:{precommit_block.header.height})")
-
-        return results
 
     def put_nid(self, nid: str):
         """

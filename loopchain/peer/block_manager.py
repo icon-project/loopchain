@@ -115,14 +115,6 @@ class BlockManager:
     def consensus_algorithm(self):
         return self.__consensus_algorithm
 
-    @property
-    def precommit_block(self):
-        return self.__precommit_block
-
-    @precommit_block.setter
-    def precommit_block(self, block):
-        self.__precommit_block = block
-
     def get_key_value_store(self) -> KeyValueStore:
         return self.blockchain.get_blockchain_store()
 
