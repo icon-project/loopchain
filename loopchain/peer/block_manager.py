@@ -66,7 +66,6 @@ class BlockManager:
                                     default_item_status=TransactionStatusInQueue.normal)
         self.blockchain = BlockChain(channel_name, store_identity, self)
         self.__peer_type = None
-        self.__consensus = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
         self.__block_height_sync_lock = threading.Lock()
@@ -103,14 +102,6 @@ class BlockManager:
     @property
     def peer_type(self):
         return self.__peer_type
-
-    @property
-    def consensus(self):
-        return self.__consensus
-
-    @consensus.setter
-    def consensus(self, consensus):
-        self.__consensus = consensus
 
     @property
     def consensus_algorithm(self):
