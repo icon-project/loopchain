@@ -15,12 +15,14 @@
 It has secure outer service for p2p consensus and status monitoring.
 And also has insecure inner service for inner process modules."""
 
+import asyncio
 import getpass
 import logging
 import multiprocessing
 import os
 import signal
 import timeit
+from typing import Dict
 
 import grpc
 
@@ -63,8 +65,8 @@ class PeerService:
         self._inner_service: PeerInnerService = None
         self._outer_service: PeerOuterService = None
 
-        self._channel_services = {}
-        self._rest_service = None
+        self._channel_services: Dict[str, CommonSubprocess] = {}
+        self._rest_service: RestService = None
 
         ObjectManager().peer_service = self
 
@@ -223,34 +225,26 @@ class PeerService:
 
             logging.info(f'peer_service: init complete peer: {self.peer_id}')
 
-        loop = self._inner_service.loop
+        loop = asyncio.get_event_loop()
         loop.create_task(_serve())
-        loop.add_signal_handler(signal.SIGINT, self.close)
-        loop.add_signal_handler(signal.SIGTERM, self.close)
+        loop.add_signal_handler(signal.SIGINT, self.cleanup)
+        loop.add_signal_handler(signal.SIGTERM, self.cleanup)
 
         try:
             loop.run_forever()
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
+            logging.info("Peer Service Ended.")
 
-        # process monitor must stop monitoring before any subprocess stop
-        # Monitor().stop()
+    def cleanup(self):
+        for chan_service in self._channel_services.values():
+            chan_service.stop()
+        self._rest_service.stop()
+        self.p2p_server_stop()
 
-        logging.info("Peer Service Ended.")
-        if self._rest_service is not None:
-            self._rest_service.stop()
-
-    def close(self):
-        async def _close():
-            for channel_stub in StubCollection().channel_stubs.values():
-                await channel_stub.async_task().stop("Close")
-
-            self.p2p_server_stop()
-            loop.stop()
-
-        loop = self._inner_service.loop
-        loop.create_task(_close())
+        loop = asyncio.get_event_loop()
+        loop.stop()
 
     async def serve_channels(self):
         for i, channel_name in enumerate(self._channel_infos):

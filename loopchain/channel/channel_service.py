@@ -133,27 +133,16 @@ class ChannelService:
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
-        # loop.set_debug(True)
         loop.create_task(_serve())
-        loop.add_signal_handler(signal.SIGINT, self.close)
-        loop.add_signal_handler(signal.SIGTERM, self.close)
 
         try:
             loop.run_forever()
-        except Exception as e:
+        except BaseException as e:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             loop.close()
-
-            self.cleanup()
-
-    def close(self):
-        if self.__inner_service:
-            self.__inner_service.cleanup()
-            logging.info("Cleanup ChannelInnerService.")
-
-        MessageQueueService.loop.stop()
+            logging.info("Channel Service Ended.")
 
     def cleanup(self):
         logging.info("Cleanup Channel Resources.")
@@ -184,6 +173,12 @@ class ChannelService:
             self.__timer_service.stop()
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
+
+        if self.__inner_service:
+            self.__inner_service.cleanup()
+            logging.info("Cleanup ChannelInnerService.")
+
+        MessageQueueService.loop.stop()
 
     async def init(self, **kwargs):
         """Initialize Channel Service
