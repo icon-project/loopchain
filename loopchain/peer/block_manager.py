@@ -78,7 +78,6 @@ class BlockManager:
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
-        self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
 
     @property
@@ -129,15 +128,6 @@ class BlockManager:
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
-
-    def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
-        self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
-
-    def get_old_block_hash(self,  block_height: int, new_block_hash: Hash32):
-        return self.__old_block_hashes[block_height][new_block_hash]
-
-    def pop_old_block_hashes(self, block_height: int):
-        self.__old_block_hashes.pop(block_height)
 
     def get_total_tx(self):
         """

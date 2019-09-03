@@ -18,8 +18,10 @@ import pickle
 import threading
 import zlib
 from collections import Counter
+from collections import defaultdict
 from enum import Enum
 from os import linesep
+from typing import Dict, DefaultDict
 from typing import Union, List, cast, Optional
 
 from loopchain import configure as conf
@@ -85,6 +87,7 @@ class BlockChain:
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
         self.__block_manager: BlockManager = block_manager
+        self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
 
         store_id = f"{store_id}_{channel_name}"
         self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
@@ -1069,7 +1072,7 @@ class BlockChain:
         else:
             block_builder.signature = block.header.signature
         new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
+        self.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
 
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
@@ -1169,10 +1172,19 @@ class BlockChain:
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
-        self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
+        self.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
         for tx_receipt in tx_receipts.values():
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
         self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
         return new_block, tx_receipts
+
+    def set_old_block_hash(self, block_height: int, new_block_hash: Hash32, old_block_hash: Hash32):
+        self.__old_block_hashes[block_height][new_block_hash] = old_block_hash
+
+    def get_old_block_hash(self,  block_height: int, new_block_hash: Hash32):
+        return self.__old_block_hashes[block_height][new_block_hash]
+
+    def pop_old_block_hashes(self, block_height: int):
+        self.__old_block_hashes.pop(block_height)
