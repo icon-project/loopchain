@@ -220,7 +220,7 @@ class BlockManager:
         return len(self.__txQueue)
 
     def confirm_prev_block(self, current_block: Block):
-        confirmed_block = self.blockchain.confirm_prev_block(current_block)
+        confirmed_block = self.blockchain.confirm_prev_block(current_block, self.candidate_blocks)
         if confirmed_block is None:
             return
 

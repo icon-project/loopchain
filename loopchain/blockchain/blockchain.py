@@ -29,6 +29,7 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
+from loopchain.blockchain.candidate_blocks import CandidateBlocks
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
@@ -840,13 +841,14 @@ class BlockChain:
         return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
                 and current_block_header.peer_id == reps[0])
 
-    def confirm_prev_block(self, current_block: Block):
+    def confirm_prev_block(self, current_block: Block, candidate_blocks: CandidateBlocks):
         """confirm prev unconfirmed block by votes in current block
 
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
+        :param candidate_blocks:
         :return: confirm_Block
         """
-        candidate_blocks = self.__block_manager.candidate_blocks
+        # candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
 

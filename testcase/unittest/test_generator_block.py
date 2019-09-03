@@ -139,7 +139,7 @@ class TestGeneratorBlock(unittest.TestCase):
         self.assertTrue(chain.add_unconfirm_block(unconfirm_block), "미검증블럭 추가에 실패하였습니다.")
 
         # 블럭 검증작업후 블럭을 검증완료 상태로 바꾸며, 블럭체인에 등록 해 줍니다.
-        chain.confirm_prev_block(unconfirm_block)
+        chain.confirm_prev_block(unconfirm_block)  # FIXME: Abandoned test
 
         # 블럭 검증완료
         self.assertEqual(chain.last_block.block_hash, unconfirm_block.block_hash, "블럭이 추가되지 않았습니다.")
