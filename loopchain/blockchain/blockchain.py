@@ -841,7 +841,7 @@ class BlockChain:
         return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
                 and current_block_header.peer_id == reps[0])
 
-    def confirm_prev_block(self, current_block: Block, candidate_blocks: CandidateBlocks):
+    def confirm_prev_block(self, current_block: Block, candidate_blocks: CandidateBlocks, complained_result):
         """confirm prev unconfirmed block by votes in current block
 
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
@@ -865,7 +865,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
+                    if (current_block.header.complained and complained_result)\
                             or self.__is_1st_block_of_new_term(self.last_block.header, current_block.header):
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block

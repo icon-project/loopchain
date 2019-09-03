@@ -46,7 +46,7 @@ class Epoch:
 
         self.round = 0
         self.complain_votes: Dict[int, LeaderVotes] = {}
-        self.complained_result = None
+        self.complained_result: Optional[bool] = None
         self.reps = []  # init by self.new_votes()
 
         self.new_votes()
