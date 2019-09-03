@@ -277,7 +277,6 @@ class ChannelService:
         logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
         try:
             self.__block_manager = BlockManager(
-                name="loopchain.peer.BlockManager",
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,

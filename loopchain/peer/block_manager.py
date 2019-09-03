@@ -49,7 +49,7 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, name: str, channel_service, peer_id, channel_name, store_identity):
+    def __init__(self, channel_service, peer_id, channel_name, store_identity):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
         self.__pre_validate_strategy = self.__pre_validate
@@ -67,7 +67,6 @@ class BlockManager:
         self.__block_height_future: Future = None
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
-        self.name = name
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
