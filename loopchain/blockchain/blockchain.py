@@ -74,7 +74,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None, block_manager=None):
+    def __init__(self, channel_name=None, store_id=None, tx_queue=None):
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
@@ -87,7 +87,7 @@ class BlockChain:
         self.last_unconfirmed_block = None
         self.__channel_name = channel_name
         self.__peer_id = ChannelProperty().peer_id
-        self.__block_manager: BlockManager = block_manager
+        self.__tx_queue: AgingCache = tx_queue
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
 
         store_id = f"{store_id}_{channel_name}"
@@ -491,8 +491,6 @@ class BlockChain:
 
         # loop all tx in block
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        tx_queue = self.__block_manager.get_tx_queue()
-
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
             receipt = receipts[tx_hash]
@@ -510,7 +508,7 @@ class BlockChain:
                 tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
                 json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
 
-            tx_queue.pop(tx_hash, None)
+            self.__tx_queue.pop(tx_hash, None)
 
             if block.header.height > 0:
                 self._write_tx_by_address(tx, batch)
@@ -715,7 +713,7 @@ class BlockChain:
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
-            if tx_hash in self.__block_manager.get_tx_queue():
+            if tx_hash in self.__tx_queue:
                 # this case is tx pending
                 logging.debug(f"blockchain:find_invoke_result_by_tx_hash pending tx({tx_hash})")
                 return {'code': ScoreResponse.NOT_INVOKED}
