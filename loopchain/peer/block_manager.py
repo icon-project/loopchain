@@ -240,6 +240,9 @@ class BlockManager:
         self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
+        if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
+            raise InvalidUnconfirmedBlock("The unconfirmed block has height already added.")
+
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
         try:
             candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
@@ -853,6 +856,7 @@ class BlockManager:
         try:
             self.add_unconfirmed_block(unconfirmed_block)
         except InvalidUnconfirmedBlock as e:
+            self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
