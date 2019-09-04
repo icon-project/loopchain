@@ -264,7 +264,7 @@ class PeerManager:
             self.reset_all_peers(*self._reps_reset_data, update_now=True)
             self._reps_reset_data = None
 
-    def get_peer(self, peer_id) -> Optional[Peer]:
+    def get_peer(self, peer_id: Union[str, ExternalAddress]) -> Optional[Peer]:
         """peer_id 에 해당하는 peer 를 찾는다.
 
         :param peer_id:
@@ -272,8 +272,8 @@ class PeerManager:
         """
 
         try:
-            if not isinstance(peer_id, str):
-                logging.error("peer_id type is: " + str(type(peer_id)) + ":" + str(peer_id))
+            if isinstance(peer_id, ExternalAddress):
+                peer_id = peer_id.hex_hx()
 
             return self.peer_list[str(peer_id)]
 
