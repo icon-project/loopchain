@@ -792,9 +792,7 @@ class BlockManager:
                                                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
-        last_unconfirmed_block = self.blockchain.last_unconfirmed_block
-        prev_block = self.blockchain.find_block_by_hash(unconfirmed_block.header.prev_hash)
-        prev_block = prev_block or last_unconfirmed_block or self.blockchain.last_block
+        prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
             if unconfirmed_block.header.version != "0.1a" and unconfirmed_block.header.height > 1:

@@ -297,8 +297,21 @@ class BlockChain:
 
         return None
 
+    def get_prev_block(self, block: Block) -> Block:
+        """get prev block by given block
+
+        :param block: Block
+        :return: prev_block (from blockchain or DB) by given block
+        """
+        prev_hash = block.header.prev_hash
+        if self.last_unconfirmed_block and prev_hash == self.last_unconfirmed_block.header.hash:
+            prev_block = self.last_unconfirmed_block
+        else:
+            prev_block = self.find_block_by_hash(prev_hash) or self.last_block
+        return prev_block
+
     def find_block_by_hash(self, block_hash: Union[str, Hash32]):
-        """find block by block hash.
+        """find block in DB by block hash.
 
         :param block_hash: plain string,
         key 로 사용되기전에 함수내에서 encoding 되므로 미리 encoding 된 key를 parameter 로 사용해선 안된다.
@@ -309,7 +322,7 @@ class BlockChain:
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
-        """find block by its height
+        """find block in DB by its height
 
         :param block_height: int,
         it convert to key of blockchain db in this method so don't try already converted key.
