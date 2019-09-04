@@ -172,8 +172,6 @@ class BlockVerifier(BaseBlockVerifier):
                 self._handle_exception(exception)
 
     def verify_prev_votes(self, block: 'Block', prev_reps: Sequence[ExternalAddress]):
-        return
-
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
