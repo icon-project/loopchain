@@ -19,13 +19,14 @@ import unittest
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
 from loopchain.channel.channel_statemachine import ChannelStateMachine
+from loopchain.configure_default import NodeType
 from loopchain.protos import loopchain_pb2
 
 
 class MockBlockManager:
-    def __init__(self):
+    def __init__(self, peer_type):
         self.timer_called = 0
-        self.peer_type = loopchain_pb2.BLOCK_GENERATOR
+        self.peer_type = peer_type
 
     def start_block_generate_timer(self):
         if self.timer_called == 0:
@@ -47,15 +48,9 @@ class MockBlockManager:
         pass
 
 
-class MockBlockManagerCitizen(MockBlockManager):
-    def __init__(self):
-        super().__init__()
-        self.peer_type = loopchain_pb2.PEER
-
-
 class MockChannelService:
-    def __init__(self):
-        self.block_manager = MockBlockManager()
+    def __init__(self, peer_type=loopchain_pb2.BLOCK_GENERATOR):
+        self.block_manager = MockBlockManager(peer_type=peer_type)
 
     async def evaluate_network(self):
         pass
@@ -81,18 +76,11 @@ class MockChannelService:
     def set_new_leader(self):
         pass
 
-
-class MockChannelServiceCitizen(MockChannelService):
-    def __init__(self):
-        super().__init__()
-        self.block_manager = MockBlockManagerCitizen()
-
     def is_support_node_function(self, node_function):
-        return False
+        return NodeType.is_support_node_function(node_function, self.block_manager.peer_type)
 
 
 class TestChannelStateMachine(unittest.TestCase):
-
     def setUp(self):
         test_util.print_testname(self._testMethodName)
 
@@ -128,7 +116,7 @@ class TestChannelStateMachine(unittest.TestCase):
 
     def test_change_state_by_multiple_condition(self):
         # GIVEN
-        channel_state_machine = ChannelStateMachine(MockChannelServiceCitizen())
+        channel_state_machine = ChannelStateMachine(MockChannelService(peer_type=loopchain_pb2.PEER))
         channel_state_machine.complete_init_components()
         channel_state_machine.block_sync()
         channel_state_machine.complete_sync()
