@@ -140,6 +140,7 @@ class ChannelStateMachine(object):
 
     def _blocksync_on_exit(self, *args, **kwargs):
         self.__channel_service.block_manager.stop_block_height_sync_timer()
+        self.__channel_service.set_new_leader()
         self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 
     def _subscribe_network_on_enter(self, *args, **kwargs):

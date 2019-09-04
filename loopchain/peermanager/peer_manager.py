@@ -125,7 +125,8 @@ class PeerManager:
 
             # set to leader peer
             if not self._peer_list_data.leader_id or len(self.peer_list) == 0:
-                logging.debug("Set Group Leader Peer: " + str(peer.order))
+                logging.debug(f"Set Group Leader Peer: order({peer.order}), peer_id({peer.peer_id})")
+
                 self._peer_list_data.leader_id = peer.peer_id
 
             self.peer_list[peer.peer_id] = peer
@@ -153,7 +154,7 @@ class PeerManager:
 
         if self.get_peer(peer.peer_id) is None:
             raise Exception(f'{peer.peer_id} is not a member of reps!')
-
+        logging.debug(f"set leader peer: {peer.peer_id}")
         self._peer_list_data.leader_id = peer.peer_id
 
     def get_leader_peer(self, is_peer=True) -> Optional[Peer]:

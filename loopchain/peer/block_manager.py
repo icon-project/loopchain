@@ -628,17 +628,22 @@ class BlockManager:
         return True
 
     def start_epoch(self):
-        current_block_header = self.__current_last_block().header
-        current_height = current_block_header.height
-        next_leader = current_block_header.next_leader
-        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
-
-        if leader_peer:
-            self.epoch = Epoch.new_epoch(leader_peer.peer_id)
+        current_height = self.__current_last_block().header.height
+        new_leader = self.get_new_leader()
+        if new_leader:
+            self.epoch = Epoch.new_epoch(new_leader.peer_id)
         elif self.epoch and self.epoch.height < current_height:
             self.epoch = Epoch.new_epoch()
 
         util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
+
+    def get_new_leader(self):
+        next_leader = self.__current_last_block().header.next_leader
+        if next_leader:
+            new_leader = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx())
+        else:
+            new_leader = None
+        return new_leader
 
     def __get_peer_stub_list(self):
         """It updates peer list for block manager refer to peer list on the loopchain network.

@@ -538,35 +538,10 @@ class ChannelService:
 
         self.__block_manager.set_peer_type(peer_type)
 
-    def set_new_leader(self, new_leader_id, block_height=0):
-        logging.info(f"SET NEW LEADER channel({ChannelProperty().name}) leader_id({new_leader_id})")
-
-        # complained_leader = self.peer_manager.get_leader_peer()
-        leader_peer = self.peer_manager.get_peer(new_leader_id)
-
-        if block_height > 0 and block_height != self.__block_manager.blockchain.last_block.height + 1:
-            logging.warning(f"height behind peer can not take leader role.")
-            return
-
-        if leader_peer is None:
-            logging.warning(f"in channel_service:set_new_leader::There is no peer by peer_id({new_leader_id})")
-            return
-
-        utils.logger.spam(f"channel_service:set_new_leader::leader_target({leader_peer.target})")
-
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
-        self.peer_manager.set_leader_peer(leader_peer)
-
-        peer_leader = self.peer_manager.get_leader_peer()
-
-        if self_peer_object.target == peer_leader.target:
-            loggers.get_preset().is_leader = True
-            loggers.get_preset().update_logger()
-            logging.debug("I'm Leader Peer!")
-        else:
-            loggers.get_preset().is_leader = False
-            loggers.get_preset().update_logger()
-            logging.debug("I'm general Peer!")
+    def set_new_leader(self):
+        new_leader = self.block_manager.get_new_leader()
+        if new_leader:
+            self.peer_manager.set_leader_peer(new_leader)
 
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")

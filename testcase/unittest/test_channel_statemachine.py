@@ -23,8 +23,6 @@ from loopchain.protos import loopchain_pb2
 
 
 class MockBlockManager:
-    peer_type = loopchain_pb2.BLOCK_GENERATOR
-
     def __init__(self):
         self.timer_called = 0
         self.peer_type = loopchain_pb2.BLOCK_GENERATOR
@@ -49,23 +47,10 @@ class MockBlockManager:
         pass
 
 
-class MockBlockManagerCitizen:
-    peer_type = loopchain_pb2.PEER
-
-    def start_block_generate_timer(self):
-        pass
-
-    def block_height_sync(self):
-        pass
-
-    def stop_block_height_sync_timer(self):
-        pass
-
-    def update_service_status(self, status):
-        pass
-
-    def start_epoch(self):
-        pass
+class MockBlockManagerCitizen(MockBlockManager):
+    def __init__(self):
+        super().__init__()
+        self.peer_type = loopchain_pb2.PEER
 
 
 class MockChannelService:
@@ -93,6 +78,9 @@ class MockChannelService:
     def stop_shutdown_timer_when_fail_subscribe(self):
         pass
 
+    def set_new_leader(self):
+        pass
+
 
 class MockChannelServiceCitizen(MockChannelService):
     def __init__(self):
@@ -101,10 +89,6 @@ class MockChannelServiceCitizen(MockChannelService):
 
     def is_support_node_function(self, node_function):
         return False
-
-    # @property
-    # def block_manager(self):
-    #     return MockBlockManagerCitizen()
 
 
 class TestChannelStateMachine(unittest.TestCase):
