@@ -18,7 +18,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from loopchain.radiostation import RadioStationService
-    from loopchain.peer import PeerService
     from loopchain.channel.channel_service import ChannelService
 
 
@@ -27,5 +26,4 @@ class ObjectManager(metaclass=SingletonMetaClass):
     """
 
     rs_service: 'RadioStationService' = None
-    peer_service: 'PeerService' = None
     channel_service: 'ChannelService' = None

@@ -5,6 +5,7 @@ from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer
+from loopchain.peer.peer_service import PeerService
 
 
 class Mock:
@@ -55,5 +56,4 @@ def set_mock(test):
     peer_service_mock.peer_manager = PeerManagerMock(peer_auth)
     peer_service_mock.channel_service = ChannelServiceMock(conf.LOOPCHAIN_DEFAULT_CHANNEL)
 
-    ObjectManager().peer_service = peer_service_mock
     ObjectManager().channel_service = peer_service_mock.channel_service

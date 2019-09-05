@@ -55,7 +55,6 @@ class TestBlock(unittest.TestCase):
         set_mock(self)
 
     def tearDown(self):
-        ObjectManager().peer_service = None
         ObjectManager().channel_service = None
 
     def __generate_block_data(self) -> Block:

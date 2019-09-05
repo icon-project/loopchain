@@ -69,8 +69,6 @@ class PeerService:
         self._channel_services = {}
         self._rest_service = None
 
-        ObjectManager().peer_service = self
-
     @property
     def inner_service(self):
         return self._inner_service
@@ -212,7 +210,7 @@ class PeerService:
         StubCollection().amqp_key = amqp_key
 
         peer_queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=amqp_key)
-        self._outer_service = PeerOuterService()
+        self._outer_service = PeerOuterService(self)
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
