@@ -300,7 +300,7 @@ class BlockChain:
             block_version = self.__block_versioner.get_version(block_height)
             return BlockSerializer.new(block_version, self.__tx_versioner).deserialize(block_dumped)
         except KeyError as e:
-            logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
+            logging.debug(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
         return None
 
@@ -846,7 +846,7 @@ class BlockChain:
     def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
         if unconfirmed_block_header.version == '0.1a':
             return False
-        
+
         reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
         return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
                 and current_block_header.peer_id == reps[0])

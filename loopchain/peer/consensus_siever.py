@@ -106,6 +106,8 @@ class ConsensusSiever(ConsensusBase):
         self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash):
+        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+
         self._blockchain.last_unconfirmed_block = None
         dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
         if block_version == '0.1a':
@@ -145,6 +147,7 @@ class ConsensusSiever(ConsensusBase):
                 block_deprecated = (last_unconfirmed_block is None
                                     or last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address)
                 if reps_switched and block_deprecated:
+                    util.logger.info(f"start new term.")
                     new_term = True
 
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
@@ -185,7 +188,6 @@ class ConsensusSiever(ConsensusBase):
             except ThereIsNoCandidateBlock:
                 util.logger.debug(
                     f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
-                self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
