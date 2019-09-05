@@ -168,6 +168,8 @@ class BlockChain:
 
         peer_manager = ObjectManager().channel_service.peer_manager
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
+            utils.logger.debug(
+                f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
             expected_generator = ExternalAddress.fromhex_address(
                 peer_manager.get_next_leader_peer(peer_id).peer_id)
         else:
