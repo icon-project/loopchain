@@ -176,13 +176,13 @@ class BlockManager:
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
             f"height({block_.header.height}) block({block_.header.hash}) peers: "
-            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
+            f"{self.__channel_service.peer_manager.get_peer_count()} "
             f"target_reps_hash({target_reps_hash})")
 
         # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
         block_dumped = self.blockchain.block_dumps(block_)
 
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
             loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
             reps_hash=target_reps_hash
@@ -353,11 +353,11 @@ class BlockManager:
         :param block_height:
         :return block, max_block_height, confirm_info, response_code
         """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
+            return self.__block_request_by_citizen(block_height, self.__channel_service.radio_station_stub)
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -660,8 +660,8 @@ class BlockManager:
         unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rest_stub = ObjectManager().channel_service.radio_station_stub
+        if not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            rest_stub = self.__channel_service.radio_station_stub
             peer_stubs.append(rest_stub)
             last_block = rest_stub.call("GetLastBlock")
             max_height = self.blockchain.block_versioner.get_height(last_block)
