@@ -29,4 +29,3 @@ class ObjectManager(metaclass=SingletonMetaClass):
     rs_service: 'RadioStationService' = None
     peer_service: 'PeerService' = None
     channel_service: 'ChannelService' = None
-    rest_proxy_service = None
