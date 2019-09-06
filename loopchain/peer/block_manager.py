@@ -234,14 +234,15 @@ class BlockManager:
         if confirmed_block is None:
             return
 
-        # start new epoch
         if not (current_block.header.complained and self.epoch.complained_result):
             self.epoch = Epoch.new_epoch()
 
-        # reset leader
         self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
+        if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
+            raise InvalidUnconfirmedBlock("The unconfirmed block has height already added.")
+
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
         try:
             candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
@@ -711,7 +712,6 @@ class BlockManager:
             elected_leader = self.epoch.complain_result()
             if elected_leader:
                 self.__channel_service.reset_leader(elected_leader, complained=True)
-                self.__channel_service.reset_leader_complain_timer()
             elif elected_leader is False:
                 util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
                 # In this case, a new leader can't be elected by the consensus of leader complaint.
@@ -845,9 +845,6 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-            if is_validated:
-                self.__channel_service.turn_on_leader_complain_timer()
-
     async def vote_as_peer(self, unconfirmed_block: Block):
         """Vote to AnnounceUnconfirmedBlock
         """
@@ -859,6 +856,7 @@ class BlockManager:
         try:
             self.add_unconfirmed_block(unconfirmed_block)
         except InvalidUnconfirmedBlock as e:
+            self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)

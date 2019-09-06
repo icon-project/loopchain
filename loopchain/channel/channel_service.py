@@ -537,6 +537,7 @@ class ChannelService:
             self.state_machine.turn_to_peer()
 
         self.__block_manager.set_peer_type(peer_type)
+        self.turn_on_leader_complain_timer()
 
     def set_new_leader(self):
         new_leader_id = self.block_manager.get_next_leader()
