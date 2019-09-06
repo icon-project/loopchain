@@ -27,6 +27,7 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
+from loopchain.baseservice.score_code import PrepChangedReason
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
@@ -1122,10 +1123,18 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
+        next_leader = _block.header.next_leader  # TODO: Check that 0.1a ensures existence of the attribute
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.debug(
-                f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
+            # P-Rep list has been changed
+            utils.logger.debug(f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
+
+            if next_prep.state == PrepChangedReason.TERM_END:
+                next_leader = Hash32.empty()
+            elif next_prep.state == PrepChangedReason.PANELTY:
+                # TODO: Nothing changed. What does means that next_leader is ignored when leader-complained?
+                pass
+
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
@@ -1139,6 +1148,7 @@ class BlockChain:
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
+        block_builder.next_leader = next_leader
         block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
