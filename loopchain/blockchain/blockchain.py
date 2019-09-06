@@ -119,6 +119,10 @@ class BlockChain:
         return self.__made_block_counter[ChannelProperty().peer_address]
 
     @property
+    def just_before_max_made_block_count(self) -> bool:
+        return self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1)
+
+    @property
     def last_block_has_changed_next_reps(self) -> bool:
         if self.__last_block.header.version != '0.1a':
             return self.__last_block.header.reps_hash != self.__last_block.header.next_reps_hash
@@ -141,29 +145,11 @@ class BlockChain:
     def reset_leader_made_block_count(self):
         self.__made_block_counter.clear()
 
-    def get_next_leader(self) -> str:
-        """get next leader by leader_made_block_count
-
-        :return: new leader's peer_id as hex_hx(str)
-        """
-
-        peer_manager = ObjectManager().channel_service.peer_manager
-
-        if self.last_block_has_changed_next_reps:
-            # TODO It needs additional features for new reps.
-            # - Keep order when changing list by penalty
-            # - If the list is changed due to the term, reset to order = 0
-            utils.logger.notice(
-                f"in get_next_leader new reps leader is "
-                f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
-            return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
-
-        if self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
-            # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
-            # next unconfirmed block height is 10 and It has to have changed next leader.
-            return peer_manager.get_next_leader_peer(self.__last_block.header.peer_id.hex_hx()).peer_id
-
-        return peer_manager.leader_id
+    def get_first_leader_of_next_reps(self) -> str:
+        utils.logger.notice(
+            f"in get_next_leader new reps leader is "
+            f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
+        return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
 
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block

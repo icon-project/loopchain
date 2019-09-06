@@ -18,7 +18,7 @@ import logging
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional
 
 from collections import defaultdict
 
@@ -629,8 +629,24 @@ class BlockManager:
 
     def start_epoch(self):
         self.epoch = Epoch.new_epoch()
-
         util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
+
+    def get_next_leader(self) -> Optional[str]:
+        if self.blockchain.last_block_has_changed_next_reps:
+            next_leader = self.blockchain.get_first_leader_of_next_reps()
+        elif self.blockchain.just_before_max_made_block_count:
+            next_leader = self.__channel_service.peer_manager.get_next_leader_peer(
+                self.blockchain.last_block.header.peer_id.hex_hx()
+            ).peer_id
+        else:
+            next_leader = self.__current_last_block().header.next_leader
+            try:
+                next_leader = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()).peer_id
+            except Exception as e:
+                logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
+                next_leader = None
+
+        return next_leader
 
     def __get_peer_stub_list(self):
         """It updates peer list for block manager refer to peer list on the loopchain network.
