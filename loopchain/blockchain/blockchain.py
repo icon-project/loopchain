@@ -1139,7 +1139,8 @@ class BlockChain:
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
-            next_preps_hash = None
+            # P-Rep list has no changes
+            next_preps_hash = Hash32.empty()
 
         if prev_block.header.version != "0.1a":
             reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
