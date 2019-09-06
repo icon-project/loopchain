@@ -102,8 +102,12 @@ class ConsensusSiever(ConsensusBase):
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
+        next_leader = self._blockchain.get_next_leader()
+        self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash):
+        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+
         self._blockchain.last_unconfirmed_block = None
         dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
         if block_version == '0.1a':
@@ -143,6 +147,7 @@ class ConsensusSiever(ConsensusBase):
                 block_deprecated = (last_unconfirmed_block is None
                                     or last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address)
                 if reps_switched and block_deprecated:
+                    util.logger.info(f"start new term.")
                     new_term = True
 
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
@@ -178,28 +183,25 @@ class ConsensusSiever(ConsensusBase):
                     need_next_call = True
                 elif last_unconfirmed_block:
                     await self.__add_block(last_unconfirmed_block)
-                    self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
                 util.logger.debug(
                     f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
-                self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
-            next_leader = self._blockchain.get_next_leader()
-            candidate_block = self.__build_candidate_block(block_builder, ExternalAddress.fromhex_address(next_leader))
+            candidate_block = self.__build_candidate_block(
+                block_builder, ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id))
             candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, last_block, is_block_editable=True)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
 
             self._blockchain.last_unconfirmed_block = candidate_block
-            self._block_manager.epoch = Epoch.new_epoch(next_leader)
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
             self._blockchain.last_unconfirmed_block = candidate_block
@@ -210,20 +212,19 @@ class ConsensusSiever(ConsensusBase):
             except NotEnoughVotes:
                 return
 
-            if next_leader != ChannelProperty().peer_id:
+            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
                 util.logger.spam(
                     f"-------------------turn_to_peer "
-                    f"next_leader({next_leader}) "
+                    f"next_leader({self._block_manager.epoch.leader_id}) "
                     f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.reset_leader(next_leader)
+                ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
                 if self._blockchain.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
                     # next unconfirmed block height is 10
-                    ObjectManager().channel_service.reset_leader(next_leader)
-                    
-                self._block_manager.epoch = Epoch.new_epoch(next_leader)
+                    ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
+
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
                 else:
@@ -244,6 +245,12 @@ class ConsensusSiever(ConsensusBase):
             if vote.is_completed():
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote
+
+            util.logger.spam(
+                f"not completed vote"
+                f"\nvotes({vote.votes})"
+                f"\nreps({vote.reps})")
+
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
             timeout_timestamp = block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000

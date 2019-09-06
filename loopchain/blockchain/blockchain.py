@@ -118,6 +118,12 @@ class BlockChain:
     def my_made_block_count(self) -> int:
         return self.__made_block_counter[ChannelProperty().peer_address]
 
+    @property
+    def last_block_has_changed_next_reps(self) -> bool:
+        if self.__last_block.header.version != '0.1a':
+            return self.__last_block.header.reps_hash != self.__last_block.header.next_reps_hash
+        return False
+
     def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
 
@@ -127,7 +133,7 @@ class BlockChain:
         if block.header.height == 0:
             return
 
-        if self.__last_block.header.peer_id != block.header.peer_id:
+        if self.__last_block.header.peer_id != block.header.peer_id or self.last_block_has_changed_next_reps:
             self.__made_block_counter[block.header.peer_id] = 1
         else:
             self.__made_block_counter[block.header.peer_id] += 1
@@ -143,8 +149,7 @@ class BlockChain:
 
         peer_manager = ObjectManager().channel_service.peer_manager
 
-        if (self.last_block.header.version != '0.1a') and \
-                (self.last_block.header.reps_hash != self.last_block.header.next_reps_hash):
+        if self.last_block_has_changed_next_reps:
             # TODO It needs additional features for new reps.
             # - Keep order when changing list by penalty
             # - If the list is changed due to the term, reset to order = 0
@@ -168,6 +173,8 @@ class BlockChain:
 
         peer_manager = ObjectManager().channel_service.peer_manager
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
+            utils.logger.spam(
+                f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
             expected_generator = ExternalAddress.fromhex_address(
                 peer_manager.get_next_leader_peer(peer_id).peer_id)
         else:
@@ -293,12 +300,25 @@ class BlockChain:
             block_version = self.__block_versioner.get_version(block_height)
             return BlockSerializer.new(block_version, self.__tx_versioner).deserialize(block_dumped)
         except KeyError as e:
-            logging.error(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
+            logging.debug(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
 
         return None
 
+    def get_prev_block(self, block: Block) -> Block:
+        """get prev block by given block
+
+        :param block: Block
+        :return: prev_block (from blockchain or DB) by given block
+        """
+        prev_hash = block.header.prev_hash
+        if self.last_unconfirmed_block and prev_hash == self.last_unconfirmed_block.header.hash:
+            prev_block = self.last_unconfirmed_block
+        else:
+            prev_block = self.find_block_by_hash(prev_hash) or self.last_block
+        return prev_block
+
     def find_block_by_hash(self, block_hash: Union[str, Hash32]):
-        """find block by block hash.
+        """find block in DB by block hash.
 
         :param block_hash: plain string,
         key 로 사용되기전에 함수내에서 encoding 되므로 미리 encoding 된 key를 parameter 로 사용해선 안된다.
@@ -309,7 +329,7 @@ class BlockChain:
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
-        """find block by its height
+        """find block in DB by its height
 
         :param block_height: int,
         it convert to key of blockchain db in this method so don't try already converted key.
@@ -824,9 +844,10 @@ class BlockChain:
         return results
 
     def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
-        reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
         if unconfirmed_block_header.version == '0.1a':
             return False
+
+        reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
         return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
                 and current_block_header.peer_id == reps[0])
 

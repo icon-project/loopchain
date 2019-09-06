@@ -52,7 +52,9 @@ class Votes(ABC, Generic[TVote]):
             if not vote:
                 continue
             if rep != vote.rep:
-                raise RuntimeError(f"Incorrect Rep : {rep}, {vote.rep}")
+                raise RuntimeError(f"Incorrect Rep : {rep}, {vote.rep}"
+                                   f"\nreps({self.reps})"
+                                   f"\nvotes({self.votes})")
             try:
                 self.verify_vote(vote)
             except VoteSafeDuplicateError:
@@ -64,7 +66,8 @@ class Votes(ABC, Generic[TVote]):
         try:
             index = self.reps.index(vote.rep)
         except ValueError:
-            raise VoteNoRightRep(f"This rep({vote.rep.hex_hx()}) has no right to vote")
+            raise VoteNoRightRep(f"This rep({vote.rep.hex_hx()}) has no right to vote"
+                                 f"\nreps({self.reps})")
 
         # FIXME Leave the evidence, Duplicate voting
         if self.votes[index]:

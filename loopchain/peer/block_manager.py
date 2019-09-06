@@ -628,15 +628,7 @@ class BlockManager:
         return True
 
     def start_epoch(self):
-        current_block_header = self.__current_last_block().header
-        current_height = current_block_header.height
-        next_leader = current_block_header.next_leader
-        leader_peer = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()) if next_leader else None
-
-        if leader_peer:
-            self.epoch = Epoch.new_epoch(leader_peer.peer_id)
-        elif self.epoch and self.epoch.height < current_height:
-            self.epoch = Epoch.new_epoch()
+        self.epoch = Epoch.new_epoch()
 
         util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
 
@@ -766,7 +758,17 @@ class BlockManager:
         vote_dumped = json.dumps(vote_serialized)
         block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
 
-        self.__channel_service.broadcast_scheduler.schedule_broadcast("VoteUnconfirmedBlock", block_vote)
+        if block.header.version != '0.1a':
+            target_reps_hash = block.header.reps_hash
+        else:
+            target_reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
+
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
+            "VoteUnconfirmedBlock",
+            block_vote,
+            reps_hash=target_reps_hash
+        )
+
         return vote
 
     def verify_confirm_info(self, unconfirmed_block: Block):
@@ -781,8 +783,7 @@ class BlockManager:
                                                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
-        last_unconfirmed_block = self.blockchain.last_unconfirmed_block
-        prev_block = last_unconfirmed_block or self.blockchain.last_block
+        prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
             if unconfirmed_block.header.version != "0.1a" and unconfirmed_block.header.height > 1:
