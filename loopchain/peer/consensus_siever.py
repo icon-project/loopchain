@@ -102,7 +102,7 @@ class ConsensusSiever(ConsensusBase):
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
-        next_leader = self._blockchain.get_next_leader()
+        next_leader = self._block_manager.get_next_leader()
         self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash):
@@ -220,7 +220,7 @@ class ConsensusSiever(ConsensusBase):
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
                 ObjectManager().channel_service.turn_on_leader_complain_timer()
             else:
-                if self._blockchain.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1):
+                if self._blockchain.just_before_max_made_block_count:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
                     # next unconfirmed block height is 10
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
