@@ -433,8 +433,8 @@ class ChannelService:
         # try websocket connection, and handle exception in callback
         asyncio.ensure_future(self.__node_subscriber.subscribe(
             block_height=self.__block_manager.blockchain.block_height,
-            event=subscribe_event
-        )).add_done_callback(_handle_exception)
+            event=subscribe_event,
+        ), loop=MessageQueueService.loop).add_done_callback(_handle_exception)
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
