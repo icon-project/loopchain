@@ -150,6 +150,7 @@ class ConsensusSiever(ConsensusBase):
                 if reps_switched and block_deprecated:
                     util.logger.info(f"start new term.")
                     new_term = True
+                    latest_block = self._blockchain.last_block
 
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
