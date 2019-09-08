@@ -77,7 +77,8 @@ class ChannelStateMachine(object):
     def evaluate_network(self):
         pass
 
-    @statemachine.transition(source=('EvaluateNetwork', 'Watch', 'Vote', 'BlockSync', 'BlockGenerate', 'LeaderComplain'),
+    @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'Watch',
+                                     'Vote', 'BlockSync', 'BlockGenerate', 'LeaderComplain'),
                              dest='BlockSync',
                              after='_do_block_sync')
     def block_sync(self):

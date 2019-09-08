@@ -17,6 +17,7 @@ import asyncio
 import json
 import logging
 import traceback
+from earlgrey import MessageQueueService
 from asyncio import Event
 
 import websockets
@@ -74,7 +75,8 @@ class NodeSubscriber:
             # set websocket payload maxsize to 4MB.
             self._websocket: WebSocketClientProtocol = await websockets.connect(
                 uri=self._target_uri,
-                max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK
+                max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK,
+                loop=MessageQueueService.loop
             )
             logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
             request = Request(
