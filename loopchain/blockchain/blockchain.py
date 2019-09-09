@@ -28,7 +28,7 @@ from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.baseservice.score_code import PrepChangedReason
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
@@ -378,6 +378,15 @@ class BlockChain:
     def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
+
+    def find_preps_addresses_by_header(self, header: BlockHeader) -> List[ExternalAddress]:
+        try:
+            roothash = header.reps_hash
+        except AttributeError:
+            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
+            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+
+        return self.find_preps_addresses_by_roothash(roothash)
 
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
@@ -1064,7 +1073,8 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        block_builder.reps = self.find_preps_addresses_by_roothash(
+            ObjectManager().channel_service.peer_manager.prepared_reps_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
@@ -1123,7 +1133,7 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
-        next_leader = _block.header.next_leader  # TODO: Check that 0.1a ensures existence of the attribute
+        next_leader = _block.header.next_leader
         next_prep = response.get("prep")
         if next_prep:
             # P-Rep list has been changed
@@ -1132,7 +1142,6 @@ class BlockChain:
             if next_prep.state == PrepChangedReason.TERM_END:
                 next_leader = Hash32.empty()
             elif next_prep.state == PrepChangedReason.PANELTY:
-                # TODO: Nothing changed. What does means that next_leader is ignored when leader-complained?
                 pass
 
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
@@ -1141,11 +1150,6 @@ class BlockChain:
         else:
             # P-Rep list has no changes
             next_preps_hash = Hash32.empty()
-
-        if prev_block.header.version != "0.1a":
-            reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
-        else:
-            reps = ObjectManager().channel_service.get_rep_ids()
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
@@ -1172,7 +1176,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = reps
+        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
         block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:

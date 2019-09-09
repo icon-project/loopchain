@@ -67,10 +67,9 @@ class CandidateBlock:
             logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
-            if block.header.version != "0.1a" and block.header.reps_hash:
-                reps = ObjectManager().channel_service.block_manager.blockchain.find_preps_addresses_by_roothash(block.header.reps_hash)
-            elif ObjectManager().channel_service:
-                reps = ObjectManager().channel_service.get_rep_ids()
+            channel_service = ObjectManager().channel_service
+            if channel_service:
+                reps = channel_service.block_manager.blockchain.find_preps_addresses_by_header(block.header)
             else:
                 reps = []
 
