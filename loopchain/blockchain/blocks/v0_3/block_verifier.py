@@ -46,8 +46,8 @@ class BlockVerifier(BaseBlockVerifier):
             self.verify_leader_votes(block, prev_block, reps)
 
         if header.height > 1:
-            if prev_block.header.version != "0.1a":
-                prev_next_reps_hash = prev_block.header.next_reps_hash
+            prev_next_reps_hash = prev_block.header.revealed_next_reps_hash
+            if prev_next_reps_hash:
                 if prev_next_reps_hash != header.reps_hash:
                     exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                              f"RepsHash({header.reps_hash}), "
@@ -160,11 +160,7 @@ class BlockVerifier(BaseBlockVerifier):
                 self._handle_exception(e)
         else:
             prev_block_header: BlockHeader = prev_block.header
-            if prev_block_header.next_leader != block.header.peer_id:
-                if prev_block_header.reps_hash != prev_block_header.next_reps_hash \
-                        and block.header.peer_id == reps[0]:
-                    # prep term changed!
-                    return
+            if prev_block_header.next_leader != block.header.peer_id and not prev_block_header.prep_changed:
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "
                                          f"Expected({prev_block_header.next_leader.hex_xx()}).\n "

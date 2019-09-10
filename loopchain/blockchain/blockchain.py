@@ -126,7 +126,7 @@ class BlockChain:
     @property
     def last_block_has_changed_next_reps(self) -> bool:
         if self.__last_block.header.version != '0.1a':
-            return self.__last_block.header.reps_hash != self.__last_block.header.next_reps_hash
+            return self.__last_block.header.prep_changed is not None
         return False
 
     def _increase_made_block_count(self, block: Block) -> None:
@@ -149,8 +149,8 @@ class BlockChain:
     def get_first_leader_of_next_reps(self) -> str:
         utils.logger.notice(
             f"in get_next_leader new reps leader is "
-            f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
-        return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
+            f"{self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]}")
+        return self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]
 
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block
@@ -839,13 +839,11 @@ class BlockChain:
 
         return results
 
-    def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
+    def __is_1st_block_of_new_term(self, unconfirmed_block_header):
         if unconfirmed_block_header.version == '0.1a':
             return False
 
-        reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
-        return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
-                and current_block_header.peer_id == reps[0])
+        return unconfirmed_block_header.prep_changed
 
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
@@ -871,7 +869,7 @@ class BlockChain:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
-                            or self.__is_1st_block_of_new_term(self.last_block.header, current_block.header):
+                            or self.__is_1st_block_of_new_term(self.last_block.header):
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
                     return None
@@ -1139,9 +1137,9 @@ class BlockChain:
             # P-Rep list has been changed
             utils.logger.debug(f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
 
-            if next_prep.state == PrepChangedReason.TERM_END:
-                next_leader = Hash32.empty()
-            elif next_prep.state == PrepChangedReason.PANELTY:
+            if next_prep["state"] == PrepChangedReason.TERM_END:
+                next_leader = ExternalAddress.empty()
+            elif next_prep["state"] == PrepChangedReason.PENALTY:
                 pass
 
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)

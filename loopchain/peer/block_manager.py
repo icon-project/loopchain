@@ -165,8 +165,8 @@ class BlockManager:
         """
         if self.__channel_service.state_machine.state == "BlockGenerate":
             last_block: Block = self.blockchain.last_block
-            if last_block.header.version != '0.1a':
-                if last_block.header.reps_hash != last_block.header.next_reps_hash:  # new term
+            if last_block.header.revealed_next_reps_hash:
+                if last_block.header.prep_changed:
                     self._send_unconfirmed_block(block_, last_block.header.reps_hash)
                 self._send_unconfirmed_block(block_, block_.header.reps_hash)
             else:
@@ -237,7 +237,15 @@ class BlockManager:
         if not (current_block.header.complained and self.epoch.complained_result):
             self.epoch = Epoch.new_epoch()
 
-        self.__channel_service.reset_leader(current_block.header.next_leader.hex_hx())
+        if current_block.header.prep_changed:
+            next_leader = self.blockchain.find_preps_addresses_by_header(
+                current_block.header.next_reps_hash)[0].hex_hx()
+        else:
+            next_leader = current_block.header.next_leader.hex_hx()
+
+        util.logger.notice(f"\n\n\nconfirm prev block next_leader({next_leader})")
+
+        self.__channel_service.reset_leader(next_leader)
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:

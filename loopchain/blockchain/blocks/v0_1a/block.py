@@ -1,8 +1,9 @@
 from collections import OrderedDict
-
 from dataclasses import dataclass
+
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, \
+    _dict__str__
 from loopchain.blockchain.types import Hash32, Address, Signature, ExternalAddress
-from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, _dict__str__
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,22 @@ class BlockHeader(BaseBlockHeader):
     def complained(self) -> bool:
         # tx == 0 and peer_id == next_leader >> complained = True
         return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
+
+    @property
+    def prep_changed(self) -> None:
+        """0.1a block doesn't support this.
+
+        :return: Always None
+        """
+        return None
+
+    @property
+    def revealed_next_reps_hash(self) -> None:
+        """0.1a block doesn't support this.
+
+        :return: Always None
+        """
+        return None
 
 
 @dataclass(frozen=True)

@@ -28,4 +28,4 @@ class ScoreResponse(IntEnum):
 
 class PrepChangedReason:
     TERM_END = "0x0"  # Term ends and reset P-Rep list
-    PANELTY = "0x1"  # Updated within term (Panelty)
+    PENALTY = "0x1"  # Updated within term (Penalty)
