@@ -18,7 +18,7 @@ import pickle
 import threading
 import zlib
 from enum import Enum
-from typing import Union, List
+from typing import Union, List, Coroutine, Any
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -237,6 +237,7 @@ class BlockChain:
     async def find_confirm_info_by_height(self, height) -> bytes:
         block = await self.find_block_by_height(height)
         if block:
+            # FIXME : return bytes. why create new bytes instance?
             return bytes(await self.find_confirm_info_by_hash(block.header.hash))
 
         return bytes()
@@ -257,6 +258,7 @@ class BlockChain:
         :param need_to_score_invoke:
         :return:
         """
+        logging.debug(f"add_block() start")
         with self.__add_block_lock:
             mismatch = await self.prevent_next_block_mismatch(block.header.height)
             if need_to_write_tx_info and need_to_score_invoke and not mismatch:
@@ -275,6 +277,7 @@ class BlockChain:
             return await self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     async def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
+        logging.debug(f"__add_block() start")
         with self.__add_block_lock:
             invoke_results = self.__invoke_results.get(block.header.hash.hex(), None)
             if invoke_results is None and need_to_score_invoke:
@@ -290,7 +293,7 @@ class BlockChain:
                     ObjectManager().channel_service.score_write_precommit_state(block)
             except Exception as e:
                 logging.warning(f"blockchain:add_block FAIL "
-                                f"channel_service.score_write_precommit_state")
+                                f"channel_service.score_write_precommit_state : {e}")
                 raise e
             finally:
                 self.__invoke_results.pop(block.header.hash.hex(), None)
@@ -325,6 +328,7 @@ class BlockChain:
             return True
 
     async def __write_block_data(self, block: Block, confirm_info):
+        logging.debug(f"__write_block_data() start")
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -361,24 +365,29 @@ class BlockChain:
 
         await batch.write()
         """
-        await self._blockchain_store.put(block_hash_encoded, block_serialized.encode("utf-8"))
-        await self._blockchain_store.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
-        await self._blockchain_store.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-        await self._blockchain_store.put(
-            BlockChain.BLOCK_HEIGHT_KEY +
-            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-            block_hash_encoded)
+        futures = [
+            self._blockchain_store.put(block_hash_encoded, block_serialized.encode("utf-8")),
+            self._blockchain_store.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded),
+            self._blockchain_store.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes),
+            self._blockchain_store.put(
+                BlockChain.BLOCK_HEIGHT_KEY +
+                block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+                block_hash_encoded)
+        ]
 
         if confirm_info:
-            await self._blockchain_store.put(
+            futures.append(self._blockchain_store.put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8")
+                json.dumps(BlockVotes.serialize_votes(confirm_info)).encode("utf-8"))
             )
 
         if block.header.prev_hash:
             prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
             prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
-            await self._blockchain_store.delete(prev_block_confirm_info_key)
+            futures.append(self._blockchain_store.delete(prev_block_confirm_info_key))
+
+        result = await asyncio.gather(*futures, loop=self._loop)
+        logging.warning(f"__write_block_data() result = {result}")
 
         return next_total_tx
 
@@ -657,7 +666,8 @@ class BlockChain:
 
         block, invoke_results = ObjectManager().channel_service.genesis_invoke(block)
         self.set_invoke_results(block.header.hash.hex(), invoke_results)
-        asyncio.run_coroutine_threadsafe(self.add_block(block), self._loop)
+        task = self._loop.create_task(self.add_block(block))
+        logging.debug(f"__add_genesis_block() : add_block task = {task}")
 
     async def put_precommit_block(self, precommit_block: Block):
         """
@@ -705,9 +715,10 @@ class BlockChain:
 
         return results
 
-    def confirm_prev_block(self, current_block: Block):
+    def confirm_prev_block(self, current_block: Block, vote_coroutine: Coroutine[Any, Any, None]):
         """confirm prev unconfirmed block by votes in current block
 
+        :param vote_coroutine: call vote_coroutine after finished add_block
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
         :return: confirm_Block
         """
@@ -719,8 +730,12 @@ class BlockChain:
         candidate_blocks = block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
+            logging.warning(f"last_block.header({self.last_block.header})\n"
+                            f"current_block.header({current_block.header})")
 
             try:
+                for k, v in candidate_blocks.blocks.items():
+                    logging.warning(f"candidate_blocks : {k.hex_0x()} = {v}")
                 unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
                 logging.debug("confirmed_block_hash: " + current_block.header.prev_hash.hex())
                 if unconfirmed_block:
@@ -750,7 +765,16 @@ class BlockChain:
             # utils.logger.debug(f"-------------------confirm_prev_block---before add block,"
             #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
-            asyncio.run_coroutine_threadsafe(self.add_block(unconfirmed_block, confirm_info), self._loop)
+            task = self._loop.create_task(self.add_block(unconfirmed_block, confirm_info))
+            logging.warning(f"confirm_prev_block() : add_block task = {task}")
+
+            def add_block_callback(f):
+                logging.debug(f"confirm_prev_block() : add_block done = {f}")
+                t = self._loop.create_task(vote_coroutine)
+                logging.debug(f"confirm_prev_block() : add_block_callback = {t}")
+
+            task.add_done_callback(add_block_callback)
+
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 

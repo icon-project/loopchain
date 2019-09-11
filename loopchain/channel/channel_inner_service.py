@@ -697,7 +697,8 @@ class ChannelInnerTask:
             logging.error(f"announce_unconfirmed_block: {e}")
             return
 
-        logging.debug(f"#block \n"
+        logging.debug(f"announce_unconfirmed_block()\n"
+                      f"#block \n"
                       f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
                       f"height({unconfirmed_block.header.height})\n"
                       f"hash({unconfirmed_block.header.hash.hex()})")

@@ -96,10 +96,15 @@ class ConsensusSiever(ConsensusBase):
         if not vote_result:
             raise NotEnoughVotes
 
-        asyncio.run_coroutine_threadsafe(
+        # FIXME : !!!!
+        from earlgrey import MessageQueueService
+        future = asyncio.run_coroutine_threadsafe(
             self._block_manager.get_blockchain().add_block(block, confirm_info=vote.votes),
-            self._loop
+            MessageQueueService.loop
         )
+        result = future.result()
+        util.logger.warning(f"__add_block() : result = {result}")
+
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
         self._made_block_count += 1
@@ -146,7 +151,7 @@ class ConsensusSiever(ConsensusBase):
                 complain_votes = None
 
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-            last_block_votes = await self.get_votes(last_block.header.hash)
+            last_block_votes = self.get_votes(last_block.header.hash)
 
             block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
             vote_result = None
@@ -166,10 +171,15 @@ class ConsensusSiever(ConsensusBase):
                     """
                     # It should be enhanced after coming up for compatibility of versions.
                     self._blockchain.last_unconfirmed_block = None
-                    dumped_votes = asyncio.run_coroutine_threadsafe(
+
+                    # FIXME : !!!!!
+                    from earlgrey import MessageQueueService
+                    future = asyncio.run_coroutine_threadsafe(
                         self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash),
-                        self._loop
+                        MessageQueueService.loop
                     )
+                    dumped_votes = future.result()
+                    util.logger.warning(f"consensus : find_confirm_info_by_hash() -> dump_votes = {dumped_votes}")
                     if block_builder.version == '0.1a':
                         votes = dumped_votes
                     else:
@@ -207,7 +217,7 @@ class ConsensusSiever(ConsensusBase):
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
-            util.logger.spam(f"candidate block : {candidate_block.header}")
+            util.logger.warning(f"candidate block : {candidate_block.header}")
 
             self._blockchain.last_unconfirmed_block = candidate_block
             self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
@@ -229,7 +239,7 @@ class ConsensusSiever(ConsensusBase):
             else:
                 if self.made_block_count >= conf.MAX_MADE_BLOCK_COUNT:
                     ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
-                    
+
                 self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
@@ -266,7 +276,7 @@ class ConsensusSiever(ConsensusBase):
                                     str(util.diff_in_seconds(candidate_block.header.timestamp)))
                 return None
 
-    async def get_votes(self, block_hash: Hash32):
+    def get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
         except KeyError:
@@ -275,10 +285,14 @@ class ConsensusSiever(ConsensusBase):
         if prev_votes:
             prev_votes_list = prev_votes.votes
         else:
-            prev_votes_dumped = asyncio.run_coroutine_threadsafe(
+            # FIXME : !!!!!
+            from earlgrey import MessageQueueService
+            future = asyncio.run_coroutine_threadsafe(
                 self._blockchain.find_confirm_info_by_hash(block_hash),
-                self._loop
+                MessageQueueService.loop
             )
+            prev_votes_dumped = future.result()
+            util.logger.warning(f"get_votes : find_confirm_info_by_hash() -> prev_votes_dumped = {prev_votes_dumped}")
             try:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
             except json.JSONDecodeError:  # handle exception for old votes

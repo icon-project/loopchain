@@ -233,7 +233,8 @@ class BlockManager:
         return len(self.__txQueue)
 
     def confirm_prev_block(self, current_block: Block):
-        confirmed_block = self.__blockchain.confirm_prev_block(current_block)
+        vote_coroutine = self._vote(current_block)
+        confirmed_block = self.__blockchain.confirm_prev_block(current_block, vote_coroutine)
         if confirmed_block is None:
             return
 
@@ -305,10 +306,8 @@ class BlockManager:
             util.logger.info(f"Can't add confirmed block if state is not Watch. {confirmed_block.header.hash.hex()}")
             return
 
-        asyncio.run_coroutine_threadsafe(
-            self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info),
-            self._loop
-        )
+        task = self._loop.create_task(self.__blockchain.add_block(confirmed_block, confirm_info=confirm_info))
+        logging.debug(f"add_confirmed_block : task = {task}")
 
     async def rebuild_block(self):
         await self.__blockchain.rebuild_transaction_count()
@@ -515,6 +514,8 @@ class BlockManager:
                 raise exc
 
         self.__blockchain.set_invoke_results(block_.header.hash.hex(), invoke_results)
+
+        # FIXME : check possible to replace to loop.create_task
         future = asyncio.run_coroutine_threadsafe(
             self.__blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke),
             self._loop
@@ -522,6 +523,12 @@ class BlockManager:
         return future.result()
 
     def __confirm_prev_block_by_sync(self, block_):
+        """
+        FIXME : deprecated?
+
+        :param block_:
+        :return:
+        """
         prev_block = self.__blockchain.last_unconfirmed_block
         confirm_info = block_.body.confirm_prev_block
 
@@ -541,6 +548,7 @@ class BlockManager:
                                                        reps=reps)
         self.__blockchain.set_invoke_results(prev_block.header.hash.hex(), invoke_results)
         future = asyncio.run_coroutine_threadsafe(self.__blockchain.add_block(prev_block, confirm_info), self._loop)
+        logging.warning(f"__confirm_prev_block_by_sync : future = {future}")
         return future.result()
 
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
@@ -653,9 +661,8 @@ class BlockManager:
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
         # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-        asyncio.run_coroutine_threadsafe(
-            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1),
-            self._loop
+        self._loop.create_task(
+            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
         )
 
         try:
@@ -879,8 +886,6 @@ class BlockManager:
             util.logger.warning(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            await self._vote(unconfirmed_block)
-        else:
             await self._vote(unconfirmed_block)
 
         self.__channel_service.turn_on_leader_complain_timer()
