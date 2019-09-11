@@ -21,13 +21,12 @@ import multiprocessing
 import os
 import signal
 import timeit
-from functools import partial
 
 import grpc
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import CommonSubprocess, ObjectManager, RestClient
+from loopchain.baseservice import CommonSubprocess, ObjectManager
 from loopchain.container import RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
@@ -108,8 +107,7 @@ class PeerService:
         if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
             return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         else:
-            # TODO rest call to neighbor..?
-            pass
+            return conf.CHANNEL_OPTION
 
     def _init_port(self, port):
         # service 초기화 작업
