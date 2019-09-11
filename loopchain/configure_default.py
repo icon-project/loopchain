@@ -222,10 +222,10 @@ DISABLE_V1_API = True
 
 
 class ApiVersion(IntEnum):
-    node = 0
-    v1 = 1
-    v2 = 2
-    v3 = 3
+    node = 1
+    v1 = 2
+    v2 = 3
+    v3 = 4
 
 
 ##########

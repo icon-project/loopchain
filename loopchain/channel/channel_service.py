@@ -213,7 +213,7 @@ class ChannelService:
         await self.__init_sub_services()
 
     async def __init_network(self):
-        self._init_rs_client()
+        await self._init_rs_client()
         await self.__peer_manager.load_peers()
         await self._select_node_type()
 
@@ -334,7 +334,7 @@ class ChannelService:
         scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
-    def _init_rs_client(self):
+    async def _init_rs_client(self):
         radiostations: list = self.get_channel_option().get('radiostations')
         if not radiostations:
             logging.warning(f"no configurations for radiostations.")
@@ -346,10 +346,8 @@ class ChannelService:
         except ValueError:
             pass
 
-        self.__rs_client = RestClient(
-            target=radiostations,
-            channel=ChannelProperty().name
-        )
+        self.__rs_client = RestClient(channel=ChannelProperty().name)
+        await self.__rs_client.init(radiostations)
         ChannelProperty().rs_target = self.__rs_client.target
 
     async def __init_score_container(self):

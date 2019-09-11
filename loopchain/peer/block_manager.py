@@ -386,7 +386,6 @@ class BlockManager:
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = rs_client.call(
             "GetBlockByHeight", {
-                'channel': self.__channel_name,
                 'height': str(block_height)
             }
         )

@@ -14,8 +14,7 @@
 """The Client Interface for REST call."""
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
-from typing import Union, List
+from typing import List
 from urllib.parse import urlparse
 
 import requests
@@ -27,12 +26,8 @@ from loopchain import utils
 
 
 class RestClient:
-    def __init__(self, target: Union[str, List[str]], channel=None):
-        if isinstance(target, list):
-            self._target = self._select_fastest_endpoint(target)
-        else:
-            self._target = target
-        utils.logger.spam(f"RestStubManager:init target({self._target})")
+    def __init__(self, channel=None):
+        self._target = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         self._version_urls = {}
         self._http_clients = {}
@@ -50,8 +45,12 @@ class RestClient:
             "GetLastBlock": "icx_getLastBlock",
             "GetReps": "rep_getListByHash"
         }
-        self._init_http_clients()
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
+
+    async def init(self, endpoints: List[str]):
+        self._target = await self._select_fastest_endpoint(endpoints)
+        if self._target:
+            utils.logger.spam(f"RestClient init target({self._target})")
+            self._init_http_clients()
 
     @property
     def target(self):
@@ -68,7 +67,7 @@ class RestClient:
             if version != conf.ApiVersion.v1:
                 self._http_clients[url] = HTTPClient(url)
 
-    def _select_fastest_endpoint(self, endpoints):
+    async def _select_fastest_endpoint(self, endpoints):
         latencies = dict()
         for endpoint in endpoints:
             request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
@@ -122,7 +121,3 @@ class RestClient:
         except Exception as e:
             logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
             raise e
-
-    def call_async(self, method_name, params=None, timeout=None):
-        future = self._executor.submit(self.call, method_name, params, timeout)
-        return future
