@@ -123,12 +123,6 @@ class BlockChain:
     def just_before_max_made_block_count(self) -> bool:
         return self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1)
 
-    @property
-    def last_block_has_changed_next_reps(self) -> bool:
-        if self.__last_block.header.version != '0.1a':
-            return self.__last_block.header.prep_changed is not None
-        return False
-
     def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
 
@@ -138,7 +132,7 @@ class BlockChain:
         if block.header.height == 0:
             return
 
-        if self.__last_block.header.peer_id != block.header.peer_id or self.last_block_has_changed_next_reps:
+        if self.__last_block.header.peer_id != block.header.peer_id or self.__last_block.header.prep_changed:
             self.__made_block_counter[block.header.peer_id] = 1
         else:
             self.__made_block_counter[block.header.peer_id] += 1
@@ -839,12 +833,6 @@ class BlockChain:
 
         return results
 
-    def __is_1st_block_of_new_term(self, unconfirmed_block_header):
-        if unconfirmed_block_header.version == '0.1a':
-            return False
-
-        return unconfirmed_block_header.prep_changed
-
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
@@ -869,7 +857,7 @@ class BlockChain:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
-                            or self.__is_1st_block_of_new_term(self.last_block.header):
+                            or self.last_block.header.prep_changed is not None:
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
                     return None

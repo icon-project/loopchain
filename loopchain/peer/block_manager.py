@@ -240,6 +240,9 @@ class BlockManager:
         if current_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_header(
                 current_block.header.next_reps_hash)[0].hex_hx()
+            util.logger.notice(
+                f"\n\n\nconfirm prev block reps("
+                f"{self.blockchain.find_preps_addresses_by_header(current_block.header.next_reps_hash)})")
         else:
             next_leader = current_block.header.next_leader.hex_hx()
 
@@ -277,13 +280,14 @@ class BlockManager:
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
 
-        if unconfirmed_block.header.version == "0.1a" and unconfirmed_block.body.confirm_prev_block:
-            need_to_confirm = True
-        elif unconfirmed_block.header.version == "0.3":
+        if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
-            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
-                                       unconfirmed_block.header.height, None, unconfirmed_block.body.leader_votes)
+            leader_votes = LeaderVotes(
+                reps, conf.LEADER_COMPLAIN_RATIO, unconfirmed_block.header.height,
+                None, unconfirmed_block.body.leader_votes)
             need_to_confirm = leader_votes.get_result() is None
+        elif unconfirmed_block.body.confirm_prev_block:
+            need_to_confirm = True
         else:
             need_to_confirm = False
 
@@ -451,9 +455,6 @@ class BlockManager:
             return self.blockchain.block_height + 1
         else:
             return self.blockchain.block_height
-
-    def __current_last_block(self):
-        return self.blockchain.last_unconfirmed_block or self.blockchain.last_block
 
     def __add_block_by_sync(self, block_, confirm_info=None):
         logging.debug(f"block_manager.py >> block_height_sync :: "
@@ -640,20 +641,22 @@ class BlockManager:
         util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
 
     def get_next_leader(self) -> Optional[str]:
-        if self.blockchain.last_block_has_changed_next_reps:
+        if self.blockchain.last_block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps()
         elif self.blockchain.just_before_max_made_block_count:
             next_leader = self.__channel_service.peer_manager.get_next_leader_peer(
                 self.blockchain.last_block.header.peer_id.hex_hx()
             ).peer_id
         else:
-            next_leader = self.__current_last_block().header.next_leader
+            latest_block = self.blockchain.last_unconfirmed_block or self.blockchain.last_block
+            next_leader = latest_block.header.next_leader
             try:
                 next_leader = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()).peer_id
             except Exception as e:
                 logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
                 next_leader = None
 
+        util.logger.notice(f"in get_next_leader({next_leader})")
         return next_leader
 
     def __get_peer_stub_list(self):
@@ -781,9 +784,8 @@ class BlockManager:
         vote_dumped = json.dumps(vote_serialized)
         block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
 
-        if block.header.version != '0.1a':
-            target_reps_hash = block.header.reps_hash
-        else:
+        target_reps_hash = block.header.reps_hash
+        if not target_reps_hash:
             target_reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
