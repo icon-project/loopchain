@@ -84,7 +84,8 @@ unit-test:
 
 integration-test:
 	@echo "Start integration test..."
-	$(TEST_CMD) testcase/integration || exit -1
+	$(TEST_CMD) testcase/integration/configure && \
+	$(TEST_CMD) testcase/integration/scenarios || exit -1
 
 ## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check
