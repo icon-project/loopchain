@@ -14,7 +14,7 @@
 """The Client Interface for REST call."""
 
 import logging
-from typing import List
+from typing import List, Dict, Optional
 from urllib.parse import urlparse
 
 import requests
@@ -27,7 +27,7 @@ from loopchain import utils
 
 class RestClient:
     def __init__(self, channel=None):
-        self._target = None
+        self._target: str = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         self._version_urls = {}
         self._http_clients = {}
@@ -67,8 +67,8 @@ class RestClient:
             if version != conf.ApiVersion.v1:
                 self._http_clients[url] = HTTPClient(url)
 
-    async def _select_fastest_endpoint(self, endpoints):
-        latencies = dict()
+    async def _select_fastest_endpoint(self, endpoints) -> Optional[str]:
+        latencies: Dict[str, float] = dict()
         for endpoint in endpoints:
             request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
             neighbor_target = urlparse(request_uri).netloc
