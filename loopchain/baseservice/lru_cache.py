@@ -6,7 +6,7 @@ from functools import wraps
 from inspect import signature
 
 
-def lru_cache(maxsize=None, not_none_returns_only=False):
+def lru_cache(maxsize=None, valued_returns_only=False):
     def decorator(func):
         func_sig = signature(func)
         cache = OrderedDict()
@@ -21,7 +21,7 @@ def lru_cache(maxsize=None, not_none_returns_only=False):
                 val = cache[key]
             except KeyError:
                 val = func(*args, **kwargs)
-                if not_none_returns_only and val is None:
+                if valued_returns_only and not val:
                     pass
                 else:
                     cache[key] = val

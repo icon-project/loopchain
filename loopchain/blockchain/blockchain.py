@@ -363,12 +363,12 @@ class BlockChain:
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
-    @lru_cache(maxsize=4, not_none_returns_only=True)
+    @lru_cache(maxsize=4, valued_returns_only=True)
     def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
         preps = self.find_preps_by_roothash(roothash)
         return [prep["id"] for prep in preps]
 
-    @lru_cache(maxsize=4, not_none_returns_only=True)
+    @lru_cache(maxsize=4, valued_returns_only=True)
     def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
@@ -551,8 +551,9 @@ class BlockChain:
             self._write_tx(block, receipts, batch)
 
         if next_prep:
-            utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
-                              f"\npreps({next_prep['preps']})")
+            utils.logger.spam(
+                f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
+                f"\npreps({next_prep['preps']})")
             self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
 
         if confirm_info:

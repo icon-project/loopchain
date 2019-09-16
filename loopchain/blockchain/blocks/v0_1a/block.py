@@ -30,9 +30,7 @@ class BlockHeader(BaseBlockHeader):
 
     @property
     def reps_hash(self) -> None:
-        """0.1a block doesn't support this.
-
-        :return: Always None
+        """If the block version doesn't support this, it should return None.
         """
         return None
 
@@ -43,17 +41,13 @@ class BlockHeader(BaseBlockHeader):
 
     @property
     def prep_changed(self) -> None:
-        """0.1a block doesn't support this.
-
-        :return: Always None
+        """If the block version doesn't support this, it should return None.
         """
         return None
 
     @property
     def revealed_next_reps_hash(self) -> None:
-        """0.1a block doesn't support this.
-
-        :return: Always None
+        """If the block version doesn't support this, it should return None.
         """
         return None
 
