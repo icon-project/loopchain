@@ -90,6 +90,7 @@ class PeerLoader:
             return
 
         response = rs_client.call("GetChannelInfos")
+        logging.debug(f"response of GetChannelInfos: {response}")
         reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
         if reps is None:
             logging.error(f"There's no peer list to initialize.")
