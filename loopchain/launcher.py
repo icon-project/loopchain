@@ -255,7 +255,6 @@ def start_as_peer(args):
 
     # apply default configure values
     port = args.port or conf.PORT_PEER
-    radio_station_target = None
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
@@ -265,26 +264,6 @@ def start_as_peer(args):
             command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
     check_port_available(int(port))
-
-    if args.radio_station_target:
-        try:
-            parse_result: ParseResult = urlparse(args.radio_station_target)
-
-            if conf.SUBSCRIBE_USE_HTTPS:
-                if not parse_result.scheme:
-                    parse_result = urlparse(f"https://{args.radio_station_target}")
-            else:
-                if not parse_result.scheme:
-                    parse_result = urlparse(f"http://{args.radio_station_target}")
-                    if not parse_result.port:
-                        parse_result = urlparse(f"http://{args.radio_station_target}:{conf.PORT_RADIOSTATION}")
-
-            radio_station_target = parse_result.netloc
-
-        except Exception as e:
-            utils.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
-                               f"[IP Address of Radio Station]:[PORT number of Radio Station], "
-                               f"or just [IP Address of Radio Station] format. error({e})")
 
     PeerService().serve(
         port=port,
