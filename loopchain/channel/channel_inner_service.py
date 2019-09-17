@@ -76,16 +76,19 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        tx_hash = None
+        relay_target = None
         if self.__qos_controller.limit():
             util.logger.debug(f"Out of TPS limit. tx={kwargs}")
-            return message_code.Response.fail_out_of_tps_limit, None
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         node_type = self.__properties.get('node_type', None)
         if node_type is None:
             util.logger.warning("Node type has not been set yet.")
-            return NodeInitializationError.message_code, None
+            return NodeInitializationError.message_code, tx_hash, relay_target
         elif node_type != conf.NodeType.CommunityNode.value:
-            return message_code.Response.fail_no_permission, None
+            relay_target = self.__properties.get('relay_target', None)
+            return message_code.Response.fail_no_permission, tx_hash, relay_target
 
         result_code = None
         exception = None
@@ -110,7 +113,7 @@ class ChannelTxCreatorInnerTask:
             logging.debug(f"create icx input : {kwargs}")
 
             self.__broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, self.__tx_versioner))
-            return message_code.Response.success, tx.hash.hex()
+            return message_code.Response.success, tx.hash.hex(), relay_target
 
         except MessageCodeError as e:
             result_code = e.message_code
@@ -126,7 +129,7 @@ class ChannelTxCreatorInnerTask:
                                 f"kwargs({kwargs})\n\n"
                                 f"tx({tx})\n\n"
                                 f"exception({exception})")
-                return result_code, None
+                return result_code, tx_hash, relay_target
 
     async def schedule_job(self, command, params):
         self.__broadcast_scheduler.schedule_job(command, params)
@@ -492,6 +495,10 @@ class ChannelInnerTask:
     @message_queue_task
     async def hello(self):
         return 'channel_hello'
+
+    @message_queue_task
+    async def get_rs_target(self):
+        return ChannelProperty().rs_target
 
     @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):

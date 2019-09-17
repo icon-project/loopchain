@@ -30,7 +30,7 @@ from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 
 import verboselogs
 from fluent import event
@@ -224,7 +224,7 @@ def request_server_wait_response(stub_method, message, time_out_seconds=None):
     return None
 
 
-def normalize_request_url(url_input, version, channel=None):
+def normalize_request_url(url_input, version=None, channel=None):
     if 'http://' in url_input:
         url_input = url_input.split("http://")[1]
 
@@ -258,23 +258,20 @@ def normalize_request_url(url_input, version, channel=None):
 
 
 def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_https=False, channel=None):
-    if ip is None:
-        ip = conf.IP_LOCAL
-    if port is None:
-        port = conf.PORT_PEER_FOR_REST
-    if version is None:
-        version = conf.ApiVersion.v3
-    if channel is None:
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
+    ip = ip or conf.IP_LOCAL
+    port = port or conf.PORT_PEER_FOR_REST
+    version = version or conf.ApiVersion.v3
+    channel = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
+    scheme = 'https' if use_https else 'http'
 
     if dns:
         ip = dns
         port = '443'
 
     if version in (conf.ApiVersion.v3, conf.ApiVersion.node):
-        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}/{channel}"
+        url = f"{scheme}://{ip}:{port}/api/{version.name}/{channel}"
     else:
-        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
+        url = f"{scheme}://{ip}:{port}/api/{version.name}"
     return url
 
 
@@ -352,6 +349,11 @@ def get_private_ip():
         return get_private_ip3()
 
 
+def convert_local_ip_to_private_ip(data: Union[list, dict]):
+    converted = json.dumps(data).replace('[local_ip]', get_private_ip())
+    return json.loads(converted)
+
+
 def load_json_data(channel_manage_data_path: str):
     try:
         logging.debug(f"load_json_data() : try to load channel management"
@@ -359,8 +361,7 @@ def load_json_data(channel_manage_data_path: str):
         with open(channel_manage_data_path) as file:
             json_data = json.load(file)
 
-        json_string = json.dumps(json_data).replace('[local_ip]', get_private_ip())
-        json_data = json.loads(json_string)
+        json_data = convert_local_ip_to_private_ip(json_data)
         logging.info(f"loading channel info : {json_data}")
         return json_data
     except FileNotFoundError as e:

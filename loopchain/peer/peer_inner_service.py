@@ -41,7 +41,6 @@ class PeerInnerTask:
             'peer_port': self._peer_service.peer_port,
             'peer_target': self._peer_service.peer_target,
             'rest_target': self._peer_service.rest_target,
-            'rs_target': self._peer_service.radio_station_target,
             'peer_id': self._peer_service.peer_id
         }
 

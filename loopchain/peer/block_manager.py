@@ -357,7 +357,7 @@ class BlockManager:
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height, ObjectManager().channel_service.radio_station_stub)
+            return self.__block_request_by_citizen(block_height)
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -382,14 +382,14 @@ class BlockManager:
             votes, response.response_code
         )
 
-    def __block_request_by_citizen(self, block_height, rs_rest_stub):
-        get_block_result = rs_rest_stub.call(
+    def __block_request_by_citizen(self, block_height):
+        rs_client = ObjectManager().channel_service.rs_client
+        get_block_result = rs_client.call(
             "GetBlockByHeight", {
-                'channel': self.__channel_name,
                 'height': str(block_height)
             }
         )
-        last_block = rs_rest_stub.call("GetLastBlock")
+        last_block = rs_client.call("GetLastBlock")
         max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
@@ -661,9 +661,9 @@ class BlockManager:
         peer_stubs = []     # peer stub list for block height synchronization
 
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rest_stub = ObjectManager().channel_service.radio_station_stub
-            peer_stubs.append(rest_stub)
-            last_block = rest_stub.call("GetLastBlock")
+            rs_client = ObjectManager().channel_service.rs_client
+            peer_stubs.append(rs_client)
+            last_block = rs_client.call("GetLastBlock")
             max_height = self.blockchain.block_versioner.get_height(last_block)
 
             return max_height, unconfirmed_block_height, peer_stubs

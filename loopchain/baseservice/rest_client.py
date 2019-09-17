@@ -11,36 +11,26 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""A stub wrapper for REST call.
-This object has same interface with gRPC stub manager"""
+"""The Client Interface for REST call."""
+
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from typing import List, Dict, Optional
+from urllib.parse import urlparse
 
 import requests
+from aiohttp import ClientSession
 from jsonrpcclient import HTTPClient, Request
 
-import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain import utils
 
 
-class RestStubManager:
-    def __init__(self, target, channel=None, for_rs_target=True):
-        util.logger.spam(f"RestStubManager:init target({target})")
+class RestClient:
+    def __init__(self, channel=None):
+        self._target: str = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         self._version_urls = {}
         self._http_clients = {}
-        for version in conf.ApiVersion:
-            if 'https://' in target:
-                url = util.normalize_request_url(target, version, self._channel_name)
-            elif for_rs_target:
-                url = util.normalize_request_url(
-                    f"{'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'}://{target}", version, self._channel_name)
-            else:
-                url = util.normalize_request_url(f"http://{target}", version, self._channel_name)
-            self._version_urls[version] = url
-            if version != conf.ApiVersion.v1:
-                self._http_clients[url] = HTTPClient(url)
-
         self._method_versions = {
             "GetChannelInfos": conf.ApiVersion.node,
             "GetBlockByHeight": conf.ApiVersion.node,
@@ -48,7 +38,6 @@ class RestStubManager:
             "GetLastBlock": conf.ApiVersion.v3,
             "GetReps": conf.ApiVersion.v3
         }
-
         self._method_names = {
             "GetChannelInfos": "node_getChannelInfos",
             "GetBlockByHeight": "node_getBlockByHeight",
@@ -57,9 +46,53 @@ class RestStubManager:
             "GetReps": "rep_getListByHash"
         }
 
-        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="RestStubThread")
+    async def init(self, endpoints: List[str]):
+        self._target = await self._select_fastest_endpoint(endpoints)
+        if self._target:
+            utils.logger.spam(f"RestClient init target({self._target})")
+            self._init_http_clients()
 
-    def call(self, method_name, params=None, timeout=None, is_stub_reuse=True, is_raise=False) -> dict:
+    @property
+    def target(self):
+        return self._target
+
+    def _init_http_clients(self):
+        for version in conf.ApiVersion:
+            if 'https://' in self._target:
+                url = utils.normalize_request_url(self._target, version, self._channel_name)
+            else:
+                scheme = 'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'
+                url = utils.normalize_request_url(f"{scheme}://{self._target}", version, self._channel_name)
+            self._version_urls[version] = url
+            if version != conf.ApiVersion.v1:
+                self._http_clients[url] = HTTPClient(url)
+
+    async def _select_fastest_endpoint(self, endpoints) -> Optional[str]:
+        latencies: Dict[str, float] = dict()
+        for endpoint in endpoints:
+            request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
+            neighbor_target = urlparse(request_uri).netloc
+            try:
+                async with ClientSession() as session:
+                    start_time = session.loop.time()
+                    await session.get(request_uri,
+                                      params={'channel': self._channel_name},
+                                      timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                    elapsed_time = session.loop.time() - start_time
+            except Exception:
+                continue
+            else:
+                latencies[neighbor_target] = elapsed_time
+
+        if not latencies:
+            logging.warning(f"no alive node among endpoints({endpoints})")
+            return
+
+        min_latency_target = min(latencies.keys(), key=lambda k: latencies[k])
+        logging.info(f"minimum latency endpoint is: {min_latency_target}")
+        return min_latency_target
+
+    def call(self, method_name, params=None, timeout=None) -> dict:
         try:
             version = self._method_versions[method_name]
             url = self._version_urls[version]
@@ -82,15 +115,9 @@ class RestStubManager:
                     response = self._http_clients[url].send(request, timeout=timeout)
                 except Exception as e:
                     raise ConnectionError(e)
-            util.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
+            utils.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
             return response
 
         except Exception as e:
             logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
             raise e
-
-    def call_async(self, method_name, params=None, call_back=None, timeout=None, is_stub_reuse=True):
-        future = self._executor.submit(self.call, method_name, params, timeout, is_stub_reuse)
-        if call_back:
-            future.add_done_callback(call_back)
-        return future
