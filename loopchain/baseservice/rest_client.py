@@ -73,7 +73,7 @@ class RestClient:
         latencies: Dict[str, float] = dict()
         for endpoint in endpoints:
             request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
-            neighbor_target = urlparse(request_uri).netloc
+            neighbor_target = urlparse(request_uri).scheme + "://" + urlparse(request_uri).netloc
             try:
                 async with ClientSession() as session:
                     start_time = session.loop.time()
