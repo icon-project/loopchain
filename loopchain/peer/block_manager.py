@@ -661,9 +661,17 @@ class BlockManager:
         logging.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
         # prevent_next_block_mismatch until last_block_height in block DB. (excludes last_unconfirmed_block_height)
-        self._loop.create_task(
+        """
+        task = self._loop.create_task(
             self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1)
         )
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self.get_blockchain().prevent_next_block_mismatch(self.__blockchain.block_height + 1),
+            self._loop
+        )
+        mismatch = future.result()
+        logging.warning(f"__block_height_sync() mismatch = {mismatch}")
 
         try:
             if peer_stubs:
