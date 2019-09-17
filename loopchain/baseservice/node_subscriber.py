@@ -44,7 +44,9 @@ CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
 
 class NodeSubscriber:
     def __init__(self, channel, rs_target):
-        self._target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{rs_target}/api/ws/{channel}"
+        # TODO required post review [LC-454]
+        # self._target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{rs_target}/api/ws/{channel}"
+        self._target_uri = f"{'wss' if ('https://' in rs_target) else 'ws'}://{rs_target}/api/ws/{channel}"
         self._exception = None
         self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None

@@ -225,8 +225,13 @@ def request_server_wait_response(stub_method, message, time_out_seconds=None):
 
 
 def normalize_request_url(url_input, version=None, channel=None):
+    use_https = False
+
     if 'http://' in url_input:
         url_input = url_input.split("http://")[1]
+
+    if 'https://' in url_input:
+        use_https = True
 
     if not url_input:  # ex) '' => http://localhost:9000/api/v3
         url = generate_url_from_params(version=version, channel=channel)
@@ -252,7 +257,7 @@ def normalize_request_url(url_input, version=None, channel=None):
     elif url_input.count('.') == 3 and url_input.replace(".", "").isdigit():  # ex) 127.0.0.1
         url = generate_url_from_params(ip=url_input, version=version, channel=channel)
     else:  # ex) testwallet.icon.foundation => https://testwallet.icon.foundation/api/v3
-        url = generate_url_from_params(dns=url_input, version=version, use_https=True, channel=channel)
+        url = generate_url_from_params(dns=url_input, version=version, use_https=use_https, channel=channel)
 
     return url
 
