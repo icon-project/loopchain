@@ -18,7 +18,7 @@ import signal
 from asyncio import Condition
 from collections import namedtuple
 from concurrent.futures import ThreadPoolExecutor
-from typing import Union, Dict, List, Tuple
+from typing import Union, Dict, List, Tuple, Optional
 
 from earlgrey import *
 
@@ -494,8 +494,26 @@ class ChannelInnerTask:
         return 'channel_hello'
 
     @message_queue_task
-    async def get_rs_target(self):
-        return ChannelProperty().rs_target
+    async def get_rs_target(self) -> Optional[str]:
+        """Return rs_target to RPC-Server.
+
+        It is not impossible that RPC-Server is initialized before ChannelService in ready.
+        Wait for channel initialized to cover this case.
+        """
+        rs_target = None
+        retry_count = 0
+        max_retry = 60
+
+        while not rs_target:
+            if retry_count >= max_retry:
+                logging.warning(f"Fail to response rs_target: {ChannelProperty().rs_target}")
+                break
+
+            rs_target = ChannelProperty().rs_target
+            retry_count += 1
+            await asyncio.sleep(.1)
+
+        return rs_target
 
     @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):

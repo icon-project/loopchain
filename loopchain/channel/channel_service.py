@@ -349,6 +349,7 @@ class ChannelService:
         self.__rs_client = RestClient(channel=ChannelProperty().name)
         await self.__rs_client.init(radiostations)
         ChannelProperty().rs_target = self.__rs_client.target
+        logging.debug("ChannelProperty().rs_target: ", ChannelProperty().rs_target)
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
