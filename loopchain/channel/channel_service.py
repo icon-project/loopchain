@@ -291,7 +291,10 @@ class ChannelService:
             new_node_type = self._get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
-        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
+        self.__inner_service.update_sub_services_properties(
+            node_type=ChannelProperty().node_type.value,
+            relay_target=ChannelProperty().rs_target
+        )
 
     def switch_role(self):
         self.peer_manager.update_all_peers()
