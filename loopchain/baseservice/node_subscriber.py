@@ -16,11 +16,11 @@
 import asyncio
 import json
 import logging
-import traceback
-from earlgrey import MessageQueueService
 from asyncio import Event
+from urllib import parse
 
 import websockets
+from earlgrey import MessageQueueService
 from jsonrpcclient.request import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
@@ -29,7 +29,7 @@ from websockets import WebSocketClientProtocol
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import AnnounceNewBlockError, ExternalAddress
+from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -44,7 +44,10 @@ CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
 
 class NodeSubscriber:
     def __init__(self, channel, rs_target):
-        self._target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{rs_target}/api/ws/{channel}"
+        # TODO required post review [LC-454]
+        # self._target_uri = f"{'wss' if conf.SUBSCRIBE_USE_HTTPS else 'ws'}://{rs_target}/api/ws/{channel}"
+        self._target_uri = \
+            f"{'wss' if ('https://' in rs_target) else 'ws'}://{parse.urlparse(rs_target).netloc}/api/ws/{channel}"
         self._exception = None
         self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None

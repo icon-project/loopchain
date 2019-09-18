@@ -58,11 +58,13 @@ class RestClient:
 
     def _init_http_clients(self):
         for version in conf.ApiVersion:
-            if 'https://' in self._target:
-                url = utils.normalize_request_url(self._target, version, self._channel_name)
-            else:
-                scheme = 'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'
-                url = utils.normalize_request_url(f"{scheme}://{self._target}", version, self._channel_name)
+            # TODO required post review [LC-454]
+            # if 'https://' in self._target:
+            #     url = utils.normalize_request_url(self._target, version, self._channel_name)
+            # else:
+            #     scheme = 'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'
+            #     url = utils.normalize_request_url(f"{scheme}://{self._target}", version, self._channel_name)
+            url = utils.normalize_request_url(self._target, version, self._channel_name)
             self._version_urls[version] = url
             if version != conf.ApiVersion.v1:
                 self._http_clients[url] = HTTPClient(url)
@@ -71,7 +73,7 @@ class RestClient:
         latencies: Dict[str, float] = dict()
         for endpoint in endpoints:
             request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
-            neighbor_target = urlparse(request_uri).netloc
+            neighbor_target = urlparse(request_uri).scheme + "://" + urlparse(request_uri).netloc
             try:
                 async with ClientSession() as session:
                     start_time = session.loop.time()
