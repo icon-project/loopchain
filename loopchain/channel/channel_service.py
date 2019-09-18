@@ -530,7 +530,8 @@ class ChannelService:
             self.__block_manager.epoch.new_round(leader_peer.peer_id)
         else:
             self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
-        logging.info(f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
+        logging.info(
+            f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
 
         if self_peer_object.peer_id == leader_peer.peer_id:
             utils.logger.debug("Set Peer Type Leader!")
