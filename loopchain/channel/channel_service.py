@@ -223,11 +223,14 @@ class ChannelService:
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
+        await self._init_rs_target()
         await self._select_node_type()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await self.set_peer_type_in_channel()
         else:
+            if ChannelProperty().rs_target is None:
+                utils.exit_and_msg("no alive radiostations to subscribe")
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
 
@@ -337,11 +340,11 @@ class ChannelService:
         scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
                                block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
-    async def _init_rs_client(self):
+    def _get_radiostations(self):
         radiostations: list = self.get_channel_option().get('radiostations')
         if not radiostations:
             logging.warning(f"no configurations for radiostations.")
-            return
+            return None
 
         radiostations = utils.convert_local_ip_to_private_ip(radiostations)
         try:
@@ -349,9 +352,19 @@ class ChannelService:
         except ValueError:
             pass
 
-        self.__rs_client = RestClient(channel=ChannelProperty().name)
+        return radiostations
+
+    async def _init_rs_target(self):
+        radiostations = self._get_radiostations()
+        if radiostations is None:
+            return
+
         await self.__rs_client.init(radiostations)
         ChannelProperty().rs_target = self.__rs_client.target
+
+    async def _init_rs_client(self):
+        self.__rs_client = RestClient(channel=ChannelProperty().name)
+        await self._init_rs_target()
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
