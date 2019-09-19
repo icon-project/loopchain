@@ -275,9 +275,6 @@ class PeerManager:
             if isinstance(peer_id, ExternalAddress):
                 peer_id = peer_id.hex_hx()
 
-            if peer_id == ExternalAddress.empty().hex_hx():
-                return list(self.peer_list.values())[0]
-
             return self.peer_list[str(peer_id)]
 
         except KeyError:
