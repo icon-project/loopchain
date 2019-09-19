@@ -141,7 +141,7 @@ class BlockChain:
         self.__made_block_counter.clear()
 
     def get_first_leader_of_next_reps(self) -> str:
-        utils.logger.notice(
+        utils.logger.spam(
             f"in get_next_leader new reps leader is "
             f"{self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]}")
         return self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]
@@ -1089,20 +1089,32 @@ class BlockChain:
             }
             transactions.append(transaction)
 
+        prev_vote_results = {}
+        prev_block_votes = []
+
         if prev_block.header.height < 1:
             prev_block_validators = []
-            prev_block_votes = []
         elif prev_block.header.version != "0.1a":
             prev_block_validators = [vote.rep.hex_hx() for vote in _block.body.prev_votes
                                      if vote and vote.rep != prev_block.header.peer_id]
+            prev_vote_results = {vote.rep: vote.result() for vote in _block.body.prev_votes
+                                 if vote and vote.rep != prev_block.header.peer_id}
         else:
             prev_block_validators = [rep['id'] for rep in ObjectManager().channel_service.peer_manager.get_reps()
                                      if rep['id'] != prev_block.header.peer_id.hex_hx()]
 
-        if prev_block_validators:
-            prev_block_votes = [[vote_address.hex_hx(), hex(vote_address.hex_hx() in prev_block_validators)]
-                                for vote_address in self.find_preps_addresses_by_header(prev_block.header)
-                                if vote_address != prev_block.header.peer_id]
+        if prev_vote_results:
+            prev_block_votes = [
+                [
+                    vote_address.hex_hx(),
+                    hex((2 - prev_vote_results[vote_address]) if vote_address in prev_vote_results else False)
+                ]
+                for vote_address in self.find_preps_addresses_by_header(prev_block.header)
+                if vote_address != prev_block.header.peer_id
+            ]
+
+        # utils.logger.notice(f"prev_vote_results({prev_vote_results}) "
+        #                     f"prev_block_votes({prev_block_votes})")
 
         request_origin = {
             'block': {
