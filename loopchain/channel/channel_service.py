@@ -590,6 +590,17 @@ class ChannelService:
         stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 
+    def callback_leader_complain_timeout(self):
+        if self.state_machine.state == "BlockGenerate":
+            _, new_leader_id = self.block_manager.get_leader_ids_for_complaint()
+            if new_leader_id == ChannelProperty().peer_id:
+                utils.logger.debug(
+                    f"Cannot convert the state to the `LeaderComplain` from the `BlockGenerate`"
+                    f", because I'm the BlockGenerate and the next leader candidate.")
+                return
+
+        self.state_machine.leader_complain()
+
     def turn_on_leader_complain_timer(self):
         """Turn on a leader complaint timer by the configuration name of `ALLOW_MAKE_EMPTY_BLOCK`.
         """
@@ -621,7 +632,7 @@ class ChannelService:
         if self.state_machine.state in ("Vote", "LeaderComplain"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
-                                                      is_repeat=True, callback=self.state_machine.leader_complain)
+                                                      is_repeat=True, callback=self.callback_leader_complain_timeout)
 
     def stop_leader_complain_timer(self):
         utils.logger.spam(f"stop_leader_complain_timer in channel service.")

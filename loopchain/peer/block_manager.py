@@ -18,7 +18,7 @@ import logging
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
 
 from collections import defaultdict
 
@@ -735,7 +735,10 @@ class BlockManager:
         elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
 
-    def leader_complain(self):
+    def get_leader_ids_for_complaint(self) -> Tuple[str, str]:
+        """
+        :return: Return complained_leader_id and new_leader_id for the Leader Complaint.
+        """
         complained_leader_id = self.epoch.leader_id
 
         new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
@@ -749,6 +752,10 @@ class BlockManager:
         if not isinstance(complained_leader_id, str):
             complained_leader_id = ""
 
+        return complained_leader_id, new_leader_id
+
+    def leader_complain(self):
+        complained_leader_id, new_leader_id = self.get_leader_ids_for_complaint()
         leader_vote = LeaderVote.new(
             signer=ChannelProperty().peer_auth,
             block_height=self.epoch.height,
