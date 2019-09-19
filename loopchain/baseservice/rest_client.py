@@ -14,7 +14,7 @@
 """The Client Interface for REST call."""
 
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union
 from urllib.parse import urlparse
 
 import requests
@@ -70,27 +70,43 @@ class RestClient:
                 self._http_clients[url] = HTTPClient(url)
 
     async def _select_fastest_endpoint(self, endpoints) -> Optional[str]:
-        latencies: Dict[str, float] = dict()
+        """select fastest endpoint with conditions below
+        1. Maximum block height (higher priority)
+        2. Minimum elapsed response time
+
+        :param endpoints: list of endpoints
+        :return: the fastest endpoint target "{scheme}://{netloc}"
+        """
+        results: List[Dict[str, Union[str, int, float]]] = list()
+        path = self._method_names["Status"]
         for endpoint in endpoints:
-            request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1)
-            neighbor_target = urlparse(request_uri).scheme + "://" + urlparse(request_uri).netloc
+            request_uri = utils.normalize_request_url(endpoint, conf.ApiVersion.v1) + path
+            endpoint_target = urlparse(request_uri).scheme + "://" + urlparse(request_uri).netloc
             try:
                 async with ClientSession() as session:
                     start_time = session.loop.time()
-                    await session.get(request_uri,
-                                      params={'channel': self._channel_name},
-                                      timeout=conf.REST_ADDITIONAL_TIMEOUT)
+                    async with session.get(url=request_uri,
+                                           params={'channel': self._channel_name},
+                                           timeout=conf.REST_ADDITIONAL_TIMEOUT) as response:
+                        response_dict = await response.json()
+                        block_height = response_dict['block_height']
                     elapsed_time = session.loop.time() - start_time
             except Exception:
                 continue
             else:
-                latencies[neighbor_target] = elapsed_time
+                results.append({
+                    'target': endpoint_target,
+                    'elapsed_time': elapsed_time,
+                    'height': block_height
+                })
 
-        if not latencies:
+        if not results:
             logging.warning(f"no alive node among endpoints({endpoints})")
             return
 
-        min_latency_target = min(latencies.keys(), key=lambda k: latencies[k])
+        # sort results by min elapsed_time with max block height
+        sorted_result = sorted(results, key=lambda k: (-k['height'], k['elapsed_time']))
+        min_latency_target = sorted_result[0]['target']
         logging.info(f"minimum latency endpoint is: {min_latency_target}")
         return min_latency_target
 
