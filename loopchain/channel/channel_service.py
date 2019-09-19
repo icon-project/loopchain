@@ -411,16 +411,13 @@ class ChannelService:
     def get_channel_option(self) -> dict:
         return conf.CHANNEL_OPTION[ChannelProperty().name]
 
-    def get_rep_ids(self) -> list:
-        return [ExternalAddress.fromhex_address(peer_id, allow_malformed=True)
-                for peer_id in self.__peer_manager.peer_list]
-
     def generate_genesis_block(self):
         if self.__block_manager.blockchain.block_height > -1:
             logging.debug("genesis block was already generated")
             return
 
-        reps = self.get_rep_ids()
+        reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
+            self.peer_manager.prepared_reps_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):

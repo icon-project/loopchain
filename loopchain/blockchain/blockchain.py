@@ -27,7 +27,8 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer
+from loopchain.baseservice.score_code import PrepChangedReason
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
@@ -122,12 +123,6 @@ class BlockChain:
     def just_before_max_made_block_count(self) -> bool:
         return self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1)
 
-    @property
-    def last_block_has_changed_next_reps(self) -> bool:
-        if self.__last_block.header.version != '0.1a':
-            return self.__last_block.header.reps_hash != self.__last_block.header.next_reps_hash
-        return False
-
     def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
 
@@ -137,7 +132,7 @@ class BlockChain:
         if block.header.height == 0:
             return
 
-        if self.__last_block.header.peer_id != block.header.peer_id or self.last_block_has_changed_next_reps:
+        if self.__last_block.header.peer_id != block.header.peer_id or self.__last_block.header.prep_changed:
             self.__made_block_counter[block.header.peer_id] = 1
         else:
             self.__made_block_counter[block.header.peer_id] += 1
@@ -148,8 +143,8 @@ class BlockChain:
     def get_first_leader_of_next_reps(self) -> str:
         utils.logger.notice(
             f"in get_next_leader new reps leader is "
-            f"{self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]}")
-        return self.find_preps_ids_by_roothash(self.last_block.header.next_reps_hash)[0]
+            f"{self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]}")
+        return self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]
 
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block
@@ -368,15 +363,24 @@ class BlockChain:
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
-    @lru_cache(maxsize=4, not_none_returns_only=True)
+    @lru_cache(maxsize=4, valued_returns_only=True)
     def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
         preps = self.find_preps_by_roothash(roothash)
         return [prep["id"] for prep in preps]
 
-    @lru_cache(maxsize=4, not_none_returns_only=True)
+    @lru_cache(maxsize=4, valued_returns_only=True)
     def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
+
+    def find_preps_addresses_by_header(self, header: BlockHeader) -> List[ExternalAddress]:
+        try:
+            roothash = header.reps_hash
+        except AttributeError:
+            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
+            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+
+        return self.find_preps_addresses_by_roothash(roothash)
 
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
@@ -547,8 +551,9 @@ class BlockChain:
             self._write_tx(block, receipts, batch)
 
         if next_prep:
-            utils.logger.spam(f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
-                              f"\npreps({next_prep['preps']})")
+            utils.logger.spam(
+                f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
+                f"\npreps({next_prep['preps']})")
             self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
 
         if confirm_info:
@@ -829,14 +834,6 @@ class BlockChain:
 
         return results
 
-    def __is_1st_block_of_new_term(self, unconfirmed_block_header, current_block_header):
-        if unconfirmed_block_header.version == '0.1a':
-            return False
-
-        reps = self.find_preps_addresses_by_roothash(current_block_header.reps_hash)
-        return (unconfirmed_block_header.reps_hash != unconfirmed_block_header.next_reps_hash
-                and current_block_header.peer_id == reps[0])
-
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
@@ -861,7 +858,7 @@ class BlockChain:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
                     if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
-                            or self.__is_1st_block_of_new_term(self.last_block.header, current_block.header):
+                            or self.last_block.header.prep_changed is not None:
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
                     return None
@@ -1063,7 +1060,8 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        block_builder.reps = self.find_preps_addresses_by_roothash(
+            ObjectManager().channel_service.peer_manager.prepared_reps_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
@@ -1122,23 +1120,27 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
+        next_leader = _block.header.next_leader
         next_prep = response.get("prep")
         if next_prep:
-            utils.logger.debug(
-                f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
+            # P-Rep list has been changed
+            utils.logger.debug(f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
+
+            if next_prep["state"] == PrepChangedReason.TERM_END:
+                next_leader = ExternalAddress.empty()
+            elif next_prep["state"] == PrepChangedReason.PENALTY:
+                pass
+
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
-            next_preps_hash = None
-
-        if prev_block.header.version != "0.1a":
-            reps = self.find_preps_addresses_by_roothash(_block.header.reps_hash)
-        else:
-            reps = ObjectManager().channel_service.get_rep_ids()
+            # P-Rep list has no changes
+            next_preps_hash = Hash32.empty()
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
+        block_builder.next_leader = next_leader
         block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
@@ -1161,7 +1163,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = reps
+        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
         block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:

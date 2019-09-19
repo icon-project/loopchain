@@ -716,7 +716,8 @@ class ChannelInnerTask:
             f"height({unconfirmed_block.header.height})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
 
-        if self._channel_service.state_machine.state not in ("Vote", "Watch", "LeaderComplain"):
+        if self._channel_service.state_machine.state not in \
+                ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
             return
 

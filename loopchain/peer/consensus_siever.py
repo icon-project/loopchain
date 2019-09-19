@@ -127,8 +127,8 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug(f"-------------------consensus-------------------")
         async with self.__lock:
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
-                util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
-                return
+                util.logger.warning(
+                    f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
             complain_votes = self.__get_complaint_votes()
@@ -146,11 +146,9 @@ class ConsensusSiever(ConsensusBase):
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             last_block_header = self._blockchain.last_block.header
             new_term = False
-            if last_block_header.version != '0.1a':
-                reps_switched = last_block_header.reps_hash != last_block_header.next_reps_hash
-                block_deprecated = (last_unconfirmed_block is None
-                                    or last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address)
-                if reps_switched and block_deprecated:
+            if last_block_header.prep_changed:
+                if last_unconfirmed_block is None or \
+                        last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
                     util.logger.info(f"start new term.")
                     new_term = True
                     latest_block = self._blockchain.last_block
@@ -215,14 +213,16 @@ class ConsensusSiever(ConsensusBase):
             except NotEnoughVotes:
                 return
 
-            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
+            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
+                    and not candidate_block.header.prep_changed:
                 util.logger.spam(
                     f"-------------------turn_to_peer "
                     f"next_leader({self._block_manager.epoch.leader_id}) "
                     f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
             else:
-                if self._blockchain.just_before_max_made_block_count:
+                if self._blockchain.just_before_max_made_block_count \
+                        and not candidate_block.header.prep_changed:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
                     # next unconfirmed block height is 10
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)

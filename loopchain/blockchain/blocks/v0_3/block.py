@@ -1,9 +1,11 @@
 from dataclasses import dataclass
-from typing import List
-from loopchain.crypto.hashing import build_hash_generator
-from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
+from typing import List, Optional
+
+from loopchain.baseservice import PrepChangedReason
 from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
+from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
 from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
+from loopchain.crypto.hashing import build_hash_generator
 
 
 @dataclass(frozen=True)
@@ -24,6 +26,26 @@ class BlockHeader(BaseBlockHeader):
     @property
     def complained(self):
         return self.leader_votes_hash != Hash32.empty()
+
+    @property
+    def prep_changed(self) -> Optional[PrepChangedReason]:
+        """Return reason for prep changed
+
+        :return: None means there is no change.
+        """
+        if self.next_reps_hash == Hash32.empty():
+            return None
+
+        if self.next_leader == ExternalAddress.empty():
+            return PrepChangedReason.TERM_END
+
+        return PrepChangedReason.PENALTY
+
+    @property
+    def revealed_next_reps_hash(self):
+        if self.prep_changed:
+            return self.next_reps_hash
+        return self.reps_hash
 
 
 @dataclass(frozen=True)
