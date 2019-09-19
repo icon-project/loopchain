@@ -106,7 +106,8 @@ class ConsensusSiever(ConsensusBase):
         self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash):
-        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
+        if not self._block_manager.epoch.complained_result:
+            self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
 
         self._blockchain.last_unconfirmed_block = None
         dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
@@ -118,7 +119,7 @@ class ConsensusSiever(ConsensusBase):
         return self._block_manager.epoch.makeup_block(complain_votes, votes)
 
     def __get_complaint_votes(self):
-        if self._block_manager.epoch.round > 0:
+        if self._block_manager.epoch.complained_result:
             return self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
         return None
 
@@ -130,17 +131,17 @@ class ConsensusSiever(ConsensusBase):
                 return
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
-            complain_votes = self.__get_complaint_votes()
-            complained_result = self._block_manager.epoch.complained_result
-            if not complained_result:
-                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
-
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             latest_block = last_unconfirmed_block or self._blockchain.last_block
             last_block_header = self._blockchain.last_block.header
             last_block_vote_list = await self.get_votes(latest_block.header.hash)
             if last_block_vote_list is None:
                 return
+
+            complain_votes = self.__get_complaint_votes()
+            complained_result = self._block_manager.epoch.complained_result
+            if not complained_result:
+                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
             new_term = False
             if last_block_header.version != '0.1a':
@@ -242,6 +243,7 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.info(f"Votes : {vote.get_summary()}")
             if vote.is_completed():
+                self._block_manager.epoch.complained_result = None
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote
 
