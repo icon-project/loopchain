@@ -249,10 +249,10 @@ class ConsensusSiever(ConsensusBase):
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote
 
-            util.logger.spam(
-                f"not completed vote"
-                f"\nvotes({vote.votes})"
-                f"\nreps({vote.reps})")
+            # util.logger.spam(
+            #     f"not completed vote"
+            #     f"\nvotes({vote.votes})"
+            #     f"\nreps({vote.reps})")
 
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
