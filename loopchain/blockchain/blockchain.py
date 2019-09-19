@@ -376,6 +376,8 @@ class BlockChain:
     def find_preps_addresses_by_header(self, header: BlockHeader) -> List[ExternalAddress]:
         try:
             roothash = header.reps_hash
+            if not roothash:
+                raise AttributeError
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
             roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
