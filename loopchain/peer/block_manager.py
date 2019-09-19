@@ -240,13 +240,13 @@ class BlockManager:
         if current_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_header(
                 current_block.header.next_reps_hash)[0].hex_hx()
-            util.logger.notice(
-                f"\n\n\nconfirm prev block reps("
+            util.logger.spam(
+                f"confirm prev block reps("
                 f"{self.blockchain.find_preps_addresses_by_header(current_block.header.next_reps_hash)})")
         else:
             next_leader = current_block.header.next_leader.hex_hx()
 
-        util.logger.notice(f"\n\n\nconfirm prev block next_leader({next_leader})")
+        util.logger.debug(f"confirm prev block next_leader({next_leader})")
 
         self.__channel_service.reset_leader(next_leader)
 
@@ -656,7 +656,7 @@ class BlockManager:
                 logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
                 next_leader = None
 
-        util.logger.notice(f"in get_next_leader({next_leader})")
+        util.logger.spam(f"in get_next_leader({next_leader})")
         return next_leader
 
     def __get_peer_stub_list(self):
@@ -716,6 +716,11 @@ class BlockManager:
 
     def add_complain(self, vote: LeaderVote):
         util.logger.spam(f"add_complain vote({vote})")
+
+        if not self.epoch:
+            util.logger.debug(f"Epoch is not initialized.")
+            return
+
         if self.epoch.height == vote.block_height:
             self.epoch.add_complain(vote)
 
@@ -799,23 +804,27 @@ class BlockManager:
     def verify_confirm_info(self, unconfirmed_block: Block):
         my_height = self.blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
-            raise ConfirmInfoInvalidNeedBlockSync(f"trigger block sync in _vote my_height({my_height}), "
-                                                  f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidNeedBlockSync(
+                f"trigger block sync: my_height({my_height}), "
+                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+
+        if my_height == unconfirmed_block.header.height - 2 and not self.blockchain.last_unconfirmed_block:
+            raise ConfirmInfoInvalidNeedBlockSync(
+                f"trigger block sync: my_height({my_height}), "
+                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_block.header.height:
-            raise ConfirmInfoInvalidAddedBlock(f"block is already added my_height({my_height}), "
-                                               f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+            raise ConfirmInfoInvalidAddedBlock(
+                f"block is already added my_height({my_height}), "
+                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
-            if unconfirmed_block.header.version != "0.1a" and unconfirmed_block.header.height > 1:
-                if prev_block.header.version != "0.1a":
-                    prev_reps = reps_getter(prev_block.header.reps_hash)
-                else:
-                    prev_reps = reps_getter(unconfirmed_block.header.reps_hash)
+            if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
+                prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:
             logging.warning(e)
