@@ -131,18 +131,20 @@ class ConsensusSiever(ConsensusBase):
                 return
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
-            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-            latest_block = last_unconfirmed_block or self._blockchain.last_block
-            last_block_header = self._blockchain.last_block.header
-            last_block_vote_list = await self.get_votes(latest_block.header.hash)
+            complain_votes = self.__get_complaint_votes()
+            complained_result = self._block_manager.epoch.complained_result
+            if complained_result:
+                self._blockchain.last_unconfirmed_block = None
+            else:
+                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
+
+            latest_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
+            last_block_vote_list = await self.__get_votes(latest_block.header.hash)
             if last_block_vote_list is None:
                 return
 
-            complain_votes = self.__get_complaint_votes()
-            complained_result = self._block_manager.epoch.complained_result
-            if not complained_result:
-                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
-
+            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+            last_block_header = self._blockchain.last_block.header
             new_term = False
             if last_block_header.version != '0.1a':
                 reps_switched = last_block_header.reps_hash != last_block_header.next_reps_hash
@@ -271,7 +273,7 @@ class ConsensusSiever(ConsensusBase):
             raise TimeoutError
         return timeout
 
-    async def get_votes(self, block_hash: Hash32):
+    async def __get_votes(self, block_hash: Hash32):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
         except KeyError as e:
@@ -279,25 +281,28 @@ class ConsensusSiever(ConsensusBase):
             prev_votes = None
 
         if prev_votes:
-            if not prev_votes.is_completed():
-                try:
-                    last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-                    self.__check_timeout(last_unconfirmed_block)
+            try:
+                last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+                self.__check_timeout(last_unconfirmed_block)
+
+                if not prev_votes.is_completed():
                     self.__broadcast_block(last_unconfirmed_block)
                     if await self._wait_for_voting(last_unconfirmed_block) is None:
                         return None
-                except TimeoutError:
-                    util.logger.warning(f"Timeout block of hash : {block_hash}")
-                    self.__stop_broadcast_send_unconfirmed_block_timer()
-                    return None
-                except NotEnoughVotes:
-                    if last_unconfirmed_block:
-                        util.logger.warning(f"The last unconfirmed block has not enough votes. {block_hash}")
-                        return None
-                    else:
-                        util.exit_and_msg(f"The block that has not enough votes added to the blockchain.")
 
-            prev_votes_list = prev_votes.votes
+                prev_votes_list = prev_votes.votes
+            except TimeoutError:
+                util.logger.warning(f"Timeout block of hash : {block_hash}")
+                if self._block_manager.epoch.complained_result:
+                    self._blockchain.last_unconfirmed_block = None
+                self.__stop_broadcast_send_unconfirmed_block_timer()
+                return None
+            except NotEnoughVotes:
+                if last_unconfirmed_block:
+                    util.logger.warning(f"The last unconfirmed block has not enough votes. {block_hash}")
+                    return None
+                else:
+                    util.exit_and_msg(f"The block that has not enough votes added to the blockchain.")
         else:
             prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
             try:
