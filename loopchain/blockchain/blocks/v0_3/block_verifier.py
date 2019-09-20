@@ -116,14 +116,17 @@ class BlockVerifier(BaseBlockVerifier):
             self._handle_exception(exception)
 
         if header.next_reps_hash != new_block.header.next_reps_hash:
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"NextRepsHash({header.next_reps_hash}), "
-                                     f"Expected({new_block.header.next_reps_hash}), "
-                                     f"next_reps_hash({new_block.header.next_reps_hash}), "
-                                     f"revealed_next_reps_hash({new_block.header.revealed_next_reps_hash}), "
-                                     f"origin header({header}), "
-                                     f"new block header({new_block.header}).")
-            self._handle_exception(exception)
+            if not new_block.header.prep_changed \
+                    and header.next_reps_hash == new_block.header.revealed_next_reps_hash:
+                pass
+            else:
+                exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
+                                         f"NextRepsHash({header.next_reps_hash}), "
+                                         f"Expected({new_block.header.next_reps_hash}), "
+                                         f"revealed_next_reps_hash({new_block.header.revealed_next_reps_hash}), "
+                                         f"\norigin header({header}), "
+                                         f"\nnew block header({new_block.header}).")
+                self._handle_exception(exception)
 
         builder.state_hash = new_block.header.state_hash
         builder.receipts = invoke_result
