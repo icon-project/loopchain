@@ -17,10 +17,7 @@ import json
 import logging
 import signal
 import traceback
-from urllib.parse import urlparse
 
-import requests
-from aiohttp import ClientSession
 from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
@@ -214,14 +211,14 @@ class ChannelService:
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
-        await self._init_rs_target()
         await self._select_node_type()
 
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await self.set_peer_type_in_channel()
         else:
+            await self._init_rs_target()
             if ChannelProperty().rs_target is None:
-                utils.exit_and_msg("no alive radiostations to subscribe")
+                return
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
 
