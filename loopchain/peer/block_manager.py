@@ -639,10 +639,10 @@ class BlockManager:
                 self.blockchain.last_block.header.peer_id.hex_hx()
             ).peer_id
         else:
-            latest_block = self.blockchain.last_unconfirmed_block or self.blockchain.last_block
-            next_leader = latest_block.header.next_leader
+            next_leader = self.blockchain.latest_block.header.next_leader.hex_hx()
+
             try:
-                next_leader = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()).peer_id
+                next_leader = self.__channel_service.peer_manager.get_peer(next_leader).peer_id
             except Exception as e:
                 logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
                 next_leader = None

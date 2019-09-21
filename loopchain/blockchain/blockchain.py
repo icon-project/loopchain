@@ -179,6 +179,10 @@ class BlockChain:
         return self.__last_block
 
     @property
+    def latest_block(self) -> Block:
+        return self.last_unconfirmed_block or self.__last_block
+
+    @property
     def block_versioner(self):
         return self.__block_versioner
 

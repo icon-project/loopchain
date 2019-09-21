@@ -138,20 +138,18 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            latest_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-            last_block_vote_list = await self.__get_votes(latest_block.header.hash)
+            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
             if last_block_vote_list is None:
                 return
 
-            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+            last_unconfirmed_block: Block = self._blockchain.last_unconfirmed_block
             last_block_header = self._blockchain.last_block.header
-            new_term = False
+
             if last_block_header.prep_changed:
-                if last_unconfirmed_block is None or \
-                        last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
-                    util.logger.info(f"start new term.")
-                    new_term = True
-                    latest_block = self._blockchain.last_block
+                new_term = last_unconfirmed_block is None or \
+                           last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address
+            else:
+                new_term = False
 
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
@@ -200,13 +198,12 @@ class ConsensusSiever(ConsensusBase):
             candidate_block = self.__build_candidate_block(
                 block_builder, ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id))
             candidate_block, invoke_results = self._blockchain.score_invoke(
-                candidate_block, latest_block, is_block_editable=True)
+                candidate_block, self._blockchain.latest_block, is_block_editable=True)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
-            self._blockchain.last_unconfirmed_block = candidate_block
 
             try:
                 await self._wait_for_voting(candidate_block)
@@ -221,6 +218,8 @@ class ConsensusSiever(ConsensusBase):
                     f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
             else:
+                self._blockchain.last_unconfirmed_block = candidate_block
+
                 if self._blockchain.just_before_max_made_block_count \
                         and not candidate_block.header.prep_changed:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,

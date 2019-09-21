@@ -60,7 +60,9 @@ class Epoch:
     def new_epoch(leader_id=None):
         block_manager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader()
-        return Epoch(block_manager, leader_id)
+        new_epoch = Epoch(block_manager, leader_id)
+        utils.logger.notice(f"new epoch height({new_epoch.height})")
+        return new_epoch
 
     def new_round(self, new_leader_id, round_=None):
         is_complained = round_ != 0

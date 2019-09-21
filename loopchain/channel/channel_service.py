@@ -275,7 +275,6 @@ class ChannelService:
             if self.state_machine.state == "BlockGenerate":
                 self.start_switch_role_timer_for_last_leader_when_term_expired()
                 return False
-
         return True
 
     async def _select_node_type(self):
