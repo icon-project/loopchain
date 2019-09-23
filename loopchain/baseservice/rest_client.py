@@ -58,12 +58,6 @@ class RestClient:
 
     def _init_http_clients(self):
         for version in conf.ApiVersion:
-            # TODO required post review [LC-454]
-            # if 'https://' in self._target:
-            #     url = utils.normalize_request_url(self._target, version, self._channel_name)
-            # else:
-            #     scheme = 'https' if conf.SUBSCRIBE_USE_HTTPS else 'http'
-            #     url = utils.normalize_request_url(f"{scheme}://{self._target}", version, self._channel_name)
             url = utils.normalize_request_url(self._target, version, self._channel_name)
             self._version_urls[version] = url
             if version != conf.ApiVersion.v1:
