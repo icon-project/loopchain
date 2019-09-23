@@ -45,6 +45,9 @@ if TYPE_CHECKING:
 class ChannelTxCreatorInnerTask:
     def __init__(self, channel_name: str, peer_target: str, tx_versioner: TransactionVersioner):
         self.__channel_name = channel_name
+        self.__nid: int = None
+        self.__relay_target: str = None
+        self.__node_type: conf.NodeType = None
         self.__properties = dict()
         self.__tx_versioner = tx_versioner
 
@@ -67,23 +70,22 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def update_properties(self, properties: dict):
-        self.__properties.update(properties)
+        self.__nid = properties["nid"]
+        self.__node_type = properties["node_type"]
+        self.__relay_target = properties["relay_target"]
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
         tx_hash = None
-        relay_target = None
         if self.__qos_controller.limit():
             util.logger.debug(f"Out of TPS limit. tx={kwargs}")
-            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, self.__relay_target
 
-        node_type = self.__properties.get('node_type', None)
-        if node_type is None:
+        if self.__node_type:
             util.logger.warning("Node type has not been set yet.")
-            return NodeInitializationError.message_code, tx_hash, relay_target
-        elif node_type != conf.NodeType.CommunityNode.value:
-            relay_target = self.__properties.get('relay_target', None)
-            return message_code.Response.fail_no_permission, tx_hash, relay_target
+            return NodeInitializationError.message_code, tx_hash, self.__relay_target
+        elif self.__node_type != conf.NodeType.CommunityNode.value:
+            return message_code.Response.fail_no_permission, tx_hash, self.__relay_target
 
         result_code = None
         exception = None
@@ -95,20 +97,19 @@ class ChannelTxCreatorInnerTask:
             ts = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
             tx = ts.from_(kwargs)
 
-            nid = self.__properties.get('nid', None)
-            if nid is None:
+            if self.__nid:
                 util.logger.warning(f"NID has not been set yet.")
                 raise NodeInitializationError(tx.hash.hex())
 
             tv = TransactionVerifier.new(tx_version, tx_type, self.__tx_versioner)
-            tv.pre_verify(tx, nid=nid)
+            tv.pre_verify(tx, nid=self.__nid)
 
             self.__pre_validate(tx)
 
             logging.debug(f"create icx input : {kwargs}")
 
             self.__broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, (tx, self.__tx_versioner))
-            return message_code.Response.success, tx.hash.hex(), relay_target
+            return message_code.Response.success, tx.hash.hex(), self.__relay_target
 
         except MessageCodeError as e:
             result_code = e.message_code
@@ -124,7 +125,7 @@ class ChannelTxCreatorInnerTask:
                                 f"kwargs({kwargs})\n\n"
                                 f"tx({tx})\n\n"
                                 f"exception({exception})")
-                return result_code, tx_hash, relay_target
+                return result_code, tx_hash, self.__relay_target
 
     async def schedule_job(self, command, params):
         self.__broadcast_scheduler.schedule_job(command, params)
@@ -220,10 +221,7 @@ class ChannelTxReceiverInnerTask:
 
     @message_queue_task
     async def update_properties(self, properties: dict):
-        try:
-            self.__nid = properties['nid']
-        except KeyError:
-            pass
+        self.__nid = properties['nid']
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx_list(self, request) -> tuple:
