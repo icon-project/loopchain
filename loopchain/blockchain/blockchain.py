@@ -292,8 +292,9 @@ class BlockChain:
         :return: prev_block (from blockchain or DB) by given block
         """
         prev_hash = block.header.prev_hash
-        if self.last_unconfirmed_block and prev_hash == self.last_unconfirmed_block.header.hash:
-            prev_block = self.last_unconfirmed_block
+        candidate_blocks = self.__block_manager.candidate_blocks
+        if prev_hash in candidate_blocks.blocks.keys():
+            prev_block = candidate_blocks.blocks[prev_hash].block
         else:
             prev_block = self.find_block_by_hash(prev_hash) or self.last_block
         return prev_block
