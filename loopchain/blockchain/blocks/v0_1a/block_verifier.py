@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from loopchain.rest_server.json_rpc import GenericJsonRpcServerError
+from loopchain.jsonrpc.exception import GenericJsonRpcServerError
 from loopchain.blockchain.blocks import BlockBuilder, BlockVerifier as BaseBlockVerifier
 from loopchain.blockchain.blocks.v0_1a import BlockHeader
 from loopchain.blockchain.exception import ScoreInvokeError, ScoreInvokeResultError

@@ -325,12 +325,9 @@ class _Broadcaster:
     def __get_broadcast_targets(self, method_name):
 
         peer_targets = list(self.__audience)
-        if ObjectManager().rs_service:
-            return peer_targets
-        else:
-            if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
-                peer_targets.remove(self.__self_target)
-            return peer_targets
+        if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
+            peer_targets.remove(self.__self_target)
+        return peer_targets
 
 
 class BroadcastScheduler(metaclass=abc.ABCMeta):

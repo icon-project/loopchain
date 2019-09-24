@@ -26,3 +26,4 @@ from .block_generation_scheduelr import *
 from .node_subscriber import *
 from .slot_timer import *
 from .broadcast_scheduler import *
+from .rest_service import *
