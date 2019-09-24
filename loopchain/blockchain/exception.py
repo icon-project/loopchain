@@ -88,12 +88,6 @@ class ThereIsNoCandidateBlock(Exception):
     pass
 
 
-class CandidateBlockHeightError(Exception):
-    """
-    """
-    pass
-
-
 class AnnounceNewBlockError(Exception):
     message_code = message_code.Response.fail_announce_block
 

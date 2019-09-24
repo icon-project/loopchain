@@ -284,8 +284,9 @@ class ChannelService:
         if (ChannelProperty().node_type == conf.NodeType.CommunityNode
                 and new_node_type == conf.NodeType.CitizenNode):
             utils.logger.debug(f"prep right expired...")
-            self.start_shutdown_timer_when_term_expired()
-            return False
+            if self.state_machine.state == "BlockGenerate":
+                self.start_switch_role_timer_for_last_leader_when_term_expired()
+                return False
 
         return True
 
@@ -299,9 +300,9 @@ class ChannelService:
             relay_target=ChannelProperty().rs_target
         )
 
-    def switch_role(self):
+    def switch_role(self, force: bool=False):
         self.peer_manager.update_all_peers()
-        if self._is_role_switched():
+        if force or self._is_role_switched():
             self.__state_machine.switch_role()
 
     async def reset_network(self):
@@ -655,9 +656,8 @@ class ChannelService:
     def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
 
-    def start_shutdown_timer_when_term_expired(self):
-        error = f"Shutdown by expired term with timeout({conf.TIMEOUT_FOR_LEADER_COMPLAIN}) sec"
+    def start_switch_role_timer_for_last_leader_when_term_expired(self):
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED,
-                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
-                                                  callback=self.shutdown_peer,
-                                                  callback_kwargs={"message": error})
+                                                  duration=conf.SWITCH_ROLE_DELAY_FOR_LAST_LEADER,
+                                                  callback=self.switch_role,
+                                                  callback_kwargs={"force": True})

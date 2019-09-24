@@ -21,7 +21,6 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import CandidateBlockHeightError
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
 from loopchain.blockchain.votes.votes import VoteError
@@ -118,16 +117,13 @@ class CandidateBlocks:
     def get_votes(self, block_hash):
         return self.blocks[block_hash].votes
 
-    @property
-    def is_empty(self):
-        return len(self.blocks) == 0
-
     def add_block(self, block: Block):
         if block.header.height != self.height:
-            raise CandidateBlockHeightError(
+            util.logger.warning(
                 f"Candidate block height must be ({self.height})"
                 f"\nyour last block height({self._blockchain.last_block.header.height}), "
                 f"\nyou tried add block height({block.header.height})")
+            return
 
         with self.__blocks_lock:
             if block.header.hash not in self.blocks:
