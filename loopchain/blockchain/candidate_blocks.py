@@ -92,9 +92,10 @@ class CandidateBlock:
 
 
 class CandidateBlocks:
-    def __init__(self):
+    def __init__(self, blockchain):
         self.blocks: Dict[Hash32, CandidateBlock] = {}
         self.__blocks_lock = threading.Lock()
+        self._blockchain = blockchain
 
     def add_vote(self, vote: BlockVote):
         with self.__blocks_lock:
@@ -113,6 +114,12 @@ class CandidateBlocks:
         return self.blocks[block_hash].votes
 
     def add_block(self, block: Block):
+        if block.header.height != self._blockchain.block_height + 1:
+            util.logger.warning(
+                f"Candidate block height must be ({self._blockchain.block_height})"
+                f"\nyou tried add block height({block.header.height})")
+            return
+
         with self.__blocks_lock:
             if block.header.hash not in self.blocks:
                 self.blocks[block.header.hash] = CandidateBlock.from_block(block)

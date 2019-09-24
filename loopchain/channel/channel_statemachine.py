@@ -22,7 +22,7 @@ from transitions import State
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain.blocks import Block
-from loopchain.peer import status_code
+from loopchain.peer import status_code, ChannelProperty
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 from loopchain.utils import loggers
@@ -116,7 +116,8 @@ class ChannelStateMachine(object):
         pass
 
     def _is_leader(self):
-        return self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
+        return (not self._has_no_vote_function() and
+                self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR)
 
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)

@@ -81,6 +81,9 @@ class MockChannelService:
     def set_new_leader(self):
         pass
 
+    def is_support_node_function(self, _):
+        return True
+
 
 class MockChannelServiceCitizen(MockChannelService):
     def __init__(self):
