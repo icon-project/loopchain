@@ -105,10 +105,6 @@ class ChannelService:
         return self.__broadcast_scheduler
 
     @property
-    def consensus(self):
-        return self.__consensus
-
-    @property
     def timer_service(self):
         return self.__timer_service
 
@@ -174,11 +170,6 @@ class ChannelService:
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
             logging.info("Cleanup BroadcastScheduler.")
-
-        if self.__consensus:
-            self.__consensus.stop()
-            self.__consensus.wait()
-            logging.info("Cleanup Consensus.")
 
         if self.__timer_service.is_run():
             self.__timer_service.stop()
