@@ -815,7 +815,9 @@ class BlockManager:
                 f"trigger block sync: my_height({my_height}), "
                 f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
 
-        if my_height == unconfirmed_block.header.height - 2 and not self.blockchain.last_unconfirmed_block:
+        is_rep = ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote)
+        if (is_rep and my_height == unconfirmed_block.header.height - 2
+                and not self.blockchain.last_unconfirmed_block):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
                 f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
