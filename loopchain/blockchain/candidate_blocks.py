@@ -97,10 +97,6 @@ class CandidateBlocks:
         self.__blocks_lock = threading.Lock()
         self._blockchain = blockchain
 
-    @property
-    def height(self):
-        return self._blockchain.last_block.header.height + 1
-
     def add_vote(self, vote: BlockVote):
         with self.__blocks_lock:
             if vote.block_hash != Hash32.empty() and vote.block_hash not in self.blocks:
@@ -118,10 +114,9 @@ class CandidateBlocks:
         return self.blocks[block_hash].votes
 
     def add_block(self, block: Block):
-        if block.header.height != self.height:
+        if block.header.height != self._blockchain.block_height + 1:
             util.logger.warning(
-                f"Candidate block height must be ({self.height})"
-                f"\nyour last block height({self._blockchain.last_block.header.height}), "
+                f"Candidate block height must be ({self._blockchain.block_height})"
                 f"\nyou tried add block height({block.header.height})")
             return
 

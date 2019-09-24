@@ -76,7 +76,6 @@ class BlockChain:
         if channel_name is None:
             channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
 
-        self.__block_height = -1
         # last block in block db
         self.__last_block = None
         self.__made_block_counter = MadeBlockCounter()
@@ -166,7 +165,10 @@ class BlockChain:
 
     @property
     def block_height(self):
-        return self.__block_height
+        try:
+            return self.__last_block.header.height
+        except AttributeError:
+            return -1
 
     @property
     def total_tx(self):
@@ -456,7 +458,6 @@ class BlockChain:
             self._increase_made_block_count(block)
 
             self.__last_block = block
-            self.__block_height = self.__last_block.header.height
             self.__total_tx = next_total_tx
 
             logging.info(
@@ -471,7 +472,7 @@ class BlockChain:
                 'peer_name': conf.PEER_NAME,
                 'channel_name': self.__channel_name,
                 'data': {
-                    'block_height': self.__block_height
+                    'block_height': self.__last_block.header.height
                 }})
 
             # notify new block
@@ -903,12 +904,7 @@ class BlockChain:
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
 
-        # 블럭의 높이는 마지막 블럭의 높이와 같음
-        if self.__last_block is None:
-            self.__block_height = -1
-        else:
-            self.__block_height = self.__last_block.header.height
-        logging.debug(f"ENGINE-303 init_blockchain: {self.__block_height}")
+        logging.debug(f"ENGINE-303 init_blockchain: {self.block_height}")
 
     def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None
