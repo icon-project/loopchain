@@ -703,7 +703,7 @@ class ChannelInnerTask:
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_dumped) -> None:
+    async def announce_unconfirmed_block(self, block_dumped, round_: int) -> None:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
@@ -728,7 +728,7 @@ class ChannelInnerTask:
             return
 
         try:
-            self._block_manager.verify_confirm_info(unconfirmed_block)
+            self._block_manager.verify_confirm_info(unconfirmed_block, round_)
         except ConfirmInfoInvalid as e:
             util.logger.warning(f"ConfirmInfoInvalid {e}")
         except ConfirmInfoInvalidNeedBlockSync as e:
@@ -743,7 +743,7 @@ class ChannelInnerTask:
         except NotReadyToConfirmInfo as e:
             util.logger.warning(f"NotReadyToConfirmInfo {e}")
         else:
-            self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+            self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unrecorded_block(self, block_dumped) -> None:

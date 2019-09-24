@@ -145,7 +145,7 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
-    def _do_vote(self, unconfirmed_block: Block, is_unrecorded_block: bool = False):
+    def _do_vote(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
         if is_unrecorded_block:
             try:
                 self._run_coroutine_threadsafe(
@@ -153,7 +153,7 @@ class ChannelStateMachine(object):
             except UnrecordedBlock as e:
                 util.logger.info(e)
         else:
-            self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
+            self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()

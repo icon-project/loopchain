@@ -150,7 +150,7 @@ class BlockManager:
     def __pre_validate_pass(self, tx: Transaction):
         pass
 
-    def broadcast_send_unconfirmed_block(self, block_: Block, is_unrecorded_block: bool):
+    def broadcast_send_unconfirmed_block(self, block_: Block, round_: int, is_unrecorded_block: bool):
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
@@ -168,22 +168,22 @@ class BlockManager:
 
         if last_block.header.revealed_next_reps_hash:
             if last_block.header.prep_changed:
-                send_block_function(block_, last_block.header.reps_hash)
-            send_block_function(block_, block_.header.reps_hash)
+                send_block_function(block_, last_block.header.reps_hash, round_)
+            send_block_function(block_, block_.header.reps_hash, round_)
         else:
-            send_block_function(block_, self.__channel_service.peer_manager.prepared_reps_hash)
+            send_block_function(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
 
-    def _send_unconfirmed_block(self, block_: Block, target_reps_hash):
+    def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
-            f"height({block_.header.height}) block({block_.header.hash}) peers: "
+            f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
             f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
 
@@ -253,36 +253,61 @@ class BlockManager:
         complained = unconfirmed_block.header.complained and self.epoch.complained_result
         self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
 
-    def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
+    def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
             raise InvalidUnconfirmedBlock("The unconfirmed block has height already added.")
 
-        last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
         try:
             candidate_block = self.candidate_blocks.blocks[unconfirmed_block.header.hash].block
         except KeyError:
             # When an unconfirmed block confirmed previous block, the block become last unconfirmed block,
             # But if the block is failed to verify, the block doesn't be added into candidate block.
-            candidate_block: Block = last_unconfirmed_block
+            candidate_block: Block = self.blockchain.last_unconfirmed_block
 
         if candidate_block is None or unconfirmed_block.header.hash != candidate_block.header.hash:
             return
 
-        if self.__channel_service.state_machine.state == 'LeaderComplain' \
-                and self.epoch.leader_id == unconfirmed_block.header.peer_id.hex_hx():
-            raise InvalidUnconfirmedBlock(f"Unconfirmed block is made by complained leader. {unconfirmed_block})")
-
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def add_unconfirmed_block(self, unconfirmed_block: Block, is_unrecorded_block: bool = False):
-        """
+    def is_unrecorded_block(self, unconfirmed_block: Block):
+        if self.blockchain.last_block.header.revealed_next_reps_hash:
+            expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
+            if self.blockchain.last_block.header.prep_changed:
+                return True
+        return False
 
+    def __validate_epoch_of_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
+        current_state = self.__channel_service.state_machine.state
+        block_header = unconfirmed_block.header
+
+        # TODO: Will be removed.
+        util.logger.spam(
+            f"expected leader({self.epoch.leader_id}), round({self.epoch.round}), "
+            f"unconfirmed_block leader({block_header.peer_id.hex_hx()}), round({round_})")
+        if self.epoch.round != round_:
+            raise InvalidUnconfirmedBlock(
+                f"The unconfirmed block is made by an unexpected round. "
+                f"Expected({self.epoch.round}), Unconfirmed_block({round_})")
+
+        if not self.epoch.complained_result and self.epoch.leader_id != block_header.peer_id.hex_hx():
+            raise InvalidUnconfirmedBlock(
+                f"The unconfirmed block is made by an unexpected leader. "
+                f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
+
+        if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
+            raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
+
+    def add_unconfirmed_block(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
+        """
         :param unconfirmed_block:
+        :param round_:
         :param is_unrecorded_block:
         :return:
         """
-        self.__validate_duplication_unconfirmed_block(unconfirmed_block)
+        self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
+        self.__validate_epoch_of_unconfirmed_block(unconfirmed_block, round_)
 
+        util.logger.spam(f"PASS A VALIDATION OF UNCONFIRMED BLOCK")
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
 
         if unconfirmed_block.header.reps_hash:
@@ -816,7 +841,7 @@ class BlockManager:
 
         return vote
 
-    def verify_confirm_info(self, unconfirmed_block: Block):
+    def verify_confirm_info(self, unconfirmed_block: Block, round_: int):
         my_height = self.blockchain.block_height
         if my_height < (unconfirmed_block.header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
@@ -835,6 +860,10 @@ class BlockManager:
             raise ConfirmInfoInvalidAddedBlock(
                 f"block is already added my_height({my_height}), "
                 f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+
+        # Is this condition appropriate here ?
+        if self.epoch.round != round_:
+            raise ConfirmInfoInvalid("The unconfirmed block has invalid round")
 
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
@@ -886,16 +915,17 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-    async def vote_as_peer(self, unconfirmed_block: Block):
+    async def vote_as_peer(self, unconfirmed_block: Block, round_: int):
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(
             f"in vote_as_peer "
             f"height({unconfirmed_block.header.height}) "
+            f"round({round_}) "
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
 
         try:
-            self.add_unconfirmed_block(unconfirmed_block)
+            self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
