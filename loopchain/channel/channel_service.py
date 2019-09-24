@@ -521,17 +521,17 @@ class ChannelService:
 
         utils.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
             self.__block_manager.epoch.new_round(leader_peer.peer_id)
         else:
             self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+
         logging.info(
             f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
 
-        if self_peer_object.peer_id == leader_peer.peer_id:
+        if ChannelProperty().peer_id == leader_peer.peer_id:
             utils.logger.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()

@@ -225,9 +225,6 @@ class BlockManager:
         if confirmed_block is None:
             return
 
-        if not (current_block.header.complained and self.epoch.complained_result):
-            self.epoch = Epoch.new_epoch()
-
         if current_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_header(
                 current_block.header.next_reps_hash)[0].hex_hx()
@@ -238,8 +235,8 @@ class BlockManager:
             next_leader = current_block.header.next_leader.hex_hx()
 
         util.logger.debug(f"confirm prev block next_leader({next_leader})")
-
-        self.__channel_service.reset_leader(next_leader)
+        complained = current_block.header.complained and self.epoch.complained_result
+        self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
@@ -823,7 +820,7 @@ class BlockManager:
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
-            if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
+            if prev_block and (prev_block.header.reps_hash and unconfirmed_block.header.height > 1):
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:
