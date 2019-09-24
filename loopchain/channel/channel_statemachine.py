@@ -116,9 +116,8 @@ class ChannelStateMachine(object):
         pass
 
     def _is_leader(self):
-        return \
-            ChannelProperty().node_type == conf.NodeType.CommunityNode and \
-            self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR
+        return (not self._has_no_vote_function() and
+                self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR)
 
     def _has_no_vote_function(self):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
