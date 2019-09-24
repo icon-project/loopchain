@@ -157,8 +157,8 @@ class BlockVerifier(BaseBlockVerifier):
         body: BlockBody = block.body
         if body.leader_votes:
             any_vote = next(vote for vote in body.leader_votes if vote)
-            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO,
-                                       block.header.height, any_vote.old_leader, body.leader_votes)
+            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO, block.header.height, any_vote.round_,
+                                       any_vote.old_leader, body.leader_votes)
             if leader_votes.get_result() != block.header.peer_id:
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "

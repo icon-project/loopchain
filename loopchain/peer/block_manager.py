@@ -280,10 +280,10 @@ class BlockManager:
         current_state = self.__channel_service.state_machine.state
         block_header = unconfirmed_block.header
 
-        # TODO: Will be removed.
-        util.logger.spam(
-            f"expected leader({self.epoch.leader_id}), round({self.epoch.round}), "
-            f"unconfirmed_block leader({block_header.peer_id.hex_hx()}), round({round_})")
+        if self.epoch.height == block_header.height and self.epoch.round > round_:
+            raise InvalidUnconfirmedBlock(
+                f"The unconfirmed block has invalid round. Expected({self.epoch.round}), Unconfirmed_block({round_})")
+
         if self.epoch.round != round_:
             raise InvalidUnconfirmedBlock(
                 f"The unconfirmed block is made by an unexpected round. "
@@ -307,9 +307,7 @@ class BlockManager:
         self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
         self.__validate_epoch_of_unconfirmed_block(unconfirmed_block, round_)
 
-        util.logger.spam(f"PASS A VALIDATION OF UNCONFIRMED BLOCK")
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
-
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
             leader_votes = LeaderVotes(
@@ -754,7 +752,7 @@ class BlockManager:
             util.logger.debug(f"Epoch is not initialized.")
             return
 
-        if self.epoch.height == vote.block_height:
+        if self.epoch.height == vote.block_height and self.epoch.round <= vote.round_:
             self.epoch.add_complain(vote)
 
             elected_leader = self.epoch.complain_result()
@@ -792,6 +790,7 @@ class BlockManager:
         leader_vote = LeaderVote.new(
             signer=ChannelProperty().peer_auth,
             block_height=self.epoch.height,
+            round_=self.epoch.round,
             old_leader=ExternalAddress.fromhex_address(complained_leader_id),
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
             timestamp=util.get_time_stamp()
@@ -842,30 +841,26 @@ class BlockManager:
         return vote
 
     def verify_confirm_info(self, unconfirmed_block: Block, round_: int):
+        unconfirmed_header = unconfirmed_block.header
         my_height = self.blockchain.block_height
-        if my_height < (unconfirmed_block.header.height - 2):
+        if my_height < (unconfirmed_header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})")
 
         is_rep = ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote)
-        if (is_rep and my_height == unconfirmed_block.header.height - 2
-                and not self.blockchain.last_unconfirmed_block):
+        if is_rep and my_height == unconfirmed_header.height - 2 and not self.blockchain.last_unconfirmed_block:
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})")
 
         # a block is already added that same height unconfirmed_block height
-        if my_height >= unconfirmed_block.header.height:
+        if my_height >= unconfirmed_header.height:
             raise ConfirmInfoInvalidAddedBlock(
                 f"block is already added my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_block.header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})")
 
-        # Is this condition appropriate here ?
-        if self.epoch.round != round_:
-            raise ConfirmInfoInvalid("The unconfirmed block has invalid round")
-
-        block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
+        block_verifier = BlockVerifier.new(unconfirmed_header.version, self.blockchain.tx_versioner)
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
@@ -874,7 +869,7 @@ class BlockManager:
                 "There is no prev block or not ready to confirm block (Maybe node is starting)")
 
         try:
-            if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
+            if prev_block and prev_block.header.reps_hash and unconfirmed_header.height > 1:
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:

@@ -848,7 +848,6 @@ class ChannelInnerTask:
     async def complain_leader(self, vote_dumped: str) -> None:
         vote_serialized = json.loads(vote_dumped)
         vote = LeaderVote.deserialize(vote_serialized)
-
         self._block_manager.add_complain(vote)
 
     @message_queue_task

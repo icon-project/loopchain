@@ -171,7 +171,6 @@ class ConsensusSiever(ConsensusBase):
                 complain_votes, last_block_vote_list, skip_add_tx, next_reps, next_leader)
             need_next_call = False
             round_ = self._block_manager.epoch.round
-            util.logger.warning(f"before broadcast : {round_}")
             try:
                 if complained_result or new_term:
                     util.logger.spam("consensus block_builder.complained or new term")
@@ -218,7 +217,6 @@ class ConsensusSiever(ConsensusBase):
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block, max(self._block_manager.epoch.round, round_), is_unrecorded_block)
-            util.logger.warning(f"after broadcast : {self._block_manager.epoch.round}/{round_}")
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
 
             if is_unrecorded_block:

@@ -79,8 +79,10 @@ class Epoch:
         leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,
                                    self.height,
+                                   self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
         self.complain_votes[self.round] = leader_votes
+        self.__remove_complain_votes()
 
     def set_epoch_leader(self, leader_id, complained=False):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -94,13 +96,31 @@ class Epoch:
         utils.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
                            f"new_leader_id({leader_vote.new_leader}), "
                            f"block_height({leader_vote.block_height}), "
+                           f"round({leader_vote.round_}), "
                            f"peer_id({leader_vote.rep})")
         try:
-            self.complain_votes[self.round].add_vote(leader_vote)
+            self.complain_votes[leader_vote.round_].add_vote(leader_vote)
+        except KeyError as e:
+            utils.logger.warning(f"{e}\nThere is no vote of {leader_vote.round_} round.")
         except VoteError as e:
             utils.logger.info(e)
         except RuntimeError as e:
             logging.warning(e)
+
+    def __remove_complain_votes(self):
+        utils.logger.spam(f"Try to remove complaint votes on round {self.round}.")
+        round_list = sorted(self.complain_votes.keys())
+        keep_round = self.round - 1
+        if round_list[0] >= keep_round:
+            return
+
+        for round_ in round_list:
+            if round_ < keep_round:
+                utils.logger.spam(f"Remove complaint votes on {round_} round.")
+                del self.complain_votes[round_]
+            elif round_ == keep_round:
+                break
+        utils.logger.spam(f"Complete to remove complaint votes")
 
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.
