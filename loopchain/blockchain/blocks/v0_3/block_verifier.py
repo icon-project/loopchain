@@ -107,28 +107,29 @@ class BlockVerifier(BaseBlockVerifier):
         return invoke_result
 
     def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
-        header: BlockHeader = block.header
         new_block, invoke_result = self.invoke_func(block, prev_block)
-        if header.state_hash != new_block.header.state_hash:
+        header: BlockHeader = block.header
+        new_header: BlockHeader = new_block.header
+        if header.state_hash != new_header.state_hash:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                      f"StateRootHash({header.state_hash}), "
-                                     f"Expected({new_block.header.state_hash}).")
+                                     f"Expected({new_header.state_hash}).")
             self._handle_exception(exception)
 
-        if header.next_reps_hash != new_block.header.next_reps_hash:
-            if not new_block.header.prep_changed \
-                    and header.next_reps_hash == new_block.header.revealed_next_reps_hash:
+        if header.next_reps_hash != new_header.next_reps_hash:
+            if (not new_header.prep_changed
+                    and header.next_reps_hash == new_header.revealed_next_reps_hash):
                 pass
             else:
                 exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                          f"NextRepsHash({header.next_reps_hash}), "
-                                         f"Expected({new_block.header.next_reps_hash}), "
-                                         f"revealed_next_reps_hash({new_block.header.revealed_next_reps_hash}), "
+                                         f"Expected({new_header.next_reps_hash}), "
+                                         f"revealed_next_reps_hash({new_header.revealed_next_reps_hash}), "
                                          f"\norigin header({header}), "
-                                         f"\nnew block header({new_block.header}).")
+                                         f"\nnew block header({new_header}).")
                 self._handle_exception(exception)
 
-        builder.state_hash = new_block.header.state_hash
+        builder.state_hash = new_header.state_hash
         builder.receipts = invoke_result
 
         builder.build_receipts_hash()
