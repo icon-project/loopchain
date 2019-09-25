@@ -47,7 +47,9 @@ class ChannelStateMachine(object):
                     on_enter='_subscribe_network_on_enter',
                     on_exit='_subscribe_network_on_exit'),
               State(name='Watch',
-                    ignore_invalid_triggers=True),
+                    ignore_invalid_triggers=True,
+                    on_enter='_watch_on_enter', 
+                    on_exit='_watch_on_exit'),
               State(name='Vote',
                     ignore_invalid_triggers=True,
                     on_enter='_vote_on_enter',
@@ -170,6 +172,12 @@ class ChannelStateMachine(object):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer_when_fail_subscribe()
         self.__channel_service.block_manager.start_epoch()
+
+    def _watch_on_enter(self, *args, **kwargs):
+        self.__channel_service.start_block_monitoring_timer()
+
+    def _watch_on_exit(self, *args, **kwargs):
+        self.__channel_service.stop_block_monitoring_timer()
 
     def _do_reset_network_on_enter(self):
         self._run_coroutine_threadsafe(self.__channel_service.reset_network())

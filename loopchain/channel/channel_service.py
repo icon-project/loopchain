@@ -634,3 +634,11 @@ class ChannelService:
 
     def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
+
+    def start_block_monitoring_timer(self):
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_BLOCK_MONITOR,
+                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                  callback=self.state_machine.subscribe_network)
+
+    def stop_block_monitoring_timer(self):
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)

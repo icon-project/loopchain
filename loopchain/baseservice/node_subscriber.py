@@ -153,6 +153,15 @@ class NodeSubscriber:
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
 
+            await self._reset_block_monitoring_timer(confirmed_block.header.height)
+
+    async def _reset_block_monitoring_timer(self, height):
+        timer_key = TimerService.TIMER_KEY_BLOCK_MONITOR
+        timer_service = ObjectManager().channel_service.timer_service
+        if timer_key in timer_service.timer_list:
+            logging.debug(f"reset TIMER_KEY_BLOCK_MONITOR timer for block height({height})")
+            timer_service.reset_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
             self._exception = exception
@@ -165,6 +174,9 @@ class NodeSubscriber:
             # set subscribe_event to transit the state to Watch.
             self._subscribe_event.set()
 
+        await self._reset_heartbeat_timer(_callback)
+
+    async def _reset_heartbeat_timer(self, _callback):
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
