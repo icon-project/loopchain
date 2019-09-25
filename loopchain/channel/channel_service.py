@@ -227,8 +227,6 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.turn_on_leader_complain_timer()
 
-        self.__block_manager.blockchain.rebuild_made_block_count()
-
     def update_sub_services_properties(self):
         nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
@@ -268,13 +266,6 @@ class ChannelService:
         if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
-
-        if (ChannelProperty().node_type == conf.NodeType.CommunityNode
-                and new_node_type == conf.NodeType.CitizenNode):
-            utils.logger.debug(f"prep right expired...")
-            if self.state_machine.state == "BlockGenerate":
-                self.start_switch_role_timer_for_last_leader_when_term_expired()
-                return False
 
         return True
 
@@ -522,17 +513,17 @@ class ChannelService:
 
         utils.logger.spam(f"peer_service:reset_leader target({leader_peer.target}), complained={complained}")
 
-        self_peer_object = self.peer_manager.get_peer(ChannelProperty().peer_id)
         self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
             self.__block_manager.epoch.new_round(leader_peer.peer_id)
         else:
             self.__block_manager.epoch = Epoch.new_epoch(leader_peer.peer_id)
+
         logging.info(
             f"Epoch height({self.__block_manager.epoch.height}), leader ({self.__block_manager.epoch.leader_id})")
 
-        if self_peer_object.peer_id == leader_peer.peer_id:
+        if ChannelProperty().peer_id == leader_peer.peer_id:
             utils.logger.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()
@@ -643,9 +634,3 @@ class ChannelService:
 
     def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
-
-    def start_switch_role_timer_for_last_leader_when_term_expired(self):
-        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED,
-                                                  duration=conf.SWITCH_ROLE_DELAY_FOR_LAST_LEADER,
-                                                  callback=self.switch_role,
-                                                  callback_kwargs={"force": True})

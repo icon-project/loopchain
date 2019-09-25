@@ -17,10 +17,9 @@ import json
 import logging
 import threading
 import traceback
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
-
-from collections import defaultdict
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -29,7 +28,7 @@ from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps
+    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -152,16 +151,15 @@ class BlockManager:
         pass
 
     def broadcast_send_unconfirmed_block(self, block_: Block):
-        """생성된 unconfirmed block 을 피어들에게 broadcast 하여 검증을 요청한다.
+        """broadcast unconfirmed block for getting votes form reps
         """
-        if self.__channel_service.state_machine.state == "BlockGenerate":
-            last_block: Block = self.blockchain.last_block
-            if last_block.header.revealed_next_reps_hash:
-                if last_block.header.prep_changed:
-                    self._send_unconfirmed_block(block_, last_block.header.reps_hash)
-                self._send_unconfirmed_block(block_, block_.header.reps_hash)
-            else:
-                self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
+        last_block: Block = self.blockchain.last_block
+        if last_block.header.revealed_next_reps_hash:
+            if last_block.header.prep_changed:
+                self._send_unconfirmed_block(block_, last_block.header.reps_hash)
+            self._send_unconfirmed_block(block_, block_.header.reps_hash)
+        else:
+            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash):
         util.logger.debug(
@@ -225,9 +223,6 @@ class BlockManager:
         if confirmed_block is None:
             return
 
-        if not (current_block.header.complained and self.epoch.complained_result):
-            self.epoch = Epoch.new_epoch()
-
         if current_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_header(
                 current_block.header.next_reps_hash)[0].hex_hx()
@@ -238,8 +233,8 @@ class BlockManager:
             next_leader = current_block.header.next_leader.hex_hx()
 
         util.logger.debug(f"confirm prev block next_leader({next_leader})")
-
-        self.__channel_service.reset_leader(next_leader)
+        complained = current_block.header.complained and self.epoch.complained_result
+        self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
@@ -304,6 +299,7 @@ class BlockManager:
 
     def rebuild_block(self):
         self.blockchain.rebuild_transaction_count()
+        self.blockchain.rebuild_made_block_count()
 
         nid = self.blockchain.find_nid()
         if nid is None:
@@ -639,13 +635,7 @@ class BlockManager:
                 self.blockchain.last_block.header.peer_id.hex_hx()
             ).peer_id
         else:
-            latest_block = self.blockchain.last_unconfirmed_block or self.blockchain.last_block
-            next_leader = latest_block.header.next_leader
-            try:
-                next_leader = self.__channel_service.peer_manager.get_peer(next_leader.hex_hx()).peer_id
-            except Exception as e:
-                logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
-                next_leader = None
+            next_leader = self.blockchain.latest_block.header.next_leader.hex_hx()
 
         util.logger.spam(f"in get_next_leader({next_leader})")
         return next_leader
@@ -822,6 +812,11 @@ class BlockManager:
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
+
+        if not prev_block:
+            raise NotReadyToConfirmInfo(
+                "There is no prev block or not ready to confirm block (Maybe node is starting)")
+
         try:
             if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
                 prev_reps = reps_getter(prev_block.header.reps_hash)

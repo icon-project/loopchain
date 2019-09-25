@@ -179,6 +179,10 @@ class BlockChain:
         return self.__last_block
 
     @property
+    def latest_block(self) -> Block:
+        return self.last_unconfirmed_block or self.__last_block
+
+    @property
     def block_versioner(self):
         return self.__block_versioner
 
@@ -204,7 +208,6 @@ class BlockChain:
 
         block_hash = self.__last_block.header.hash.hex()
         block_height = self.__last_block.header.height
-        start_block_height = self.__last_block.header.height
 
         while block_hash != "":
             if block_height <= 0:
@@ -215,10 +218,10 @@ class BlockChain:
             block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
-            self.__made_block_counter[block.header.peer_id] += 1
-
-            if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
+            if self.__last_block.header.peer_id != block.header.peer_id:
                 break
+
+            self.__made_block_counter[block.header.peer_id] += 1
 
             # next loop
             block_height = block.header.height - 1
@@ -344,14 +347,6 @@ class BlockChain:
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
-    def find_confirm_info_by_height(self, height: int) -> bytes:
-        block = self.find_block_by_height(height)
-        hash_encoded = block.header.hash.hex().encode('UTF-8')
-        try:
-            return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
-        except KeyError:
-            return self.find_prev_confirm_info_by_height(block.header.height + 1)
-
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
         block = self.find_block_by_hash(block_hash)
         if block and isinstance(block.body, v0_3.BlockBody):
@@ -454,9 +449,7 @@ class BlockChain:
                 utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")
 
             self.__invoke_results.pop(block.header.hash, None)
-
-            self._increase_made_block_count(block)
-
+            self._increase_made_block_count(block)  # must do this before self.__last_block = block
             self.__last_block = block
             self.__total_tx = next_total_tx
 
@@ -1110,9 +1103,6 @@ class BlockChain:
                 for vote_address in self.find_preps_addresses_by_header(prev_block.header)
                 if vote_address != prev_block.header.peer_id
             ]
-
-        # utils.logger.notice(f"prev_vote_results({prev_vote_results}) "
-        #                     f"prev_block_votes({prev_block_votes})")
 
         request_origin = {
             'block': {

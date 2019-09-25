@@ -38,7 +38,7 @@ class Peer:
         :param order:
         :return:
         """
-        self.peer_id = peer_id
+        self.peer_id: str = peer_id
         self.order: int = order
         self.target: str = target
 

@@ -47,9 +47,13 @@ class Timer:
         self.target = kwargs.get("target")
         self.duration = kwargs.get("duration")
         self.is_run_at_start: bool = kwargs.get("is_run_at_start", False)
-        self.is_repeat: bool = kwargs.get("is_repeat", False)
+        self._is_repeat: bool = kwargs.get("is_repeat", False)
+
+        # only works If is_repeat=True. 0 means no timeout.
+        self._repeat_timeout: int = kwargs.get("repeat_timeout", 0)
 
         self.__start_time = time.time()
+        self.__repeat_start_time = self.__start_time
         self.__callback: Union[Callable, Awaitable] = kwargs.get("callback", None)
         self.__kwargs = kwargs.get("callback_kwargs") or {}
 
@@ -59,6 +63,15 @@ class Timer:
 
         util.logger.spam(f'timer({self.target}) gap: {time.time() - self.__start_time}')
         return True
+
+    @property
+    def is_repeat(self) -> bool:
+        if self._is_repeat and \
+                (self._repeat_timeout == 0 or
+                 (time.time() - self.__repeat_start_time < self._repeat_timeout)):
+            return True
+
+        return False
 
     def reset(self):
         self.__start_time = time.time()

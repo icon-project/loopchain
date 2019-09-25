@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 import asyncio
 import json
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, \
+    NotNeedToWaitForVotes
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -64,8 +65,6 @@ class ConsensusSiever(ConsensusBase):
 
     def stop(self):
         self.__block_generation_timer.stop()
-        self.__stop_broadcast_send_unconfirmed_block_timer()
-
         if self._loop:
             self.__put_vote(None)
 
@@ -138,20 +137,21 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            latest_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
-            last_block_vote_list = await self.__get_votes(latest_block.header.hash)
-            if last_block_vote_list is None:
-                return
+            try:
+                last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
+                if last_block_vote_list is None:
+                    return
+            except NotNeedToWaitForVotes as e:
+                util.logger.debug(e)
 
-            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+            last_unconfirmed_block: Optional[Block] = self._blockchain.last_unconfirmed_block
             last_block_header = self._blockchain.last_block.header
-            new_term = False
+
             if last_block_header.prep_changed:
-                if last_unconfirmed_block is None or \
-                        last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
-                    util.logger.info(f"start new term.")
-                    new_term = True
-                    latest_block = self._blockchain.last_block
+                new_term = last_unconfirmed_block is None or \
+                           last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address
+            else:
+                new_term = False
 
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
@@ -189,8 +189,7 @@ class ConsensusSiever(ConsensusBase):
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
-                util.logger.debug(
-                    f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
+                util.logger.debug(f"There is no candidate block.")
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
@@ -200,18 +199,27 @@ class ConsensusSiever(ConsensusBase):
             candidate_block = self.__build_candidate_block(
                 block_builder, ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id))
             candidate_block, invoke_results = self._blockchain.score_invoke(
-                candidate_block, latest_block, is_block_editable=True)
+                candidate_block, self._blockchain.latest_block, is_block_editable=True)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
-            self._blockchain.last_unconfirmed_block = candidate_block
 
-            try:
-                await self._wait_for_voting(candidate_block)
-            except NotEnoughVotes:
-                return
+            # unrecorded_block means the last block of term to add prep changed block.
+            if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
+                first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
+                    last_unconfirmed_block.header.revealed_next_reps_hash)[0]
+                is_unrecorded_block = ChannelProperty().peer_address != first_leader_of_term
+            else:
+                is_unrecorded_block = False
+
+            if not is_unrecorded_block:
+                self._blockchain.last_unconfirmed_block = candidate_block
+                try:
+                    await self._wait_for_voting(candidate_block)
+                except NotEnoughVotes:
+                    return
 
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
                     and not candidate_block.header.prep_changed:
@@ -249,11 +257,6 @@ class ConsensusSiever(ConsensusBase):
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote
 
-            # util.logger.spam(
-            #     f"not completed vote"
-            #     f"\nvotes({vote.votes})"
-            #     f"\nreps({vote.reps})")
-
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
             try:
@@ -283,8 +286,16 @@ class ConsensusSiever(ConsensusBase):
         if prev_votes:
             try:
                 last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-                self.__check_timeout(last_unconfirmed_block)
+                if last_unconfirmed_block is None:
+                    warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
+                    if self._blockchain.find_block_by_hash(block_hash):
+                        warning_msg += "\nBut already added block so  no longer have to wait for the vote."
+                        raise NotNeedToWaitForVotes(warning_msg)
+                    else:
+                        util.logger.warning(warning_msg)
+                        return None
 
+                self.__check_timeout(last_unconfirmed_block)
                 if not prev_votes.is_completed():
                     self.__broadcast_block(last_unconfirmed_block)
                     if await self._wait_for_voting(last_unconfirmed_block) is None:
@@ -327,6 +338,7 @@ class ConsensusSiever(ConsensusBase):
                 target=timer_key,
                 duration=conf.INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK,
                 is_repeat=True,
+                repeat_timeout=conf.BLOCK_VOTE_TIMEOUT,
                 is_run_at_start=True,
                 callback=broadcast_func
             )

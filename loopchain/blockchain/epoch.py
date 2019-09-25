@@ -17,7 +17,7 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 
 import logging
 import traceback
-from typing import Dict, Optional
+from typing import Dict, Optional, TYPE_CHECKING
 
 from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
@@ -28,10 +28,13 @@ from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
 from loopchain.blockchain.votes.votes import VoteError
 from loopchain.channel.channel_property import ChannelProperty
 
+if TYPE_CHECKING:
+    from loopchain.peer import BlockManager
+
 
 class Epoch:
     def __init__(self, block_manager, leader_id=None):
-        self.__block_manager = block_manager
+        self.__block_manager: BlockManager = block_manager
         self.__blockchain = block_manager.blockchain
         if self.__blockchain.last_block:
             self.height = self.__blockchain.last_block.header.height + 1
@@ -58,9 +61,11 @@ class Epoch:
 
     @staticmethod
     def new_epoch(leader_id=None):
-        block_manager = ObjectManager().channel_service.block_manager
+        block_manager: BlockManager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader()
-        return Epoch(block_manager, leader_id)
+        new_epoch = Epoch(block_manager, leader_id)
+        # utils.logger.spam(f"new epoch height({new_epoch.height})")
+        return new_epoch
 
     def new_round(self, new_leader_id, round_=None):
         is_complained = round_ != 0
