@@ -227,8 +227,6 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.turn_on_leader_complain_timer()
 
-        self.__block_manager.blockchain.rebuild_made_block_count()
-
     def update_sub_services_properties(self):
         nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))

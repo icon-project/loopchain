@@ -301,6 +301,7 @@ class BlockManager:
 
     def rebuild_block(self):
         self.blockchain.rebuild_transaction_count()
+        self.blockchain.rebuild_made_block_count()
 
         nid = self.blockchain.find_nid()
         if nid is None:
@@ -820,7 +821,7 @@ class BlockManager:
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
         try:
-            if prev_block and (prev_block.header.reps_hash and unconfirmed_block.header.height > 1):
+            if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:

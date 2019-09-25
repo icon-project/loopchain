@@ -204,11 +204,12 @@ class BlockChain:
 
         :return:
         """
+        # utils.logger.notice(f"-----------------------rebuild_made_block_count")
+
         self.reset_leader_made_block_count()
 
         block_hash = self.__last_block.header.hash.hex()
         block_height = self.__last_block.header.height
-        start_block_height = self.__last_block.header.height
 
         while block_hash != "":
             if block_height <= 0:
@@ -219,10 +220,10 @@ class BlockChain:
             block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
             block = block_serializer.deserialize(json.loads(block_dump))
 
-            self.__made_block_counter[block.header.peer_id] += 1
-
-            if start_block_height - block.header.height >= conf.MAX_MADE_BLOCK_COUNT:
+            if self.__last_block.header.peer_id != block.header.peer_id:
                 break
+
+            self.__made_block_counter[block.header.peer_id] += 1
 
             # next loop
             block_height = block.header.height - 1
@@ -458,9 +459,7 @@ class BlockChain:
                 utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")
 
             self.__invoke_results.pop(block.header.hash, None)
-
-            self._increase_made_block_count(block)
-
+            self._increase_made_block_count(block)  # must do this before self.__last_block = block
             self.__last_block = block
             self.__total_tx = next_total_tx
 
@@ -485,6 +484,9 @@ class BlockChain:
                 # reset_network_by_block_height is called in critical section by self.__add_block_lock.
                 # Other Blocks must not be added until reset_network_by_block_height function finishes.
                 ObjectManager().channel_service.switch_role()
+
+            # utils.logger.notice(f"__add_block({block.header.height})")
+            # utils.logger.notice(f"made_block_count\n{self.__made_block_counter}")
 
             return True
 
