@@ -347,13 +347,6 @@ class BlockChain:
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
-    def find_confirm_info_by_block(self, block: Block) -> bytes:
-        hash_encoded = block.header.hash.hex().encode('UTF-8')
-        try:
-            return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
-        except KeyError:
-            return self.find_prev_confirm_info_by_height(block.header.height + 1)
-
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
         block = self.find_block_by_hash(block_hash)
         if block and isinstance(block.body, v0_3.BlockBody):

@@ -52,7 +52,7 @@ class NotReadyToConfirmInfo(Exception):
     pass
 
 
-class NoNeedToWaitForVotes(Exception):
+class NotNeedToWaitForVotes(Exception):
     """There is prev_votes, But already added block so  no longer have to wait for the vote.
     """
     pass

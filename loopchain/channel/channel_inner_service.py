@@ -516,7 +516,7 @@ class ChannelInnerTask:
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
 
-            confirm_info: bytes = self._blockchain.find_confirm_info_by_block(new_block)
+            confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)
 
             logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
             bs = BlockSerializer.new(new_block.header.version, self._blockchain.tx_versioner)
@@ -899,7 +899,7 @@ class ChannelInnerTask:
         return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict)
 
     async def __get_block(self, block_hash, block_height):
-        if block_hash == "" and block_height == -1:
+        if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
 
         block = None
@@ -907,16 +907,18 @@ class ChannelInnerTask:
         fail_response_code = None
         if block_hash:
             block = self._blockchain.find_block_by_hash(block_hash)
-            confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
+                confirm_info = bytes()
+            else:
+                confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
         elif block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_height
                 confirm_info = bytes()
             else:
-                confirm_info = self._blockchain.find_confirm_info_by_block(block)
+                confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
         else:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
