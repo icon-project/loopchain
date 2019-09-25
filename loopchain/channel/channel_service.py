@@ -267,12 +267,6 @@ class ChannelService:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
             return False
 
-        if (ChannelProperty().node_type == conf.NodeType.CommunityNode
-                and new_node_type == conf.NodeType.CitizenNode):
-            utils.logger.debug(f"prep right expired...")
-            if self.state_machine.state == "BlockGenerate":
-                self.start_switch_role_timer_for_last_leader_when_term_expired()
-                return False
         return True
 
     async def _select_node_type(self):
@@ -640,9 +634,3 @@ class ChannelService:
 
     def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
-
-    def start_switch_role_timer_for_last_leader_when_term_expired(self):
-        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED,
-                                                  duration=conf.SWITCH_ROLE_DELAY_FOR_LAST_LEADER,
-                                                  callback=self.switch_role,
-                                                  callback_kwargs={"force": True})

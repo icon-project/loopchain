@@ -204,8 +204,6 @@ class BlockChain:
 
         :return:
         """
-        # utils.logger.notice(f"-----------------------rebuild_made_block_count")
-
         self.reset_leader_made_block_count()
 
         block_hash = self.__last_block.header.hash.hex()

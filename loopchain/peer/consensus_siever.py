@@ -64,8 +64,6 @@ class ConsensusSiever(ConsensusBase):
 
     def stop(self):
         self.__block_generation_timer.stop()
-        self.__stop_broadcast_send_unconfirmed_block_timer()
-
         if self._loop:
             self.__put_vote(None)
 
@@ -187,8 +185,7 @@ class ConsensusSiever(ConsensusBase):
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
-                util.logger.debug(
-                    f"There is no candidate block by height({last_unconfirmed_block.header.height}).")
+                util.logger.debug(f"There is no candidate block.")
                 block_builder = self._makeup_new_block(
                     block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
             finally:
@@ -205,10 +202,20 @@ class ConsensusSiever(ConsensusBase):
             self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
 
-            try:
-                await self._wait_for_voting(candidate_block)
-            except NotEnoughVotes:
-                return
+            # dirty block means the last block of term to add prep changed block.
+            if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
+                first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
+                    last_unconfirmed_block.header.revealed_next_reps_hash)[0]
+                is_dirty_block = ChannelProperty().peer_address != first_leader_of_term
+            else:
+                is_dirty_block = False
+
+            if not is_dirty_block:
+                self._blockchain.last_unconfirmed_block = candidate_block
+                try:
+                    await self._wait_for_voting(candidate_block)
+                except NotEnoughVotes:
+                    return
 
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
                     and not candidate_block.header.prep_changed:
@@ -218,8 +225,6 @@ class ConsensusSiever(ConsensusBase):
                     f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
             else:
-                self._blockchain.last_unconfirmed_block = candidate_block
-
                 if self._blockchain.just_before_max_made_block_count \
                         and not candidate_block.header.prep_changed:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
@@ -247,11 +252,6 @@ class ConsensusSiever(ConsensusBase):
                 self._block_manager.epoch.complained_result = None
                 self.__stop_broadcast_send_unconfirmed_block_timer()
                 return vote
-
-            # util.logger.spam(
-            #     f"not completed vote"
-            #     f"\nvotes({vote.votes})"
-            #     f"\nreps({vote.reps})")
 
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
@@ -290,6 +290,8 @@ class ConsensusSiever(ConsensusBase):
                         return None
 
                 prev_votes_list = prev_votes.votes
+            except AttributeError as e:
+                util.logger.warning(f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block}) {e}")
             except TimeoutError:
                 util.logger.warning(f"Timeout block of hash : {block_hash}")
                 if self._block_manager.epoch.complained_result:
@@ -326,6 +328,7 @@ class ConsensusSiever(ConsensusBase):
                 target=timer_key,
                 duration=conf.INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK,
                 is_repeat=True,
+                repeat_timeout=conf.BLOCK_VOTE_TIMEOUT,
                 is_run_at_start=True,
                 callback=broadcast_func
             )

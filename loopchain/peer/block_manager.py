@@ -152,16 +152,15 @@ class BlockManager:
         pass
 
     def broadcast_send_unconfirmed_block(self, block_: Block):
-        """생성된 unconfirmed block 을 피어들에게 broadcast 하여 검증을 요청한다.
+        """broadcast unconfirmed block for getting votes form reps
         """
-        if self.__channel_service.state_machine.state == "BlockGenerate":
-            last_block: Block = self.blockchain.last_block
-            if last_block.header.revealed_next_reps_hash:
-                if last_block.header.prep_changed:
-                    self._send_unconfirmed_block(block_, last_block.header.reps_hash)
-                self._send_unconfirmed_block(block_, block_.header.reps_hash)
-            else:
-                self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
+        last_block: Block = self.blockchain.last_block
+        if last_block.header.revealed_next_reps_hash:
+            if last_block.header.prep_changed:
+                self._send_unconfirmed_block(block_, last_block.header.reps_hash)
+            self._send_unconfirmed_block(block_, block_.header.reps_hash)
+        else:
+            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash):
         util.logger.debug(
