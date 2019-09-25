@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -154,6 +154,13 @@ class BlockManager:
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
+
+        if last_block.header.height > block_.header.height and \
+                self.__channel_service.state_machine.state != "BlockGenerate":
+            util.logger.debug(f"Last block has reached a sufficient height. Broadcast will stop!")
+            ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
+            return
+
         if last_block.header.revealed_next_reps_hash:
             if last_block.header.prep_changed:
                 self._send_unconfirmed_block(block_, last_block.header.reps_hash)
@@ -655,7 +662,10 @@ class BlockManager:
             rs_client = ObjectManager().channel_service.rs_client
             peer_stubs.append(rs_client)
             last_block = rs_client.call("GetLastBlock")
-            max_height = self.blockchain.block_versioner.get_height(last_block)
+            try:
+                max_height = self.blockchain.block_versioner.get_height(last_block)
+            except Exception as e:
+                util.exit_and_msg(f"The server is not ready! Please try again after a while.")
 
             return max_height, unconfirmed_block_height, peer_stubs
 

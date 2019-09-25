@@ -43,6 +43,9 @@ class ConsensusSiever(ConsensusBase):
         self._loop: asyncio.BaseEventLoop = None
         self._vote_queue: asyncio.Queue = None
 
+        util.logger.debug(f"Stop previous broadcast!")
+        self.stop_broadcast_send_unconfirmed_block_timer()
+
     def start_timer(self, timer_service: TimerService):
         self._loop = timer_service.get_event_loop()
         self.__lock = asyncio.Lock(loop=self._loop)
@@ -254,7 +257,7 @@ class ConsensusSiever(ConsensusBase):
             util.logger.info(f"Votes : {vote.get_summary()}")
             if vote.is_completed():
                 self._block_manager.epoch.complained_result = None
-                self.__stop_broadcast_send_unconfirmed_block_timer()
+                self.stop_broadcast_send_unconfirmed_block_timer()
                 return vote
 
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
@@ -306,7 +309,7 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.warning(f"Timeout block of hash : {block_hash}")
                 if self._block_manager.epoch.complained_result:
                     self._blockchain.last_unconfirmed_block = None
-                self.__stop_broadcast_send_unconfirmed_block_timer()
+                self.stop_broadcast_send_unconfirmed_block_timer()
                 return None
             except NotEnoughVotes:
                 if last_unconfirmed_block:
@@ -345,7 +348,7 @@ class ConsensusSiever(ConsensusBase):
         )
 
     @staticmethod
-    def __stop_broadcast_send_unconfirmed_block_timer():
+    def stop_broadcast_send_unconfirmed_block_timer():
         timer_key = TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
