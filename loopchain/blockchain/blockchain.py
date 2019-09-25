@@ -347,8 +347,7 @@ class BlockChain:
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
-    def find_confirm_info_by_height(self, height: int) -> bytes:
-        block = self.find_block_by_height(height)
+    def find_confirm_info_by_block(self, block: Block) -> bytes:
         hash_encoded = block.header.hash.hex().encode('UTF-8')
         try:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
@@ -482,9 +481,6 @@ class BlockChain:
                 # reset_network_by_block_height is called in critical section by self.__add_block_lock.
                 # Other Blocks must not be added until reset_network_by_block_height function finishes.
                 ObjectManager().channel_service.switch_role()
-
-            # utils.logger.notice(f"__add_block({block.header.height})")
-            # utils.logger.notice(f"made_block_count\n{self.__made_block_counter}")
 
             return True
 
@@ -1114,9 +1110,6 @@ class BlockChain:
                 for vote_address in self.find_preps_addresses_by_header(prev_block.header)
                 if vote_address != prev_block.header.peer_id
             ]
-
-        # utils.logger.notice(f"prev_vote_results({prev_vote_results}) "
-        #                     f"prev_block_votes({prev_block_votes})")
 
         request_origin = {
             'block': {

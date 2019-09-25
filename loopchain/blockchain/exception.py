@@ -46,6 +46,18 @@ class NotEnoughVotes(Exception):
     pass
 
 
+class NotReadyToConfirmInfo(Exception):
+    """There is no prev block or not ready to confirm block (Maybe node is starting)
+    """
+    pass
+
+
+class NoNeedToWaitForVotes(Exception):
+    """There is prev_votes, But already added block so  no longer have to wait for the vote.
+    """
+    pass
+
+
 class ConfirmInfoInvalid(Exception):
     """Unconfirmed block has not valid confirm info for prev block.
     """

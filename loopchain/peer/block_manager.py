@@ -17,10 +17,9 @@ import json
 import logging
 import threading
 import traceback
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
-
-from collections import defaultdict
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -29,7 +28,7 @@ from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps
+    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -638,12 +637,6 @@ class BlockManager:
         else:
             next_leader = self.blockchain.latest_block.header.next_leader.hex_hx()
 
-            try:
-                next_leader = self.__channel_service.peer_manager.get_peer(next_leader).peer_id
-            except Exception as e:
-                logging.warning(f"Cannot find ({next_leader}) in peer_manager as next_leader, {e}")
-                next_leader = None
-
         util.logger.spam(f"in get_next_leader({next_leader})")
         return next_leader
 
@@ -819,6 +812,11 @@ class BlockManager:
         block_verifier = BlockVerifier.new(unconfirmed_block.header.version, self.blockchain.tx_versioner)
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
+
+        if not prev_block:
+            raise NotReadyToConfirmInfo(
+                "There is no prev block or not ready to confirm block (Maybe node is starting)")
+
         try:
             if prev_block.header.reps_hash and unconfirmed_block.header.height > 1:
                 prev_reps = reps_getter(prev_block.header.reps_hash)

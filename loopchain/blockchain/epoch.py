@@ -64,7 +64,7 @@ class Epoch:
         block_manager: BlockManager = ObjectManager().channel_service.block_manager
         leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader()
         new_epoch = Epoch(block_manager, leader_id)
-        # utils.logger.notice(f"new epoch height({new_epoch.height})")
+        # utils.logger.spam(f"new epoch height({new_epoch.height})")
         return new_epoch
 
     def new_round(self, new_leader_id, round_=None):

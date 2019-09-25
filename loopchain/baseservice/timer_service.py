@@ -69,9 +69,6 @@ class Timer:
         if self._is_repeat and \
                 (self._repeat_timeout == 0 or
                  (time.time() - self.__repeat_start_time < self._repeat_timeout)):
-            # util.logger.spam(
-            #     f"in is_repeat self._repeat_timeout({self._repeat_timeout})"
-            #     f"\nduration({time.time() - self.__repeat_start_time})")
             return True
 
         return False
@@ -262,7 +259,6 @@ class TimerService(CommonThread):
                 return
 
             if timer.is_repeat:
-                # util.logger.spam(f"timer is repeat!")
                 self.restart_timer(key)
             else:
                 self.stop_timer(key, OffType.time_out)

@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,14 +16,15 @@
 import asyncio
 import json
 from functools import partial
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, \
+    NoNeedToWaitForVotes
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -136,11 +137,14 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
-            if last_block_vote_list is None:
-                return
+            try:
+                last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
+                if last_block_vote_list is None:
+                    return
+            except NoNeedToWaitForVotes as e:
+                util.logger.debug(e)
 
-            last_unconfirmed_block: Block = self._blockchain.last_unconfirmed_block
+            last_unconfirmed_block: Optional[Block] = self._blockchain.last_unconfirmed_block
             last_block_header = self._blockchain.last_block.header
 
             if last_block_header.prep_changed:
@@ -282,16 +286,22 @@ class ConsensusSiever(ConsensusBase):
         if prev_votes:
             try:
                 last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-                self.__check_timeout(last_unconfirmed_block)
+                if last_unconfirmed_block is None:
+                    warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block"
+                    if self._blockchain.find_block_by_hash(block_hash):
+                        warning_msg += "\nBut already added block so  no longer have to wait for the vote."
+                        raise NoNeedToWaitForVotes(warning_msg)
+                    else:
+                        util.logger.warning(warning_msg)
+                        return None
 
+                self.__check_timeout(last_unconfirmed_block)
                 if not prev_votes.is_completed():
                     self.__broadcast_block(last_unconfirmed_block)
                     if await self._wait_for_voting(last_unconfirmed_block) is None:
                         return None
 
                 prev_votes_list = prev_votes.votes
-            except AttributeError as e:
-                util.logger.warning(f"last_unconfirmed_block({self._blockchain.last_unconfirmed_block}) {e}")
             except TimeoutError:
                 util.logger.warning(f"Timeout block of hash : {block_hash}")
                 if self._block_manager.epoch.complained_result:

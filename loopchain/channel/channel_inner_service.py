@@ -510,12 +510,13 @@ class ChannelInnerTask:
 
             new_block_height = subscriber_block_height + 1
             new_block = self._blockchain.find_block_by_height(new_block_height)
-            confirm_info: bytes = self._blockchain.find_confirm_info_by_height(new_block_height)
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
                 await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
                 continue
+
+            confirm_info: bytes = self._blockchain.find_confirm_info_by_block(new_block)
 
             logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
             bs = BlockSerializer.new(new_block.header.version, self._blockchain.tx_versioner)
@@ -739,6 +740,8 @@ class ChannelInnerTask:
                 self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
             util.logger.warning(f"ConfirmInfoInvalidAddedBlock {e}")
+        except NotReadyToConfirmInfo as e:
+            util.logger.warning(f"NotReadyToConfirmInfo {e}")
         else:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
@@ -909,9 +912,11 @@ class ChannelInnerTask:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
         elif block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
-            confirm_info = self._blockchain.find_confirm_info_by_height(block_height)
             if block is None:
                 fail_response_code = message_code.Response.fail_wrong_block_height
+                confirm_info = bytes()
+            else:
+                confirm_info = self._blockchain.find_confirm_info_by_block(block)
         else:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
