@@ -274,10 +274,7 @@ class ChannelService:
             new_node_type = self._get_node_type_by_peer_list()
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
-        self.__inner_service.update_sub_services_properties(
-            node_type=ChannelProperty().node_type.value,
-            relay_target=ChannelProperty().rs_target
-        )
+        self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self, force: bool=False):
         self.peer_manager.update_all_peers()
@@ -341,6 +338,7 @@ class ChannelService:
 
         await self.__rs_client.init(radiostations)
         ChannelProperty().rs_target = self.__rs_client.target
+        self.__inner_service.update_sub_services_properties(relay_target=ChannelProperty().rs_target)
 
     async def _init_rs_client(self):
         self.__rs_client = RestClient(channel=ChannelProperty().name)
