@@ -65,7 +65,7 @@ class NodeSubscriber:
             websocket = self._websocket
             self._websocket = None
             if not websocket.closed:
-                logging.debug("Closing websocket connection...")
+                logging.debug(f"Closing websocket connection to {self._target_uri}...")
                 await websocket.close()
 
     async def subscribe(self, block_height, event: Event):

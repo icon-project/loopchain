@@ -178,6 +178,7 @@ class ChannelStateMachine(object):
 
     def _watch_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_block_monitoring_timer()
+        self._run_coroutine_threadsafe(self.__channel_service.node_subscriber.close())
 
     def _do_reset_network_on_enter(self):
         self._run_coroutine_threadsafe(self.__channel_service.reset_network())

@@ -113,6 +113,10 @@ class ChannelService:
     def inner_service(self):
         return self.__inner_service
 
+    @property
+    def node_subscriber(self):
+        return self.__node_subscriber
+
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -240,10 +244,6 @@ class ChannelService:
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
-        if self.__node_subscriber is not None:
-            await self.__node_subscriber.close()
-            self.__node_subscriber: NodeSubscriber = None
-
         self.__timer_service.clean()
 
         peer_ids = set()
