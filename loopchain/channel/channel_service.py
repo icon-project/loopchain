@@ -113,6 +113,10 @@ class ChannelService:
     def inner_service(self):
         return self.__inner_service
 
+    @property
+    def node_subscriber(self):
+        return self.__node_subscriber
+
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -240,10 +244,6 @@ class ChannelService:
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
-        if self.__node_subscriber is not None:
-            await self.__node_subscriber.close()
-            self.__node_subscriber: NodeSubscriber = None
-
         self.__timer_service.clean()
 
         peer_ids = set()
@@ -634,3 +634,15 @@ class ChannelService:
 
     def stop_shutdown_timer_when_fail_subscribe(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE)
+
+    def start_block_monitoring_timer(self):
+        self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_BLOCK_MONITOR,
+                                                  duration=conf.TIMEOUT_FOR_BLOCK_MONITOR,
+                                                  callback=self.state_machine.subscribe_network)
+
+    def reset_block_monitoring_timer(self):
+        if self.__timer_service.get_timer(TimerService.TIMER_KEY_BLOCK_MONITOR):
+            self.__timer_service.reset_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+
+    def stop_block_monitoring_timer(self):
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)

@@ -84,6 +84,12 @@ class MockChannelService:
     def is_support_node_function(self, _):
         return True
 
+    def start_block_monitoring_timer(self):
+        pass
+
+    def stop_block_monitoring_timer(self):
+        pass
+
 
 class MockChannelServiceCitizen(MockChannelService):
     def __init__(self):

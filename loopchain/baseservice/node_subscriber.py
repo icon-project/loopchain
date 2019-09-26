@@ -65,7 +65,7 @@ class NodeSubscriber:
             websocket = self._websocket
             self._websocket = None
             if not websocket.closed:
-                logging.debug("Closing websocket connection...")
+                logging.debug(f"Closing websocket connection to {self._target_uri}...")
                 await websocket.close()
 
     async def subscribe(self, block_height, event: Event):
@@ -152,6 +152,8 @@ class NodeSubscriber:
                               f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped})")
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
+            finally:
+                ObjectManager().channel_service.reset_block_monitoring_timer()
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
@@ -165,6 +167,9 @@ class NodeSubscriber:
             # set subscribe_event to transit the state to Watch.
             self._subscribe_event.set()
 
+        await self._reset_heartbeat_timer(_callback)
+
+    async def _reset_heartbeat_timer(self, _callback):
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
