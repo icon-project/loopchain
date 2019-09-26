@@ -457,7 +457,7 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        leader_id = self.__block_manager.get_next_leader()
+        leader_id = self.__block_manager.get_next_leader(self.__block_manager.blockchain.latest_block)
         utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
@@ -536,7 +536,7 @@ class ChannelService:
         self.turn_on_leader_complain_timer()
 
     def set_new_leader(self):
-        new_leader_id = self.block_manager.get_next_leader()
+        new_leader_id = self.block_manager.get_next_leader(self.block_manager.blockchain.latest_block)
         if new_leader_id:
             new_leader = self.peer_manager.get_peer(new_leader_id)
             self.peer_manager.set_leader_peer(new_leader)

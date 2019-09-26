@@ -62,7 +62,8 @@ class Epoch:
     @staticmethod
     def new_epoch(leader_id=None):
         block_manager: BlockManager = ObjectManager().channel_service.block_manager
-        leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader()
+        leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader(
+            block_manager.blockchain.latest_block)
         new_epoch = Epoch(block_manager, leader_id)
         # utils.logger.spam(f"new epoch height({new_epoch.height})")
         return new_epoch

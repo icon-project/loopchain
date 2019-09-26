@@ -634,17 +634,17 @@ class BlockManager:
         self.epoch = Epoch.new_epoch()
         util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
 
-    def get_next_leader(self) -> Optional[str]:
-        if self.blockchain.last_block.header.prep_changed:
-            next_leader = self.blockchain.get_first_leader_of_next_reps()
-        elif self.blockchain.just_before_max_made_block_count:
+    def get_next_leader(self, block: Block) -> Optional[str]:
+        if block.header.prep_changed:
+            next_leader = self.blockchain.get_first_leader_of_next_reps(block)
+        elif self.blockchain.made_block_count_reached_max(block):
             next_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-                self.blockchain.last_block.header.peer_id.hex_hx()
+                block.header.peer_id.hex_hx()
             ).peer_id
         else:
-            next_leader = self.blockchain.latest_block.header.next_leader.hex_hx()
+            next_leader = block.header.next_leader.hex_hx()
 
-        util.logger.spam(f"in get_next_leader({next_leader})")
+        util.logger.spam(f"next_leader({next_leader})")
         return next_leader
 
     def __get_peer_stub_list(self):

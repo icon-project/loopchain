@@ -118,9 +118,8 @@ class BlockChain:
     def my_made_block_count(self) -> int:
         return self.__made_block_counter[ChannelProperty().peer_address]
 
-    @property
-    def just_before_max_made_block_count(self) -> bool:
-        return self.leader_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 1)
+    def made_block_count_reached_max(self, block: Block) -> bool:
+        return self.__made_block_counter[block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1)
 
     def _increase_made_block_count(self, block: Block) -> None:
         """This is must called before changing self.__last_block!
@@ -139,11 +138,11 @@ class BlockChain:
     def reset_leader_made_block_count(self):
         self.__made_block_counter.clear()
 
-    def get_first_leader_of_next_reps(self) -> str:
+    def get_first_leader_of_next_reps(self, block: Block) -> str:
         utils.logger.spam(
             f"in get_next_leader new reps leader is "
-            f"{self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]}")
-        return self.find_preps_ids_by_roothash(self.last_block.header.revealed_next_reps_hash)[0]
+            f"{self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]}")
+        return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block

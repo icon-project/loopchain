@@ -104,7 +104,7 @@ class ConsensusSiever(ConsensusBase):
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
-        next_leader = self._block_manager.get_next_leader()
+        next_leader = self._block_manager.get_next_leader(block)
         self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash):
@@ -232,7 +232,7 @@ class ConsensusSiever(ConsensusBase):
                     f"peer_id({ChannelProperty().peer_id})")
                 ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
             else:
-                if self._blockchain.just_before_max_made_block_count \
+                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) \
                         and not candidate_block.header.prep_changed:
                     # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
                     # next unconfirmed block height is 10
