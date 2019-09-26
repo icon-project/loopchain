@@ -640,5 +640,9 @@ class ChannelService:
                                                   duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                                                   callback=self.state_machine.subscribe_network)
 
+    def reset_block_monitoring_timer(self):
+        if self.__timer_service.get_timer(TimerService.TIMER_KEY_BLOCK_MONITOR):
+            self.__timer_service.reset_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+
     def stop_block_monitoring_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)

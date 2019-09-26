@@ -152,15 +152,8 @@ class NodeSubscriber:
                               f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped})")
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
-
-            await self._reset_block_monitoring_timer(confirmed_block.header.height)
-
-    async def _reset_block_monitoring_timer(self, height):
-        timer_key = TimerService.TIMER_KEY_BLOCK_MONITOR
-        timer_service = ObjectManager().channel_service.timer_service
-        if timer_key in timer_service.timer_list:
-            logging.debug(f"reset TIMER_KEY_BLOCK_MONITOR timer for block height({height})")
-            timer_service.reset_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+            finally:
+                ObjectManager().channel_service.reset_block_monitoring_timer()
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):

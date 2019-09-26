@@ -174,6 +174,8 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.start_epoch()
 
     def _watch_on_enter(self, *args, **kwargs):
+        loggers.get_preset().is_leader = False
+        loggers.get_preset().update_logger()
         self.__channel_service.start_block_monitoring_timer()
 
     def _watch_on_exit(self, *args, **kwargs):
