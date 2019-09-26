@@ -637,7 +637,7 @@ class ChannelService:
 
     def start_block_monitoring_timer(self):
         self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_BLOCK_MONITOR,
-                                                  duration=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
+                                                  duration=conf.TIMEOUT_FOR_BLOCK_MONITOR,
                                                   callback=self.state_machine.subscribe_network)
 
     def reset_block_monitoring_timer(self):
