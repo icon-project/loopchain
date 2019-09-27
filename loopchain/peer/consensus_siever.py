@@ -23,8 +23,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, \
-    NotNeedToWaitForVotes
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -113,6 +112,7 @@ class ConsensusSiever(ConsensusBase):
 
         self._blockchain.last_unconfirmed_block = None
         dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
+
         if block_version == '0.1a':
             votes = dumped_votes
         else:
@@ -140,12 +140,9 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            try:
-                last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
-                if last_block_vote_list is None:
-                    return
-            except NotNeedToWaitForVotes as e:
-                util.logger.debug(e)
+            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
+            if last_block_vote_list is None:
+                return
 
             last_unconfirmed_block: Optional[Block] = self._blockchain.last_unconfirmed_block
             last_block_header = self._blockchain.last_block.header
@@ -170,8 +167,9 @@ class ConsensusSiever(ConsensusBase):
                         util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                         return
                     """
-                    block_builder = self._makeup_new_block(
-                        block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
+                    block_builder = self._makeup_new_block(block_builder.version,
+                                                           complain_votes,
+                                                           self._blockchain.last_block.header.hash)
                 elif self._blockchain.my_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
                     # (conf.MAX_MADE_BLOCK_COUNT - 2) means if made_block_count is 8,
                     # but after __add_block, it becomes 9
@@ -193,8 +191,9 @@ class ConsensusSiever(ConsensusBase):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
                 util.logger.debug(f"There is no candidate block.")
-                block_builder = self._makeup_new_block(
-                    block_builder.version, complain_votes, self._blockchain.last_block.header.hash)
+                block_builder = self._makeup_new_block(block_builder.version,
+                                                       complain_votes,
+                                                       self._blockchain.last_block.header.hash)
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
@@ -293,10 +292,12 @@ class ConsensusSiever(ConsensusBase):
                     warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
                     if self._blockchain.find_block_by_hash(block_hash):
                         warning_msg += "\nBut already added block so  no longer have to wait for the vote."
-                        raise NotNeedToWaitForVotes(warning_msg)
+                        # TODO An analysis of the cause of this situation is necessary.
+                        util.logger.notice(warning_msg)
+                        self._block_manager.candidate_blocks.remove_block(block_hash)
                     else:
                         util.logger.warning(warning_msg)
-                        return None
+                    return None
 
                 self.__check_timeout(last_unconfirmed_block)
                 if not prev_votes.is_completed():

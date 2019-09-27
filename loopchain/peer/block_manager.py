@@ -644,7 +644,7 @@ class BlockManager:
         else:
             next_leader = block.header.next_leader.hex_hx()
 
-        util.logger.spam(f"next_leader({next_leader})")
+        util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
 
     def __get_peer_stub_list(self):
