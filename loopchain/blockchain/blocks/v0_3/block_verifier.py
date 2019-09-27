@@ -157,8 +157,9 @@ class BlockVerifier(BaseBlockVerifier):
         body: BlockBody = block.body
         if body.leader_votes:
             any_vote = next(vote for vote in body.leader_votes if vote)
-            leader_votes = LeaderVotes(reps, conf.LEADER_COMPLAIN_RATIO, block.header.height, any_vote.round_,
-                                       any_vote.old_leader, body.leader_votes)
+            leader_votes = LeaderVotes(
+                reps, conf.LEADER_COMPLAIN_RATIO,
+                block.header.height, any_vote.round_, any_vote.old_leader, body.leader_votes)
             if leader_votes.get_result() != block.header.peer_id:
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "
@@ -181,8 +182,12 @@ class BlockVerifier(BaseBlockVerifier):
     def verify_prev_votes(self, block: 'Block', prev_reps: Sequence[ExternalAddress]):
         header: BlockHeader = block.header
         body: BlockBody = block.body
+        round_ = 0
+        if body.prev_votes:
+            round_ = next(vote for vote in body.prev_votes if vote).round_
 
-        prev_votes = BlockVotes(prev_reps, conf.VOTING_RATIO, header.height - 1, header.prev_hash, body.prev_votes)
+        prev_votes = BlockVotes(
+            prev_reps, conf.VOTING_RATIO, header.height - 1, round_, header.prev_hash, body.prev_votes)
         if prev_votes.get_result() is not True:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                      f"PrevVotes {body.prev_votes}")
@@ -192,3 +197,5 @@ class BlockVerifier(BaseBlockVerifier):
         except Exception as e:
             # FIXME : votes.verify does not verify all votes when raising an exception.
             self._handle_exception(e)
+
+

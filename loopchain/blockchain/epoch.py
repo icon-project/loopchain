@@ -82,7 +82,7 @@ class Epoch:
                                    self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
         self.complain_votes[self.round] = leader_votes
-        self.__remove_complain_votes()
+        self.__remove_outdated_complain_votes()
 
     def set_epoch_leader(self, leader_id, complained=False):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -107,7 +107,7 @@ class Epoch:
         except RuntimeError as e:
             logging.warning(e)
 
-    def __remove_complain_votes(self):
+    def __remove_outdated_complain_votes(self):
         utils.logger.spam(f"Try to remove complaint votes on round {self.round}.")
         round_list = sorted(self.complain_votes.keys())
         keep_round = self.round - 1
@@ -116,11 +116,9 @@ class Epoch:
 
         for round_ in round_list:
             if round_ < keep_round:
-                utils.logger.spam(f"Remove complaint votes on {round_} round.")
                 del self.complain_votes[round_]
             elif round_ == keep_round:
                 break
-        utils.logger.spam(f"Complete to remove complaint votes")
 
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.

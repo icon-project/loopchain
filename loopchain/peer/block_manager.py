@@ -187,17 +187,17 @@ class BlockManager:
             reps_hash=target_reps_hash
         )
 
-    def _send_unrecorded_block(self, block_: Block, target_reps_hash):
+    def _send_unrecorded_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
             f"BroadCast AnnounceUnrecordedBlock "
-            f"height({block_.header.height}) block({block_.header.hash}) peers: "
+            f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
             f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnrecordedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
 
@@ -280,14 +280,9 @@ class BlockManager:
         current_state = self.__channel_service.state_machine.state
         block_header = unconfirmed_block.header
 
-        if self.epoch.height == block_header.height and self.epoch.round > round_:
+        if self.epoch.height == block_header.height and self.epoch.round < round_:
             raise InvalidUnconfirmedBlock(
                 f"The unconfirmed block has invalid round. Expected({self.epoch.round}), Unconfirmed_block({round_})")
-
-        if self.epoch.round != round_:
-            raise InvalidUnconfirmedBlock(
-                f"The unconfirmed block is made by an unexpected round. "
-                f"Expected({self.epoch.round}), Unconfirmed_block({round_})")
 
         if not self.epoch.complained_result and self.epoch.leader_id != block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(
@@ -304,8 +299,8 @@ class BlockManager:
         :param is_unrecorded_block:
         :return:
         """
-        self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
         self.__validate_epoch_of_unconfirmed_block(unconfirmed_block, round_)
+        self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
         if unconfirmed_block.header.reps_hash:
@@ -813,12 +808,13 @@ class BlockManager:
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "ComplainLeader", request, reps_hash=self.__channel_service.peer_manager.prepared_reps_hash)
 
-    def vote_unconfirmed_block(self, block: Block, is_validated):
+    def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
 
         vote = BlockVote.new(
             signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
+            round_=round_,
             block_hash=block.header.hash if is_validated else Hash32.empty(),
             timestamp=util.get_time_stamp()
         )
@@ -877,7 +873,7 @@ class BlockManager:
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
-    async def _vote(self, unconfirmed_block: Block):
+    async def _vote(self, unconfirmed_block: Block, round_: int):
         exc = None
         try:
             block_version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
@@ -906,7 +902,7 @@ class BlockManager:
             self._reset_leader(unconfirmed_block)
         finally:
             is_validated = exc is None
-            vote = self.vote_unconfirmed_block(unconfirmed_block, is_validated)
+            vote = self.vote_unconfirmed_block(unconfirmed_block, round_, is_validated)
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
@@ -928,6 +924,6 @@ class BlockManager:
             util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            await self._vote(unconfirmed_block)
+            await self._vote(unconfirmed_block, round_)
         else:
-            await self._vote(unconfirmed_block)
+            await self._vote(unconfirmed_block, round_)

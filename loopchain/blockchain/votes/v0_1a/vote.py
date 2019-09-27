@@ -21,6 +21,7 @@ from loopchain.crypto.signature import Signer
 @dataclass(frozen=True)
 class BlockVote(BaseVote[bool]):
     block_height: int
+    round_: int
     block_hash: Hash32
 
     def result(self) -> bool:
@@ -29,8 +30,8 @@ class BlockVote(BaseVote[bool]):
     # noinspection PyMethodOverriding
     @classmethod
     def new(cls, signer: Signer, timestamp: int,
-            block_height: int, block_hash: Union[Hash32, None]) -> 'BlockVote':
-        return super().new(signer, timestamp, block_height=block_height, block_hash=block_hash)
+            block_height: int, round_: int, block_hash: Union[Hash32, None]) -> 'BlockVote':
+        return super().new(signer, timestamp, block_height=block_height, round_=round_, block_hash=block_hash)
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -41,21 +42,23 @@ class BlockVote(BaseVote[bool]):
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
+        data_deserialized["round_"] = data["round_"]
         data_deserialized["block_hash"] = Hash32.fromhex(data["blockHash"])
         return data_deserialized
 
     # noinspection PyMethodOverriding
     @classmethod
-    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, block_hash: Hash32):
+    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, round_: int, block_hash: Hash32):
         origin_data = super().to_origin_data(rep, timestamp)
         origin_data["blockHeight"] = hex(block_height)
+        origin_data["round_"] = round_
         origin_data["blockHash"] = block_hash.hex_0x() if block_hash is not None else None
         return origin_data
 
     # noinspection PyMethodOverriding
     @classmethod
-    def to_hash(cls, rep: ExternalAddress, timestamp: int, block_height: int, block_hash: Hash32):
-        return super().to_hash(rep, timestamp, block_height=block_height, block_hash=block_hash)
+    def to_hash(cls, rep: ExternalAddress, timestamp: int, block_height: int, round_: int, block_hash: Hash32):
+        return super().to_hash(rep, timestamp, block_height=block_height, round_=round_, block_hash=block_hash)
 
 
 @dataclass(frozen=True)

@@ -23,14 +23,19 @@ class BlockVotes(BaseVotes[BlockVote]):
     VoteType = BlockVote
 
     def __init__(self, reps: Iterable['ExternalAddress'], voting_ratio: float,
-                 block_height: int, block_hash: Hash32, votes: List[BlockVote] = None):
+                 block_height: int, round_: int, block_hash: Hash32, votes: List[BlockVote] = None):
         self.block_height = block_height
+        self.round = round_
         self.block_hash = block_hash
         super().__init__(reps, voting_ratio, votes)
 
     def verify_vote(self, vote: BlockVote):
         if vote.block_height != self.block_height:
             raise RuntimeError(f"Vote block_height not match. {vote.block_height} != {self.block_height}\n"
+                               f"{vote}")
+
+        if vote.round_ != self.round:
+            raise RuntimeError(f"Vote round not match. {vote.round_} != {self.round}\n"
                                f"{vote}")
 
         if vote.block_hash != self.block_hash and vote.block_hash != Hash32.empty():
@@ -56,6 +61,7 @@ class BlockVotes(BaseVotes[BlockVote]):
     def get_summary(self):
         msg = super().get_summary()
         msg += f"block height({self.block_height})\n"
+        msg += f"round({self.round})\n"
         msg += f"block hash({self.block_hash.hex_0x()})"
         return msg
 
@@ -63,13 +69,15 @@ class BlockVotes(BaseVotes[BlockVote]):
         return (
             super().__eq__(other) and
             self.block_hash == other.block_hash and
-            self.block_height == other.block_height
+            self.block_height == other.block_height and
+            self.round == other.round
         )
 
     def __repr__(self):
         return (
             f"{self.__class__.__qualname__}(reps={self.reps!r}, voting_ratio={self.voting_ratio!r}, "
-            f"block_height={self.block_height!r}, block_hash={self.block_hash!r}, votes={self.votes!r})"
+            f"block_height={self.block_height!r}, round={self.round!r}, "
+            f"block_hash={self.block_hash!r}, votes={self.votes!r})"
         )
 
 
@@ -147,10 +155,10 @@ class LeaderVotes(BaseVotes[LeaderVote]):
         if votes_data:
             votes = [LeaderVote.deserialize(vote_data) for vote_data in votes_data]
             reps = [vote.rep for vote in votes]
-            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].old_leader)
+            votes_instance = cls(reps, voting_ratio, votes[0].block_height, votes[0].round_, votes[0].old_leader)
             for vote in votes:
                 index = reps.index(vote.rep)
                 votes_instance.votes[index] = vote
             return votes_instance
         else:
-            return cls([], voting_ratio, -1, ExternalAddress.empty())
+            return cls([], voting_ratio, -1, -1, ExternalAddress.empty())

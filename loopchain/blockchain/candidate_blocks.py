@@ -37,7 +37,7 @@ class CandidateBlock:
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        self.votes: BlockVotes = None
+        self.votes: dict[int, BlockVotes] = {}
         self.votes_buffer: List[BlockVote] = []
         self.start_time = util.get_time_stamp()  # timestamp
         self.hash = block_hash
@@ -67,26 +67,35 @@ class CandidateBlock:
             logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
-            channel_service = ObjectManager().channel_service
-            if channel_service:
-                reps = channel_service.block_manager.blockchain.find_preps_addresses_by_header(block.header)
-            else:
-                reps = []
-
-            self.votes = BlockVotes(reps, conf.VOTING_RATIO, self.height, self.hash)
+            reps = self.__get_reps()
+            self.votes[0] = BlockVotes(reps, conf.VOTING_RATIO, self.height, 0, self.hash)
             for vote in self.votes_buffer:
                 try:
-                    self.votes.add_vote(vote)
+                    if not self.votes.get(vote.round_):
+                        self.votes[vote.round_] = \
+                            BlockVotes(reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
+                    self.votes[vote.round_].add_vote(vote)
                 except VoteError as e:
                     util.logger.info(e)
             self.votes_buffer.clear()
 
+    def __get_reps(self):
+        channel_service = ObjectManager().channel_service
+        if channel_service:
+            return channel_service.block_manager.blockchain.find_preps_addresses_by_header(self.__block.header)
+        else:
+            return []
+
     def add_vote(self, vote: BlockVote):
         if self.votes:
+            if not self.votes.get(vote.round_):
+                self.votes[vote.round_] = \
+                    BlockVotes(self.__get_reps(), conf.VOTING_RATIO, self.height, vote.round_, self.hash)
             try:
-                self.votes.add_vote(vote)
+                self.votes[vote.round_].add_vote(vote)
             except VoteError as e:
                 util.logger.info(e)
+                return
         else:
             self.votes_buffer.append(vote)
 
@@ -110,8 +119,9 @@ class CandidateBlocks:
                 if block.height == vote.block_height:
                     block.add_vote(vote)
 
-    def get_votes(self, block_hash):
-        return self.blocks[block_hash].votes
+    def get_votes(self, block_hash, round_: int):
+        votes = self.blocks[block_hash].votes
+        return votes.get(round_) if votes else votes
 
     def add_block(self, block: Block):
         if block.header.height != self._blockchain.block_height + 1:

@@ -95,8 +95,8 @@ class ConsensusSiever(ConsensusBase):
 
         return block_builder.build()
 
-    async def __add_block(self, block: Block):
-        vote = await self._wait_for_voting(block)
+    async def __add_block(self, block: Block, round_: int):
+        vote = await self._wait_for_voting(block, round_)
         if not vote:
             raise NotEnoughVotes
         elif not vote.get_result():
@@ -137,7 +137,8 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
+            last_block_vote_list = \
+                await self.__get_votes(self._blockchain.latest_block.header.hash, self._block_manager.epoch.round)
             if last_block_vote_list is None:
                 return
 
@@ -170,7 +171,6 @@ class ConsensusSiever(ConsensusBase):
             block_builder = self._block_manager.epoch.makeup_block(
                 complain_votes, last_block_vote_list, skip_add_tx, next_reps, next_leader)
             need_next_call = False
-            round_ = self._block_manager.epoch.round
             try:
                 if complained_result or new_term:
                     util.logger.spam("consensus block_builder.complained or new term")
@@ -188,7 +188,7 @@ class ConsensusSiever(ConsensusBase):
                     # but after __add_block, it becomes 9
                     # so next unconfirmed block height is 10 (last).
                     if last_unconfirmed_block:
-                        await self.__add_block(last_unconfirmed_block)
+                        await self.__add_block(last_unconfirmed_block, self._block_manager.epoch.round)
                     else:
                         util.logger.info(f"This leader already made "
                                          f"{self._blockchain.my_made_block_count} blocks. "
@@ -199,7 +199,7 @@ class ConsensusSiever(ConsensusBase):
                         (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
                 elif last_unconfirmed_block:
-                    await self.__add_block(last_unconfirmed_block)
+                    await self.__add_block(last_unconfirmed_block, self._block_manager.epoch.round)
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
@@ -216,15 +216,15 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
-            self.__broadcast_block(candidate_block, max(self._block_manager.epoch.round, round_), is_unrecorded_block)
-            self._block_manager.vote_unconfirmed_block(candidate_block, True)
+            self.__broadcast_block(candidate_block, self._block_manager.epoch.round, is_unrecorded_block)
+            self._block_manager.vote_unconfirmed_block(candidate_block, self._block_manager.epoch.round, True)
 
             if is_unrecorded_block:
                 self._blockchain.last_unconfirmed_block = None
             else:
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
-                    await self._wait_for_voting(candidate_block)
+                    await self._wait_for_voting(candidate_block, self._block_manager.epoch.round)
                 except NotEnoughVotes:
                     return
 
@@ -247,14 +247,14 @@ class ConsensusSiever(ConsensusBase):
                 else:
                     self.__block_generation_timer.call()
 
-    async def _wait_for_voting(self, block: 'Block'):
+    async def _wait_for_voting(self, block: 'Block', round_: int):
         """Waiting validator's vote for the candidate_block.
 
         :param block:
         :return: vote_result or None
         """
         while True:
-            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash)
+            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash, round_)
             if not vote:
                 raise ThereIsNoCandidateBlock
 
@@ -283,9 +283,9 @@ class ConsensusSiever(ConsensusBase):
             raise TimeoutError
         return timeout
 
-    async def __get_votes(self, block_hash: Hash32):
+    async def __get_votes(self, block_hash: Hash32, round_: int):
         try:
-            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash)
+            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash, round_)
         except KeyError as e:
             util.logger.spam(f"There is no block in candidates list: {e}")
             prev_votes = None
@@ -307,7 +307,7 @@ class ConsensusSiever(ConsensusBase):
                 self.__check_timeout(last_unconfirmed_block)
                 if not prev_votes.is_completed():
                     self.__broadcast_block(last_unconfirmed_block, self._block_manager.epoch.round)
-                    if await self._wait_for_voting(last_unconfirmed_block) is None:
+                    if await self._wait_for_voting(last_unconfirmed_block, round_) is None:
                         return None
 
                 prev_votes_list = prev_votes.votes
