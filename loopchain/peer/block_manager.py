@@ -28,7 +28,7 @@ from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo
+    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo, UnrecordedBlock
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -264,7 +264,13 @@ class BlockManager:
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def add_unconfirmed_block(self, unconfirmed_block):
+    def __check_unrecorded_block(self, unconfirmed_block: Block):
+        expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
+        if self.blockchain.last_block.header.prep_changed and \
+                unconfirmed_block.header.peer_id != ExternalAddress.fromhex(expected_generator):
+            raise UnrecordedBlock
+
+    def add_unconfirmed_block(self, unconfirmed_block: Block):
         """
 
         :param unconfirmed_block:
@@ -287,6 +293,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self.confirm_prev_block(unconfirmed_block)
+                self.__check_unrecorded_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
@@ -881,6 +888,8 @@ class BlockManager:
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
+        except UnrecordedBlock as e:
+            util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
             await self._vote(unconfirmed_block)
