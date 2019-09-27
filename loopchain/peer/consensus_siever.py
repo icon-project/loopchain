@@ -106,7 +106,7 @@ class ConsensusSiever(ConsensusBase):
         next_leader = self._block_manager.get_next_leader(block)
         self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
-    def _makeup_new_block(self, block_version, complain_votes, block_hash):
+    def _makeup_new_block(self, block_version, complain_votes, block_hash, skip_add_tx=False):
         if not self._block_manager.epoch.complained_result:
             self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
 
@@ -118,7 +118,7 @@ class ConsensusSiever(ConsensusBase):
         else:
             votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
-        return self._block_manager.epoch.makeup_block(complain_votes, votes)
+        return self._block_manager.epoch.makeup_block(complain_votes, votes, skip_add_tx)
 
     def __get_complaint_votes(self):
         if self._block_manager.epoch.complained_result:
@@ -156,7 +156,20 @@ class ConsensusSiever(ConsensusBase):
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
 
-            block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_vote_list)
+            # unrecorded_block means the last block of term to add prep changed block.
+            if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
+                first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
+                    last_unconfirmed_block.header.revealed_next_reps_hash)[0]
+                is_unrecorded_block = ChannelProperty().peer_address != first_leader_of_term
+                if is_unrecorded_block is True:
+                    util.logger.debug(f"unrecorded block for height({last_unconfirmed_block.header.height + 1})")
+            else:
+                is_unrecorded_block = False
+
+            skip_add_tx = is_unrecorded_block or new_term
+            block_builder = self._block_manager.epoch.makeup_block(complain_votes,
+                                                                   last_block_vote_list,
+                                                                   skip_add_tx)
             need_next_call = False
             try:
                 if complained_result or new_term:
@@ -190,10 +203,8 @@ class ConsensusSiever(ConsensusBase):
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
-                util.logger.debug(f"There is no candidate block.")
-                block_builder = self._makeup_new_block(block_builder.version,
-                                                       complain_votes,
-                                                       self._blockchain.last_block.header.hash)
+                util.logger.warning(f"There is no candidate block.")
+                return
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
@@ -207,14 +218,6 @@ class ConsensusSiever(ConsensusBase):
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
-
-            # unrecorded_block means the last block of term to add prep changed block.
-            if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
-                first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
-                    last_unconfirmed_block.header.revealed_next_reps_hash)[0]
-                is_unrecorded_block = ChannelProperty().peer_address != first_leader_of_term
-            else:
-                is_unrecorded_block = False
 
             if not is_unrecorded_block:
                 self._blockchain.last_unconfirmed_block = candidate_block

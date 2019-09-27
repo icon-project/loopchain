@@ -150,8 +150,8 @@ class Epoch:
                 break
 
             tx: 'Transaction' = tx_queue.get_item_in_status(
-                TransactionStatusInQueue.normal,
-                TransactionStatusInQueue.added_to_block
+                get_status=TransactionStatusInQueue.normal,
+                set_status=TransactionStatusInQueue.added_to_block
             )
             if tx is None:
                 break
@@ -189,7 +189,7 @@ class Epoch:
                     continue
             utils.logger.spam(f"There is no duplicated tx anymore.")
 
-    def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
+    def makeup_block(self, complain_votes: LeaderVotes, prev_votes, skip_add_tx=False):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -197,7 +197,7 @@ class Epoch:
         block_builder.prev_votes = prev_votes
         if complain_votes and complain_votes.get_result():
             block_builder.leader_votes = complain_votes.votes
-        else:
+        elif not skip_add_tx:
             self.__add_tx_to_block(block_builder)
 
         return block_builder
