@@ -536,6 +536,7 @@ class ChannelService:
     def set_new_leader(self):
         new_leader_id = self.block_manager.get_next_leader(self.block_manager.blockchain.latest_block)
         if new_leader_id:
+            self.__peer_manager.update_all_peers()
             new_leader = self.peer_manager.get_peer(new_leader_id)
             self.peer_manager.set_leader_peer(new_leader)
 

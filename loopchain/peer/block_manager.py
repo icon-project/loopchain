@@ -265,10 +265,11 @@ class BlockManager:
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
     def __check_unrecorded_block(self, unconfirmed_block: Block):
-        expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
-        if self.blockchain.last_block.header.prep_changed and \
-                unconfirmed_block.header.peer_id != ExternalAddress.fromhex(expected_generator):
-            raise UnrecordedBlock
+        if self.blockchain.last_block.header.revealed_next_reps_hash:
+            expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
+            if self.blockchain.last_block.header.prep_changed and \
+                    unconfirmed_block.header.peer_id != ExternalAddress.fromhex(expected_generator):
+                raise UnrecordedBlock
 
     def add_unconfirmed_block(self, unconfirmed_block: Block):
         """
