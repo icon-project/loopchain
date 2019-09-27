@@ -82,6 +82,12 @@ class DuplicationUnconfirmedBlock(Exception):
     pass
 
 
+class UnrecordedBlock(Exception):
+    """
+    """
+    pass
+
+
 class NotInReps(Exception):
     """
     """
