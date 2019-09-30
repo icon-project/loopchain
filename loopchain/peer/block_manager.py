@@ -225,21 +225,22 @@ class BlockManager:
         """
         return len(self.__txQueue)
 
-    def confirm_prev_block(self, current_block: Block):
-        confirmed_block = self.blockchain.confirm_prev_block(current_block)
+    def _confirm_prev_block(self, unconfirmed_block: Block):
+        confirmed_block = self.blockchain.confirm_prev_block(unconfirmed_block)
         if confirmed_block is None:
             return
 
-        if current_block.header.prep_changed:
-            next_leader = self.blockchain.find_preps_addresses_by_roothash(
-                current_block.header.next_reps_hash)[0].hex_hx()
-            util.logger.spam(
-                f"next reps({self.blockchain.find_preps_addresses_by_roothash(current_block.header.next_reps_hash)})")
-        else:
-            next_leader = current_block.header.next_leader.hex_hx()
+        self.__check_unrecorded_block(unconfirmed_block)
 
-        util.logger.debug(f"confirm prev block next_leader({next_leader})")
-        complained = current_block.header.complained and self.epoch.complained_result
+    def _reset_leader(self, unconfirmed_block: Block):
+        if unconfirmed_block.header.prep_changed:
+            next_leader = self.blockchain.find_preps_addresses_by_roothash(
+                unconfirmed_block.header.next_reps_hash)[0].hex_hx()
+        else:
+            next_leader = unconfirmed_block.header.next_leader.hex_hx()
+
+        util.logger.debug(f"next_leader({next_leader})")
+        complained = unconfirmed_block.header.complained and self.epoch.complained_result
         self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
 
     def __validate_duplication_unconfirmed_block(self, unconfirmed_block: Block):
@@ -292,8 +293,7 @@ class BlockManager:
 
         try:
             if need_to_confirm:
-                self.confirm_prev_block(unconfirmed_block)
-                self.__check_unrecorded_block(unconfirmed_block)
+                self._confirm_prev_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
@@ -869,6 +869,7 @@ class BlockManager:
             traceback.print_exc()
         else:
             self.candidate_blocks.add_block(unconfirmed_block)
+            self._reset_leader(unconfirmed_block)
         finally:
             is_validated = exc is None
             vote = self.vote_unconfirmed_block(unconfirmed_block, is_validated)
