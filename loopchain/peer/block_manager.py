@@ -231,11 +231,10 @@ class BlockManager:
             return
 
         if current_block.header.prep_changed:
-            next_leader = self.blockchain.find_preps_addresses_by_header(
+            next_leader = self.blockchain.find_preps_addresses_by_roothash(
                 current_block.header.next_reps_hash)[0].hex_hx()
             util.logger.spam(
-                f"confirm prev block reps("
-                f"{self.blockchain.find_preps_addresses_by_header(current_block.header.next_reps_hash)})")
+                f"next reps({self.blockchain.find_preps_addresses_by_roothash(current_block.header.next_reps_hash)})")
         else:
             next_leader = current_block.header.next_leader.hex_hx()
 
