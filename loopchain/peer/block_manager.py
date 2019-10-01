@@ -230,8 +230,6 @@ class BlockManager:
         if confirmed_block is None:
             return
 
-        self.__check_unrecorded_block(unconfirmed_block)
-
     def _reset_leader(self, unconfirmed_block: Block):
         if unconfirmed_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_roothash(
@@ -294,6 +292,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self._confirm_prev_block(unconfirmed_block)
+                self.__check_unrecorded_block(unconfirmed_block)
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
