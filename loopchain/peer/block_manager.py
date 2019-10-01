@@ -225,11 +225,6 @@ class BlockManager:
         """
         return len(self.__txQueue)
 
-    def _confirm_prev_block(self, unconfirmed_block: Block):
-        confirmed_block = self.blockchain.confirm_prev_block(unconfirmed_block)
-        if confirmed_block is None:
-            return
-
     def _reset_leader(self, unconfirmed_block: Block):
         if unconfirmed_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_roothash(
@@ -262,12 +257,13 @@ class BlockManager:
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def __check_unrecorded_block(self, unconfirmed_block: Block):
+    def __is_unrecorded_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.revealed_next_reps_hash:
             expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
             if self.blockchain.last_block.header.prep_changed and \
                     unconfirmed_block.header.peer_id != ExternalAddress.fromhex(expected_generator):
-                raise UnrecordedBlock
+                return True
+        return False
 
     def add_unconfirmed_block(self, unconfirmed_block: Block):
         """
@@ -291,8 +287,9 @@ class BlockManager:
 
         try:
             if need_to_confirm:
-                self._confirm_prev_block(unconfirmed_block)
-                self.__check_unrecorded_block(unconfirmed_block)
+                self.blockchain.confirm_prev_block(unconfirmed_block)
+                if self.__is_unrecorded_block(unconfirmed_block):
+                    raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
                     raise BlockchainError(f"last block is not previous block. block={unconfirmed_block}")
@@ -892,6 +889,7 @@ class BlockManager:
             util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            await self._vote(unconfirmed_block)
+            if not self.__is_unrecorded_block(unconfirmed_block):
+                await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
