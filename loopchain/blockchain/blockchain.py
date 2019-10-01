@@ -439,6 +439,11 @@ class BlockChain:
 
             if not need_to_write_tx_info:
                 receipts = None
+
+            if next_prep and self.find_preps_addresses_by_roothash(
+                    Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True)):
+                next_prep = None
+
             next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
 
             try:
@@ -1142,6 +1147,10 @@ class BlockChain:
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
             ObjectManager().channel_service.peer_manager.reset_all_peers(
                 next_prep["rootHash"], next_prep['preps'], update_now=False)
+
+            # PREPs of unconfirmed block have to write to db in advance for the reset leader.
+            if not self.find_preps_addresses_by_roothash(next_preps_hash):
+                self.write_preps(next_preps_hash, next_prep['preps'])
         else:
             # P-Rep list has no changes
             next_preps_hash = Hash32.empty()
