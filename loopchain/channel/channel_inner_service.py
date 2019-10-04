@@ -588,7 +588,7 @@ class ChannelInnerTask:
         if last_block:
             block_height = last_block.header.height
 
-        if last_unconfirmed_block:
+        if last_unconfirmed_block and not self._block_manager.is_unrecorded_block(last_unconfirmed_block):
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
         status_data["status"] = self._block_manager.service_status

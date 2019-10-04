@@ -257,7 +257,7 @@ class BlockManager:
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def __is_unrecorded_block(self, unconfirmed_block: Block):
+    def is_unrecorded_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.revealed_next_reps_hash:
             expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
             if self.blockchain.last_block.header.prep_changed and \
@@ -288,7 +288,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self.blockchain.confirm_prev_block(unconfirmed_block)
-                if self.__is_unrecorded_block(unconfirmed_block):
+                if self.is_unrecorded_block(unconfirmed_block):
                     raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
@@ -688,11 +688,11 @@ class BlockManager:
                         channel=self.__channel_name,
                     ), conf.GRPC_TIMEOUT_SHORT)
 
-                    response.block_height = max(response.block_height, response.unconfirmed_block_height)
+                    latest_block_height = max(response.block_height, response.unconfirmed_block_height)
 
-                    if response.block_height > max_height:
+                    if latest_block_height > max_height:
                         # Add peer as higher than this
-                        max_height = response.block_height
+                        max_height = latest_block_height
                         unconfirmed_block_height = response.unconfirmed_block_height
                         peer_stubs.append(stub)
 
@@ -889,7 +889,7 @@ class BlockManager:
             util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            if not self.__is_unrecorded_block(unconfirmed_block):
+            if not self.is_unrecorded_block(unconfirmed_block):
                 await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)
