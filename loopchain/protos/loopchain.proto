@@ -54,6 +54,7 @@ service PeerService {
     rpc BlockSync (BlockSyncRequest) returns (BlockSyncReply) {}
     // Subscribe 후 broadcast 받는 인터페이스는 Announce- 로 시작한다.
     rpc AnnounceUnconfirmedBlock (BlockSend) returns (CommonReply) {}
+    rpc AnnounceUnrecordedBlock (BlockSend) returns (CommonReply) {}
     rpc AnnounceNewBlockForVote (NewBlockSend) returns (CommonReply) {}
     rpc AnnounceConfirmedBlock (BlockAnnounce) returns (CommonReply) {}
     // Test 검증을 위한 인터페이스

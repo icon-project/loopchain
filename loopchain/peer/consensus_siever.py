@@ -86,10 +86,11 @@ class ConsensusSiever(ConsensusBase):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
-        block_builder.next_leader = next_leader
         block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
-        block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
+        if not block_builder.next_leader and not block_builder.reps:
+            block_builder.next_leader = next_leader
+            block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
         return block_builder.build()
 
@@ -156,6 +157,8 @@ class ConsensusSiever(ConsensusBase):
             if last_unconfirmed_block and not last_block_vote_list and not new_term:
                 return
 
+            next_reps = None
+            next_leader = None
             # unrecorded_block means the last block of term to add prep changed block.
             if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
                 first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
@@ -163,13 +166,13 @@ class ConsensusSiever(ConsensusBase):
                 is_unrecorded_block = ChannelProperty().peer_address != first_leader_of_term
                 if is_unrecorded_block is True:
                     util.logger.debug(f"unrecorded block for height({last_unconfirmed_block.header.height + 1})")
+                    next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             else:
                 is_unrecorded_block = False
 
             skip_add_tx = is_unrecorded_block or new_term
-            block_builder = self._block_manager.epoch.makeup_block(complain_votes,
-                                                                   last_block_vote_list,
-                                                                   skip_add_tx)
+            block_builder = self._block_manager.epoch.makeup_block(
+                complain_votes, last_block_vote_list, skip_add_tx, next_reps, next_leader)
             need_next_call = False
             try:
                 if complained_result or new_term:
@@ -183,6 +186,8 @@ class ConsensusSiever(ConsensusBase):
                     block_builder = self._makeup_new_block(block_builder.version,
                                                            complain_votes,
                                                            self._blockchain.last_block.header.hash)
+                    next_reps = [rep for rep in self._block_manager.epoch.reps]
+                    next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
                 elif self._blockchain.my_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
                     # (conf.MAX_MADE_BLOCK_COUNT - 2) means if made_block_count is 8,
                     # but after __add_block, it becomes 9
@@ -209,6 +214,7 @@ class ConsensusSiever(ConsensusBase):
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
+            util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
             candidate_block = self.__build_candidate_block(
                 block_builder, ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id))
             candidate_block, invoke_results = self._blockchain.score_invoke(
@@ -216,7 +222,7 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
-            self.__broadcast_block(candidate_block)
+            self.__broadcast_block(candidate_block, is_unrecorded_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
 
             if not is_unrecorded_block:
@@ -358,6 +364,6 @@ class ConsensusSiever(ConsensusBase):
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
-    def __broadcast_block(self, block: 'Block'):
-        broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, block)
+    def __broadcast_block(self, block: 'Block', is_unrecorded_block: bool):
+        broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, block, is_unrecorded_block)
         self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)

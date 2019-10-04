@@ -150,7 +150,7 @@ class BlockManager:
     def __pre_validate_pass(self, tx: Transaction):
         pass
 
-    def broadcast_send_unconfirmed_block(self, block_: Block):
+    def broadcast_send_unconfirmed_block(self, block_: Block, is_unrecorded_block: bool):
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
@@ -161,12 +161,17 @@ class BlockManager:
             ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
             return
 
+        if is_unrecorded_block:
+            send_block_function = self._send_unrecorded_block
+        else:
+            send_block_function = self._send_unconfirmed_block
+
         if last_block.header.revealed_next_reps_hash:
             if last_block.header.prep_changed:
-                self._send_unconfirmed_block(block_, last_block.header.reps_hash)
-            self._send_unconfirmed_block(block_, block_.header.reps_hash)
+                send_block_function(block_, last_block.header.reps_hash)
+            send_block_function(block_, block_.header.reps_hash)
         else:
-            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash)
+            send_block_function(block_, self.__channel_service.peer_manager.prepared_reps_hash)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash):
         util.logger.debug(
@@ -175,11 +180,23 @@ class BlockManager:
             f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
             f"target_reps_hash({target_reps_hash})")
 
-        # util.logger.spam(f'block_manager:zip_test num of tx is {block_.confirmed_tx_len}')
         block_dumped = self.blockchain.block_dumps(block_)
-
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
+            loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
+            reps_hash=target_reps_hash
+        )
+
+    def _send_unrecorded_block(self, block_: Block, target_reps_hash):
+        util.logger.debug(
+            f"BroadCast AnnounceUnrecordedBlock "
+            f"height({block_.header.height}) block({block_.header.hash}) peers: "
+            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
+            f"target_reps_hash({target_reps_hash})")
+
+        block_dumped = self.blockchain.block_dumps(block_)
+        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+            "AnnounceUnrecordedBlock",
             loopchain_pb2.BlockSend(block=block_dumped, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
@@ -260,15 +277,16 @@ class BlockManager:
     def is_unrecorded_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.revealed_next_reps_hash:
             expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
-            if self.blockchain.last_block.header.prep_changed and \
-                    unconfirmed_block.header.peer_id != ExternalAddress.fromhex(expected_generator):
+            if self.blockchain.last_block.header.prep_changed:
                 return True
         return False
 
-    def add_unconfirmed_block(self, unconfirmed_block: Block):
+    def add_unconfirmed_block(self, unconfirmed_block: Block, is_unrecorded_block: bool = False):
         """
 
         :param unconfirmed_block:
+        :param is_unrecorded_block:
+        :return:
         """
         self.__validate_duplication_unconfirmed_block(unconfirmed_block)
 
@@ -288,7 +306,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self.blockchain.confirm_prev_block(unconfirmed_block)
-                if self.is_unrecorded_block(unconfirmed_block):
+                if is_unrecorded_block:
                     raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
