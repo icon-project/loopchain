@@ -189,7 +189,8 @@ class Epoch:
                     continue
             utils.logger.spam(f"There is no duplicated tx anymore.")
 
-    def makeup_block(self, complain_votes: LeaderVotes, prev_votes, skip_add_tx=False):
+    def makeup_block(self, complain_votes: LeaderVotes, prev_votes,
+                     skip_add_tx=False, next_reps=None, next_leader=None):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -197,7 +198,11 @@ class Epoch:
         block_builder.prev_votes = prev_votes
         if complain_votes and complain_votes.get_result():
             block_builder.leader_votes = complain_votes.votes
-        elif not skip_add_tx:
+
+        if skip_add_tx:
+            block_builder.next_leader = next_leader
+            block_builder.reps = next_reps
+        else:
             self.__add_tx_to_block(block_builder)
 
         return block_builder

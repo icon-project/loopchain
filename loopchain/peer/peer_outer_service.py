@@ -487,7 +487,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.GetInvokeResultReply(response_code=response_code, result=result)
 
     def AnnounceUnconfirmedBlock(self, request, context):
-        """수집된 tx 로 생성한 Block 을 각 peer 에 전송하여 검증을 요청한다.
+        """Send the UnconfirmedBlock includes collected transactions to reps and request to verify it.
 
         :param request:
         :param context:
@@ -497,6 +497,21 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[channel_name]
         asyncio.run_coroutine_threadsafe(
             channel_stub.async_task().announce_unconfirmed_block(request.block),
+            self.peer_service.inner_service.loop
+        )
+        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
+
+    def AnnounceUnrecordedBlock(self, request, context):
+        """Send the UnrecordedBlock to reps and request to verify it.
+
+        :param request:
+        :param context:
+        :return:
+        """
+        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        channel_stub = StubCollection().channel_stubs[channel_name]
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().announce_unrecorded_block(request.block),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
