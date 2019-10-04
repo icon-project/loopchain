@@ -88,7 +88,8 @@ class ConsensusSiever(ConsensusBase):
         block_builder.prev_hash = last_block.header.hash
         block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
-        if not block_builder.next_leader and not block_builder.reps:
+
+        if not (block_builder.next_leader and block_builder.reps):
             block_builder.next_leader = next_leader
             block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
