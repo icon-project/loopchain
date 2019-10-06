@@ -456,6 +456,7 @@ class BlockChain:
             self._increase_made_block_count(block)  # must do this before self.__last_block = block
             self.__last_block = block
             self.__total_tx = next_total_tx
+            self.__block_manager.new_epoch()
 
             logging.info(
                 f"ADD BLOCK HEIGHT : {block.header.height} , "

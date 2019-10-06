@@ -719,6 +719,13 @@ class BlockManager:
 
         return max_height, unconfirmed_block_height, peer_stubs
 
+    def new_epoch(self):
+        if self.epoch:
+            new_leader_id = self.get_next_leader(self.blockchain.last_block)
+            new_leader = self.__channel_service.peer_manager.get_peer(new_leader_id)
+            self.epoch = Epoch.new_epoch(new_leader.peer_id)
+            logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
+
     def stop(self):
         # for reuse key value store when restart channel.
         self.blockchain.close_blockchain_store()
