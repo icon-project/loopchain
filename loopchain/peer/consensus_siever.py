@@ -145,8 +145,7 @@ class ConsensusSiever(ConsensusBase):
             last_block_header = self._blockchain.last_block.header
 
             if last_block_header.prep_changed:
-                new_term = last_unconfirmed_block is None or \
-                           last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address
+                new_term = last_unconfirmed_block is None
             else:
                 new_term = False
 
@@ -219,7 +218,9 @@ class ConsensusSiever(ConsensusBase):
             self.__broadcast_block(candidate_block, is_unrecorded_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, True)
 
-            if not is_unrecorded_block:
+            if is_unrecorded_block:
+                self._blockchain.last_unconfirmed_block = None
+            else:
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
                     await self._wait_for_voting(candidate_block)

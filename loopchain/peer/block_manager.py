@@ -300,6 +300,7 @@ class BlockManager:
             if need_to_confirm:
                 self.blockchain.confirm_prev_block(unconfirmed_block)
                 if is_unrecorded_block:
+                    self.blockchain.last_unconfirmed_block = None
                     raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:
                 if self.blockchain.last_block.header.hash != unconfirmed_block.header.prev_hash:
