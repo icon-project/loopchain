@@ -274,13 +274,6 @@ class BlockManager:
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def is_unrecorded_block(self, unconfirmed_block: Block):
-        if self.blockchain.last_block.header.revealed_next_reps_hash:
-            expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
-            if self.blockchain.last_block.header.prep_changed:
-                return True
-        return False
-
     def add_unconfirmed_block(self, unconfirmed_block: Block, is_unrecorded_block: bool = False):
         """
 
@@ -909,7 +902,6 @@ class BlockManager:
             util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            if not self.is_unrecorded_block(unconfirmed_block):
-                await self._vote(unconfirmed_block)
+            await self._vote(unconfirmed_block)
         else:
             await self._vote(unconfirmed_block)

@@ -82,15 +82,15 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug("Cannot vote before starting consensus.")
         # raise RuntimeError("Cannot vote before starting consensus.")
 
-    def __build_candidate_block(self, block_builder, next_leader):
+    def __build_candidate_block(self, block_builder):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
         block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
 
-        if not (block_builder.next_leader and block_builder.reps):
-            block_builder.next_leader = next_leader
+        if not block_builder.next_leader and not block_builder.reps:
+            block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
         return block_builder.build()
@@ -163,6 +163,7 @@ class ConsensusSiever(ConsensusBase):
                 if is_unrecorded_block is True:
                     util.logger.debug(f"unrecorded block for height({last_unconfirmed_block.header.height + 1})")
                     next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
+                    next_reps = [rep for rep in self._block_manager.epoch.reps]
             else:
                 is_unrecorded_block = False
 
@@ -182,8 +183,6 @@ class ConsensusSiever(ConsensusBase):
                     block_builder = self._makeup_new_block(block_builder.version,
                                                            complain_votes,
                                                            self._blockchain.last_block.header.hash)
-                    next_reps = [rep for rep in self._block_manager.epoch.reps]
-                    next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
                 elif self._blockchain.my_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
                     # (conf.MAX_MADE_BLOCK_COUNT - 2) means if made_block_count is 8,
                     # but after __add_block, it becomes 9
@@ -211,8 +210,7 @@ class ConsensusSiever(ConsensusBase):
                     return self.__block_generation_timer.call()
 
             util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
-            candidate_block = self.__build_candidate_block(
-                block_builder, ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id))
+            candidate_block = self.__build_candidate_block(block_builder)
             candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, self._blockchain.latest_block, is_block_editable=True)
 
