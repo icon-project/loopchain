@@ -82,7 +82,6 @@ class Epoch:
                                    self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
         self.complain_votes[self.round] = leader_votes
-        self.__remove_outdated_complain_votes()
 
     def set_epoch_leader(self, leader_id, complained=False):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
@@ -107,19 +106,6 @@ class Epoch:
         except RuntimeError as e:
             logging.warning(e)
 
-    def __remove_outdated_complain_votes(self):
-        utils.logger.spam(f"Try to remove complaint votes on round {self.round}.")
-        round_list = sorted(self.complain_votes.keys())
-        keep_round = self.round - 1
-        if round_list[0] >= keep_round:
-            return
-
-        for round_ in round_list:
-            if round_ < keep_round:
-                del self.complain_votes[round_]
-            elif round_ == keep_round:
-                break
-
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.
 
@@ -131,19 +117,6 @@ class Epoch:
             return vote_result.hex_hx()
         else:
             return None
-
-    def _check_unconfirmed_block(self):
-        if self.__blockchain.last_unconfirmed_block:
-            vote = self.__block_manager.candidate_blocks.get_votes(
-                self.__blockchain.last_unconfirmed_block.header.hash)
-            vote_result = vote.get_result(
-                self.__blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
-
-            if not vote_result:
-                utils.logger.debug(
-                    f"last_unconfirmed_block"
-                    f"({self.__blockchain.last_unconfirmed_block.header.hash}), "
-                    f"vote result({vote_result})")
 
     def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()

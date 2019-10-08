@@ -108,8 +108,9 @@ class LeaderVotes(BaseVotes[LeaderVote]):
     def is_completed(self):
         majority_pair = self.get_majority()
         if majority_pair:
-            majority_count = majority_pair[1]
-            if majority_count >= self.quorum:
+            majority_value = majority_pair[0][0]
+            majority_count = majority_pair[0][1]
+            if majority_count >= self.quorum or self.is_failed(majority_value, majority_count):
                 return True
 
             empty_count = self.votes.count(None)
@@ -118,13 +119,20 @@ class LeaderVotes(BaseVotes[LeaderVote]):
                 return True
         return False
 
+    def is_failed(self, value: ExternalAddress, count: int) -> bool:
+        return value == ExternalAddress.empty() and count >= len(self.reps) - self.quorum + 1
+
     def get_result(self):
-        majority_pair = self.get_majority()
-        if majority_pair:
-            majority_value = majority_pair[0]
-            majority_count = majority_pair[1]
-            if majority_count >= self.quorum:
-                return majority_value
+        majority_pairs = self.get_majority(2)
+        if majority_pairs:
+            rank_1_value, rank_1_count = majority_pairs[0]
+            if rank_1_count >= self.quorum or self.is_failed(rank_1_value, rank_1_count):
+                return rank_1_value
+
+            if len(majority_pairs) > 1:
+                rank_2_value, rank_2_count = majority_pairs[1]
+                if self.is_failed(rank_2_value, rank_2_count):
+                    return rank_2_value
         return None
 
     def get_summary(self):

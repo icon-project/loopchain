@@ -85,10 +85,10 @@ class Votes(ABC, Generic[TVote]):
     def get_result(self):
         raise NotImplementedError
 
-    def get_majority(self):
+    def get_majority(self, n: int = 1):
         counter = Counter(vote.result() for vote in self.votes if vote)
-        majorities = counter.most_common(1)
-        return majorities[0] if majorities else None
+        majorities = counter.most_common(n)
+        return majorities
 
     def get_summary(self):
         def _fill_space(left_str):

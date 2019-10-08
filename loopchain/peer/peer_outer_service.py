@@ -350,9 +350,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         channel_stub = StubCollection().channel_stubs[channel]
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().complain_leader(
-                vote_dumped=request.complain_vote
-            ),
+            channel_stub.async_task().complain_leader(vote_dumped=request.complain_vote),
             self.peer_service.inner_service.loop
         )
 
@@ -511,7 +509,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().announce_unrecorded_block(request.block),
+            channel_stub.async_task().announce_unrecorded_block(request.block, request.round_),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")

@@ -269,13 +269,6 @@ class BlockManager:
 
         raise DuplicationUnconfirmedBlock("Unconfirmed block has already been added.")
 
-    def is_unrecorded_block(self, unconfirmed_block: Block):
-        if self.blockchain.last_block.header.revealed_next_reps_hash:
-            expected_generator = self.blockchain.get_first_leader_of_next_reps(self.blockchain.last_block)
-            if self.blockchain.last_block.header.prep_changed:
-                return True
-        return False
-
     def __validate_epoch_of_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
         current_state = self.__channel_service.state_machine.state
         block_header = unconfirmed_block.header
@@ -664,7 +657,7 @@ class BlockManager:
 
         return True
 
-    def get_next_leader(self, block: Block) -> Optional[str]:
+    def get_next_leader_by_block(self, block: Block) -> Optional[str]:
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
@@ -729,7 +722,7 @@ class BlockManager:
         return max_height, unconfirmed_block_height, peer_stubs
 
     def new_epoch(self):
-        new_leader_id = self.get_next_leader(self.blockchain.last_block)
+        new_leader_id = self.get_next_leader_by_block(self.blockchain.last_block)
         self.epoch = Epoch(self, new_leader_id)
         logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
@@ -747,19 +740,64 @@ class BlockManager:
             util.logger.debug(f"Epoch is not initialized.")
             return
 
-        if self.epoch.height == vote.block_height and self.epoch.round <= vote.round_:
-            self.epoch.add_complain(vote)
+        if self.epoch.height == vote.block_height:
+            if self.epoch.round == vote.round_:
+                self.epoch.add_complain(vote)
+            elif self.epoch.round > vote.round_:
+                if vote.new_leader != ExternalAddress.empty():
+                    self.__send_fail_leader_vote(vote)
+                else:
+                    return
+            else:
+                # TODO: do round sync
+                return
 
             elected_leader = self.epoch.complain_result()
             if elected_leader:
-                self.__channel_service.reset_leader(elected_leader, complained=True)
-            elif elected_leader is False:
-                util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
-                # In this case, a new leader can't be elected by the consensus of leader complaint.
-                # That's why the leader of current `round` is set to the next `round` again.
-                self.epoch.new_round(self.epoch.leader_id)
+                if elected_leader == ExternalAddress.empty().hex_xx() and vote.round_ == self.epoch.round:
+                    util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
+                    elected_leader = \
+                        self.__channel_service.peer_manager.get_next_leader_peer(self.epoch.leader_id).peer_id
+
+                if self.epoch.round == vote.round_:
+                    self.__channel_service.reset_leader(elected_leader, complained=True)
         elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
+
+    def __send_fail_leader_vote(self, leader_vote: LeaderVote):
+        fail_vote = LeaderVote.new(
+            signer=ChannelProperty().peer_auth,
+            block_height=leader_vote.block_height,
+            round_=leader_vote.round_,
+            old_leader=leader_vote.old_leader,
+            new_leader=ExternalAddress.empty(),
+            timestamp=util.get_time_stamp()
+        )
+
+        logging.info(f"FailLeaderVote : to {leader_vote.old_leader}, round({leader_vote.round_})")
+        fail_vote_dumped = json.dumps(fail_vote.serialize())
+        request = loopchain_pb2.ComplainLeaderRequest(
+            complain_vote=fail_vote_dumped,
+            channel=self.channel_name
+        )
+
+        reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or \
+                    self.__channel_service.peer_manager.prepared_reps_hash
+        rep_id = leader_vote.rep.hex_hx()
+        for rep in self.blockchain.find_preps_by_roothash(reps_hash):
+            if rep["id"] == rep_id:
+                target = rep["p2pEndpoint"]
+                break
+
+        util.logger.debug(
+            f"fail leader complain "
+            f"complained_leader_id({leader_vote.old_leader}), "
+            f"new_leader_id({ExternalAddress.empty()}),"
+            f"round({leader_vote.round_})")
+
+        self.__channel_service.broadcast_scheduler.schedule_send_failed_leader_complain(
+            "ComplainLeader", request, target=target
+        )
 
     def get_leader_ids_for_complaint(self) -> Tuple[str, str]:
         """
@@ -790,7 +828,8 @@ class BlockManager:
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
             timestamp=util.get_time_stamp()
         )
-        logging.info(f"LeaderVote : \n{leader_vote}")
+        logging.info(
+            f"LeaderVote : old_leader({complained_leader_id}), new_leader({new_leader_id}), round({self.epoch.round})")
         self.add_complain(leader_vote)
 
         leader_vote_serialized = leader_vote.serialize()
@@ -836,7 +875,7 @@ class BlockManager:
 
         return vote
 
-    def verify_confirm_info(self, unconfirmed_block: Block, round_: int):
+    def verify_confirm_info(self, unconfirmed_block: Block):
         unconfirmed_header = unconfirmed_block.header
         my_height = self.blockchain.block_height
         if my_height < (unconfirmed_header.height - 2):

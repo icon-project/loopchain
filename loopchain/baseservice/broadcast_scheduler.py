@@ -71,6 +71,7 @@ class _Broadcaster:
             BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
+            BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handler_send_to_single_target,
         }
 
         self.__broadcast_with_self_target_methods = {
@@ -202,6 +203,12 @@ class _Broadcaster:
                                     f"target({target}) ")
             except KeyError as e:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
+
+    def __handler_send_to_single_target(self, param):
+        method_name = param[0]
+        method_param = param[1]
+        target = param[2]
+        self.__call_async_to_target(target, method_name, method_param, True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
 
     def __handler_subscribe(self, audience_target):
         util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
@@ -426,6 +433,9 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
         util.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+
+    def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
+        self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
 
 
 class _BroadcastThread(CommonThread):

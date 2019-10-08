@@ -20,6 +20,7 @@ class BroadcastCommand:
     AUDIENCE_UNSUBSCRIBE = "audience_unsubscribe"
     BROADCAST = "broadcast"
     MAKE_SELF_PEER_CONNECTION = "make_self_connection"
+    SEND_TO_SINGLE_TARGET = "send_to_single_target"
     CONNECT_TO_LEADER = "connect_to_leader"
     CREATE_TX = "create_tx"
     STATUS = "status"

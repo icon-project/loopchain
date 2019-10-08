@@ -89,14 +89,14 @@ class ConsensusSiever(ConsensusBase):
         block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
 
-        if not block_builder.next_leader and not block_builder.reps:
+        if block_builder.version == '0.1a' or (not block_builder.next_leader and not block_builder.reps):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
 
         return block_builder.build()
 
-    async def __add_block(self, block: Block, round_: int):
-        vote = await self._wait_for_voting(block, round_)
+    async def __add_block(self, block: Block):
+        vote = await self._wait_for_voting(block)
         if not vote:
             raise NotEnoughVotes
         elif not vote.get_result():
@@ -137,8 +137,7 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
-            last_block_vote_list = \
-                await self.__get_votes(self._blockchain.latest_block.header.hash, self._block_manager.epoch.round)
+            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
             if last_block_vote_list is None:
                 return
 
@@ -188,7 +187,7 @@ class ConsensusSiever(ConsensusBase):
                     # but after __add_block, it becomes 9
                     # so next unconfirmed block height is 10 (last).
                     if last_unconfirmed_block:
-                        await self.__add_block(last_unconfirmed_block, self._block_manager.epoch.round)
+                        await self.__add_block(last_unconfirmed_block)
                     else:
                         util.logger.info(f"This leader already made "
                                          f"{self._blockchain.my_made_block_count} blocks. "
@@ -199,7 +198,7 @@ class ConsensusSiever(ConsensusBase):
                         (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
                 elif last_unconfirmed_block:
-                    await self.__add_block(last_unconfirmed_block, self._block_manager.epoch.round)
+                    await self.__add_block(last_unconfirmed_block)
             except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
             except ThereIsNoCandidateBlock:
@@ -216,7 +215,7 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
-            self.__broadcast_block(candidate_block, self._block_manager.epoch.round, is_unrecorded_block)
+            self.__broadcast_block(candidate_block, is_unrecorded_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, self._block_manager.epoch.round, True)
 
             if is_unrecorded_block:
@@ -224,7 +223,7 @@ class ConsensusSiever(ConsensusBase):
             else:
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
-                    await self._wait_for_voting(candidate_block, self._block_manager.epoch.round)
+                    await self._wait_for_voting(candidate_block)
                 except NotEnoughVotes:
                     return
 
@@ -247,14 +246,14 @@ class ConsensusSiever(ConsensusBase):
                 else:
                     self.__block_generation_timer.call()
 
-    async def _wait_for_voting(self, block: 'Block', round_: int):
+    async def _wait_for_voting(self, block: 'Block'):
         """Waiting validator's vote for the candidate_block.
 
         :param block:
         :return: vote_result or None
         """
         while True:
-            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash, round_)
+            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash, self._block_manager.epoch.round)
             if not vote:
                 raise ThereIsNoCandidateBlock
 
@@ -283,9 +282,9 @@ class ConsensusSiever(ConsensusBase):
             raise TimeoutError
         return timeout
 
-    async def __get_votes(self, block_hash: Hash32, round_: int):
+    async def __get_votes(self, block_hash: Hash32):
         try:
-            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash, round_)
+            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash, self._block_manager.epoch.round)
         except KeyError as e:
             util.logger.spam(f"There is no block in candidates list: {e}")
             prev_votes = None
@@ -306,8 +305,8 @@ class ConsensusSiever(ConsensusBase):
 
                 self.__check_timeout(last_unconfirmed_block)
                 if not prev_votes.is_completed():
-                    self.__broadcast_block(last_unconfirmed_block, self._block_manager.epoch.round)
-                    if await self._wait_for_voting(last_unconfirmed_block, round_) is None:
+                    self.__broadcast_block(last_unconfirmed_block)
+                    if await self._wait_for_voting(last_unconfirmed_block) is None:
                         return None
 
                 prev_votes_list = prev_votes.votes
@@ -360,7 +359,9 @@ class ConsensusSiever(ConsensusBase):
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
-    def __broadcast_block(self, block: 'Block', round_, is_unrecorded_block: bool = False):
-        broadcast_func = partial(
-            self._block_manager.broadcast_send_unconfirmed_block, block, round_, is_unrecorded_block)
+    def __broadcast_block(self, block: 'Block', is_unrecorded_block: bool = False):
+        broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block,
+                                 block,
+                                 self._block_manager.epoch.round,
+                                 is_unrecorded_block)
         self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)

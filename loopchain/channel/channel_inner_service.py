@@ -33,9 +33,9 @@ from loopchain.blockchain.transactions import (Transaction, TransactionSerialize
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import loopchain_pb2, message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
-from loopchain.jsonrpc.exception import JsonError
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -729,7 +729,7 @@ class ChannelInnerTask:
             return
 
         try:
-            self._block_manager.verify_confirm_info(unconfirmed_block, round_)
+            self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid as e:
             util.logger.warning(f"ConfirmInfoInvalid {e}")
         except ConfirmInfoInvalidNeedBlockSync as e:
@@ -773,7 +773,7 @@ class ChannelInnerTask:
             return
 
         try:
-            self._block_manager.verify_confirm_info(unrecorded_block, round_)
+            self._block_manager.verify_confirm_info(unrecorded_block)
         except ConfirmInfoInvalid as e:
             util.logger.warning(f"ConfirmInfoInvalid {e}")
         except ConfirmInfoInvalidNeedBlockSync as e:
