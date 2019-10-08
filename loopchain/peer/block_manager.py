@@ -328,6 +328,7 @@ class BlockManager:
     def rebuild_block(self):
         self.blockchain.rebuild_transaction_count()
         self.blockchain.rebuild_made_block_count()
+        self.new_epoch()
 
         nid = self.blockchain.find_nid()
         if nid is None:
@@ -651,10 +652,6 @@ class BlockManager:
 
         return True
 
-    def start_epoch(self):
-        self.epoch = Epoch.new_epoch()
-        util.logger.debug(f"start epoch epoch leader({self.epoch.leader_id})")
-
     def get_next_leader(self, block: Block) -> Optional[str]:
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
@@ -718,6 +715,11 @@ class BlockManager:
                     logging.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
+
+    def new_epoch(self):
+        new_leader_id = self.get_next_leader(self.blockchain.last_block)
+        self.epoch = Epoch(self, new_leader_id)
+        logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
     def stop(self):
         # for reuse key value store when restart channel.

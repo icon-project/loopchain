@@ -105,13 +105,8 @@ class ConsensusSiever(ConsensusBase):
         self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
-        next_leader = self._block_manager.get_next_leader(block)
-        self._block_manager.epoch = Epoch.new_epoch(next_leader)
 
     def _makeup_new_block(self, block_version, complain_votes, block_hash, skip_add_tx=False):
-        if not self._block_manager.epoch.complained_result:
-            self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-
         self._blockchain.last_unconfirmed_block = None
         dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
 
@@ -365,6 +360,6 @@ class ConsensusSiever(ConsensusBase):
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
-    def __broadcast_block(self, block: 'Block', is_unrecorded_block: bool):
+    def __broadcast_block(self, block: 'Block', is_unrecorded_block: bool = False):
         broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, block, is_unrecorded_block)
         self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)

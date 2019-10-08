@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 class Epoch:
-    def __init__(self, block_manager, leader_id=None):
+    def __init__(self, block_manager: 'BlockManager', leader_id=None):
         self.__block_manager: BlockManager = block_manager
         self.__blockchain = block_manager.blockchain
         if self.__blockchain.last_block:
@@ -58,15 +58,6 @@ class Epoch:
     @property
     def complain_duration(self):
         return min((2 ** self.round) * conf.TIMEOUT_FOR_LEADER_COMPLAIN, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
-
-    @staticmethod
-    def new_epoch(leader_id=None):
-        block_manager: BlockManager = ObjectManager().channel_service.block_manager
-        leader_id = leader_id or ObjectManager().channel_service.block_manager.get_next_leader(
-            block_manager.blockchain.latest_block)
-        new_epoch = Epoch(block_manager, leader_id)
-        # utils.logger.spam(f"new epoch height({new_epoch.height})")
-        return new_epoch
 
     def new_round(self, new_leader_id, round_=None):
         is_complained = round_ != 0

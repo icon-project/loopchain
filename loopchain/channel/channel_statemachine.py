@@ -179,7 +179,6 @@ class ChannelStateMachine(object):
     def _subscribe_network_on_exit(self, *args, **kwargs):
         self.__channel_service.stop_subscribe_timer()
         self.__channel_service.stop_shutdown_timer_when_fail_subscribe()
-        self.__channel_service.block_manager.start_epoch()
 
     def _watch_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = False
