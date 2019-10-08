@@ -328,7 +328,7 @@ class BlockManager:
     def rebuild_block(self):
         self.blockchain.rebuild_transaction_count()
         self.blockchain.rebuild_made_block_count()
-        self.epoch = Epoch.new_epoch()
+        self.new_epoch()
 
         nid = self.blockchain.find_nid()
         if nid is None:
@@ -718,8 +718,7 @@ class BlockManager:
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader(self.blockchain.last_block)
-        new_leader = self.__channel_service.peer_manager.get_peer(new_leader_id)
-        self.epoch = Epoch.new_epoch(new_leader.peer_id)
+        self.epoch = Epoch(self, new_leader_id)
         logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
     def stop(self):
