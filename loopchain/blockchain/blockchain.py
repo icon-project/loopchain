@@ -144,18 +144,29 @@ class BlockChain:
             f"{self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]}")
         return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
+    @staticmethod
+    def get_next_rep_in_reps(rep, reps: List[ExternalAddress]):
+        try:
+            return reps[reps.index(rep) + 1]
+        except IndexError:
+            return reps[0]
+        except ValueError:
+            utils.logger.warning(f"rep({rep}) not in reps({reps})")
+            return None
+
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
-        peer_manager = ObjectManager().channel_service.peer_manager
+        reps: List[ExternalAddress] = \
+            self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
+
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
             utils.logger.spam(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
-            expected_generator = ExternalAddress.fromhex_address(
-                peer_manager.get_next_leader_peer(peer_id).peer_id)
+            expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
             expected_generator = peer_id
 
@@ -389,7 +400,7 @@ class BlockChain:
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
             preps_dumped = bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + roothash))
-        except KeyError:
+        except (KeyError, TypeError):
             return []
         else:
             return json.loads(preps_dumped)

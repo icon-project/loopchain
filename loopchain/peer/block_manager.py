@@ -642,9 +642,8 @@ class BlockManager:
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
-            next_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-                block.header.peer_id.hex_hx()
-            ).peer_id
+            reps = self.blockchain.find_preps_addresses_by_roothash(block.header.revealed_next_reps_hash)
+            next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps).hex_hx()
         else:
             next_leader = block.header.next_leader.hex_hx()
 
@@ -784,10 +783,9 @@ class BlockManager:
         """
         complained_leader_id = self.epoch.leader_id
 
-        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-            current_leader_peer_id=complained_leader_id
-        )
-        new_leader_id = new_leader.peer_id if new_leader else None
+        new_leader = \
+            self.blockchain.get_next_rep_in_reps(ExternalAddress.fromhex(complained_leader_id), self.epoch.reps)
+        new_leader_id = new_leader.hex_hx() if new_leader else None
 
         if not isinstance(new_leader_id, str):
             new_leader_id = ""

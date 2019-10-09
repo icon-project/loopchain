@@ -169,16 +169,6 @@ class PeerManager:
 
         return leader_peer
 
-    def get_next_leader_peer(self, current_leader_peer_id=None):
-        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
-
-        if not current_leader_peer_id:
-            leader_peer = self.get_leader_peer()
-        else:
-            leader_peer = self.get_peer(current_leader_peer_id)
-
-        return self._peer_list_data.next_peer(leader_peer.peer_id)
-
     def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
         logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
 

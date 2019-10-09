@@ -164,6 +164,8 @@ class _Broadcaster:
         :param method_param: gRPC message
         """
 
+        util.logger.notice(f"in __broadcast_run_async method_name({method_name})")
+
         if timeout is None:
             timeout = conf.GRPC_TIMEOUT_BROADCAST_RETRY
 
@@ -171,7 +173,7 @@ class _Broadcaster:
         # logging.debug(f"broadcast({method_name}) async... ({len(self.__audience)})")
 
         for target in self.__get_broadcast_targets(method_name):
-            # util.logger.debug(f"method_name({method_name}), peer_target({target})")
+            util.logger.notice(f"peer_target({target})")
             self.__call_async_to_target(target, method_name, method_param, True, retry_times, timeout)
 
     def __broadcast_run_sync(self, method_name, method_param, retry_times=None, timeout=None):
@@ -211,7 +213,7 @@ class _Broadcaster:
         self.__call_async_to_target(target, method_name, method_param, True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
 
     def __handler_subscribe(self, audience_target):
-        util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
+        util.logger.notice(f"_Broadcaster received subscribe command audience_target({audience_target})")
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -222,19 +224,19 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        util.logger.debug(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
+        util.logger.notice(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:
             logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
 
     def __handler_broadcast(self, broadcast_param):
-        # logging.debug("BroadcastThread received broadcast command")
+        # util.logger.debug(f"BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
         broadcast_method_kwparam = broadcast_param[2]
-        # logging.debug("BroadcastThread method name: " + broadcast_method_name)
-        # logging.debug("BroadcastThread method param: " + str(broadcast_method_param))
+        # util.logger.debug("BroadcastThread method name: " + broadcast_method_name)
+        # util.logger.debug("BroadcastThread method param: " + str(broadcast_method_param))
         self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
     def __make_tx_list_message(self):
@@ -396,11 +398,13 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self.__perform_schedule_listener(command, params)
 
     def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
+        util.logger.notice(f"update({update_command}) audience({reps_hash})")
+
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         if update_command:
             update_reps = blockchain.find_preps_by_roothash(reps_hash)
-            util.logger.info(
+            util.logger.notice(
                 f"update audience command({update_command})"
                 f"\nupdate_reps({update_reps})"
             )
@@ -417,13 +421,19 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
     def schedule_broadcast(
             self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
+        update_audience_hash = None
 
         if not self.__audience_reps_hash:
             self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
-            self._update_audience(self.__audience_reps_hash)
+            update_audience_hash = self.__audience_reps_hash
 
         if reps_hash and reps_hash != self.__audience_reps_hash:
-            self._update_audience(reps_hash)
+            update_audience_hash = reps_hash
+
+        if update_audience_hash:
+            self._update_audience(update_audience_hash)
+
+        util.logger.notice(f"broadcast method_name({method_name}) audience({self.__audience_reps_hash})")
 
         kwargs = {}
         if retry_times is not None:
@@ -431,7 +441,6 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         if timeout is not None:
             kwargs['timeout'] = timeout
 
-        util.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
     def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
