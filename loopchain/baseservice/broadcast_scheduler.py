@@ -229,12 +229,12 @@ class _Broadcaster:
             logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
 
     def __handler_broadcast(self, broadcast_param):
-        # logging.debug("BroadcastThread received broadcast command")
+        # util.logger.debug(f"BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
         broadcast_method_kwparam = broadcast_param[2]
-        # logging.debug("BroadcastThread method name: " + broadcast_method_name)
-        # logging.debug("BroadcastThread method param: " + str(broadcast_method_param))
+        # util.logger.debug("BroadcastThread method name: " + broadcast_method_name)
+        # util.logger.debug("BroadcastThread method param: " + str(broadcast_method_param))
         self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
     def __make_tx_list_message(self):
@@ -417,13 +417,17 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
     def schedule_broadcast(
             self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
+        update_audience_hash = None
 
         if not self.__audience_reps_hash:
             self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
-            self._update_audience(self.__audience_reps_hash)
+            update_audience_hash = self.__audience_reps_hash
 
         if reps_hash and reps_hash != self.__audience_reps_hash:
-            self._update_audience(reps_hash)
+            update_audience_hash = reps_hash
+
+        if update_audience_hash:
+            self._update_audience(update_audience_hash)
 
         kwargs = {}
         if retry_times is not None:

@@ -511,7 +511,6 @@ class ChannelService:
 
         utils.logger.spam(f"reset_leader target({leader_peer.target}), complained={complained}")
 
-        self.peer_manager.set_leader_peer(leader_peer)
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
             self.__block_manager.epoch.new_round(leader_peer.peer_id)
@@ -527,11 +526,6 @@ class ChannelService:
 
         self.__block_manager.set_peer_type(peer_type)
         self.turn_on_leader_complain_timer()
-
-    def set_new_leader(self):
-        self.__peer_manager.update_all_peers()
-        new_leader = self.peer_manager.get_peer(self.block_manager.epoch.leader_id)
-        self.peer_manager.set_leader_peer(new_leader)
 
     def score_write_precommit_state(self, block: Block):
         logging.debug(f"call score commit {ChannelProperty().name} {block.header.height} {block.header.hash.hex()}")

@@ -145,19 +145,18 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
-    def _do_vote(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
-        if is_unrecorded_block:
+    def _do_vote(self, unconfirmed_block: Block, round_: int):
+        if unconfirmed_block.header.is_unrecorded:
             try:
                 self._run_coroutine_threadsafe(
-                    self.__channel_service.block_manager.add_unconfirmed_block(
-                        unconfirmed_block, round_, is_unrecorded_block)
-                )
+                    self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_))
             except UnrecordedBlock as e:
                 util.logger.info(e)
             except InvalidUnconfirmedBlock as e:
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
-            self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
+            self._run_coroutine_threadsafe(
+                self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
@@ -169,7 +168,7 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
 
     def _blocksync_on_exit(self, *args, **kwargs):
-        self.__channel_service.set_new_leader()
+        self.__channel_service.peer_manager.update_all_peers()
         self.__channel_service.block_manager.stop_block_height_sync_timer()
         self.__channel_service.block_manager.update_service_status(status_code.Service.online)
 

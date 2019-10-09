@@ -29,14 +29,12 @@ class PeerListData:
     """Manage peer list as serializable data."""
     def __init__(self):
         self.peer_list: OrderedDict[BlockHeader.peer_id, Peer] = OrderedDict()  # { peer_id:Peer }
-        self.leader_id: BlockHeader.peer_id = None  # leader_peer_id
 
     def serialize(self) -> dict:
         peer_list_serialized = [peer.serialize() for peer_id, peer in self.peer_list.items()]
 
         return {
-            'peer_list': peer_list_serialized,
-            'leader_id': self.leader_id
+            'peer_list': peer_list_serialized
         }
 
     @staticmethod
@@ -49,7 +47,6 @@ class PeerListData:
 
         peer_list_data = PeerListData()
         peer_list_data.peer_list = peer_list
-        peer_list_data.leader_id = peer_list_data_serialized['leader_id']
         return peer_list_data
 
     def dump(self) -> bytes:

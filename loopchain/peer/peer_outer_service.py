@@ -499,21 +499,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
-    def AnnounceUnrecordedBlock(self, request, context):
-        """Send the UnrecordedBlock to reps and request to verify it.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().announce_unrecorded_block(request.block, request.round_),
-            self.peer_service.inner_service.loop
-        )
-        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
     def BlockSync(self, request, context):
         # Peer To Peer
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel

@@ -150,7 +150,7 @@ class BlockManager:
     def __pre_validate_pass(self, tx: Transaction):
         pass
 
-    def broadcast_send_unconfirmed_block(self, block_: Block, round_: int, is_unrecorded_block: bool):
+    def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
@@ -161,17 +161,13 @@ class BlockManager:
             ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
             return
 
-        if is_unrecorded_block:
-            send_block_function = self._send_unrecorded_block
-        else:
-            send_block_function = self._send_unconfirmed_block
-
         if last_block.header.revealed_next_reps_hash:
-            if last_block.header.prep_changed:
-                send_block_function(block_, last_block.header.reps_hash, round_)
-            send_block_function(block_, block_.header.reps_hash, round_)
+            if block_.header.is_unrecorded:
+                self._send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
+            else:
+                self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            send_block_function(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
+            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
@@ -183,20 +179,6 @@ class BlockManager:
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
-            reps_hash=target_reps_hash
-        )
-
-    def _send_unrecorded_block(self, block_: Block, target_reps_hash, round_: int):
-        util.logger.debug(
-            f"BroadCast AnnounceUnrecordedBlock "
-            f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
-            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
-            f"target_reps_hash({target_reps_hash})")
-
-        block_dumped = self.blockchain.block_dumps(block_)
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceUnrecordedBlock",
             loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
@@ -285,11 +267,11 @@ class BlockManager:
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
 
-    def add_unconfirmed_block(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
+    def add_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
         """
+
         :param unconfirmed_block:
         :param round_:
-        :param is_unrecorded_block:
         :return:
         """
         self.__validate_epoch_of_unconfirmed_block(unconfirmed_block, round_)
@@ -310,7 +292,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self.blockchain.confirm_prev_block(unconfirmed_block)
-                if is_unrecorded_block:
+                if unconfirmed_block.header.is_unrecorded:
                     self.blockchain.last_unconfirmed_block = None
                     raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:
@@ -565,7 +547,8 @@ class BlockManager:
                     result = True
                     if max_height == unconfirmed_block_height == block.header.height \
                             and max_height > 0 and not confirm_info:
-                        self.candidate_blocks.add_block(block)
+                        self.candidate_blocks.add_block(
+                            block, self.blockchain.find_preps_addresses_by_header(block.header))
                         self.blockchain.last_unconfirmed_block = block
                         result = True
                     else:
@@ -661,9 +644,10 @@ class BlockManager:
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
-            next_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-                block.header.peer_id.hex_hx()
-            ).peer_id
+            reps_hash = block.header.revealed_next_reps_hash or \
+                        ObjectManager().channel_service.peer_manager.prepared_reps_hash
+            reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
+            next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps).hex_hx()
         else:
             next_leader = block.header.next_leader.hex_hx()
 
@@ -756,9 +740,8 @@ class BlockManager:
             if elected_leader:
                 if elected_leader == ExternalAddress.empty().hex_xx() and vote.round_ == self.epoch.round:
                     util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
-                    elected_leader = \
-                        self.__channel_service.peer_manager.get_next_leader_peer(self.epoch.leader_id).peer_id
-
+                    elected_leader = self.blockchain.get_next_rep_in_reps(
+                        ExternalAddress.fromhex(self.epoch.leader_id), self.epoch.reps).hex_hx()
                 if self.epoch.round == vote.round_:
                     self.__channel_service.reset_leader(elected_leader, complained=True)
         elif self.epoch.height < vote.block_height:
@@ -803,10 +786,9 @@ class BlockManager:
         """
         complained_leader_id = self.epoch.leader_id
 
-        new_leader = self.__channel_service.peer_manager.get_next_leader_peer(
-            current_leader_peer_id=complained_leader_id
-        )
-        new_leader_id = new_leader.peer_id if new_leader else None
+        new_leader = self.blockchain.get_next_rep_in_reps(
+            ExternalAddress.fromhex(complained_leader_id), self.epoch.reps)
+        new_leader_id = new_leader.hex_hx() if new_leader else None
 
         if not isinstance(new_leader_id, str):
             new_leader_id = ""
@@ -935,7 +917,8 @@ class BlockManager:
             logging.error(e)
             traceback.print_exc()
         else:
-            self.candidate_blocks.add_block(unconfirmed_block)
+            self.candidate_blocks.add_block(
+                unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
             self._reset_leader(unconfirmed_block)
         finally:
             is_validated = exc is None

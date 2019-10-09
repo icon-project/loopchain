@@ -144,18 +144,29 @@ class BlockChain:
             f"{self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]}")
         return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
+    @staticmethod
+    def get_next_rep_in_reps(rep, reps: List[ExternalAddress]):
+        try:
+            return reps[reps.index(rep) + 1]
+        except IndexError:
+            return reps[0]
+        except ValueError:
+            utils.logger.warning(f"rep({rep}) not in reps({reps})")
+            return None
+
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
-        peer_manager = ObjectManager().channel_service.peer_manager
+        reps: List[ExternalAddress] = \
+            self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
+
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
             utils.logger.spam(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
-            expected_generator = ExternalAddress.fromhex_address(
-                peer_manager.get_next_leader_peer(peer_id).peer_id)
+            expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
             expected_generator = peer_id
 
@@ -389,7 +400,7 @@ class BlockChain:
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
             preps_dumped = bytes(self._blockchain_store.get(BlockChain.PREPS_KEY + roothash))
-        except KeyError:
+        except (KeyError, TypeError):
             return []
         else:
             return json.loads(preps_dumped)
@@ -1078,7 +1089,11 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
-    def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
+    def score_invoke(self,
+                     _block: Block,
+                     prev_block: Block,
+                     is_block_editable: bool = False,
+                     is_unrecorded_block: bool = False) -> dict or None:
         method = "icx_sendTransaction"
         transactions = []
 
@@ -1163,7 +1178,6 @@ class BlockChain:
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
-        block_builder.next_leader = next_leader
         block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
@@ -1186,8 +1200,14 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
-        block_builder.next_reps_hash = next_preps_hash
+        if is_unrecorded_block:
+            block_builder.next_leader = ExternalAddress.empty()
+            block_builder.reps = []
+            block_builder.next_reps_hash = Hash32.empty()
+        else:
+            block_builder.next_leader = next_leader
+            block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+            block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth

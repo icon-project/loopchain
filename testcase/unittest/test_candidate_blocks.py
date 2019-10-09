@@ -20,7 +20,7 @@ import unittest
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import CandidateBlock, CandidateBlocks, BlockChain
+from loopchain.blockchain import CandidateBlock, CandidateBlocks, BlockChain, ExternalAddress
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.utils import loggers
@@ -49,7 +49,7 @@ class TestCandidateBlocks(unittest.TestCase):
         block = self.__get_test_block()
 
         # WHEN
-        candidate_block = CandidateBlock.from_block(block)
+        candidate_block = CandidateBlock.from_block(block, [])
         util.logger.spam(f"block hash({block.header.hash}) candidate hash({candidate_block.hash})")
 
         # THEN
@@ -69,7 +69,7 @@ class TestCandidateBlocks(unittest.TestCase):
         self.assertIsNone(candidate_block.block)
 
         # WHEN Set candidate_block.block
-        candidate_block.block = block
+        candidate_block.add_block(block, [])
 
         # THEN
         self.assertEqual(block.header.hash, candidate_block.hash)
@@ -85,7 +85,7 @@ class TestCandidateBlocks(unittest.TestCase):
         candidate_blocks = CandidateBlocks(blockchain)
 
         # WHEN add
-        candidate_blocks.add_block(block)
+        candidate_blocks.add_block(block, [ExternalAddress.empty()])
 
         # THEN
         self.assertTrue(block.header.hash in candidate_blocks.blocks)

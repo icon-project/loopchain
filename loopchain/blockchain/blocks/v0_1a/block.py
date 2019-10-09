@@ -46,6 +46,12 @@ class BlockHeader(BaseBlockHeader):
         return None
 
     @property
+    def is_unrecorded(self) -> bool:
+        """If the block version doesn't support this, it should return False.
+        """
+        return False
+
+    @property
     def revealed_next_reps_hash(self) -> None:
         """If the block version doesn't support this, it should return None.
         """

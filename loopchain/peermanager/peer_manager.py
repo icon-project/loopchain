@@ -52,14 +52,6 @@ class PeerManager:
         return self._peer_list_data.peer_list
 
     @property
-    def leader_id(self) -> Optional[str]:
-        """return leader's peer id
-
-        :return:
-        """
-        return self._peer_list_data.leader_id
-
-    @property
     def prepared_reps_hash(self):
         return self._prepared_reps_hash
 
@@ -123,11 +115,6 @@ class PeerManager:
                                     f"\npeers({self._peer_list_data.peer_list})")
                 return None
 
-            # set to leader peer
-            if not self._peer_list_data.leader_id or len(self.peer_list) == 0:
-                logging.debug(f"Set Group Leader Peer: order({peer.order}), peer_id({peer.peer_id})")
-                self._peer_list_data.leader_id = peer.peer_id
-
             self.peer_list[peer.peer_id] = peer
             self._prepared_reps_hash = self.reps_hash()
 
@@ -143,42 +130,6 @@ class PeerManager:
 
         return False
 
-    def set_leader_peer(self, peer: Peer):
-        """리더 피어를 지정한다.
-        없는 경우에는 전체 리더 피어를 지정하게 된다.
-
-        :param peer: 리더로 지정할 peer 의 정보
-        :return:
-        """
-
-        if self.get_peer(peer.peer_id) is None:
-            raise Exception(f'{peer.peer_id} is not a member of reps!')
-        logging.debug(f"set leader peer: {peer.peer_id}")
-        self._peer_list_data.leader_id = peer.peer_id
-
-    def get_leader_peer(self, is_peer=True) -> Optional[Peer]:
-        """
-
-        :return:
-        """
-
-        leader_peer = self.get_peer(self._peer_list_data.leader_id)
-        if not leader_peer and is_peer and \
-                ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            util.exit_and_msg(f"Fail to find a leader of this network!")
-
-        return leader_peer
-
-    def get_next_leader_peer(self, current_leader_peer_id=None):
-        util.logger.spam(f"peer_manager:get_next_leader_peer current_leader_peer_id({current_leader_peer_id})")
-
-        if not current_leader_peer_id:
-            leader_peer = self.get_leader_peer()
-        else:
-            leader_peer = self.get_peer(current_leader_peer_id)
-
-        return self._peer_list_data.next_peer(leader_peer.peer_id)
-
     def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
         logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
 
@@ -187,32 +138,6 @@ class PeerManager:
         except Exception as e:
             logging.debug("try get peer stub except: " + str(e))
             return None
-
-    def complain_leader(self) -> Peer:
-        """When current leader is offline, Find last height alive peer and set as a new leader.
-
-        :return:
-        """
-
-        leader_peer = self.get_leader_peer(is_peer=False)
-        try:
-            stub_manager = self.get_peer_stub_manager(leader_peer)
-            response = stub_manager.call("GetStatus", loopchain_pb2.StatusRequest(request=""), is_stub_reuse=True)
-
-            status_json = json.loads(response.status)
-            logging.warning(f"stub_manager target({stub_manager.target}) type({status_json['peer_type']})")
-
-            if status_json["peer_type"] == str(loopchain_pb2.BLOCK_GENERATOR):
-                return leader_peer
-            else:
-                raise Exception
-        except Exception as e:
-            new_leader = self.__find_highest_peer()
-            if new_leader is not None:
-                # 변경된 리더를 announce 해야 한다
-                logging.warning("Change peer to leader that complain old leader.")
-                self.set_leader_peer(new_leader)
-        return new_leader
 
     def __find_highest_peer(self) -> Peer:
         # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
