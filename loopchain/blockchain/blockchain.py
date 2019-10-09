@@ -370,6 +370,11 @@ class BlockChain:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
 
+    @lru_cache(maxsize=4, valued_returns_only=True)
+    def find_preps_targets_by_roothash(self, roothash: Hash32) -> dict:
+        preps = self.find_preps_by_roothash(roothash)
+        return {prep["id"]: prep["p2pEndpoint"] for prep in preps}
+
     def find_preps_addresses_by_header(self, header: BlockHeader) -> List[ExternalAddress]:
         try:
             roothash = header.reps_hash

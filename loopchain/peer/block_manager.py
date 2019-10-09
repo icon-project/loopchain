@@ -784,16 +784,14 @@ class BlockManager:
         reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or \
                     self.__channel_service.peer_manager.prepared_reps_hash
         rep_id = leader_vote.rep.hex_hx()
-        for rep in self.blockchain.find_preps_by_roothash(reps_hash):
-            if rep["id"] == rep_id:
-                target = rep["p2pEndpoint"]
-                break
+        target = self.blockchain.find_preps_targets_by_roothash(reps_hash)[rep_id]
 
         util.logger.debug(
             f"fail leader complain "
             f"complained_leader_id({leader_vote.old_leader}), "
             f"new_leader_id({ExternalAddress.empty()}),"
-            f"round({leader_vote.round_})")
+            f"round({leader_vote.round_}),"
+            f"target({target})")
 
         self.__channel_service.broadcast_scheduler.schedule_send_failed_leader_complain(
             "ComplainLeader", request, target=target
