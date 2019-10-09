@@ -188,8 +188,6 @@ class Epoch:
             block_builder.next_leader = None
             block_builder.reps = None
         elif is_unrecorded:
-            block_builder.next_leader = ExternalAddress.fromhex_address(self.leader_id)
-            block_builder.reps = self.reps
             utils.logger.debug(f"unrecorded block for height({self.height})")
         else:
             self.__add_tx_to_block(block_builder)

@@ -47,7 +47,8 @@ class BlockHeader(BaseBlockHeader):
 
         :return: bool
         """
-        return self.next_leader == self.reps_hash == self.next_reps_hash == Hash32.empty()
+        return (self.next_leader == ExternalAddress.empty() and
+                self.reps_hash == self.next_reps_hash == Hash32.empty())
 
     @property
     def revealed_next_reps_hash(self):

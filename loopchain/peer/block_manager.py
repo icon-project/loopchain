@@ -150,7 +150,7 @@ class BlockManager:
     def __pre_validate_pass(self, tx: Transaction):
         pass
 
-    def broadcast_send_unconfirmed_block(self, block_: Block, round_: int, is_unrecorded_block: bool):
+    def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
@@ -161,7 +161,7 @@ class BlockManager:
             ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
             return
 
-        if is_unrecorded_block:
+        if block_.header.is_unrecorded:
             send_block_function = self._send_unrecorded_block
         else:
             send_block_function = self._send_unconfirmed_block

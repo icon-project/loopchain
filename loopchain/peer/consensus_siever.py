@@ -91,7 +91,7 @@ class ConsensusSiever(ConsensusBase):
 
         if block_builder.version == '0.1a' or (not block_builder.next_leader and not block_builder.reps):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
-            block_builder.reps = [rep for rep in self._block_manager.epoch.reps]
+            block_builder.reps = self._block_manager.epoch.reps
 
         return block_builder.build()
 
@@ -204,11 +204,15 @@ class ConsensusSiever(ConsensusBase):
             util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
             candidate_block = self.__build_candidate_block(block_builder)
             candidate_block, invoke_results = self._blockchain.score_invoke(
-                candidate_block, self._blockchain.latest_block, is_block_editable=True)
+                candidate_block, self._blockchain.latest_block,
+                is_block_editable=True, is_unrecorded_block=is_unrecorded_block)
+
+            if is_unrecorded_block:
+                util.logger.notice(f"is_unrecorded_block({candidate_block.header.is_unrecorded}): {candidate_block.header}")
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
-            self.__broadcast_block(candidate_block, is_unrecorded_block)
+            self.__broadcast_block(candidate_block)
             self._block_manager.vote_unconfirmed_block(candidate_block, self._block_manager.epoch.round, True)
 
             if is_unrecorded_block:
@@ -352,9 +356,8 @@ class ConsensusSiever(ConsensusBase):
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
 
-    def __broadcast_block(self, block: 'Block', is_unrecorded_block: bool = False):
+    def __broadcast_block(self, block: 'Block'):
         broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block,
                                  block,
-                                 self._block_manager.epoch.round,
-                                 is_unrecorded_block)
+                                 self._block_manager.epoch.round)
         self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)

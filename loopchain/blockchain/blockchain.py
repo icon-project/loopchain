@@ -1078,7 +1078,11 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
-    def score_invoke(self, _block: Block, prev_block: Block, is_block_editable: bool = False) -> dict or None:
+    def score_invoke(self,
+                     _block: Block,
+                     prev_block: Block,
+                     is_block_editable: bool = False,
+                     is_unrecorded_block: bool = False) -> dict or None:
         method = "icx_sendTransaction"
         transactions = []
 
@@ -1163,7 +1167,6 @@ class BlockChain:
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
-        block_builder.next_leader = next_leader
         block_builder.peer_id = _block.header.peer_id
 
         added_transactions = response.get("addedTransactions")
@@ -1186,8 +1189,14 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
-        block_builder.next_reps_hash = next_preps_hash
+        if is_unrecorded_block:
+            block_builder.next_leader = ExternalAddress.empty()
+            block_builder.reps = []
+            block_builder.next_reps_hash = Hash32.empty()
+        else:
+            block_builder.next_leader = next_leader
+            block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+            block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
