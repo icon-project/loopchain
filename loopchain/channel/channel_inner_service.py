@@ -746,53 +746,6 @@ class ChannelInnerTask:
         else:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
-    @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unrecorded_block(self, block_dumped, round_: int) -> None:
-        try:
-            unrecorded_block = self._blockchain.block_loads(block_dumped)
-        except BlockError as e:
-            traceback.print_exc()
-            logging.error(f"announce_unrecorded_block: {e}")
-            return
-
-        util.logger.debug(
-            f"announce_unrecorded_block \n"
-            f"peer_id({unrecorded_block.header.peer_id.hex()})\n"
-            f"height({unrecorded_block.header.height})\n"
-            f"round({round_})\n"
-            f"hash({unrecorded_block.header.hash.hex()})")
-
-        if self._channel_service.state_machine.state not in \
-                ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):
-            util.logger.debug(f"Can't add unrecorded block in state({self._channel_service.state_machine.state}).")
-            return
-
-        last_block = self._blockchain.last_block
-        if last_block is None:
-            util.logger.debug("BlockChain has not been initialized yet.")
-            return
-
-        try:
-            self._block_manager.verify_confirm_info(unrecorded_block)
-        except ConfirmInfoInvalid as e:
-            util.logger.warning(f"ConfirmInfoInvalid {e}")
-        except ConfirmInfoInvalidNeedBlockSync as e:
-            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
-            if self._channel_service.state_machine.state == "BlockGenerate" and (
-                    self._block_manager.consensus_algorithm and self._block_manager.consensus_algorithm.is_running):
-                self._block_manager.consensus_algorithm.stop()
-            else:
-                self._channel_service.state_machine.block_sync()
-        except ConfirmInfoInvalidAddedBlock as e:
-            util.logger.warning(f"ConfirmInfoInvalidAddedBlock {e}")
-        except NotReadyToConfirmInfo as e:
-            util.logger.warning(f"NotReadyToConfirmInfo {e}")
-        else:
-            self._channel_service.state_machine.vote(
-                unconfirmed_block=unrecorded_block,
-                round_=round_,
-                is_unrecorded_block=True)
-
     @message_queue_task
     def block_sync(self, block_hash, block_height):
         response_message = None

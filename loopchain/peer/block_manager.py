@@ -161,17 +161,12 @@ class BlockManager:
             ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
             return
 
-        if block_.header.is_unrecorded:
-            send_block_function = self._send_unrecorded_block
-        else:
-            send_block_function = self._send_unconfirmed_block
-
         if last_block.header.revealed_next_reps_hash:
             if last_block.header.prep_changed:
-                send_block_function(block_, last_block.header.reps_hash, round_)
-            send_block_function(block_, block_.header.reps_hash, round_)
+                self._send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
+            self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            send_block_function(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
+            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
@@ -183,20 +178,6 @@ class BlockManager:
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
-            reps_hash=target_reps_hash
-        )
-
-    def _send_unrecorded_block(self, block_: Block, target_reps_hash, round_: int):
-        util.logger.debug(
-            f"BroadCast AnnounceUnrecordedBlock "
-            f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
-            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
-            f"target_reps_hash({target_reps_hash})")
-
-        block_dumped = self.blockchain.block_dumps(block_)
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
-            "AnnounceUnrecordedBlock",
             loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
@@ -285,11 +266,11 @@ class BlockManager:
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
 
-    def add_unconfirmed_block(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
+    def add_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
         """
+
         :param unconfirmed_block:
         :param round_:
-        :param is_unrecorded_block:
         :return:
         """
         self.__validate_epoch_of_unconfirmed_block(unconfirmed_block, round_)
@@ -310,7 +291,7 @@ class BlockManager:
         try:
             if need_to_confirm:
                 self.blockchain.confirm_prev_block(unconfirmed_block)
-                if is_unrecorded_block:
+                if unconfirmed_block.header.is_unrecorded:
                     self.blockchain.last_unconfirmed_block = None
                     raise UnrecordedBlock("It's an unnecessary block to vote.")
             elif last_unconfirmed_block is None:

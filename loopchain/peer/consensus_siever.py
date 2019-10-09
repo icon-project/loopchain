@@ -207,9 +207,6 @@ class ConsensusSiever(ConsensusBase):
                 candidate_block, self._blockchain.latest_block,
                 is_block_editable=True, is_unrecorded_block=is_unrecorded_block)
 
-            if is_unrecorded_block:
-                util.logger.notice(f"is_unrecorded_block({candidate_block.header.is_unrecorded}): {candidate_block.header}")
-
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block)
