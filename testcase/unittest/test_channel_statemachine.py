@@ -47,6 +47,11 @@ class MockBlockManager:
         pass
 
 
+class MockPeerManager:
+    def update_all_peers(self):
+        pass
+
+
 class MockBlockManagerCitizen(MockBlockManager):
     def __init__(self):
         super().__init__()
@@ -56,6 +61,7 @@ class MockBlockManagerCitizen(MockBlockManager):
 class MockChannelService:
     def __init__(self):
         self.block_manager = MockBlockManager()
+        self.peer_manager = MockPeerManager()
 
     async def evaluate_network(self):
         pass
@@ -76,9 +82,6 @@ class MockChannelService:
         pass
 
     def stop_shutdown_timer_when_fail_subscribe(self):
-        pass
-
-    def set_new_leader(self):
         pass
 
     def is_support_node_function(self, _):
