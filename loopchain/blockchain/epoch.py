@@ -79,6 +79,7 @@ class Epoch:
         leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,
                                    self.height,
+                                   self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
         self.complain_votes[self.round] = leader_votes
 
@@ -94,9 +95,12 @@ class Epoch:
         utils.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
                            f"new_leader_id({leader_vote.new_leader}), "
                            f"block_height({leader_vote.block_height}), "
+                           f"round({leader_vote.round_}), "
                            f"peer_id({leader_vote.rep})")
         try:
-            self.complain_votes[self.round].add_vote(leader_vote)
+            self.complain_votes[leader_vote.round_].add_vote(leader_vote)
+        except KeyError as e:
+            utils.logger.warning(f"{e}\nThere is no vote of {leader_vote.round_} round.")
         except VoteError as e:
             utils.logger.info(e)
         except RuntimeError as e:
@@ -113,19 +117,6 @@ class Epoch:
             return vote_result.hex_hx()
         else:
             return None
-
-    def _check_unconfirmed_block(self):
-        if self.__blockchain.last_unconfirmed_block:
-            vote = self.__block_manager.candidate_blocks.get_votes(
-                self.__blockchain.last_unconfirmed_block.header.hash)
-            vote_result = vote.get_result(
-                self.__blockchain.last_unconfirmed_block.header.hash.hex(), conf.VOTING_RATIO)
-
-            if not vote_result:
-                utils.logger.debug(
-                    f"last_unconfirmed_block"
-                    f"({self.__blockchain.last_unconfirmed_block.header.hash}), "
-                    f"vote result({vote_result})")
 
     def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()

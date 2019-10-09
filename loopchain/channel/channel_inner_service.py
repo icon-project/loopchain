@@ -33,9 +33,9 @@ from loopchain.blockchain.transactions import (Transaction, TransactionSerialize
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import loopchain_pb2, message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
-from loopchain.jsonrpc.exception import JsonError
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -703,7 +703,7 @@ class ChannelInnerTask:
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_dumped) -> None:
+    async def announce_unconfirmed_block(self, block_dumped, round_: int) -> None:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
@@ -715,6 +715,7 @@ class ChannelInnerTask:
             f"announce_unconfirmed_block \n"
             f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
             f"height({unconfirmed_block.header.height})\n"
+            f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
 
         if self._channel_service.state_machine.state not in \
@@ -743,10 +744,10 @@ class ChannelInnerTask:
         except NotReadyToConfirmInfo as e:
             util.logger.warning(f"NotReadyToConfirmInfo {e}")
         else:
-            self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
+            self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unrecorded_block(self, block_dumped) -> None:
+    async def announce_unrecorded_block(self, block_dumped, round_: int) -> None:
         try:
             unrecorded_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
@@ -758,6 +759,7 @@ class ChannelInnerTask:
             f"announce_unrecorded_block \n"
             f"peer_id({unrecorded_block.header.peer_id.hex()})\n"
             f"height({unrecorded_block.header.height})\n"
+            f"round({round_})\n"
             f"hash({unrecorded_block.header.hash.hex()})")
 
         if self._channel_service.state_machine.state not in \
@@ -786,7 +788,10 @@ class ChannelInnerTask:
         except NotReadyToConfirmInfo as e:
             util.logger.warning(f"NotReadyToConfirmInfo {e}")
         else:
-            self._channel_service.state_machine.vote(unconfirmed_block=unrecorded_block, is_unrecorded_block=True)
+            self._channel_service.state_machine.vote(
+                unconfirmed_block=unrecorded_block,
+                round_=round_,
+                is_unrecorded_block=True)
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
@@ -837,7 +842,8 @@ class ChannelInnerTask:
             raise
         else:
             vote = BlockVote.deserialize(vote_serialized)
-            util.logger.debug(f"Peer vote to : {vote.block_height} {vote.block_hash} from {vote.rep.hex_hx()}")
+            util.logger.debug(
+                f"Peer vote to : {vote.block_height}({vote.round_}) {vote.block_hash} from {vote.rep.hex_hx()}")
             self._block_manager.candidate_blocks.add_vote(vote)
 
             if self._channel_service.state_machine.state == "BlockGenerate" and \
@@ -848,7 +854,6 @@ class ChannelInnerTask:
     async def complain_leader(self, vote_dumped: str) -> None:
         vote_serialized = json.loads(vote_dumped)
         vote = LeaderVote.deserialize(vote_serialized)
-
         self._block_manager.add_complain(vote)
 
     @message_queue_task

@@ -21,7 +21,7 @@ from transitions import State
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.blockchain import UnrecordedBlock
+from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
 from loopchain.peer import status_code, ChannelProperty
 from loopchain.protos import loopchain_pb2
@@ -145,15 +145,19 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
-    def _do_vote(self, unconfirmed_block: Block, is_unrecorded_block: bool = False):
+    def _do_vote(self, unconfirmed_block: Block, round_: int, is_unrecorded_block: bool = False):
         if is_unrecorded_block:
             try:
                 self._run_coroutine_threadsafe(
-                    self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, is_unrecorded_block))
+                    self.__channel_service.block_manager.add_unconfirmed_block(
+                        unconfirmed_block, round_, is_unrecorded_block)
+                )
             except UnrecordedBlock as e:
                 util.logger.info(e)
+            except InvalidUnconfirmedBlock as e:
+                util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
-            self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block))
+            self._run_coroutine_threadsafe(self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()

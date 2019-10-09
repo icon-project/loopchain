@@ -55,7 +55,6 @@ service PeerService {
     // Subscribe 후 broadcast 받는 인터페이스는 Announce- 로 시작한다.
     rpc AnnounceUnconfirmedBlock (BlockSend) returns (CommonReply) {}
     rpc AnnounceUnrecordedBlock (BlockSend) returns (CommonReply) {}
-    rpc AnnounceNewBlockForVote (NewBlockSend) returns (CommonReply) {}
     rpc AnnounceConfirmedBlock (BlockAnnounce) returns (CommonReply) {}
     // Test 검증을 위한 인터페이스
     rpc Echo (CommonRequest) returns (CommonReply) {}
@@ -254,12 +253,7 @@ message PrecommitBlockReply {
 //[Peer&BlockGenerator] for send Block, this message type shared in AnnounceUnconfirmedBlock and SendConfirmedBlock
 message BlockSend {
     required bytes block = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-message NewBlockSend {
-    required bytes block = 1;
-    required bytes epoch = 2;
+    required int32 round_ = 2;
     optional string channel = 3; // channel ID for multichain network
 }
 

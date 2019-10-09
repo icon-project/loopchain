@@ -43,11 +43,11 @@ class TestVote(unittest.TestCase):
     def test_block_vote(self):
         signer = self.signers[0]
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_vote = BlockVote.new(signer, 0, 0, block_hash)
+        block_vote = BlockVote.new(signer, 0, 0, 0, block_hash)
         block_vote.verify()
 
         origin = f"icx_vote.blockHash.{block_vote.block_hash.hex_0x()}.blockHeight.{hex(block_vote.block_height)}."
-        origin += f"rep.{block_vote.rep.hex_hx()}.timestamp.{hex(block_vote.timestamp)}"
+        origin += f"rep.{block_vote.rep.hex_hx()}.round_.{block_vote.round_}.timestamp.{hex(block_vote.timestamp)}"
 
         origin_data = block_vote.to_origin_data(**block_vote.origin_args())
         self.assertEqual(origin, vote.hash_generator.generate_salted_origin(origin_data))
@@ -58,13 +58,13 @@ class TestVote(unittest.TestCase):
     def test_block_votes_true(self):
         ratio = 0.67
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+        block_votes = BlockVotes(self.reps, ratio, 0, 0, block_hash)
 
         for i, signer in enumerate(self.signers):
             if i == 66:
                 break
 
-            block_vote = BlockVote.new(signer, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
@@ -73,7 +73,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.is_completed(), False)
         self.assertEqual(block_votes.get_result(), None)
 
-        block_vote = BlockVote.new(self.signers[99], 0, 0, block_hash)
+        block_vote = BlockVote.new(self.signers[99], 0, 0, 0, block_hash)
         block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.is_completed(), True)
@@ -82,13 +82,13 @@ class TestVote(unittest.TestCase):
     def test_block_votes_false(self):
         ratio = 0.67
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+        block_votes = BlockVotes(self.reps, ratio, 0, 0, block_hash)
 
         for i, signer in enumerate(self.signers):
             if i % 4 == 0:
-                block_vote = BlockVote.new(signer, 0, 0, block_hash)
+                block_vote = BlockVote.new(signer, 0, 0, 0, block_hash)
             else:
-                block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
+                block_vote = BlockVote.new(signer, 0, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -98,13 +98,13 @@ class TestVote(unittest.TestCase):
     def test_block_votes_fail(self):
         ratio = 0.67
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+        block_votes = BlockVotes(self.reps, ratio, 0, 0, block_hash)
 
         for i, signer in enumerate(self.signers):
             if i == 33:
                 break
 
-            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         self.assertEqual(block_votes.quorum, len(self.reps) * ratio)
@@ -113,7 +113,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.is_completed(), False)
         self.assertEqual(block_votes.get_result(), None)
 
-        block_vote = BlockVote.new(self.signers[99], 0, 0, Hash32.empty())
+        block_vote = BlockVote.new(self.signers[99], 0, 0, 0, Hash32.empty())
         block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -123,11 +123,11 @@ class TestVote(unittest.TestCase):
     def test_block_votes_completed(self):
         ratio = 0.67
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+        block_votes = BlockVotes(self.reps, ratio, 0, 0, block_hash)
 
         signers = list(enumerate(self.signers))
         for i, signer in signers[:25]:
-            block_vote = BlockVote.new(signer, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -135,7 +135,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[25:50]:
-            block_vote = BlockVote.new(signer, 0, 0, block_hash)
+            block_vote = BlockVote.new(signer, 0, 0, 0, block_hash)
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -143,7 +143,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[50:75]:
-            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -151,7 +151,7 @@ class TestVote(unittest.TestCase):
         self.assertEqual(block_votes.get_result(), None)
 
         for i, signer in signers[75:90]:
-            block_vote = BlockVote.new(signer, 0, 0, Hash32.empty())
+            block_vote = BlockVote.new(signer, 0, 0, 0, Hash32.empty())
             block_votes.add_vote(block_vote)
 
         logging.info(block_votes)
@@ -161,33 +161,37 @@ class TestVote(unittest.TestCase):
     def test_block_invalid_vote(self):
         ratio = 0.67
         block_hash = Hash32(os.urandom(Hash32.size))
-        block_votes = BlockVotes(self.reps, ratio, 0, block_hash)
+        block_votes = BlockVotes(self.reps, ratio, 0, 0, block_hash)
 
-        invalid_block_vote = BlockVote.new(self.signers[0], 0, 1, block_hash)
+        invalid_block_vote = BlockVote.new(self.signers[0], 0, 0, 1, block_hash)
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        invalid_block_vote = BlockVote.new(self.signers[0], 0, 0, Hash32(os.urandom(32)))
+        invalid_block_vote = BlockVote.new(self.signers[0], 0, 1, 0, block_hash)
+        self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
+
+        invalid_block_vote = BlockVote.new(self.signers[0], 0, 0, 0, Hash32(os.urandom(32)))
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
         invalid_block_vote = BlockVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
-                                       block_height=0, block_hash=block_hash)
+                                       block_height=0, round_=0, block_hash=block_hash)
         self.assertRaises(RuntimeError, block_votes.add_vote, invalid_block_vote)
 
-        block_vote = BlockVote.new(self.signers[0], 0, 0, block_hash)
+        block_vote = BlockVote.new(self.signers[0], 0, 0, 0, block_hash)
         block_votes.add_vote(block_vote)
-        duplicate_block_vote = BlockVote.new(self.signers[0], 0, 0, Hash32.empty())
+        duplicate_block_vote = BlockVote.new(self.signers[0], 0, 0, 0, Hash32.empty())
         self.assertRaises(votes.VoteDuplicateError, block_votes.add_vote, duplicate_block_vote)
 
     def test_leader_vote(self):
         signer = self.signers[0]
-        leader_vote = LeaderVote.new(signer, 0, 0, self.reps[0], self.reps[1])
+        leader_vote = LeaderVote.new(signer, 0, 0, 0, self.reps[0], self.reps[1])
         leader_vote.verify()
 
         origin = f"icx_vote.blockHeight.{hex(leader_vote.block_height)}."
         origin += f"newLeader.{leader_vote.new_leader.hex_hx()}.oldLeader.{leader_vote.old_leader.hex_hx()}."
-        origin += f"rep.{leader_vote.rep.hex_hx()}.timestamp.{hex(leader_vote.timestamp)}"
+        origin += f"rep.{leader_vote.rep.hex_hx()}.round_.{leader_vote.round_}.timestamp.{hex(leader_vote.timestamp)}"
 
         origin_data = leader_vote.to_origin_data(**leader_vote.origin_args())
+        print(str(vote.hash_generator.generate_salted_origin(origin_data)))
         self.assertEqual(origin, vote.hash_generator.generate_salted_origin(origin_data))
 
         self.assertEqual(Hash32(hashlib.sha3_256(origin.encode('utf-8')).digest()),
@@ -203,7 +207,7 @@ class TestVote(unittest.TestCase):
             self.reps[4]
         ]
 
-        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+        leader_votes = LeaderVotes(self.reps, ratio, 0, 0, old_leader)
         for i, (rep, signer) in enumerate(zip(self.reps, self.signers)):
             mod = i % 10
             if mod < 1:
@@ -214,7 +218,7 @@ class TestVote(unittest.TestCase):
                 new_leader = new_leaders[3]
             else:
                 new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         logging.info(leader_votes)
@@ -229,10 +233,10 @@ class TestVote(unittest.TestCase):
             self.reps[2]
         ]
 
-        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+        leader_votes = LeaderVotes(self.reps, ratio, 0, 0, old_leader)
         for i, (rep, signer) in enumerate(zip(self.reps[:25], self.signers[:25])):
             new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -240,7 +244,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[25:50], self.signers[25:50])):
             new_leader = new_leaders[1]
-            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -248,7 +252,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[50:75], self.signers[50:75])):
             new_leader = new_leaders[0]
-            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), False)
@@ -256,7 +260,7 @@ class TestVote(unittest.TestCase):
 
         for i, (rep, signer) in enumerate(zip(self.reps[75:90], self.signers[75:90])):
             new_leader = new_leaders[1]
-            leader_vote = LeaderVote.new(signer, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
             leader_votes.add_vote(leader_vote)
 
         self.assertEqual(leader_votes.is_completed(), True)
@@ -267,21 +271,24 @@ class TestVote(unittest.TestCase):
 
         old_leader = self.reps[0]
         new_leader = self.reps[1]
-        leader_votes = LeaderVotes(self.reps, ratio, 0, old_leader)
+        leader_votes = LeaderVotes(self.reps, ratio, 0, 0, old_leader)
 
-        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 1, old_leader, new_leader)
+        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 1, 0, old_leader, new_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
-        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 0, new_leader, new_leader)
+        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 0, 1, old_leader, new_leader)
+        self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
+
+        invalid_leader_vote = LeaderVote.new(self.signers[0], 0, 0, 0, new_leader, new_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
         invalid_leader_vote = LeaderVote(rep=self.reps[0], timestamp=0, signature=Signature(os.urandom(65)),
-                                         block_height=0, new_leader=new_leader, old_leader=old_leader)
+                                         block_height=0, round_=0, new_leader=new_leader, old_leader=old_leader)
         self.assertRaises(RuntimeError, leader_votes.add_vote, invalid_leader_vote)
 
-        leader_vote = LeaderVote.new(self.signers[0], 0, 0, old_leader, new_leader)
+        leader_vote = LeaderVote.new(self.signers[0], 0, 0, 0, old_leader, new_leader)
         leader_votes.add_vote(leader_vote)
-        duplicate_leader_vote = LeaderVote.new(self.signers[0], 0, 0, old_leader, self.reps[2])
+        duplicate_leader_vote = LeaderVote.new(self.signers[0], 0, 0, 0, old_leader, self.reps[2])
         self.assertRaises(votes.VoteDuplicateError, leader_votes.add_vote, duplicate_leader_vote)
 
 
