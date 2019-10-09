@@ -162,7 +162,7 @@ class ConsensusSiever(ConsensusBase):
                 if is_unrecorded_block is True:
                     util.logger.debug(f"unrecorded block for height({last_unconfirmed_block.header.height + 1})")
                     next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
-                    next_reps = [rep for rep in self._block_manager.epoch.reps]
+                    next_reps = self._block_manager.epoch.reps
             else:
                 is_unrecorded_block = False
 

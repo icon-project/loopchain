@@ -42,6 +42,14 @@ class BlockHeader(BaseBlockHeader):
         return PrepChangedReason.PENALTY
 
     @property
+    def is_unrecorded(self) -> bool:
+        """Return is unrecorded block
+
+        :return: bool
+        """
+        return self.next_leader == self.reps_hash == self.next_reps_hash == Hash32.empty()
+
+    @property
     def revealed_next_reps_hash(self):
         if self.prep_changed:
             return self.next_reps_hash
