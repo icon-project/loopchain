@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,9 +19,8 @@ from typing import Dict, List
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
 from loopchain.blockchain.votes.votes import VoteError
 
@@ -43,6 +42,7 @@ class CandidateBlock:
         self.hash = block_hash
         self.height = block_height
         self.__block = None
+        self._reps: List[ExternalAddress] = []
 
     @classmethod
     def from_hash(cls, block_hash: Hash32, block_height: int):
@@ -50,52 +50,43 @@ class CandidateBlock:
         return candidate_block
 
     @classmethod
-    def from_block(cls, block: Block):
+    def from_block(cls, block: Block, reps: List[ExternalAddress]):
         candidate_block = CandidateBlock(block.header.hash, block.header.height)
-        candidate_block.block = block
+        candidate_block.add_block(block, reps)
         return candidate_block
 
     @property
     def block(self):
         return self.__block
 
-    @block.setter
-    def block(self, block: Block):
+    def add_block(self, block: Block, reps: List[ExternalAddress]):
         if self.hash != block.header.hash:
             raise CandidateBlockSetBlock
         else:
             logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
-            reps = self.__get_reps()
-            self.votes[0] = BlockVotes(reps, conf.VOTING_RATIO, self.height, 0, self.hash)
+            self._reps = reps
+            self.votes[0] = BlockVotes(self._reps, conf.VOTING_RATIO, self.height, 0, self.hash)
             for vote in self.votes_buffer:
                 try:
                     if not self.votes.get(vote.round_):
                         self.votes[vote.round_] = \
-                            BlockVotes(reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
+                            BlockVotes(self._reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
                     self.votes[vote.round_].add_vote(vote)
                 except VoteError as e:
                     util.logger.info(e)
             self.votes_buffer.clear()
 
-    def __get_reps(self):
-        channel_service = ObjectManager().channel_service
-        if channel_service:
-            return channel_service.block_manager.blockchain.find_preps_addresses_by_header(self.__block.header)
-        else:
-            return []
-
     def add_vote(self, vote: BlockVote):
         if self.votes:
             if not self.votes.get(vote.round_):
                 self.votes[vote.round_] = \
-                    BlockVotes(self.__get_reps(), conf.VOTING_RATIO, self.height, vote.round_, self.hash)
+                    BlockVotes(self._reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
             try:
                 self.votes[vote.round_].add_vote(vote)
             except VoteError as e:
                 util.logger.info(e)
-                return
         else:
             self.votes_buffer.append(vote)
 
@@ -131,10 +122,11 @@ class CandidateBlocks:
             return
 
         with self.__blocks_lock:
+            reps = self._blockchain.find_preps_addresses_by_header(block.header)
             if block.header.hash not in self.blocks:
-                self.blocks[block.header.hash] = CandidateBlock.from_block(block)
+                self.blocks[block.header.hash] = CandidateBlock.from_block(block, reps)
             else:
-                self.blocks[block.header.hash].block = block
+                self.blocks[block.header.hash].add_block(block, reps)
 
     def remove_block(self, block_hash):
         if block_hash in self.blocks and self.blocks[block_hash].block:
