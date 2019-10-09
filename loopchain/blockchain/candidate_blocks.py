@@ -114,7 +114,7 @@ class CandidateBlocks:
         votes = self.blocks[block_hash].votes
         return votes.get(round_) if votes else votes
 
-    def add_block(self, block: Block):
+    def add_block(self, block: Block, reps: List[ExternalAddress]):
         if block.header.height != self._blockchain.block_height + 1:
             util.logger.warning(
                 f"Candidate block height must be ({self._blockchain.block_height})"
@@ -122,7 +122,6 @@ class CandidateBlocks:
             return
 
         with self.__blocks_lock:
-            reps = self._blockchain.find_preps_addresses_by_header(block.header)
             if block.header.hash not in self.blocks:
                 self.blocks[block.header.hash] = CandidateBlock.from_block(block, reps)
             else:

@@ -547,7 +547,8 @@ class BlockManager:
                     result = True
                     if max_height == unconfirmed_block_height == block.header.height \
                             and max_height > 0 and not confirm_info:
-                        self.candidate_blocks.add_block(block)
+                        self.candidate_blocks.add_block(
+                            block, self.blockchain.find_preps_addresses_by_header(block.header))
                         self.blockchain.last_unconfirmed_block = block
                         result = True
                     else:
@@ -916,7 +917,8 @@ class BlockManager:
             logging.error(e)
             traceback.print_exc()
         else:
-            self.candidate_blocks.add_block(unconfirmed_block)
+            self.candidate_blocks.add_block(
+                unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
             self._reset_leader(unconfirmed_block)
         finally:
             is_validated = exc is None
