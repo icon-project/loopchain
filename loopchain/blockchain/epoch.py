@@ -171,8 +171,11 @@ class Epoch:
                     continue
             utils.logger.spam(f"There is no duplicated tx anymore.")
 
-    def makeup_block(self, complain_votes: LeaderVotes, prev_votes,
-                     skip_add_tx=False, next_reps=None, next_leader=None):
+    def makeup_block(self,
+                     complain_votes: LeaderVotes,
+                     prev_votes,
+                     new_term: bool = False,
+                     is_unrecorded: bool = False):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -181,9 +184,13 @@ class Epoch:
         if complain_votes and complain_votes.get_result():
             block_builder.leader_votes = complain_votes.votes
 
-        if skip_add_tx:
-            block_builder.next_leader = next_leader
-            block_builder.reps = next_reps
+        if new_term:
+            block_builder.next_leader = None
+            block_builder.reps = None
+        elif is_unrecorded:
+            block_builder.next_leader = ExternalAddress.fromhex_address(self.leader_id)
+            block_builder.reps = self.reps
+            utils.logger.debug(f"unrecorded block for height({self.height})")
         else:
             self.__add_tx_to_block(block_builder)
 
