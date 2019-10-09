@@ -160,11 +160,18 @@ class BlockVerifier(BaseBlockVerifier):
             leader_votes = LeaderVotes(
                 reps, conf.LEADER_COMPLAIN_RATIO,
                 block.header.height, any_vote.round_, any_vote.old_leader, body.leader_votes)
-            if leader_votes.get_result() != block.header.peer_id:
+            if leader_votes.get_result() == ExternalAddress.empty():
+                if leader_votes.block_height != block.header.height:
+                    exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                             f"Height({block.header.height}), "
+                                             f"Expected({leader_votes.round}).")
+                    self._handle_exception(exception)
+            elif leader_votes.get_result() != block.header.peer_id:
                 exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                          f"Leader({block.header.peer_id.hex_xx()}), "
                                          f"Expected({leader_votes.get_result()}).")
                 self._handle_exception(exception)
+
             try:
                 leader_votes.verify()
             except Exception as e:
