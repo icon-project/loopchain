@@ -739,9 +739,8 @@ class BlockManager:
             if elected_leader:
                 if elected_leader == ExternalAddress.empty().hex_xx() and vote.round_ == self.epoch.round:
                     util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
-                    elected_leader = \
-                        self.__channel_service.peer_manager.get_next_leader_peer(self.epoch.leader_id).peer_id
-
+                    elected_leader = self.blockchain.get_next_rep_in_reps(
+                        ExternalAddress.fromhex(self.epoch.leader_id), self.epoch.reps).hex_hx()
                 if self.epoch.round == vote.round_:
                     self.__channel_service.reset_leader(elected_leader, complained=True)
         elif self.epoch.height < vote.block_height:
