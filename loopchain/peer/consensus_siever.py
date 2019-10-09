@@ -210,11 +210,13 @@ class ConsensusSiever(ConsensusBase):
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(candidate_block)
             self.__broadcast_block(candidate_block)
-            self._block_manager.vote_unconfirmed_block(candidate_block, self._block_manager.epoch.round, True)
 
             if is_unrecorded_block:
                 self._blockchain.last_unconfirmed_block = None
             else:
+                self._block_manager.vote_unconfirmed_block(candidate_block,
+                                                           self._block_manager.epoch.round,
+                                                           True)
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
                     await self._wait_for_voting(candidate_block)

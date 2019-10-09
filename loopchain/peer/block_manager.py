@@ -162,9 +162,10 @@ class BlockManager:
             return
 
         if last_block.header.revealed_next_reps_hash:
-            if last_block.header.prep_changed:
+            if block_.header.is_unrecorded:
                 self._send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
-            self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
+            else:
+                self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
             self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.prepared_reps_hash, round_)
 
