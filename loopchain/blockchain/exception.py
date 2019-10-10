@@ -76,6 +76,12 @@ class InvalidUnconfirmedBlock(Exception):
     pass
 
 
+class UnexpectedLeader(InvalidUnconfirmedBlock):
+    """
+    """
+    pass
+
+
 class DuplicationUnconfirmedBlock(Exception):
     """
     """

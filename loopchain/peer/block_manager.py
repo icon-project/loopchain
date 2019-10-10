@@ -28,7 +28,7 @@ from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo, UnrecordedBlock
+    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -259,10 +259,17 @@ class BlockManager:
             raise InvalidUnconfirmedBlock(
                 f"The unconfirmed block has invalid round. Expected({self.epoch.round}), Unconfirmed_block({round_})")
 
-        if not self.epoch.complained_result and self.epoch.leader_id != block_header.peer_id.hex_hx():
-            raise InvalidUnconfirmedBlock(
-                f"The unconfirmed block is made by an unexpected leader. "
-                f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
+        if not self.epoch.complained_result:
+            if self.blockchain.last_unconfirmed_block and self.blockchain.last_unconfirmed_block.header.prep_changed:
+                # TODO do not validate epoch in this case.
+                expected_leader = block_header.peer_id.hex_hx()
+            else:
+                expected_leader = self.epoch.leader_id
+
+            if expected_leader != block_header.peer_id.hex_hx():
+                raise UnexpectedLeader(
+                    f"The unconfirmed block is made by an unexpected leader. "
+                    f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
 
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
@@ -640,21 +647,34 @@ class BlockManager:
 
         return True
 
-    def get_next_leader_by_block(self, block: Block) -> Optional[str]:
+    def get_next_leader(self) -> Optional[str]:
+        """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
+
+        :return:
+        """
+
+        block = self.blockchain.last_block
+
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
+            util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
         elif self.blockchain.made_block_count_reached_max(block):
-            reps_hash = (block.header.revealed_next_reps_hash
+            reps_hash = (block.header.reps_hash
                          or ObjectManager().channel_service.peer_manager.prepared_reps_hash)
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
             next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps)
+
             if next_leader:
                 next_leader = next_leader.hex_hx()
+                util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
             else:
                 next_leader = self.__get_next_leader_by_block(block)
+                util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
         else:
             next_leader = self.__get_next_leader_by_block(block)
-        util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
+            util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
+
+        util.logger.debug(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
 
     def __get_next_leader_by_block(self, block: Block) -> str:
@@ -718,7 +738,7 @@ class BlockManager:
         return max_height, unconfirmed_block_height, peer_stubs
 
     def new_epoch(self):
-        new_leader_id = self.get_next_leader_by_block(self.blockchain.last_block)
+        new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
         logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 

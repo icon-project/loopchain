@@ -86,7 +86,7 @@ def update_preset(update_logger=True):
     preset.log_monitor_port = conf.MONITOR_LOG_PORT
 
     if preset is develop:
-        preset.log_level = conf.LOOPCHAIN_DEVELOP_LOG_LEVEL
+        preset.log_level = "NOTICE"  # conf.LOOPCHAIN_DEVELOP_LOG_LEVEL
     else:
         preset.log_level = conf.LOOPCHAIN_LOG_LEVEL
 
