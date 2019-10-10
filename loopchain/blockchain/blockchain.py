@@ -154,23 +154,22 @@ class BlockChain:
             utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
-    def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
+    def get_expected_generator(self, peer_id: ExternalAddress) -> Optional[ExternalAddress]:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
-        reps: List[ExternalAddress] = \
-            self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
-
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
             utils.logger.spam(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
+            reps: List[ExternalAddress] = \
+                self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
             expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
             expected_generator = peer_id
 
-        utils.logger.debug(f"get_expected_generator ({expected_generator.hex_hx()})")
+        utils.logger.debug(f"get_expected_generator ({expected_generator})")
         return expected_generator
 
     @property
@@ -231,7 +230,7 @@ class BlockChain:
             if self.__last_block.header.peer_id != block.header.peer_id:
                 break
 
-            self.__made_block_counter[block.header.peer_id] += 1
+            self._increase_made_block_count(block)
 
             # next loop
             block_height = block.header.height - 1

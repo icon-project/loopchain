@@ -657,24 +657,20 @@ class BlockManager:
 
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
-            util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
         elif self.blockchain.made_block_count_reached_max(block):
-            reps_hash = (block.header.reps_hash
+            reps_hash = (block.header.revealed_next_reps_hash
                          or ObjectManager().channel_service.peer_manager.prepared_reps_hash)
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
             next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps)
 
             if next_leader:
                 next_leader = next_leader.hex_hx()
-                util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
             else:
                 next_leader = self.__get_next_leader_by_block(block)
-                util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
         else:
             next_leader = self.__get_next_leader_by_block(block)
-            util.logger.notice(f"next_leader({next_leader}) from block({block.header.height})")
 
-        util.logger.debug(f"next_leader({next_leader}) from block({block.header.height})")
+        util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
 
     def __get_next_leader_by_block(self, block: Block) -> str:
