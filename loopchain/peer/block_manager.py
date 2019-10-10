@@ -644,15 +644,27 @@ class BlockManager:
         if block.header.prep_changed:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
-            reps_hash = block.header.revealed_next_reps_hash or \
-                        ObjectManager().channel_service.peer_manager.prepared_reps_hash
+            reps_hash = (block.header.revealed_next_reps_hash
+                         or ObjectManager().channel_service.peer_manager.prepared_reps_hash)
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
-            next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps).hex_hx()
+            next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps)
+            if next_leader:
+                next_leader = next_leader.hex_hx()
+            else:
+                next_leader = self.__get_next_leader_by_block(block)
         else:
-            next_leader = block.header.next_leader.hex_hx()
-
+            next_leader = self.__get_next_leader_by_block(block)
         util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
+
+    def __get_next_leader_by_block(self, block: Block) -> str:
+        if block.header.next_leader is None:
+            if block.header.peer_id:
+                return block.header.peer_id.hex_hx()
+            else:
+                return ExternalAddress.empty().hex_hx()
+        else:
+            return block.header.next_leader.hex_hx()
 
     def __get_peer_stub_list(self):
         """It updates peer list for block manager refer to peer list on the loopchain network.

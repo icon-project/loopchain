@@ -151,7 +151,7 @@ class BlockChain:
         except IndexError:
             return reps[0]
         except ValueError:
-            utils.logger.warning(f"rep({rep}) not in reps({reps})")
+            utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
     def get_expected_generator(self, peer_id: ExternalAddress) -> ExternalAddress:
