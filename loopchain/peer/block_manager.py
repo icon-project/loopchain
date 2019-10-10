@@ -656,8 +656,11 @@ class BlockManager:
             else:
                 next_leader = block.header.next_leader.hex_hx()
         except AttributeError as e:
-            util.logger.warning(f"get_next_leader_by_block block is ({block}) in {e}")
-            next_leader = block.header.peer_id.hex_hx()
+            util.logger.debug(f"Got exception({e}) during get_next_leader_by_block, block_header({block.header})")
+            if block.header.peer_id:
+                next_leader = block.header.peer_id.hex_hx()
+            else:
+                next_leader = ExternalAddress.empty().hex_hx()
 
         util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
