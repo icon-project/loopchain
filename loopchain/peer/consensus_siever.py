@@ -312,6 +312,7 @@ class ConsensusSiever(ConsensusBase):
                 if self._block_manager.epoch.complained_result:
                     self._blockchain.last_unconfirmed_block = None
                 self.stop_broadcast_send_unconfirmed_block_timer()
+                ObjectManager().channel_service.state_machine.switch_role()
                 return None
             except NotEnoughVotes:
                 if last_unconfirmed_block:
