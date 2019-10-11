@@ -11,7 +11,7 @@ For detailed information about ICON Network, Pleases refer to [ICON Network](htt
 This command will enable ICON citizen node on Testnet network, running on port **9000**.
 
 ```bash
-$ loop -r testnet
+$ loop --testnet
 ```
 
 Once it's connected to the network, it will start to sync all the blocks on the ICON testnet network.
@@ -200,7 +200,7 @@ For more JSON-RPC APIs provided by tbears, please go to [Command-line Interfaces
 This command below will enable ICON citizen node on Mainnet network, running on port **9100**.
 
 ```bash
-$ loop -r mainnet
+$ loop --mainnet
 ```
 
 Once it's connected to the network, it will start to sync all the blocks on the ICON mainnet network.
