@@ -69,13 +69,12 @@ class PeerManager:
         return [{'id': peer_id, 'p2pEndpoint': peer.target}
                 for peer_id, peer in self._peer_list_data.peer_list.items()]
 
-    async def load_peers(self) -> None:
-        await PeerLoader.load(peer_manager=self)
+    def load_peers(self) -> None:
+        PeerLoader.load(peer_manager=self)
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         reps_hash = self.reps_hash()
-        reps_in_db = blockchain.find_preps_by_roothash(
-            reps_hash)
+        reps_in_db = blockchain.find_preps_by_roothash(reps_hash)
 
         if not reps_in_db:
             preps = self.serialize_as_preps()

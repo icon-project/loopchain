@@ -338,7 +338,7 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "role_switch_block_height": -1
+        "crep_root_hash": ""
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
@@ -353,7 +353,7 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "role_switch_block_height": -1
+        "crep_root_hash": ""
     }
 }
 
@@ -410,7 +410,6 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-CREP_ROOT_HASH = ''
 ICON_VERSIONS = {
     'loopchain': '0.0.0',
     'iconservice': '0.0.0',

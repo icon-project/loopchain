@@ -206,7 +206,7 @@ class ChannelService:
 
     async def __init_network(self):
         await self._init_rs_client()
-        await self.__peer_manager.load_peers()
+        self.__peer_manager.load_peers()
         await self._select_node_type()
 
     async def evaluate_network(self):

@@ -35,14 +35,14 @@ class PeerLoader:
         pass
 
     @staticmethod
-    async def load(peer_manager: 'PeerManager'):
+    def load(peer_manager: 'PeerManager'):
         PeerLoader.load_peers_from_iiss(peer_manager)
 
         if not peer_manager.peer_list:
             if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
-                await PeerLoader._load_peers_from_file(peer_manager)
+                PeerLoader._load_peers_from_file(peer_manager)
             else:
-                await PeerLoader._load_peers_from_rest_call(peer_manager)
+                PeerLoader._load_peers_from_rest_call(peer_manager)
 
         utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
         for peer_id in list(peer_manager.peer_list):
@@ -68,7 +68,7 @@ class PeerLoader:
         peer_manager.reset_all_peers(response["result"]["rootHash"], response["result"]["preps"])
 
     @staticmethod
-    async def _load_peers_from_file(peer_manager: 'PeerManager'):
+    def _load_peers_from_file(peer_manager: 'PeerManager'):
         utils.logger.debug(f"load_peers_from_file")
         channel_info = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
@@ -76,19 +76,29 @@ class PeerLoader:
             peer_manager.add_peer(peer)
 
     @staticmethod
-    async def _load_peers_from_rest_call(peer_manager: 'PeerManager'):
+    def _load_peers_from_rest_call(peer_manager: 'PeerManager'):
         rs_client = ObjectManager().channel_service.rs_client
-        if conf.CREP_ROOT_HASH:
-            reps = rs_client.call(
-                "GetReps",
-                {"repsHash": conf.CREP_ROOT_HASH}
-            )
-            logging.debug(f"reps by c-rep root hash: {reps}")
-            for order, rep_info in enumerate(reps, 1):
-                peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
-                peer_manager.add_peer(peer)
-            return
+        is_block_version_0_3 = PeerLoader._is_block_version_0_3(rs_client)
+        crep_root_hash = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
 
+        if is_block_version_0_3 and crep_root_hash:
+            return PeerLoader._get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash)
+
+        return PeerLoader._get_reps_by_channel_infos_call(peer_manager, rs_client)
+
+    @staticmethod
+    def _get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash):
+        reps = rs_client.call(
+            "GetReps",
+            {"repsHash": crep_root_hash}
+        )
+        logging.debug(f"reps by c-rep root hash: {reps}")
+        for order, rep_info in enumerate(reps, 1):
+            peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
+            peer_manager.add_peer(peer)
+
+    @staticmethod
+    def _get_reps_by_channel_infos_call(peer_manager, rs_client):
         response = rs_client.call("GetChannelInfos")
         logging.debug(f"response of GetChannelInfos: {response}")
         reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
@@ -98,3 +108,11 @@ class PeerLoader:
 
         for peer_info in reps:
             peer_manager.add_peer(peer_info)
+
+    @staticmethod
+    def _is_block_version_0_3(rs_client) -> bool:
+        version = rs_client.call("GetLastBlock").get('version')
+        if version is not None:
+            return version == '0.3'
+        else:
+            return False
