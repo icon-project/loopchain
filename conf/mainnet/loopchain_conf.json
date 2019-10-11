@@ -13,7 +13,8 @@
       "consensus_cert_use": false,
       "tx_cert_use": false,
       "key_load_type": 0,
-      "radiostations": ["https://ctz.solidwallet.io"]
+      "radiostations": ["https://ctz.solidwallet.io"],
+      "crep_root_hash": "0xd421ad83f81a31abd7f6813bb6a3b92fa547bdb6d5abc98d2d0852c1a97bcca5"
     }
   },
   "PRIVATE_PATH": "./my_keystore.json",
