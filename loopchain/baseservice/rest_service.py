@@ -37,6 +37,8 @@ class RestService(CommonProcess):
         args = ['python3', '-m', 'loopchain', 'rest', '-p', str(self._port)]
         args += command_arguments.get_raw_commands_by_filter(
             command_arguments.Type.AMQPKey,
+            command_arguments.Type.MainNet,
+            command_arguments.Type.TestNet,
             command_arguments.Type.RadioStationTarget
         )
         server = CommonSubprocess(args)

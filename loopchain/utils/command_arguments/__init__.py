@@ -30,6 +30,8 @@ class Type(IntEnum):
     AMQPTarget = 9
     AMQPKey = 10
     Version = 11
+    MainNet = 12
+    TestNet = 13
 
 
 class Attribute:
@@ -49,12 +51,18 @@ class Attribute:
 
         return [self.names[0], str(value)]
 
+    @property
+    def help(self):
+        return self.kwargs.get("help")
+
 
 types_by_names = {
     "service_type": Type.ServiceType,
     "port": Type.Port,
     "configure_file_path": Type.ConfigurationFilePath,
     "radio_station_target": Type.RadioStationTarget,
+    "mainnet": Type.MainNet,
+    "testnet": Type.TestNet,
     "develop": Type.Develop,
     "agent_pin": Type.AgentPin,
     "cert": Type.Cert,
@@ -70,6 +78,12 @@ attributes = {
         Attribute("service_type", type=str, default='citizen', nargs='?',
                   help="loopchain service to start [peer|citizen|tool|admin]"),
 
+    Type.MainNet:
+        Attribute("--mainnet", action="store_true", help="Connect to mainnet"),
+
+    Type.TestNet:
+        Attribute("--testnet", action="store_true", help="Connect to testnet"),
+
     Type.Port:
         Attribute("-p", "--port",
                   help="port of Service itself"),
@@ -79,12 +93,15 @@ attributes = {
                   help="json configure file path"),
 
     # options for peer
-    # r, rs, radiostation means higher layer node.
     Type.RadioStationTarget:
         Attribute("-r", "--radio_station_target",
-                  help="[IP Address of Radio Station]:[PORT number of Radio Station], "
-                       "[IP Address of Sub Radio Station]:[PORT number of Sub Radio Station] "
-                       "or just [IP Address of Radio Station]"),
+                  help="\n"
+                       "******************************************************************************\n"
+                       "*   Option `-r` is deprecated and will be removed very soon.                 *\n"
+                       "*   You need to set radiostation targets into configuration file.            *\n"
+                       "*   Please read examples under `./conf` to make your own peer configuration. *\n"
+                       "******************************************************************************\n"),
+
     Type.Develop:
         Attribute("-d", "--develop", action="store_true",
                   help="set log level to SPAM (low develop mode)"),
