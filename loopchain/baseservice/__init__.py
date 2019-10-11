@@ -22,7 +22,6 @@ from .common_process import *
 from .rest_client import *
 from .timer_service import *
 from .common_subprocess import *
-from .block_generation_scheduelr import *
 from .node_subscriber import *
 from .slot_timer import *
 from .broadcast_scheduler import *
