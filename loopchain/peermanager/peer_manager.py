@@ -171,6 +171,8 @@ class PeerManager:
             self._reps_reset_data = (reps_hash, reps)
             return
 
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+
         if reps_hash == self.reps_hash().hex():
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
@@ -182,7 +184,7 @@ class PeerManager:
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
             self.add_peer(peer)
 
-        ObjectManager().channel_service.block_manager.blockchain.reset_leader_made_block_count()
+        blockchain.reset_leader_made_block_count()
 
     def update_all_peers(self):
         if self._reps_reset_data:

@@ -455,7 +455,7 @@ class ChannelService:
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
-        leader_id = self.__block_manager.get_next_leader_by_block(self.__block_manager.blockchain.last_block)
+        leader_id = self.__block_manager.get_next_leader()
         utils.logger.info(f"channel({ChannelProperty().name}) peer_leader: {leader_id}")
 
         logger_preset = loggers.get_preset()
