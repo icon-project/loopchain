@@ -152,6 +152,18 @@ class NodeSubscriber:
 
         return response_dict
 
+    async def subscribe_loop(self):
+        try:
+            await self._subscribe_loop()
+        except AnnounceNewBlockError as e:
+            logging.error(f"{type(e)} during subscribe, caused by: {e}")
+            raise e
+        except Exception as e:
+            logging.info(f"{type(e)} during subscribe, caused by: {e}")
+            raise ConnectionError
+        finally:
+            await self.close()
+
     async def _subscribe_loop(self, websocket: WebSocketClientProtocol):
         while True:
             if self._exception:
