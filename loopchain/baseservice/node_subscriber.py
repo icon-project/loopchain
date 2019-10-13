@@ -130,6 +130,15 @@ class NodeSubscriber:
         )
         await self._websocket.send(json.dumps(request))
 
+    async def _recv_until_timeout(self) -> dict:
+        response: bytes = await asyncio.wait_for(
+            fut=self._websocket.recv(),
+            timeout=2 * conf.CONNECTION_RETRY_TIMEOUT_TO_RS
+        )
+        response_dict = convert_reponse_to_dict(response)
+
+        return response_dict
+
     async def _subscribe_loop(self, websocket: WebSocketClientProtocol):
         while True:
             if self._exception:
