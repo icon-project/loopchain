@@ -122,6 +122,19 @@ class NodeSubscriber:
             loop=MessageQueueService.loop
         )
 
+    async def _handshake(self, block_height):
+        try:
+            await self._subscribe_request(block_height)
+            await self._recv_until_timeout()
+        except Exception as e:
+            logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
+            await self.close()
+        else:
+            logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
+        finally:
+            # set subscribe_event to transit the state to Watch.
+            self._subscribe_event.set()
+
     async def _subscribe_request(self, block_height):
         request = Request(
             method="node_ws_Subscribe",
