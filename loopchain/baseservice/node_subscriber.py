@@ -114,6 +114,14 @@ class NodeSubscriber:
         finally:
             await self.close()
 
+    async def _prepare_connection(self, event):
+        self._subscribe_event = event
+        self._websocket: WebSocketClientProtocol = await websockets.connect(
+            uri=self._target_uri,
+            max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK,
+            loop=MessageQueueService.loop
+        )
+
     async def _subscribe_loop(self, websocket: WebSocketClientProtocol):
         while True:
             if self._exception:
