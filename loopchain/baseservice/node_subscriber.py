@@ -122,6 +122,14 @@ class NodeSubscriber:
             loop=MessageQueueService.loop
         )
 
+    async def _subscribe_request(self, block_height):
+        request = Request(
+            method="node_ws_Subscribe",
+            height=block_height,
+            peer_id=ChannelProperty().peer_id
+        )
+        await self._websocket.send(json.dumps(request))
+
     async def _subscribe_loop(self, websocket: WebSocketClientProtocol):
         while True:
             if self._exception:
