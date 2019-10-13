@@ -42,6 +42,23 @@ CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
                               message_code.Response.fail_connection_closed}
 
 
+def convert_reponse_to_dict(response: bytes) -> dict:
+    response_dict: dict = json.loads(response)
+    response_dict = _check_error_in_response(response_dict)
+
+    return response_dict
+
+
+def _check_error_in_response(response_dict: dict) -> dict:
+    if response_dict.get('code') in CONNECTION_FAIL_CONDITIONS:
+        raise ConnectionError(f"Error sent from rs target: {response_dict}")
+
+    if "error" in response_dict:
+        return ObjectManager().channel_service.shutdown_peer(message=response_dict.get('error'))
+
+    return response_dict
+
+
 class NodeSubscriber:
     def __init__(self, channel, rs_target):
         scheme = 'wss' if ('https://' in rs_target) else 'ws'
