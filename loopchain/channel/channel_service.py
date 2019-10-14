@@ -26,7 +26,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestClient, NodeSubscriber
 from loopchain.baseservice import TimerService
-from loopchain.blockchain import Epoch, AnnounceNewBlockError
+from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -239,7 +239,15 @@ class ChannelService:
         return self.get_channel_option().get('role_switch_block_height', -1)
 
     def _get_node_type_by_peer_list(self):
-        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+        epoch = self.block_manager.epoch
+        if epoch:
+            reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
+                epoch.reps_hash)
+        else:
+            reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
+                self.__peer_manager.prepared_reps_hash)
+
+        if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 

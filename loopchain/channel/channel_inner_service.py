@@ -570,10 +570,6 @@ class ChannelInnerTask:
         peer_manager = self._channel_service.peer_manager
         return str(peer_manager.peer_list), str(peer_manager.peer_list)
 
-    @message_queue_task(type_=MessageQueueType.Worker)
-    async def reset_leader(self, new_leader, block_height=0) -> None:
-        self._channel_service.reset_leader(new_leader, block_height)
-
     @message_queue_task(priority=255)
     async def get_status(self):
         status_data = dict()
