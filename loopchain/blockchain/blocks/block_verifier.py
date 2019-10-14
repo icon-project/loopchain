@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Callable
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.blockchain.exception import BlockVersionNotMatch
+from loopchain.blockchain.exception import BlockVersionNotMatch, TransactionOutOfTimeBound
 from loopchain.blockchain.transactions import TransactionVerifier
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
@@ -77,6 +77,11 @@ class BlockVerifier(ABC):
 
     def verify_transactions(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
+            if not utils.is_in_time_boundary(
+                    tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND, block.header.timestamp):
+                exception = TransactionOutOfTimeBound(tx, block.header.timestamp)
+                self._handle_exception(exception)
+
             tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
             tv.verify(tx, blockchain)
             if not self._raise_exceptions:
