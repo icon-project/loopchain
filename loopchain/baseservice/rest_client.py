@@ -15,54 +15,40 @@
 
 import asyncio
 import logging
-from typing import List, Optional
+from collections import namedtuple
+from typing import List, Optional, NamedTuple
 from urllib.parse import urlparse
 
 import requests
 from aiohttp import ClientSession
 from jsonrpcclient import HTTPClient, Request
+from loopchain import utils, configure as conf
 
-from loopchain import configure as conf
-from loopchain import utils
+
+RestMethod = namedtuple("RestMethod", "version name params")
+
+
+class RestMethods:
+    GetChannelInfos = RestMethod(conf.ApiVersion.node, "node_getChannelInfos", None)
+    GetBlockByHeight = RestMethod(conf.ApiVersion.node, "node_getBlockByHeight", namedtuple("Params", "height"))
+    Status = RestMethod(conf.ApiVersion.v1, "/status/peer", None)
+    GetLastBlock = RestMethod(conf.ApiVersion.v3, "icx_getLastBlock", None)
+    GetReps = RestMethod(conf.ApiVersion.v3, "rep_getListByHash", namedtuple("Params", "repsHash"))
 
 
 class RestClient:
     def __init__(self, channel=None):
         self._target: str = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
-        self._version_urls = {}
-        self._http_clients = {}
-        self._method_versions = {
-            "GetChannelInfos": conf.ApiVersion.node,
-            "GetBlockByHeight": conf.ApiVersion.node,
-            "Status": conf.ApiVersion.v1,
-            "GetLastBlock": conf.ApiVersion.v3,
-            "GetReps": conf.ApiVersion.v3
-        }
-        self._method_names = {
-            "GetChannelInfos": "node_getChannelInfos",
-            "GetBlockByHeight": "node_getBlockByHeight",
-            "Status": "/status/peer",
-            "GetLastBlock": "icx_getLastBlock",
-            "GetReps": "rep_getListByHash"
-        }
 
     async def init(self, endpoints: List[str]):
         self._target = await self._select_fastest_endpoint(endpoints)
         if self._target:
             utils.logger.spam(f"RestClient init target({self._target})")
-            self._init_http_clients()
 
     @property
     def target(self):
         return self._target
-
-    def _init_http_clients(self):
-        for version in conf.ApiVersion:
-            url = utils.normalize_request_url(self._target, version, self._channel_name)
-            self._version_urls[version] = url
-            if version != conf.ApiVersion.v1:
-                self._http_clients[url] = HTTPClient(url)
 
     async def _fetch_status(self, session: ClientSession, request_uri):
         endpoint_target = f"{urlparse(request_uri).scheme}://{urlparse(request_uri).netloc}"
@@ -87,7 +73,7 @@ class RestClient:
         :param endpoints: list of endpoints
         :return: the fastest endpoint target "{scheme}://{netloc}"
         """
-        path = self._method_names["Status"]
+        path = RestMethods.Status.name
         endpoints = [utils.normalize_request_url(endpoint, conf.ApiVersion.v1) + path for endpoint in endpoints]
         async with ClientSession() as session:
             results = await asyncio.gather(*[self._fetch_status(session, endpoint) for endpoint in endpoints],
@@ -104,32 +90,38 @@ class RestClient:
         logging.info(f"minimum latency endpoint is: {min_latency_target}")
         return min_latency_target
 
-    def call(self, method_name, params=None, timeout=None) -> dict:
+    def call(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
+        timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
+
         try:
-            version = self._method_versions[method_name]
-            url = self._version_urls[version]
-            method_name = self._method_names[method_name]
-            timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
-
-            if version == conf.ApiVersion.v1:
-                url += method_name
-                response = requests.get(url=url,
-                                        params={'channel': self._channel_name},
-                                        timeout=timeout)
-                if response.status_code != 200:
-                    raise ConnectionError
-                response = response.json()
+            if method.version == conf.ApiVersion.v1:
+                response = self._call_rest(method, timeout)
             else:
-                # using jsonRPC client request.
-                request = Request(method_name, params) if params else Request(method_name)
-
-                try:
-                    response = self._http_clients[url].send(request, timeout=timeout)
-                except Exception as e:
-                    raise ConnectionError(e)
-            utils.logger.spam(f"REST call complete request_url({url}), method_name({method_name})")
+                response = self._call_jsonrpc(method, params, timeout)
+            utils.logger.spam(f"REST call complete method_name({method.name})")
             return response
-
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method_name}), caused by : {type(e)}, {e}")
+            logging.warning(f"REST call fail method_name({method.name}), caused by : {type(e)}, {e}")
             raise e
+
+    def _call_rest(self, method: RestMethod, timeout):
+        url = utils.normalize_request_url(self._target, method.version, self._channel_name)
+        url += method.name
+        response = requests.get(url=url,
+                                params={'channel': self._channel_name},
+                                timeout=timeout)
+        if response.status_code != 200:
+            raise ConnectionError
+        return response.json()
+
+    def _call_jsonrpc(self, method: RestMethod, params: Optional[NamedTuple], timeout):
+        url = utils.normalize_request_url(self._target, method.version, self._channel_name)
+        http_client = HTTPClient(url)
+
+        # 'vars(namedtuple)' does not working in Python 3.7.4
+        # noinspection PyProtectedMember
+        request = Request(method.name, params._asdict()) if params else Request(method.name)
+        try:
+            return http_client.send(request, timeout=timeout)
+        except Exception as e:
+            raise ConnectionError(e)
