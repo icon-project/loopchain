@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -190,32 +190,6 @@ class PeerManager:
             self.reset_all_peers(*self._reps_reset_data, update_now=True)
             self._reps_reset_data = None
 
-    def get_peer(self, peer_id: Union[str, ExternalAddress]) -> Optional[Peer]:
-        """peer_id 에 해당하는 peer 를 찾는다.
-
-        :param peer_id:
-        :return:
-        """
-
-        try:
-            if isinstance(peer_id, ExternalAddress):
-                peer_id = peer_id.hex_hx()
-
-            return self.peer_list[str(peer_id)]
-
-        except KeyError:
-            if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-                logging.warning("there is no peer by id: " + str(peer_id))
-                logging.debug(self.get_peers_for_debug())
-                return None
-            else:
-                logging.debug(f"This node({peer_id}) will run as {conf.NodeType.CitizenNode.name}")
-                return None
-        except IndexError:
-            logging.warning(f"there is no peer by id({str(peer_id)})")
-            logging.debug(self.get_peers_for_debug())
-            return None
-
     def get_peer_count(self):
         count = 0
         try:
@@ -224,17 +198,3 @@ class PeerManager:
             logging.debug("no peer list")
 
         return count
-
-    def get_peers_for_debug(self):
-        peers = ""
-        peer_list = []
-        try:
-            for peer_id in self.peer_list:
-                peer_each = self.peer_list[peer_id]
-                peer_list.append(peer_each)
-                peers += "\n" + str(peer_each.order) + ":" + peer_each.target \
-                         + " " + str(peer_id) + " (" + str(type(peer_id)) + ")"
-        except KeyError:
-            logging.debug("no peer list")
-
-        return peers, peer_list
