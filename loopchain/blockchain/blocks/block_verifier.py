@@ -19,7 +19,6 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.blockchain.exception import BlockVersionNotMatch, TransactionOutOfTimeBound
 from loopchain.blockchain.transactions import TransactionVerifier
-from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
 
 if TYPE_CHECKING:

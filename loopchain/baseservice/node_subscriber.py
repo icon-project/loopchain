@@ -31,6 +31,7 @@ from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
@@ -179,12 +180,15 @@ class NodeSubscriber:
             block_verifier.invoke_func = blockchain.score_invoke
             reps_getter = blockchain.find_preps_addresses_by_roothash
             try:
+                next_leader = ObjectManager().channel_service.block_manager.get_next_leader()
+                if next_leader:
+                    next_leader = ExternalAddress.fromhex(next_leader)
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
                                       generator=blockchain.get_expected_generator(confirmed_block.header.peer_id),
                                       reps_getter=reps_getter,
-                                      next_leader=ExternalAddress.fromhex(blockchain.get_next_leader()))
+                                      next_leader=next_leader)
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:

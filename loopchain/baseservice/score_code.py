@@ -26,6 +26,7 @@ class ScoreResponse(IntEnum):
     SCORE_CONTAINER_EXCEPTION = 9100
 
 
+# FIXME : remove
 class PrepChangedReason:
     TERM_END = "0x0"  # Term ends and reset P-Rep list
     PENALTY = "0x1"  # Updated within term (Penalty)

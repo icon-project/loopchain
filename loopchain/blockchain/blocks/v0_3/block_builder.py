@@ -1,12 +1,12 @@
 import time
-from enum import IntEnum
 from functools import reduce
 from operator import or_
 from typing import List
+
 from loopchain.blockchain.types import ExternalAddress, Hash32, BloomFilter
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.blocks import Block, BlockBuilder as BaseBlockBuilder, BlockProverType
-from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockProver
+from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockProver, NextRepsChangeReason
 from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 
 
@@ -22,7 +22,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.reps: List[ExternalAddress] = None
         self.next_reps: List[ExternalAddress] = None
         self.next_reps_hash: Hash32 = None
-        self.next_reps_change_reason = NextRepsChangeReason.NoChange
+        self.next_reps_change_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
         self.leader_votes: List[LeaderVote] = []
         self.prev_votes: List[BlockVote] = None
 
@@ -30,6 +30,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.fixed_timestamp: int = None
         self.state_hash: 'Hash32' = None
         self.next_leader: 'ExternalAddress' = None
+        self.is_max_made_block_count: bool = None
 
         # Attributes to be generated
         self.transactions_hash: 'Hash32' = None
@@ -160,12 +161,15 @@ class BlockBuilder(BaseBlockBuilder):
         return self.next_leader
 
     def _build_next_leader(self):
-        if self.next_reps_change_reason == NextRepsChangeReason.Term:
-            return self.next_reps[0]
-        elif self.next_reps_change_reason == NextRepsChangeReason.Update:
-            curr_index = self.reps.index(self.peer_id)
-            next_index = curr_index + 1
-            next_index = next_index if next_index < len(self.next_reps) else 0
+        if self.next_reps_change_reason is NextRepsChangeReason.TermEnd:
+            return ExternalAddress.empty()
+        elif self.next_reps_change_reason is NextRepsChangeReason.Penalty:
+            if not self.is_max_made_block_count and self.peer_id in self.next_reps:
+                next_index = self.reps.index(self.peer_id)
+            else:
+                curr_index = self.reps.index(self.peer_id)
+                next_index = curr_index + 1
+                next_index = next_index if next_index < len(self.next_reps) else 0
             return self.next_reps[next_index]
         else:
             return self.next_leader
@@ -274,9 +278,3 @@ class BlockBuilder(BaseBlockBuilder):
         body: BlockBody = block.body
         self.leader_votes = body.leader_votes
         self.prev_votes = body.prev_votes
-
-
-class NextRepsChangeReason(IntEnum):
-    NoChange = -1
-    Term = 0
-    Update = 1
