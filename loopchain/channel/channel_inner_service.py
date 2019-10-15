@@ -555,11 +555,6 @@ class ChannelInnerTask:
                 for ctz in self._citizens.values()]
 
     @message_queue_task
-    async def get_reps(self) -> List[Dict[str, str]]:
-        peer_manager = self._channel_service.peer_manager
-        return peer_manager.get_reps()
-
-    @message_queue_task
     async def get_reps_by_hash(self, reps_hash: str) -> List[Dict[str, str]]:
         new_reps_hash = Hash32.fromhex(reps_hash)
         preps = self._blockchain.find_preps_by_roothash(new_reps_hash)
@@ -770,17 +765,6 @@ class ChannelInnerTask:
         return \
             message_code.Response.success, block.header.height, self._blockchain.block_height,\
             unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def add_audience(self, peer_target) -> None:
-        peer = self._channel_service.peer_manager.get_peer_by_target(peer_target)
-        if not peer:
-            util.logger.debug(f"There is no peer peer_target({peer_target})")
-        self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target)
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def remove_audience(self, peer_target) -> None:
-        self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.UNSUBSCRIBE, peer_target)
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:

@@ -13,7 +13,6 @@
 # limitations under the License.
 """A module for managing peer list"""
 
-import json
 import logging
 import math
 import threading
@@ -21,12 +20,11 @@ from typing import Optional, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, StubManager
+from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.peermanager import Peer, PeerLoader, PeerListData
-from loopchain.protos import loopchain_pb2
 
 
 class PeerManager:
@@ -91,9 +89,6 @@ class PeerManager:
     def get_reps(self):
         return [{"id": peer.peer_id, "target": peer.target} for peer in self.peer_list.values()]
 
-    def get_peer_by_target(self, peer_target):
-        return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
-
     def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager
 
@@ -119,45 +114,9 @@ class PeerManager:
 
         return peer.order
 
-    def remove_peer(self, peer_id):
-        logging.debug(f"remove peer : {peer_id}")
-        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
-        if removed_peer:
-            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
-            self._prepared_reps_hash = self.reps_hash()
-            return True
-
-        return False
-
-    def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
-        logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
-
-        try:
-            return self.peer_list[peer.peer_id].stub_manager
-        except Exception as e:
-            logging.debug("try get peer stub except: " + str(e))
-            return None
-
-    def __find_highest_peer(self) -> Peer:
-        # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
-        most_height = 0
-        most_height_peer = None
-        for peer_id in list(self.peer_list):
-            peer_each = self.peer_list[peer_id]
-            stub_manager = peer_each.stub_manager
-            try:
-                response = stub_manager.call("GetStatus",
-                                             loopchain_pb2.StatusRequest(request="find highest peer"),
-                                             is_stub_reuse=True)
-
-                peer_status = json.loads(response.status)
-                if int(peer_status["block_height"]) >= most_height:
-                    most_height = int(peer_status["block_height"])
-                    most_height_peer = peer_each
-            except Exception as e:
-                logging.warning("gRPC Exception: " + str(e))
-
-        return most_height_peer
+    def clear_peers(self):
+        self._peer_list_data.peer_list.clear()
+        self._prepared_reps_hash = None
 
     def reset_all_peers(self, reps_hash, reps, update_now=True):
         util.logger.debug(
@@ -176,8 +135,7 @@ class PeerManager:
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
-        for peer_id in list(self.peer_list):
-            self.remove_peer(peer_id)
+        self.clear_peers()
 
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)

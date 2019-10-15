@@ -253,13 +253,7 @@ class ChannelService:
 
     async def __clean_network(self):
         self.__timer_service.clean()
-
-        peer_ids = set()
-        for peer_id in self.__peer_manager.peer_list.keys():
-            peer_ids.add(peer_id)
-        for peer_id in peer_ids:
-            self.__peer_manager.remove_peer(peer_id)
-
+        self.__peer_manager.clear_peers()
         self.__rs_client = None
 
     def _is_role_switched(self) -> bool:
