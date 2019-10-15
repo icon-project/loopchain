@@ -76,9 +76,6 @@ class PeerManager:
             util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
             blockchain.write_preps(reps_hash, preps)
 
-    def get_reps(self):
-        return [{"id": peer.peer_id, "target": peer.target} for peer in self.peer_list.values()]
-
     def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager
 
