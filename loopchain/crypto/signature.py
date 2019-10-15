@@ -18,6 +18,7 @@ import hashlib
 import logging
 from typing import Union, Type, TypeVar
 
+import eth_keyfile
 from secp256k1 import Base, ALL_FLAGS
 from secp256k1 import PrivateKey, PublicKey
 
@@ -103,10 +104,10 @@ class SignVerifier:
             elif prikey_file.endswith('.pem'):
                 prikey = PemSerializer.deserialize_private_key_file(prikey_file, password)
             else:
-                from tbears.libs.icx_signer import key_from_key_store
-                prikey = key_from_key_store(prikey_file, password)
-        except Exception as e:
-            raise ValueError("Invalid Password(Peer Certificate load test)")
+                with open(prikey_file, 'rb') as file:
+                    prikey = eth_keyfile.extract_key_from_keyfile(file, password)
+        except Exception:
+            raise ValueError("Invalid Password.")
         return cls.from_prikey(prikey)
 
     @classmethod
