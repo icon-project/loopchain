@@ -183,7 +183,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
-        utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
+        # utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
         self.__set_status_cache(channel, future.result())
 
     def __get_status_data(self, channel: str):
@@ -493,8 +493,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
+
+        try:
+            round_ = request.round_
+        except AttributeError:
+            round_ = 0
+
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().announce_unconfirmed_block(request.block, request.round_),
+            channel_stub.async_task().announce_unconfirmed_block(request.block, round_),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -524,7 +530,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        utils.logger.debug(f"VoteUnconfirmedBlock block_hash({request.vote})")
+        utils.logger.debug(f"VoteUnconfirmedBlock vote({request.vote})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         asyncio.run_coroutine_threadsafe(

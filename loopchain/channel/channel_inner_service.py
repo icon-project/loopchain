@@ -772,7 +772,6 @@ class ChannelInnerTask:
             vote_serialized = json.loads(vote_dumped)
         except json.decoder.JSONDecodeError:
             util.logger.warning(f"This vote({vote_dumped}) may be from old version.")
-            raise
         else:
             vote = BlockVote.deserialize(vote_serialized)
             util.logger.debug(
