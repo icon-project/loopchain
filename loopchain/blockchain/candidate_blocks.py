@@ -15,7 +15,7 @@
 
 import logging
 import threading
-from typing import Dict, List
+from typing import Dict, List, Sequence
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -50,7 +50,7 @@ class CandidateBlock:
         return candidate_block
 
     @classmethod
-    def from_block(cls, block: Block, reps: List[ExternalAddress]):
+    def from_block(cls, block: Block, reps: Sequence[ExternalAddress]):
         candidate_block = CandidateBlock(block.header.hash, block.header.height)
         candidate_block.add_block(block, reps)
         return candidate_block
@@ -59,7 +59,7 @@ class CandidateBlock:
     def block(self):
         return self.__block
 
-    def add_block(self, block: Block, reps: List[ExternalAddress]):
+    def add_block(self, block: Block, reps: Sequence[ExternalAddress]):
         if self.hash != block.header.hash:
             raise CandidateBlockSetBlock
         else:
@@ -114,7 +114,7 @@ class CandidateBlocks:
         votes = self.blocks[block_hash].votes
         return votes.get(round_) if votes else votes
 
-    def add_block(self, block: Block, reps: List[ExternalAddress]):
+    def add_block(self, block: Block, reps: Sequence[ExternalAddress]):
         if block.header.height != self._blockchain.block_height + 1:
             util.logger.warning(
                 f"Candidate block height must be ({self._blockchain.block_height})"
