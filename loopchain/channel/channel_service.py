@@ -26,7 +26,7 @@ from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory,
 from loopchain.baseservice import ObjectManager, CommonSubprocess
 from loopchain.baseservice import RestClient, NodeSubscriber
 from loopchain.baseservice import TimerService
-from loopchain.blockchain import Epoch, AnnounceNewBlockError
+from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -239,19 +239,21 @@ class ChannelService:
         return self.get_channel_option().get('role_switch_block_height', -1)
 
     def _get_node_type_by_peer_list(self):
-        if self.__peer_manager.get_peer(ChannelProperty().peer_id):
+        epoch = self.block_manager.epoch
+        if epoch:
+            reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
+                epoch.reps_hash)
+        else:
+            reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
+                self.__peer_manager.prepared_reps_hash)
+
+        if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
         self.__timer_service.clean()
-
-        peer_ids = set()
-        for peer_id in self.__peer_manager.peer_list.keys():
-            peer_ids.add(peer_id)
-        for peer_id in peer_ids:
-            self.__peer_manager.remove_peer(peer_id)
-
+        self.__peer_manager.clear_peers()
         self.__rs_client = None
 
     def _is_role_switched(self) -> bool:
@@ -493,11 +495,14 @@ class ChannelService:
         :param complained:
         :return:
         """
-        if not self.__peer_manager.get_peer(ChannelProperty().peer_id):
+
+        blockchain = self.__block_manager.blockchain
+        prep_targets = blockchain.find_preps_targets_by_roothash(self.__block_manager.epoch.reps_hash)
+        if ChannelProperty().peer_id not in prep_targets:
             utils.logger.warning(f"This peer needs to switch to citizen.")
             return
 
-        leader_peer = self.peer_manager.get_peer(new_leader_id)
+        leader_peer_target = prep_targets.get(new_leader_id, None)
 
         if block_height > 0 and block_height != self.block_manager.blockchain.last_block.header.height + 1:
             utils.logger.warning(f"height behind peer can not take leader role. block_height({block_height}), "
@@ -505,17 +510,17 @@ class ChannelService:
                                  f"{self.block_manager.blockchain.last_block.header.height})")
             return
 
-        if leader_peer is None:
+        if leader_peer_target is None:
             logging.warning(f"in peer_service:reset_leader There is no peer by peer_id({new_leader_id})")
             return
 
-        utils.logger.spam(f"reset_leader target({leader_peer.target}), complained={complained}")
+        utils.logger.spam(f"reset_leader target({leader_peer_target}), complained={complained}")
 
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
-            self.__block_manager.epoch.new_round(leader_peer.peer_id)
+            self.__block_manager.epoch.new_round(new_leader_id)
 
-        if ChannelProperty().peer_id == leader_peer.peer_id:
+        if ChannelProperty().peer_id == new_leader_id:
             utils.logger.debug("Set Peer Type Leader!")
             peer_type = loopchain_pb2.BLOCK_GENERATOR
             self.state_machine.turn_to_leader()

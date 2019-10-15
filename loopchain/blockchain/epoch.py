@@ -50,6 +50,8 @@ class Epoch:
         self.round = 0
         self.complain_votes: Dict[int, LeaderVotes] = {}
         self.complained_result = None
+
+        self.reps_hash = None  # init by self.new_votes()
         self.reps = []  # init by self.new_votes()
 
         self.new_votes()
@@ -73,9 +75,9 @@ class Epoch:
         self.new_votes()
 
     def new_votes(self):
-        reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
-                    ObjectManager().channel_service.peer_manager.prepared_reps_hash
-        self.reps = self.__blockchain.find_preps_addresses_by_roothash(reps_hash)
+        self.reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
+                         ObjectManager().channel_service.peer_manager.prepared_reps_hash
+        self.reps = self.__blockchain.find_preps_addresses_by_roothash(self.reps_hash)
         leader_votes = LeaderVotes(self.reps,
                                    conf.LEADER_COMPLAIN_RATIO,
                                    self.height,

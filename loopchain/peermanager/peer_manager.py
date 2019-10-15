@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,20 +13,15 @@
 # limitations under the License.
 """A module for managing peer list"""
 
-import json
-import logging
-import math
 import threading
 from typing import Optional, Union
 
 import loopchain.utils as util
-from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, StubManager
+from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.peermanager import Peer, PeerLoader, PeerListData
-from loopchain.protos import loopchain_pb2
 
 
 class PeerManager:
@@ -81,19 +76,6 @@ class PeerManager:
             util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
             blockchain.write_preps(reps_hash, preps)
 
-    def get_quorum(self):
-        peer_count = self.get_peer_count()
-        quorum = math.floor(peer_count * conf.VOTING_RATIO) + 1
-        complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
-
-        return quorum, complain_quorum
-
-    def get_reps(self):
-        return [{"id": peer.peer_id, "target": peer.target} for peer in self.peer_list.values()]
-
-    def get_peer_by_target(self, peer_target):
-        return next((peer for peer in self.peer_list.values() if peer.target == peer_target), None)
-
     def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager
 
@@ -119,45 +101,9 @@ class PeerManager:
 
         return peer.order
 
-    def remove_peer(self, peer_id):
-        logging.debug(f"remove peer : {peer_id}")
-        removed_peer = self._peer_list_data.peer_list.pop(peer_id, None)
-        if removed_peer:
-            util.logger.spam(f"peer_manager:remove_peer try remove audience in sub processes")
-            self._prepared_reps_hash = self.reps_hash()
-            return True
-
-        return False
-
-    def get_peer_stub_manager(self, peer) -> Optional[StubManager]:
-        logging.debug(f"get_peer_stub_manager peer_id : {peer.peer_id}")
-
-        try:
-            return self.peer_list[peer.peer_id].stub_manager
-        except Exception as e:
-            logging.debug("try get peer stub except: " + str(e))
-            return None
-
-    def __find_highest_peer(self) -> Peer:
-        # 강제로 list 를 적용하여 값을 복사한 다음 사용한다. (중간에 값이 변경될 때 발생하는 오류를 방지하기 위해서)
-        most_height = 0
-        most_height_peer = None
-        for peer_id in list(self.peer_list):
-            peer_each = self.peer_list[peer_id]
-            stub_manager = peer_each.stub_manager
-            try:
-                response = stub_manager.call("GetStatus",
-                                             loopchain_pb2.StatusRequest(request="find highest peer"),
-                                             is_stub_reuse=True)
-
-                peer_status = json.loads(response.status)
-                if int(peer_status["block_height"]) >= most_height:
-                    most_height = int(peer_status["block_height"])
-                    most_height_peer = peer_each
-            except Exception as e:
-                logging.warning("gRPC Exception: " + str(e))
-
-        return most_height_peer
+    def clear_peers(self):
+        self._peer_list_data.peer_list.clear()
+        self._prepared_reps_hash = None
 
     def reset_all_peers(self, reps_hash, reps, update_now=True):
         util.logger.debug(
@@ -176,8 +122,7 @@ class PeerManager:
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
-        for peer_id in list(self.peer_list):
-            self.remove_peer(peer_id)
+        self.clear_peers()
 
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
@@ -189,52 +134,3 @@ class PeerManager:
         if self._reps_reset_data:
             self.reset_all_peers(*self._reps_reset_data, update_now=True)
             self._reps_reset_data = None
-
-    def get_peer(self, peer_id: Union[str, ExternalAddress]) -> Optional[Peer]:
-        """peer_id 에 해당하는 peer 를 찾는다.
-
-        :param peer_id:
-        :return:
-        """
-
-        try:
-            if isinstance(peer_id, ExternalAddress):
-                peer_id = peer_id.hex_hx()
-
-            return self.peer_list[str(peer_id)]
-
-        except KeyError:
-            if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-                logging.warning("there is no peer by id: " + str(peer_id))
-                logging.debug(self.get_peers_for_debug())
-                return None
-            else:
-                logging.debug(f"This node({peer_id}) will run as {conf.NodeType.CitizenNode.name}")
-                return None
-        except IndexError:
-            logging.warning(f"there is no peer by id({str(peer_id)})")
-            logging.debug(self.get_peers_for_debug())
-            return None
-
-    def get_peer_count(self):
-        count = 0
-        try:
-            count = len(self.peer_list)
-        except KeyError:
-            logging.debug("no peer list")
-
-        return count
-
-    def get_peers_for_debug(self):
-        peers = ""
-        peer_list = []
-        try:
-            for peer_id in self.peer_list:
-                peer_each = self.peer_list[peer_id]
-                peer_list.append(peer_each)
-                peers += "\n" + str(peer_each.order) + ":" + peer_each.target \
-                         + " " + str(peer_id) + " (" + str(type(peer_id)) + ")"
-        except KeyError:
-            logging.debug("no peer list")
-
-        return peers, peer_list

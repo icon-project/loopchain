@@ -173,7 +173,6 @@ class BlockManager:
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
             f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
-            f"{ObjectManager().channel_service.peer_manager.get_peer_count()} "
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
