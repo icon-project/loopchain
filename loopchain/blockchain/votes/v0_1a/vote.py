@@ -11,8 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from typing import Union
 from dataclasses import dataclass
+from typing import Union
+
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.blockchain.votes import Vote as BaseVote
 from loopchain.crypto.signature import Signer
@@ -42,8 +43,7 @@ class BlockVote(BaseVote[bool]):
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
-        round_ = data.get("round_")
-        data_deserialized["round_"] = round_ if round_ else 0
+        data_deserialized["round_"] = data.get("round_", 0)
         data_deserialized["block_hash"] = Hash32.fromhex(data["blockHash"])
         return data_deserialized
 
@@ -88,8 +88,7 @@ class LeaderVote(BaseVote[ExternalAddress]):
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
-        round_ = data.get("round_")
-        data_deserialized["round_"] = round_ if round_ else 0
+        data_deserialized["round_"] = data.get("round_", 0)
         data_deserialized["old_leader"] = ExternalAddress.fromhex_address(data["oldLeader"])
         data_deserialized["new_leader"] = ExternalAddress.fromhex_address(data["newLeader"])
         return data_deserialized
