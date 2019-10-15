@@ -13,13 +13,10 @@
 # limitations under the License.
 """A module for managing peer list"""
 
-import logging
-import math
 import threading
 from typing import Optional, Union
 
 import loopchain.utils as util
-from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
@@ -78,13 +75,6 @@ class PeerManager:
             preps = self.serialize_as_preps()
             util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
             blockchain.write_preps(reps_hash, preps)
-
-    def get_quorum(self):
-        peer_count = self.get_peer_count()
-        quorum = math.floor(peer_count * conf.VOTING_RATIO) + 1
-        complain_quorum = math.floor(peer_count * (1-conf.VOTING_RATIO)) + 1
-
-        return quorum, complain_quorum
 
     def get_reps(self):
         return [{"id": peer.peer_id, "target": peer.target} for peer in self.peer_list.values()]
@@ -147,12 +137,3 @@ class PeerManager:
         if self._reps_reset_data:
             self.reset_all_peers(*self._reps_reset_data, update_now=True)
             self._reps_reset_data = None
-
-    def get_peer_count(self):
-        count = 0
-        try:
-            count = len(self.peer_list)
-        except KeyError:
-            logging.debug("no peer list")
-
-        return count
