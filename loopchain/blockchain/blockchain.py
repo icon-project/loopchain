@@ -588,9 +588,11 @@ class BlockChain:
         if confirm_info:
             if isinstance(confirm_info, list):
                 confirm_info = json.dumps(BlockVotes.serialize_votes(confirm_info))
+            if isinstance(confirm_info, str):
+                confirm_info = confirm_info.encode('utf-8')
             batch.put(
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
-                confirm_info.encode("utf-8")
+                confirm_info
             )
 
         if block.header.prev_hash:
