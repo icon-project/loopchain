@@ -252,7 +252,7 @@ class ChannelService:
         return conf.NodeType.CitizenNode
 
     async def __clean_network(self):
-        self.__timer_service.clean()
+        self.__timer_service.clean(except_key=TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK)
         self.__peer_manager.clear_peers()
         self.__rs_client = None
 
