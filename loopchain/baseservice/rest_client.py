@@ -37,6 +37,13 @@ class RestMethod(Enum):
     Status = _RestMethod(conf.ApiVersion.v1, "/status/peer", None)
     GetLastBlock = _RestMethod(conf.ApiVersion.v3, "icx_getLastBlock", None)
     GetReps = _RestMethod(conf.ApiVersion.v3, "rep_getListByHash", namedtuple("Params", "repsHash"))
+    SendTransaction2 = _RestMethod(conf.ApiVersion.v2, "icx_sendTransaction",
+                                   namedtuple("Params", "from_ to value fee timestamp nonce tx_hash signature"))
+    SendTransaction3 = _RestMethod(conf.ApiVersion.v3, "icx_sendTransaction",
+                                   namedtuple("Params",
+                                              ("from_", "to", "version", "stepLimit", "timestamp", "nid", "signature",
+                                               "dataType", "data", "value", "nonce"),
+                                              defaults=(None, None, None, None)))
 
 
 class RestClient:
@@ -177,5 +184,11 @@ class RestClient:
     def _create_jsonrpc_params(self, method: RestMethod, params: Optional[NamedTuple]):
         # 'vars(namedtuple)' does not working in Python 3.7.4
         # noinspection PyProtectedMember
-        return Request(method.value.name, params._asdict()) if params else Request(method.value.name)
+        params = params._asdict() if params else None
+        if params:
+            params = { k: v for k, v in params.items() if v is not None}
+            if "from_" in params:
+                params["from"] = params.pop("from_")
+
+        return Request(method.value.name, params) if params else Request(method.value.name)
 
