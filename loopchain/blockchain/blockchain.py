@@ -20,7 +20,8 @@ import zlib
 from collections import Counter
 from enum import Enum
 from os import linesep
-from typing import Union, List, cast, Optional
+from types import MappingProxyType
+from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -371,21 +372,21 @@ class BlockChain:
         return bytes()
 
     @lru_cache(maxsize=4, valued_returns_only=True)
-    def find_preps_ids_by_roothash(self, roothash: Hash32) -> List[str]:
+    def find_preps_ids_by_roothash(self, roothash: Hash32) -> Tuple[str, ...]:
         preps = self.find_preps_by_roothash(roothash)
-        return [prep["id"] for prep in preps]
+        return tuple([prep["id"] for prep in preps])
 
     @lru_cache(maxsize=4, valued_returns_only=True)
-    def find_preps_addresses_by_roothash(self, roothash: Hash32) -> List[ExternalAddress]:
+    def find_preps_addresses_by_roothash(self, roothash: Hash32) -> Tuple[ExternalAddress, ...]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
-        return [ExternalAddress.fromhex(prep_id) for prep_id in preps_ids]
+        return tuple([ExternalAddress.fromhex(prep_id) for prep_id in preps_ids])
 
     @lru_cache(maxsize=4, valued_returns_only=True)
-    def find_preps_targets_by_roothash(self, roothash: Hash32) -> dict:
+    def find_preps_targets_by_roothash(self, roothash: Hash32) -> Mapping[str, str]:
         preps = self.find_preps_by_roothash(roothash)
-        return {prep["id"]: prep["p2pEndpoint"] for prep in preps}
+        return MappingProxyType({prep["id"]: prep["p2pEndpoint"] for prep in preps})
 
-    def find_preps_ids_by_header(self, header: BlockHeader) -> List[str]:
+    def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
         try:
             roothash = header.reps_hash
             if not roothash:
@@ -394,9 +395,9 @@ class BlockChain:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
             roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
 
-        return self.find_preps_ids_by_roothash(roothash).copy()
+        return self.find_preps_ids_by_roothash(roothash)
 
-    def find_preps_addresses_by_header(self, header: BlockHeader) -> List[ExternalAddress]:
+    def find_preps_addresses_by_header(self, header: BlockHeader) -> Sequence[ExternalAddress]:
         try:
             roothash = header.reps_hash
             if not roothash:
@@ -405,7 +406,7 @@ class BlockChain:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
             roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
 
-        return self.find_preps_addresses_by_roothash(roothash).copy()
+        return self.find_preps_addresses_by_roothash(roothash)
 
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
@@ -1128,7 +1129,7 @@ class BlockChain:
             prev_vote_results = {vote.rep: vote.result() for vote in _block.body.prev_votes
                                  if vote and vote.rep != prev_block.header.peer_id}
         else:
-            prev_block_validators = self.find_preps_ids_by_header(prev_block.header)
+            prev_block_validators = list(self.find_preps_ids_by_header(prev_block.header))
             try:
                 prev_block_validators.pop(prev_block_validators.index(prev_block.header.peer_id.hex_hx()))
             except ValueError:
