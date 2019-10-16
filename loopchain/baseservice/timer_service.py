@@ -18,7 +18,7 @@ import threading
 import time
 import traceback
 from enum import Enum
-from typing import Dict, Callable, Awaitable, Union
+from typing import Dict, Callable, Awaitable, Union, Optional
 
 from loopchain import utils as util
 from loopchain.baseservice import CommonThread
@@ -241,8 +241,11 @@ class TimerService(CommonThread):
 
         self.__loop.call_soon_threadsafe(self.__loop.stop)
 
-    def clean(self):
+    def clean(self, except_key: Optional[str] = None):
+        temp_timer = self.__timer_list.get(except_key)
         self.__timer_list = {}
+        if temp_timer is not None:
+            self.__timer_list[except_key] = temp_timer
 
     def run(self, e: threading.Event):
         e.set()
