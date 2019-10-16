@@ -24,7 +24,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
  Loopchain development and execution requires following environments.
 
-1. Python 3.6.5+ **(recommended 3.7.x)**
+1. **Python 3.7.x** (below 3.6 is not recommended)
 
     We recommend to create an isolated Python 3 virtual environment with [virtualenv].
 

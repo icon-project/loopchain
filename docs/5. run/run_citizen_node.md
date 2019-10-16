@@ -57,11 +57,6 @@ T-Bears interactive mode using IPython. For default, you can attach to local ip 
 
 ```bash
 $ tbears console
-
-Python 3.6.5
-Type 'copyright', 'credits' or 'license' for more information
-IPython 6.4.0 -- An enhanced Interactive Python. Type '?' for help.
-
 IPython profile: tbears
 
 tbears)
@@ -280,11 +275,6 @@ T-Bears interactive mode using IPython.
 
 ```bash
 $ tbears console
-
-Python 3.6.5
-Type 'copyright', 'credits' or 'license' for more information
-IPython 6.4.0 -- An enhanced Interactive Python. Type '?' for help.
-
 IPython profile: tbears
 
 tbears)
