@@ -99,7 +99,7 @@ class PeerLoader:
 
     @staticmethod
     def _get_reps_by_channel_infos_call(peer_manager, rs_client):
-        response = rs_client.call("GetChannelInfos")
+        response = rs_client.call(RestMethod.GetChannelInfos)
         logging.debug(f"response of GetChannelInfos: {response}")
         reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
         if reps is None:
