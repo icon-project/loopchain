@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethods
+from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
@@ -405,10 +405,10 @@ class BlockManager:
     def __block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = rs_client.call(
-            RestMethods.GetBlockByHeight,
-            RestMethods.GetBlockByHeight.params(height=str(block_height))
+            RestMethod.GetBlockByHeight,
+            RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
-        last_block = rs_client.call(RestMethods.GetLastBlock)
+        last_block = rs_client.call(RestMethod.GetLastBlock)
         max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
@@ -694,7 +694,7 @@ class BlockManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rs_client = ObjectManager().channel_service.rs_client
             peer_stubs.append(rs_client)
-            last_block = rs_client.call(RestMethods.GetLastBlock)
+            last_block = rs_client.call(RestMethod.GetLastBlock)
             try:
                 max_height = self.blockchain.block_versioner.get_height(last_block)
             except Exception as e:

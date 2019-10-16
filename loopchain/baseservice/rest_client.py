@@ -17,6 +17,7 @@ import asyncio
 import logging
 import time
 from collections import namedtuple
+from enum import Enum
 from typing import List, Optional, NamedTuple, Sequence
 from urllib.parse import urlparse
 
@@ -27,15 +28,15 @@ from jsonrpcclient.aiohttp_client import aiohttpClient
 from loopchain import utils, configure as conf
 
 
-RestMethod = namedtuple("RestMethod", "version name params")
+_RestMethod = namedtuple("_RestMethod", "version name params")
 
 
-class RestMethods:
-    GetChannelInfos = RestMethod(conf.ApiVersion.node, "node_getChannelInfos", None)
-    GetBlockByHeight = RestMethod(conf.ApiVersion.node, "node_getBlockByHeight", namedtuple("Params", "height"))
-    Status = RestMethod(conf.ApiVersion.v1, "/status/peer", None)
-    GetLastBlock = RestMethod(conf.ApiVersion.v3, "icx_getLastBlock", None)
-    GetReps = RestMethod(conf.ApiVersion.v3, "rep_getListByHash", namedtuple("Params", "repsHash"))
+class RestMethod(Enum):
+    GetChannelInfos = _RestMethod(conf.ApiVersion.node, "node_getChannelInfos", None)
+    GetBlockByHeight = _RestMethod(conf.ApiVersion.node, "node_getBlockByHeight", namedtuple("Params", "height"))
+    Status = _RestMethod(conf.ApiVersion.v1, "/status/peer", None)
+    GetLastBlock = _RestMethod(conf.ApiVersion.v3, "icx_getLastBlock", None)
+    GetReps = _RestMethod(conf.ApiVersion.v3, "rep_getListByHash", namedtuple("Params", "repsHash"))
 
 
 class RestClient:
@@ -54,7 +55,7 @@ class RestClient:
 
     async def _fetch_status(self, endpoint: str):
         start_time = time.time()
-        response = await self._call_async_rest(endpoint, RestMethods.Status, conf.REST_TIMEOUT)
+        response = await self._call_async_rest(endpoint, RestMethod.Status, conf.REST_TIMEOUT)
 
         return {
             'target': endpoint,
@@ -90,73 +91,91 @@ class RestClient:
         timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
 
         try:
-            if method.version == conf.ApiVersion.v1:
+            if method.value.version == conf.ApiVersion.v1:
                 response = self._call_rest(self.target, method, timeout)
             else:
                 response = self._call_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method.name}), caused by : {type(e)}, {e}")
-            raise e
+            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            raise
         else:
-            utils.logger.spam(f"REST call complete method_name({method.name})")
+            utils.logger.spam(f"REST call complete method_name({method.value.name})")
             return response
 
     async def call_async(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
         timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT
 
         try:
-            if method.version == conf.ApiVersion.v1:
+            if method.value.version == conf.ApiVersion.v1:
                 response = await self._call_async_rest(self.target, method, timeout)
             else:
                 response = await self._call_async_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call async fail method_name({method.name}), caused by : {type(e)}, {e}")
-            raise e
+            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            raise
         else:
-            utils.logger.spam(f"REST call async complete method_name({method.name})")
+            utils.logger.spam(f"REST call async complete method_name({method.value.name})")
             return response
 
     def _call_rest(self, target: str, method: RestMethod, timeout):
-        url = utils.normalize_request_url(target, method.version, self._channel_name)
-        url += method.name
+        url = self._create_rest_url(target, method)
+        params = self._create_rest_params()
         response = requests.get(url=url,
-                                params={'channel': self._channel_name},
+                                params=params,
                                 timeout=timeout)
         if response.status_code != 200:
             raise ConnectionError
         return response.json()
 
     def _call_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout):
-        url = utils.normalize_request_url(target, method.version, self._channel_name)
+        url = self._create_jsonrpc_url(target, method)
         http_client = HTTPClient(url)
-
-        # 'vars(namedtuple)' does not working in Python 3.7.4
-        # noinspection PyProtectedMember
-        request = Request(method.name, params._asdict()) if params else Request(method.name)
-        try:
-            return http_client.send(request, timeout=timeout)
-        except Exception as e:
-            raise ConnectionError(e)
+        request = self._create_jsonrpc_params(method, params)
+        return http_client.send(request, timeout=timeout)
 
     async def _call_async_rest(self, target: str, method: RestMethod, timeout):
-        url = utils.normalize_request_url(target, method.version, self._channel_name)
-        url += method.name
-
+        url = self._create_rest_url(target, method)
+        params = self._create_rest_params()
         async with ClientSession() as session:
             async with session.get(url=url,
-                                   params={'channel': self._channel_name},
+                                   params=params,
                                    timeout=timeout) as response:
                 return await response.json()
 
     async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout):
-        url = utils.normalize_request_url(target, method.version, self._channel_name)
+        url = self._create_jsonrpc_url(target, method)
         async with ClientSession() as session:
             http_client = aiohttpClient(session, url)
+            request = self._create_jsonrpc_params(method, params)
+            return await http_client.send(request)
 
-            # 'vars(namedtuple)' does not working in Python 3.7.4
-            # noinspection PyProtectedMember
-            request = Request(method.name, params._asdict()) if params else Request(method.name)
-            try:
-                return await http_client.send(request, timeout=timeout)
-            except Exception as e:
-                raise ConnectionError(e)
+    def create_url(self, target: str, method: RestMethod):
+        if method.value.version == conf.ApiVersion.v1:
+            return self._create_rest_url(target, method)
+        else:
+            return self._create_jsonrpc_url(target, method)
+
+    def _create_rest_url(self, target: str, method: RestMethod):
+        url = utils.normalize_request_url(target, method.value.version, self._channel_name)
+        url += method.value.name
+        return url
+
+    def _create_jsonrpc_url(self, target: str, method: RestMethod):
+        return utils.normalize_request_url(target, method.value.version, self._channel_name)
+
+    def create_params(self, method: RestMethod, params: Optional[NamedTuple]):
+        if method.value.version == conf.ApiVersion.v1:
+            return self._create_rest_params()
+        else:
+            return self._create_jsonrpc_params(method, params)
+
+    def _create_rest_params(self):
+        return {
+            "channel": self._channel_name
+        }
+
+    def _create_jsonrpc_params(self, method: RestMethod, params: Optional[NamedTuple]):
+        # 'vars(namedtuple)' does not working in Python 3.7.4
+        # noinspection PyProtectedMember
+        return Request(method.value.name, params._asdict()) if params else Request(method.value.name)
+
