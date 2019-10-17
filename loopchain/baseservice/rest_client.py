@@ -150,6 +150,7 @@ class RestClient:
                 return await response.json()
 
     async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout):
+        # 'aioHttpClient' does not support 'timeout'
         url = self._create_jsonrpc_url(target, method)
         async with ClientSession() as session:
             http_client = aiohttpClient(session, url)
