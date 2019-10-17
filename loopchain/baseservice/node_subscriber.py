@@ -105,11 +105,9 @@ class NodeSubscriber:
         except Exception as e:
             logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
             await self.close()
+            raise
         else:
             logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
-        finally:
-            # set subscribe_event to transit the state to Watch.
-            self._subscribe_event.set()
 
     async def _subscribe_request(self, block_height):
         request = Request(
@@ -119,31 +117,27 @@ class NodeSubscriber:
         )
         await self._websocket.send(json.dumps(request))
 
-    async def _recv_until_timeout(self) -> dict:
+    async def _recv_until_timeout(self):
         response: bytes = await asyncio.wait_for(
             fut=self._websocket.recv(),
-            timeout=2 * conf.CONNECTION_RETRY_TIMEOUT_TO_RS
+            timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT
         )
         response_dict = convert_reponse_to_dict(response)
 
-        return response_dict
+        await ws_methods.dispatch(response_dict)
 
     async def _run(self):
         try:
-            await self._subscribe_loop()
+            while True:
+                await self._recv_until_timeout()
         except AnnounceNewBlockError as e:
             logging.error(f"{type(e)} during subscribe, caused by: {e}")
-            raise e  # TODO: Check that exceptions to be raised or not.
+            raise
         except Exception as e:
             logging.info(f"{type(e)} during subscribe, caused by: {e}")
-            raise ConnectionError  # TODO: Check that exceptions to be raised or not.
+            raise ConnectionError
         finally:
             await self.close()
-
-    async def _subscribe_loop(self):
-        while True:
-            response_dict: dict = await self._recv_until_timeout()
-            await ws_methods.dispatch(response_dict)
 
     async def node_ws_PublishNewBlock(self, **kwargs):
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
@@ -182,6 +176,10 @@ class NodeSubscriber:
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
             raise exception
+
+        if not self._subscribe_event.is_set():
+            # set subscribe_event to transit the state to Watch.
+            self._subscribe_event.set()
 
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
