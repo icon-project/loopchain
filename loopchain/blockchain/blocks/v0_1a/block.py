@@ -47,6 +47,8 @@ class BlockHeader(BaseBlockHeader):
 
     @property
     def prep_changed_reason(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
         return None
 
     @property

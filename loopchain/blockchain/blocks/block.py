@@ -14,6 +14,7 @@
 
 from collections import OrderedDict
 from dataclasses import dataclass, _FIELD, _FIELDS
+from enum import IntEnum
 from types import MappingProxyType
 from typing import Mapping
 
@@ -68,3 +69,24 @@ def _dict__str__(self: dict):
 BlockHeader.__str__ = _dataclass__str__
 BlockBody.__str__ = _dataclass__str__
 Block.__str__ = _dataclass__str__
+
+
+class NextRepsChangeReason(IntEnum):
+    NoChange = -1
+    TermEnd = 0
+    Penalty = 1
+
+    @classmethod
+    def convert_to_change_reason(cls, state: str) -> 'NextRepsChangeReason':
+        """Convert next_prep['state'] to NextRepsChangeReason
+
+        :param state: "0x0" is TermEnd,
+                      "0x1" is Penalty
+        :return: NextRepsChangeReason NoChange, TermEnd, Penalty
+        """
+
+        for reason in NextRepsChangeReason:
+            if reason.value == int(state, 16):
+                return reason
+
+        return NextRepsChangeReason.NoChange

@@ -1,18 +1,11 @@
 from dataclasses import dataclass
-from enum import IntEnum
 from typing import List, Optional
 
 from loopchain.blockchain.blocks import (BlockHeader as BaseBlockHeader,
-                                         BlockBody as BaseBlockBody)
+                                         BlockBody as BaseBlockBody, NextRepsChangeReason)
 from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
 from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 from loopchain.crypto.hashing import build_hash_generator
-
-
-class NextRepsChangeReason(IntEnum):
-    NoChange = -1
-    TermEnd = 0
-    Penalty = 1
 
 
 @dataclass(frozen=True)
@@ -44,14 +37,15 @@ class BlockHeader(BaseBlockHeader):
 
     @property
     def prep_changed_reason(self) -> Optional[NextRepsChangeReason]:
+        """Return prep changed reason
 
-        if not self.prep_changed:
+        :return: NextRepsChangeReason : NoChange, TermEnd, Penalty
+        """
+        if not self.prep_changed and not self.is_unrecorded:
             return NextRepsChangeReason.NoChange
 
-        if self.next_leader == ExternalAddress.empty():
-            return NextRepsChangeReason.TermEnd
-
-        return NextRepsChangeReason.Penalty
+        # block v0.3 work as TermEnd when Penalty
+        return NextRepsChangeReason.TermEnd
 
     @property
     def is_unrecorded(self) -> bool:

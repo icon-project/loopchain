@@ -29,6 +29,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
 if TYPE_CHECKING:
+    from loopchain.blockchain import BlockBuilder
     from loopchain.peer import BlockManager
 
 
@@ -82,7 +83,7 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug("Cannot vote before starting consensus.")
         # raise RuntimeError("Cannot vote before starting consensus.")
 
-    def __build_candidate_block(self, block_builder):
+    def __build_candidate_block(self, block_builder: 'BlockBuilder'):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
@@ -93,8 +94,12 @@ class ConsensusSiever(ConsensusBase):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = self._block_manager.epoch.reps
 
-        # to build temporary block
-        block_builder.next_reps = []
+        try:
+            if block_builder.next_reps is None:
+                # to build temporary block (version >= 0.4)
+                block_builder.next_reps = []
+        except AttributeError as e:
+            util.logger.info(f"block_version = {block_builder.version} : {e}")
 
         return block_builder.build()
 
@@ -228,8 +233,8 @@ class ConsensusSiever(ConsensusBase):
                     return
 
             if not candidate_block.header.prep_changed:
-                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) or \
-                        self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
+                if (self._blockchain.made_block_count_reached_max(self._blockchain.last_block) or
+                        self._block_manager.epoch.leader_id != ChannelProperty().peer_id):
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
 
             self.__block_generation_timer.call()

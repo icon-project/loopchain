@@ -3,7 +3,8 @@ import os
 import pytest
 
 from loopchain.blockchain.blocks.v0_1a.block import BlockHeader as BlockHeader_v0_1a
-from loopchain.blockchain.blocks.v0_3.block import BlockHeader as BlockHeader_v0_3, NextRepsChangeReason
+from loopchain.blockchain.blocks.v0_3.block import BlockHeader as BlockHeader_v0_3
+from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.types import Address, Signature, Hash32, ExternalAddress, BloomFilter
 
 
@@ -88,4 +89,4 @@ class TestBlockHeader_v0_3:
                                 next_reps_hash=Hash32(os.urandom(Hash32.size)))
 
         assert header.prep_changed
-        assert header.prep_changed_reason == NextRepsChangeReason.Penalty
+        assert header.prep_changed_reason == NextRepsChangeReason.TermEnd

@@ -267,7 +267,8 @@ class TestBlock(unittest.TestCase):
 
         block_verifier.invoke_func = lambda b, prev_b: (block, dummy_receipts)
         reps_getter = lambda _: block_builder.reps
-        block_verifier.verify(block, None, None, reps_getter=reps_getter, next_leader=next_leader)
+        generator = ExternalAddress.fromhex_address(test_signer.address)
+        block_verifier.verify(block, None, None, generator=generator, reps_getter=reps_getter)
 
         block_serializer = BlockSerializer.new("0.3", tx_versioner)
         block_serialized = block_serializer.serialize(block)

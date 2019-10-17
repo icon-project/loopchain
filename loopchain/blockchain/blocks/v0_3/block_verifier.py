@@ -29,18 +29,9 @@ if TYPE_CHECKING:
 class BlockVerifier(BaseBlockVerifier):
     version = BlockHeader.version
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
-        # To make sure that next_leader always exists in kwargs
-        next_leader = kwargs.pop('next_leader')
-        super().verify(block, prev_block, blockchain, next_leader=next_leader, **kwargs)
-
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
-        kwargs.pop('next_leader', None)
-        super().verify_loosely(block, prev_block, blockchain, **kwargs)
-
     # noinspection PyMethodOverriding
     def _verify_common(self, block: 'Block', prev_block: 'Block', *,
-                       reps_getter: Callable[[Sequence[ExternalAddress]], Hash32], next_leader: 'ExternalAddress'=None,
+                       reps_getter: Callable[[Sequence[ExternalAddress]], Hash32],
                        **kwargs):
         header: BlockHeader = block.header
         body: BlockBody = block.body
@@ -79,7 +70,7 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            invoke_result = self.verify_invoke(builder, block, prev_block, next_leader)
+            invoke_result = self.verify_invoke(builder, block, prev_block)
 
         builder.build_transactions_hash()
         if header.transactions_hash != builder.transactions_hash:
@@ -111,20 +102,16 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"builder({builder.build_block_header_data()}).")
             self._handle_exception(exception)
 
+        generator: 'ExternalAddress' = kwargs.get('generator')
+        if generator:
+            self.verify_generator(block, generator)
+
         return invoke_result
 
-    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block',
-                      next_leader: 'ExternalAddress'=None) -> dict:
+    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block') -> dict:
         new_block, invoke_result = self.invoke_func(block, prev_block)
         header: BlockHeader = block.header
         new_header: BlockHeader = new_block.header
-
-        if (header.next_leader != ExternalAddress.empty() and
-                next_leader and next_leader != header.next_leader):
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"NextLeader({header.next_leader}), "
-                                     f"Expected({next_leader}).")
-            self._handle_exception(exception)
 
         if header.state_hash != new_header.state_hash:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
@@ -133,7 +120,6 @@ class BlockVerifier(BaseBlockVerifier):
             self._handle_exception(exception)
 
         if header.next_reps_hash != new_header.next_reps_hash:
-            # FIXME : need review this condition!
             if (not new_header.prep_changed
                     and header.next_reps_hash == new_header.revealed_next_reps_hash):
                 pass
@@ -145,12 +131,6 @@ class BlockVerifier(BaseBlockVerifier):
                                          f"\norigin header({header}), "
                                          f"\nnew block header({new_header}).")
                 self._handle_exception(exception)
-
-        if header.next_leader != new_header.next_leader:
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
-                                     f"NextLeader({header.next_leader}), "
-                                     f"Expected({new_header.next_leader}).")
-            self._handle_exception(exception)
 
         builder.state_hash = new_header.state_hash
         builder.receipts = invoke_result
@@ -170,6 +150,13 @@ class BlockVerifier(BaseBlockVerifier):
             self._handle_exception(exception)
 
         return invoke_result
+
+    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
+        if not block.header.complained and block.header.peer_id != generator:
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
+                                     f"Generator({block.header.peer_id.hex_xx()}), "
+                                     f"Expected({generator.hex_xx()}).")
+            self._handle_exception(exception)
 
     def verify_leader_votes(self, block: 'Block', prev_block: 'Block', reps: Sequence[ExternalAddress]):
         body: BlockBody = block.body

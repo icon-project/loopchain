@@ -27,7 +27,7 @@ from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
-from loopchain.blockchain.blocks.v0_3 import NextRepsChangeReason
+from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
                                             TransactionOutOfTimeBound, NotInReps,
                                             NotReadyToConfirmInfo,UnrecordedBlock, UnexpectedLeader)
@@ -675,7 +675,7 @@ class BlockManager:
 
         block = self.blockchain.last_block
 
-        if block.header.prep_changed and block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
+        if block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
             reps_hash = (block.header.revealed_next_reps_hash
@@ -958,16 +958,11 @@ class BlockManager:
 
             util.logger.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
 
-            next_leader = self.get_next_leader()
-            if next_leader:
-                next_leader = ExternalAddress.fromhex(next_leader)
-
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
                                   self.blockchain,
-                                  generator=self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
-                                  reps_getter=reps_getter,
-                                  next_leader=next_leader)
+                                  generator=self.blockchain.get_expected_generator(unconfirmed_block),
+                                  reps_getter=reps_getter)
         except NotInReps as e:
             util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
         except Exception as e:

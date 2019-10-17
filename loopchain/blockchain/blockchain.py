@@ -23,14 +23,15 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+from pkg_resources import parse_version
+
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader
-from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner
-from loopchain.blockchain.blocks.v0_3 import BlockBody, NextRepsChangeReason
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_3
+from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
@@ -147,7 +148,6 @@ class BlockChain:
 
     def reset_leader_made_block_count(self, is_switched_role: bool = False):
         """Clear all made_block_counter
-        FIXME : is func_name match to behavior?
 
         :return:
         """
@@ -171,14 +171,15 @@ class BlockChain:
             utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
-    def get_expected_generator(self, peer_id: ExternalAddress) -> Optional[ExternalAddress]:
+    def get_expected_generator(self, new_block: Block) -> Optional[ExternalAddress]:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
+        peer_id = new_block.header.peer_id
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            utils.logger.spam(
+            utils.logger.debug(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
             reps: Sequence[ExternalAddress] = \
                 self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
@@ -380,14 +381,14 @@ class BlockChain:
 
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
         block = self.find_block_by_hash(block_hash)
-        if block and isinstance(block.body, BlockBody):
+        if block and isinstance(block.body, v0_3.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
     def find_prev_confirm_info_by_height(self, height: int) -> bytes:
         block = self.find_block_by_height(height)
-        if block and isinstance(block.body, BlockBody):
+        if block and isinstance(block.body, v0_3.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
@@ -1133,13 +1134,62 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
-    def _convert_reps_change_reason(self, state: str) -> NextRepsChangeReason:
-        if state == "0x0":
-            return NextRepsChangeReason.TermEnd
-        elif state == "0x1":
-            return NextRepsChangeReason.Penalty
+    def _process_next_prep_legacy(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
+        next_leader = _block.header.next_leader
 
-        return NextRepsChangeReason.NoChange
+        if next_prep:
+            # P-Rep list has been changed
+            utils.logger.debug(f"_process_next_prep_legacy() current_height({_block.header.height})"
+                               f" next_prep({next_prep})")
+
+            change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
+            if change_reason == NextRepsChangeReason.TermEnd:
+                next_leader = ExternalAddress.empty()
+
+            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
+        else:
+            # P-Rep list has no changes
+            next_leader = _block.header.next_leader
+            next_preps_hash = Hash32.empty()
+
+        block_builder.next_leader = next_leader
+        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+        block_builder.next_reps_hash = next_preps_hash
+
+    def _process_next_prep(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
+        reps = self.find_preps_addresses_by_header(_block.header)
+
+        if next_prep:
+            # P-Rep list has been changed
+            utils.logger.debug(f"_process_next_prep() current_height({_block.header.height}),"
+                               f" next_prep({next_prep})")
+
+            change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
+
+            next_leader = None  # to rebuild next_leader
+            block_builder.next_reps_change_reason = change_reason
+            block_builder.is_max_made_block_count = self.made_block_count_reached_max(_block)
+            utils.logger.debug(f"_process_next_prep() change_reason = {block_builder.next_reps_change_reason},"
+                               f" is_max_mbc = {block_builder.is_max_made_block_count}")
+
+            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
+            next_preps_hash = None  # to rebuild next_reps_hash
+
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
+        else:
+            # P-Rep list has no changes
+            next_leader = _block.header.next_leader
+            next_preps = reps
+            next_preps_hash = Hash32.empty()
+
+        block_builder.next_leader = next_leader
+        block_builder.reps = reps
+        block_builder.next_reps = next_preps
+        block_builder.next_reps_hash = next_preps_hash
 
     def score_invoke(self,
                      _block: Block,
@@ -1214,29 +1264,18 @@ class BlockChain:
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
 
-        reps = self.find_preps_addresses_by_header(_block.header)
         next_prep = response.get("prep")
-        if next_prep:
-            # P-Rep list has been changed
-            utils.logger.debug(f"score_invoke() current_height({_block.header.height}) next_prep({next_prep})")
 
-            next_leader = None  # to rebuild next_leader
-            block_builder.next_reps_change_reason = self._convert_reps_change_reason(next_prep["state"])
-            block_builder.is_max_made_block_count = self.made_block_count_reached_max(_block)
-            utils.logger.debug(f"score_invoke() change_reason = {block_builder.next_reps_change_reason}")
-            utils.logger.debug(f"score_invoke() is_max_mbc = {block_builder.is_max_made_block_count}")
-
-            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
-            next_preps_hash = None  # to rebuild next_reps_hash
-
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
-
+        if is_unrecorded_block:
+            block_builder.next_leader = ExternalAddress.empty()
+            block_builder.reps = []
+            block_builder.next_reps_hash = Hash32.empty()
         else:
-            # P-Rep list has no changes
-            next_leader = _block.header.next_leader
-            next_preps = reps
-            next_preps_hash = Hash32.empty()
+            if parse_version(block_builder.version) >= parse_version('0.4'):
+                self._process_next_prep(_block, block_builder, next_prep)
+            else:
+                # TODO : need check that legacy useless after upgrade to block v0.4
+                self._process_next_prep_legacy(_block, block_builder, next_prep)
 
         added_transactions = response.get("addedTransactions")
         if added_transactions:
@@ -1258,15 +1297,6 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        if is_unrecorded_block:
-            block_builder.next_leader = ExternalAddress.empty()
-            block_builder.reps = []
-            block_builder.next_reps_hash = Hash32.empty()
-        else:
-            block_builder.next_leader = next_leader
-            block_builder.reps = reps
-            block_builder.next_reps = next_preps
-            block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
