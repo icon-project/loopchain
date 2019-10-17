@@ -475,10 +475,10 @@ class ChannelInnerTask:
     def __add_tx_list(self, tx_list):
         for tx in tx_list:
             if tx.hash.hex() in self._block_manager.get_tx_queue():
-                util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
+                util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in transaction queue.")
                 continue
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
-                util.logger.warning(f"hash {tx.hash.hex()} already exists in blockchain. tx({tx})")
+                util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
 
             self._block_manager.add_tx_obj(tx)
