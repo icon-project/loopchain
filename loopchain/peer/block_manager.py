@@ -154,10 +154,10 @@ class BlockManager:
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
-
-        if last_block.header.height > block_.header.height and \
-                self.__channel_service.state_machine.state != "BlockGenerate":
-            util.logger.debug(f"Last block has reached a sufficient height. Broadcast will stop!")
+        if (self.__channel_service.state_machine.state != "BlockGenerate" and 
+                last_block.header.height > block_.header.height):
+            util.logger.debug(
+                f"Last block has reached a sufficient height. Broadcast will stop! ({block_.header.hash.hex()})")
             ConsensusSiever.stop_broadcast_send_unconfirmed_block_timer()
             return
 
