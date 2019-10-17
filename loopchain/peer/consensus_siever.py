@@ -344,7 +344,7 @@ class ConsensusSiever(ConsensusBase):
                 target=timer_key,
                 duration=conf.INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK,
                 is_repeat=True,
-                repeat_timeout=conf.BLOCK_VOTE_TIMEOUT,
+                repeat_timeout=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                 is_run_at_start=True,
                 callback=broadcast_func
             )
