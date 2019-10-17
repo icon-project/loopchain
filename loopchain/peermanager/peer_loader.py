@@ -90,7 +90,7 @@ class PeerLoader:
     def _get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash):
         reps = rs_client.call(
             RestMethod.GetReps,
-            RestMethod.GetReps.params.value(crep_root_hash)
+            RestMethod.GetReps.value.params(crep_root_hash)
         )
         logging.debug(f"reps by c-rep root hash: {reps}")
         for order, rep_info in enumerate(reps, 1):
