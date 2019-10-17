@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import TimerService, ObjectManager, Timer
+from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
@@ -32,7 +32,7 @@ from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvali
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
-from loopchain.blockchain.transactions import Transaction
+from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
@@ -223,6 +223,38 @@ class BlockManager:
         """
         return len(self.__txQueue)
 
+    async def relay_all_txs(self):
+        rs_client = ObjectManager().channel_service.rs_client
+        if not rs_client:
+            return
+
+        items = list(self.__txQueue.d.values())
+        self.__txQueue.d.clear()
+
+        for item in items:
+            tx = item.value
+            if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND, util.get_now_time_stamp()):
+                continue
+
+            ts = TransactionSerializer.new(tx.version, tx.type(), self.blockchain.tx_versioner)
+            if tx.version == v2.version:
+                rest_method = RestMethod.SendTransaction2
+            elif tx.version == v3.version:
+                rest_method = RestMethod.SendTransaction3
+            else:
+                continue
+
+            raw_data = ts.to_raw_data(tx)
+            raw_data["from_"] = raw_data.pop("from")
+            for i in range(conf.RELAY_RETRY_TIMES):
+                try:
+                    await rs_client.call_async(rest_method,
+                                               rest_method.value.params(**raw_data))
+                except Exception as e:
+                    util.logger.warning(f"Relay failed. Tx({tx}), {e}")
+                else:
+                    break
+
     def _reset_leader(self, unconfirmed_block: Block):
         if unconfirmed_block.header.prep_changed:
             next_leader = self.blockchain.find_preps_addresses_by_roothash(
@@ -405,11 +437,10 @@ class BlockManager:
     def __block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = rs_client.call(
-            "GetBlockByHeight", {
-                'height': str(block_height)
-            }
+            RestMethod.GetBlockByHeight,
+            RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
-        last_block = rs_client.call("GetLastBlock")
+        last_block = rs_client.call(RestMethod.GetLastBlock)
         max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
@@ -695,7 +726,7 @@ class BlockManager:
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rs_client = ObjectManager().channel_service.rs_client
             peer_stubs.append(rs_client)
-            last_block = rs_client.call("GetLastBlock")
+            last_block = rs_client.call(RestMethod.GetLastBlock)
             try:
                 max_height = self.blockchain.block_versioner.get_height(last_block)
             except Exception as e:

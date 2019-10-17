@@ -16,6 +16,7 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
 
 import logging
+import time
 import traceback
 from typing import Dict, Optional, TYPE_CHECKING
 
@@ -140,9 +141,10 @@ class Epoch:
             if tx is None:
                 break
 
-            if not utils.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK):
-                utils.logger.info(f"fail add tx to block by TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK"
-                                  f"({conf.TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK}) "
+            block_timestamp = block_builder.fixed_timestamp
+            if not utils.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND, block_timestamp):
+                utils.logger.info(f"fail add tx to block by TIMESTAMP_BOUNDARY_SECOND"
+                                  f"({conf.TIMESTAMP_BOUNDARY_SECOND}) "
                                   f"tx({tx.hash}), timestamp({tx.timestamp})")
                 continue
 
@@ -182,6 +184,7 @@ class Epoch:
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
         block_builder = BlockBuilder.new(block_version, self.__blockchain.tx_versioner)
+        block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
         if complain_votes and complain_votes.get_result():
             block_builder.leader_votes = complain_votes.votes

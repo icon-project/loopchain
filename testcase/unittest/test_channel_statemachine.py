@@ -46,6 +46,9 @@ class MockBlockManager:
     def start_epoch(self):
         pass
 
+    async def relay_all_txs(self):
+        pass
+
 
 class MockPeerManager:
     def update_all_peers(self):

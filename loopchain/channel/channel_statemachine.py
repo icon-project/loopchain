@@ -186,6 +186,7 @@ class ChannelStateMachine(object):
     def _watch_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = False
         loggers.get_preset().update_logger()
+        self._run_coroutine_threadsafe(self.__channel_service.block_manager.relay_all_txs())
         self.__channel_service.start_block_monitoring_timer()
 
     def _watch_on_exit(self, *args, **kwargs):

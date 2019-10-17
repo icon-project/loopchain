@@ -20,7 +20,7 @@ from typing import cast
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import ObjectManager
+from loopchain.baseservice import ObjectManager, RestMethod
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peermanager import Peer
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
@@ -89,8 +89,8 @@ class PeerLoader:
     @staticmethod
     def _get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash):
         reps = rs_client.call(
-            "GetReps",
-            {"repsHash": crep_root_hash}
+            RestMethod.GetReps,
+            RestMethod.GetReps.value.params(crep_root_hash)
         )
         logging.debug(f"reps by c-rep root hash: {reps}")
         for order, rep_info in enumerate(reps, 1):
@@ -99,7 +99,7 @@ class PeerLoader:
 
     @staticmethod
     def _get_reps_by_channel_infos_call(peer_manager, rs_client):
-        response = rs_client.call("GetChannelInfos")
+        response = rs_client.call(RestMethod.GetChannelInfos)
         logging.debug(f"response of GetChannelInfos: {response}")
         reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
         if reps is None:

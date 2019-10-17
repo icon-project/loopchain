@@ -525,11 +525,12 @@ def get_now_time_stamp(init_time_seconds=None):
     return int(time_seconds * 1_000_000)
 
 
-def is_in_time_boundary(timestamp, range_second):
-    now_timestamp = get_now_time_stamp()
+def is_in_time_boundary(timestamp, range_second, pivot_timestamp=None):
+    if pivot_timestamp is None:
+        pivot_timestamp = get_now_time_stamp()
     timestamp_range = get_now_time_stamp(range_second)
-    left_timestamp_bound = now_timestamp - timestamp_range
-    right_timestamp_bound = now_timestamp + timestamp_range
+    left_timestamp_bound = pivot_timestamp - timestamp_range
+    right_timestamp_bound = pivot_timestamp + timestamp_range
     return left_timestamp_bound <= timestamp <= right_timestamp_bound
 
 
