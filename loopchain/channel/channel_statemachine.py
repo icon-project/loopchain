@@ -187,10 +187,10 @@ class ChannelStateMachine(object):
         loggers.get_preset().is_leader = False
         loggers.get_preset().update_logger()
         self._run_coroutine_threadsafe(self.__channel_service.block_manager.relay_all_txs())
-        self.__channel_service.start_block_monitoring_timer()
+        # self.__channel_service.start_block_monitoring_timer()
 
     def _watch_on_exit(self, *args, **kwargs):
-        self.__channel_service.stop_block_monitoring_timer()
+        # self.__channel_service.stop_block_monitoring_timer()
         self._run_coroutine_threadsafe(self.__channel_service.node_subscriber.close())
 
     def _do_reset_network_on_enter(self):
