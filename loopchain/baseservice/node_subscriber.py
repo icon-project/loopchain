@@ -76,6 +76,7 @@ class NodeSubscriber:
         self._exception = None
         self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None
+        self._block_time_handler: asyncio.TimerHandle = None
 
         ws_methods.add(self.node_ws_PublishHeartbeat)
         ws_methods.add(self.node_ws_PublishNewBlock)
@@ -157,6 +158,7 @@ class NodeSubscriber:
             await self.close()
 
     async def node_ws_PublishNewBlock(self, **kwargs):
+        self.monitoring_block()
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
@@ -210,3 +212,12 @@ class NodeSubscriber:
                 callback_kwargs={'exception': ConnectionError("No Heartbeat.")}
             )
             timer_service.add_timer(timer_key, timer)
+
+    def monitoring_block(self):
+        def _callback_for_no_block_published():
+            raise RuntimeError(f"No block published within {conf.TIMEOUT_FOR_BLOCK_MONITOR}. Close Connection.")
+
+        loop = asyncio.get_event_loop()
+        self._block_time_handler.cancel()
+        self._block_time_handler = loop.call_later(conf.TIMEOUT_FOR_BLOCK_MONITOR, _callback_for_no_block_published)
+
