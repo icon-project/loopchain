@@ -66,7 +66,8 @@ setup_options = {
     'setup_requires': setup_requires,
     'install_requires': install_requires,
     'extras_require': {
-        'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1', "pytest-benchmark"],
+        'tests': ['iconsdk==1.1.0', 'pytest>=4.6.3', 'pytest-xprocess>=0.12.1', "pytest-benchmark", "pytest-mock",
+                  "pytest-asyncio"],
     },
     'entry_points': {
         'console_scripts': [

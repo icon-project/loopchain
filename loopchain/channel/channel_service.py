@@ -419,7 +419,7 @@ class ChannelService:
         utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
 
         # try websocket connection, and handle exception in callback
-        asyncio.ensure_future(self.__node_subscriber.subscribe(
+        asyncio.ensure_future(self.__node_subscriber.start(
             block_height=self.__block_manager.blockchain.block_height,
             event=subscribe_event,
         ), loop=MessageQueueService.loop).add_done_callback(_handle_exception)
