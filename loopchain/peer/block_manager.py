@@ -290,7 +290,7 @@ class BlockManager:
             if expected_leader != block_header.peer_id.hex_hx():
                 raise UnexpectedLeader(
                     f"The unconfirmed block is made by an unexpected leader. "
-                    f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
+                    f"Expected({expected_leader}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
 
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
@@ -934,6 +934,7 @@ class BlockManager:
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
+        util.logger.spam(f"prev_block: {prev_block.header.hash if prev_block else None}")
         if not prev_block:
             raise NotReadyToConfirmInfo(
                 "There is no prev block or not ready to confirm block (Maybe node is starting)")

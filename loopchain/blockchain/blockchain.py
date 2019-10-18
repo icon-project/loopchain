@@ -145,14 +145,14 @@ class BlockChain:
         utils.logger.debug(f"_keep_order_in_penalty() : keep_order = {keep_order}")
         return keep_order
 
-    def reset_leader_made_block_count(self):
+    def reset_leader_made_block_count(self, is_switched_role: bool = False):
         """Clear all made_block_counter
         FIXME : is func_name match to behavior?
 
         :return:
         """
         utils.logger.debug(f"reset_leader_made_block_count() : made_block_count = {self.__made_block_counter}")
-        if not self._keep_order_in_penalty():
+        if not self._keep_order_in_penalty() or is_switched_role:
             self.__made_block_counter.clear()
 
     def get_first_leader_of_next_reps(self, block: Block) -> str:
@@ -327,6 +327,8 @@ class BlockChain:
         prev_block = None
         if prev_hash in candidate_blocks.blocks.keys():
             prev_block = candidate_blocks.blocks[prev_hash].block
+            utils.logger.spam(
+                f"prev_block is None.({prev_block is None}) in candidate_blocks by prev_hash({prev_hash})")
 
         if not prev_block:
             prev_block = self.find_block_by_hash(prev_hash) or self.last_block
