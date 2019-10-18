@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import logging
 import time
 from collections import namedtuple
 from enum import Enum
-from typing import List, Optional, NamedTuple, Sequence
+from typing import List, Optional, NamedTuple, Sequence, Iterator, Dict
 from urllib.parse import urlparse
 
 import requests
@@ -49,12 +49,31 @@ class RestMethod(Enum):
 class RestClient:
     def __init__(self, channel=None):
         self._target: str = None
+        self._latest_targets: Iterator[Dict] = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
 
     async def init(self, endpoints: List[str]):
-        self._target = await self._select_fastest_endpoint(endpoints)
-        if self._target:
-            utils.logger.spam(f"RestClient init target({self._target})")
+        self._latest_targets = await self._select_fastest_endpoints(endpoints)
+        if self._latest_targets:
+            min_latency_target = next(self._latest_targets)['target']  # get first target
+            self._set_target(min_latency_target)
+
+    def init_next_target(self):
+        logging.debug(f"switching target from: {self._target}")
+        if not self._latest_targets:
+            return
+        next_target = next(self._latest_targets)['target']
+        logging.debug(f"switching target to: {next_target}")
+        self._set_target(next_target)
+
+    def _set_target(self, target):
+        self._target = self._normalize_target(target)
+        logging.info(f"RestClient init target({self._target})")
+
+    @staticmethod
+    def _normalize_target(min_latency_target):
+        normalized_target = utils.normalize_request_url(min_latency_target)
+        return f"{urlparse(normalized_target).scheme}://{urlparse(normalized_target).netloc}"
 
     @property
     def target(self):
@@ -70,7 +89,7 @@ class RestClient:
             'height': response['block_height']
         }
 
-    async def _select_fastest_endpoint(self, endpoints: Sequence[str]) -> Optional[str]:
+    async def _select_fastest_endpoints(self, endpoints: Sequence[str]) -> Optional[Iterator[Dict]]:
         """select fastest endpoint with conditions below
         1. Maximum block height (higher priority)
         2. Minimum elapsed response time
@@ -88,11 +107,7 @@ class RestClient:
 
         # sort results by min elapsed_time with max block height
         sorted_result = sorted(results, key=lambda k: (-k['height'], k['elapsed_time']))
-        min_latency_target = sorted_result[0]['target']
-        normalized_target = utils.normalize_request_url(min_latency_target)
-        normalized_target = f"{urlparse(normalized_target).scheme}://{urlparse(normalized_target).netloc}"
-        logging.info(f"minimum latency endpoint is: {normalized_target}")
-        return normalized_target
+        return iter(sorted_result)
 
     def call(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
         timeout = timeout or conf.REST_ADDITIONAL_TIMEOUT

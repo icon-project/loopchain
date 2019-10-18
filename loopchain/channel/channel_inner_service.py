@@ -408,6 +408,7 @@ class ChannelInnerTask:
         self._CitizenInfo = CitizenInfo
         self._citizens: Dict[str, CitizenInfo] = dict()
         self._citizen_condition_new_block: Condition = None
+        self._citizen_condition_unregister: Condition = None
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
@@ -524,7 +525,8 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def register_citizen(self, peer_id, target, connected_time):
-        if len(self._citizens) >= conf.SUBSCRIBE_LIMIT:
+        if (len(self._citizens) >= conf.SUBSCRIBE_LIMIT
+                or self._channel_service.state_machine.state == 'BlockGenerate'):
             return False
         elif peer_id in self._citizens:
             logging.warning(f"Already registered citizen({peer_id})")
@@ -544,6 +546,14 @@ class ChannelInnerTask:
             logging.debug(f"remaining all citizens: {self._citizens}")
         except KeyError as e:
             logging.warning(f"already unregistered citizen({peer_id})")
+
+    @message_queue_task
+    async def wait_for_unregister_signal(self, subscriber_id: str):
+        async with self._citizen_condition_unregister:
+            await self._citizen_condition_unregister.wait()
+
+        logging.debug(f"citizen({subscriber_id}) will be unregistered from this node")
+        return True
 
     @message_queue_task
     async def is_citizen_registered(self, peer_id) -> bool:
@@ -1006,18 +1016,27 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
+        self._task._citizen_condition_unregister = Condition(loop=self.loop)
 
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
 
     def notify_new_block(self):
 
-        async def _notify():
+        async def _notify_new_block():
             condition = self._task._citizen_condition_new_block
             async with condition:
                 condition.notify_all()
 
-        asyncio.run_coroutine_threadsafe(_notify(), self.loop)
+        asyncio.run_coroutine_threadsafe(_notify_new_block(), self.loop)
+
+    def notify_unregister(self):
+
+        async def _notify_unregister():
+            condition = self._task._citizen_condition_unregister
+            async with condition:
+                condition.notify_all()
+        asyncio.run_coroutine_threadsafe(_notify_unregister(), self.loop)
 
     def init_sub_services(self):
         if self.loop != asyncio.get_event_loop():

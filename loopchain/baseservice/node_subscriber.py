@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,8 +38,15 @@ from loopchain.protos import message_code
 config.log_requests = False
 config.log_responses = False
 ws_methods = AsyncMethods()
-CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
-                              message_code.Response.fail_connection_closed}
+CONNECTION_FAIL_CONDITIONS = {
+    message_code.Response.fail_subscribe_limit,
+    message_code.Response.fail_connection_closed,
+    message_code.Response.fail_connect_to_leader
+}
+
+
+class UnregisteredException(Exception):
+    pass
 
 
 def convert_response_to_dict(response: bytes) -> dict:
@@ -53,7 +60,7 @@ def _check_error_in_response(response_dict: dict) -> dict:
     params = response_dict.get('params')
     if params and params.get('code') in CONNECTION_FAIL_CONDITIONS:
         error_msg = params.get('error') or f"Error sent from rs target: {params}"
-        raise ConnectionError(error_msg)
+        raise UnregisteredException(error_msg)
 
     if "error" in response_dict:
         return ObjectManager().channel_service.shutdown_peer(message=response_dict.get('error'))
@@ -139,6 +146,9 @@ class NodeSubscriber:
                 await self._recv_until_timeout()
         except AnnounceNewBlockError as e:
             logging.error(f"{type(e)} during subscribe, caused by: {e}")
+            raise
+        except UnregisteredException as e:
+            logging.info(f"{type(e)} during subscribe, caused by: {e}")
             raise
         except Exception as e:
             logging.info(f"{type(e)} during subscribe, caused by: {e}")

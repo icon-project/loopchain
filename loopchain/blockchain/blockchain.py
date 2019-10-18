@@ -507,7 +507,8 @@ class BlockChain:
                 }})
 
             # notify new block
-            ObjectManager().channel_service.inner_service.notify_new_block()
+            if ObjectManager().channel_service.state_machine.state != 'BlockGenerate':
+                ObjectManager().channel_service.inner_service.notify_new_block()
             if ObjectManager().channel_service.state_machine.state != 'BlockSync':
                 # reset_network_by_block_height is called in critical section by self.__add_block_lock.
                 # Other Blocks must not be added until reset_network_by_block_height function finishes.

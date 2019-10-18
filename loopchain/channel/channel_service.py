@@ -22,11 +22,10 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand
-from loopchain.baseservice import ObjectManager, CommonSubprocess
-from loopchain.baseservice import RestClient, NodeSubscriber
-from loopchain.baseservice import TimerService
-from loopchain.blockchain import AnnounceNewBlockError
+from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand,
+                                   ObjectManager, CommonSubprocess, RestClient,
+                                   NodeSubscriber, UnregisteredException, TimerService)
+from loopchain.blockchain.exception import AnnounceNewBlockError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -329,18 +328,24 @@ class ChannelService:
 
         return radiostations
 
-    async def _init_rs_target(self):
-        radiostations = self._get_radiostations()
-        if radiostations is None:
-            return
+    async def _init_rs_target(self, refresh_all: bool = False):
+        if refresh_all:
+            radiostations = self._get_radiostations()
+            if radiostations is None:
+                return
+            await self.__rs_client.init(radiostations)
+        else:
+            try:
+                self.__rs_client.init_next_target()
+            except StopIteration:
+                return await self._init_rs_target(refresh_all=True)
 
-        await self.__rs_client.init(radiostations)
         ChannelProperty().rs_target = self.__rs_client.target
         self.__inner_service.update_sub_services_properties(relay_target=ChannelProperty().rs_target)
 
     async def _init_rs_client(self):
         self.__rs_client = RestClient(channel=ChannelProperty().name)
-        await self._init_rs_target()
+        await self._init_rs_target(refresh_all=True)
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
@@ -399,7 +404,6 @@ class ChannelService:
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
             exc = future.exception()
-            traceback.print_tb(exc.__traceback__)
             logging.debug(f"error: {type(exc)}, {str(exc)}")
 
             if ChannelProperty().node_type != conf.NodeType.CitizenNode:
@@ -411,9 +415,11 @@ class ChannelService:
                 return
 
             if exc:
-                logging.warning(f"Waiting for next subscribe request...")
-                if self.__state_machine.state != "SubscribeNetwork":
+                if (self.__state_machine.state != "SubscribeNetwork"
+                        or isinstance(exc, UnregisteredException)):
                     self.__state_machine.subscribe_network()
+                else:
+                    logging.warning(f"Waiting for next subscribe request...")
 
         subscribe_event = asyncio.Event()
         utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
