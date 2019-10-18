@@ -827,8 +827,8 @@ class BlockManager:
             channel=self.channel_name
         )
 
-        reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or \
-                    self.__channel_service.peer_manager.prepared_reps_hash
+        reps_hash = (self.blockchain.last_block.header.revealed_next_reps_hash or
+                     self.__channel_service.peer_manager.prepared_reps_hash)
         rep_id = leader_vote.rep.hex_hx()
         target = self.blockchain.find_preps_targets_by_roothash(reps_hash)[rep_id]
 
@@ -887,8 +887,10 @@ class BlockManager:
             f"complained_leader_id({complained_leader_id}), "
             f"new_leader_id({new_leader_id})")
 
-        self.__channel_service.broadcast_scheduler.schedule_broadcast(
-            "ComplainLeader", request, reps_hash=self.__channel_service.peer_manager.prepared_reps_hash)
+        reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader",
+                                                                      request,
+                                                                      reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
         logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
@@ -972,9 +974,6 @@ class BlockManager:
                                   reps_getter=reps_getter)
         except NotInReps as e:
             util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
-            self.__channel_service.switch_role()
-            self.__channel_service.broadcast_scheduler.update_audience(
-                self.__channel_service.peer_manager.prepared_reps_hash)
         except Exception as e:
             exc = e
             logging.error(e)
