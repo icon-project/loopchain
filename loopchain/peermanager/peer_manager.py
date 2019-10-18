@@ -101,10 +101,6 @@ class PeerManager:
 
         return peer.order
 
-    def clear_peers(self):
-        self._peer_list_data.peer_list.clear()
-        self._prepared_reps_hash = None
-
     def reset_all_peers(self, reps_hash, reps, update_now=True):
         util.logger.debug(
             f"reset_all_peers."
@@ -122,7 +118,8 @@ class PeerManager:
             util.logger.debug(f"There is no change in load_peers_from_iiss.")
             return
 
-        self.clear_peers()
+        self._peer_list_data.peer_list.clear()
+        self._prepared_reps_hash = None
 
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)

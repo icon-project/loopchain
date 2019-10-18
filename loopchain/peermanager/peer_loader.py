@@ -16,15 +16,12 @@
 import logging
 import os
 from typing import TYPE_CHECKING
-from typing import cast
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, RestMethod
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peermanager import Peer
-from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
-from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peermanager import PeerManager
@@ -36,36 +33,16 @@ class PeerLoader:
 
     @staticmethod
     def load(peer_manager: 'PeerManager'):
-        PeerLoader.load_peers_from_iiss(peer_manager)
-
         if not peer_manager.peer_list:
             if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
                 PeerLoader._load_peers_from_file(peer_manager)
             else:
                 PeerLoader._load_peers_from_rest_call(peer_manager)
 
-        utils.logger.debug(f"peer_service:show_peers ({ChannelProperty().name}): ")
-        for peer_id in list(peer_manager.peer_list):
-            peer = peer_manager.peer_list[peer_id]
-            utils.logger.debug(f"peer_target: {peer.order}:{peer.target}")
-
-    @staticmethod
-    def load_peers_from_iiss(peer_manager: 'PeerManager'):
-        request = {
-            "method": "ise_getPRepList"
-        }
-
-        request = convert_params(request, ParamType.call)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        response = cast(dict, stub.sync_task().call(request))
-        response_to_json_query(response)
-
-        utils.logger.debug(f"in load_peers_from_iiss response({response})")
-        if 'preps' not in response['result']:
-            utils.logger.debug(f"There is no preps in result.")
-            return
-
-        peer_manager.reset_all_peers(response["result"]["rootHash"], response["result"]["preps"])
+            utils.logger.debug(f"show_peers ({ChannelProperty().name}): ")
+            for peer_id in list(peer_manager.peer_list):
+                peer = peer_manager.peer_list[peer_id]
+                utils.logger.debug(f"peer_target: {peer.order}:{peer.target}")
 
     @staticmethod
     def _load_peers_from_file(peer_manager: 'PeerManager'):

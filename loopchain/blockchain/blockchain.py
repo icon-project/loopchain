@@ -146,7 +146,7 @@ class BlockChain:
         return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
     @staticmethod
-    def get_next_rep_in_reps(rep, reps: List[ExternalAddress]):
+    def get_next_rep_in_reps(rep, reps: Sequence[ExternalAddress]):
         try:
             return reps[reps.index(rep) + 1]
         except IndexError:
@@ -164,7 +164,7 @@ class BlockChain:
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
             utils.logger.spam(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
-            reps: List[ExternalAddress] = \
+            reps: Sequence[ExternalAddress] = \
                 self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
             expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
@@ -386,7 +386,8 @@ class BlockChain:
         preps = self.find_preps_by_roothash(roothash)
         return MappingProxyType({prep["id"]: prep["p2pEndpoint"] for prep in preps})
 
-    def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
+    @staticmethod
+    def get_reps_hash_by_header(header: BlockHeader) -> Hash32:
         try:
             roothash = header.reps_hash
             if not roothash:
@@ -394,19 +395,13 @@ class BlockChain:
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
             roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+        return roothash
 
-        return self.find_preps_ids_by_roothash(roothash)
+    def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
+        return self.find_preps_ids_by_roothash(self.get_reps_hash_by_header(header))
 
     def find_preps_addresses_by_header(self, header: BlockHeader) -> Sequence[ExternalAddress]:
-        try:
-            roothash = header.reps_hash
-            if not roothash:
-                raise AttributeError
-        except AttributeError:
-            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
-
-        return self.find_preps_addresses_by_roothash(roothash)
+        return self.find_preps_addresses_by_roothash(self.get_reps_hash_by_header(header))
 
     def find_preps_by_roothash(self, roothash: Hash32) -> list:
         try:
