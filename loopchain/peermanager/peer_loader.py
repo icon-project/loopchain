@@ -88,7 +88,7 @@ class PeerLoader:
 
     @staticmethod
     def _is_block_version_0_3(rs_client) -> bool:
-        version = rs_client.call("GetLastBlock").get('version')
+        version = rs_client.call(RestMethod.GetLastBlock).get('version')
         if version is not None:
             return version == '0.3'
         else:
