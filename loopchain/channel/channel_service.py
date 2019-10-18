@@ -251,11 +251,6 @@ class ChannelService:
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
-    async def __clean_network(self):
-        self.__timer_service.clean(except_key=TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK)
-        self.__peer_manager.clear_peers()
-        self.__rs_client = None
-
     def _is_role_switched(self) -> bool:
         current_height = self.__block_manager.blockchain.block_height
         switch_block_height = self.__get_role_switch_block_height()
@@ -285,7 +280,8 @@ class ChannelService:
 
     async def reset_network(self):
         utils.logger.info("Reset network")
-        await self.__clean_network()
+        self.__timer_service.clean(except_key=TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK)
+        self.__rs_client = None
         self.__state_machine.evaluate_network()
 
     async def __init_peer_auth(self):

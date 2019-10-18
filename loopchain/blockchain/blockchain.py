@@ -146,7 +146,7 @@ class BlockChain:
         return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
     @staticmethod
-    def get_next_rep_in_reps(rep, reps: List[ExternalAddress]):
+    def get_next_rep_in_reps(rep, reps: Sequence[ExternalAddress]):
         try:
             return reps[reps.index(rep) + 1]
         except IndexError:
@@ -164,7 +164,7 @@ class BlockChain:
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
             utils.logger.spam(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
-            reps: List[ExternalAddress] = \
+            reps: Sequence[ExternalAddress] = \
                 self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
             expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
