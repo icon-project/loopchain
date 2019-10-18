@@ -397,6 +397,17 @@ class BlockChain:
             roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
         return roothash
 
+    @staticmethod
+    def get_next_reps_hash_by_header(header: BlockHeader) -> Hash32:
+        try:
+            roothash = header.revealed_next_reps_hash
+            if not roothash:
+                raise AttributeError
+        except AttributeError:
+            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
+            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+        return roothash
+
     def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
         return self.find_preps_ids_by_roothash(self.get_reps_hash_by_header(header))
 

@@ -887,7 +887,7 @@ class BlockManager:
             f"complained_leader_id({complained_leader_id}), "
             f"new_leader_id({new_leader_id})")
 
-        reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        reps_hash = self.blockchain.get_next_reps_hash_by_header(self.blockchain.last_block.header)
         self.__channel_service.broadcast_scheduler.schedule_broadcast("ComplainLeader",
                                                                       request,
                                                                       reps_hash=reps_hash)
