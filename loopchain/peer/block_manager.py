@@ -736,8 +736,13 @@ class BlockManager:
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         peer_target = ChannelProperty().peer_target
-        target_list = [peer.target for peer_id, peer in self.__channel_service.peer_manager.peer_list.items()
-                       if peer_id != ChannelProperty().peer_id]
+
+        if self.blockchain.last_block:
+            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        else:
+            reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
+        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
+        target_list = list(rep_targets.values())
 
         for target in target_list:
             if target != peer_target:
