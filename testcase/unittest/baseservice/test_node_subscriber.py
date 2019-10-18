@@ -6,7 +6,7 @@ import pytest
 import websockets
 
 from loopchain.baseservice import ObjectManager
-from loopchain.baseservice.node_subscriber import NodeSubscriber, _check_error_in_response
+from loopchain.baseservice.node_subscriber import NodeSubscriber, _check_error_in_response, CONNECTION_FAIL_CONDITIONS
 from loopchain.protos import message_code
 
 from loopchain.blockchain import AnnounceNewBlockError
@@ -65,11 +65,14 @@ def node_subscriber():
 
 
 class TestHelper:
-    @pytest.mark.parametrize("response_dict", [
-        {"error": "test", "code": message_code.Response.fail_subscribe_limit},
-        {"error": "test", "code": message_code.Response.fail_connection_closed},
-    ])
-    def test_acceptable_errors_in_response(self, response_dict):
+    @pytest.mark.parametrize("code", CONNECTION_FAIL_CONDITIONS)
+    def test_acceptable_errors_in_response(self, code):
+        response_dict = {
+            "error": "test",
+            "params": {
+                "code": code
+            }
+        }
         with pytest.raises(ConnectionError):
             _check_error_in_response(response_dict)
 
@@ -118,7 +121,9 @@ class TestNodeSubscriberBasic:
     async def test_response_msg_contains_error(self, node_subscriber, mock_ws):
         response_msg = {
             "error": "rs_target says an exception raised!",
-            "code": message_code.Response.fail_subscribe_limit
+            "params": {
+                "code": message_code.Response.fail_subscribe_limit
+            }
         }
         mock_ws.mock_recv.return_value = json.dumps(response_msg)
         node_subscriber._websocket = mock_ws
@@ -166,7 +171,9 @@ class TestNodeSubscriberHandShake:
     async def test_handshake_failure_by_returned_conn_fail_msgs_ensures_ws_close(self, node_subscriber, mock_ws, code):
         mock_msg = {
             "error": "rs_target says exception msg in handshake stage!",
-            "code": code
+            "params": {
+                "code": code
+            }
         }
         mock_ws.mock_recv.return_value = json.dumps(mock_msg)
         node_subscriber._websocket = mock_ws

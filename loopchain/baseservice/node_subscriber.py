@@ -42,7 +42,7 @@ CONNECTION_FAIL_CONDITIONS = {message_code.Response.fail_subscribe_limit,
                               message_code.Response.fail_connection_closed}
 
 
-def convert_reponse_to_dict(response: bytes) -> dict:
+def convert_response_to_dict(response: bytes) -> dict:
     response_dict: dict = json.loads(response)
     response_dict = _check_error_in_response(response_dict)
 
@@ -50,8 +50,10 @@ def convert_reponse_to_dict(response: bytes) -> dict:
 
 
 def _check_error_in_response(response_dict: dict) -> dict:
-    if response_dict.get('code') in CONNECTION_FAIL_CONDITIONS:
-        raise ConnectionError(f"Error sent from rs target: {response_dict}")
+    params = response_dict.get('params')
+    if params and params.get('code') in CONNECTION_FAIL_CONDITIONS:
+        error_msg = params.get('error') or f"Error sent from rs target: {params}"
+        raise ConnectionError(error_msg)
 
     if "error" in response_dict:
         return ObjectManager().channel_service.shutdown_peer(message=response_dict.get('error'))
@@ -64,6 +66,7 @@ class NodeSubscriber:
         scheme = 'wss' if ('https://' in rs_target) else 'ws'
         netloc = parse.urlparse(rs_target).netloc
         self._target_uri = f"{scheme}://{netloc}/api/ws/{channel}"
+        self._exception = None
         self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None
 
@@ -102,6 +105,8 @@ class NodeSubscriber:
         try:
             await self._subscribe_request(block_height)
             await self._recv_until_timeout()
+            if self._exception:
+                raise self._exception
         except Exception as e:
             logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
             await self.close()
@@ -122,13 +127,15 @@ class NodeSubscriber:
             fut=self._websocket.recv(),
             timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT
         )
-        response_dict = convert_reponse_to_dict(response)
+        response_dict = convert_response_to_dict(response)
 
         await ws_methods.dispatch(response_dict)
 
     async def _run(self):
         try:
             while True:
+                if self._exception:
+                    raise self._exception
                 await self._recv_until_timeout()
         except AnnounceNewBlockError as e:
             logging.error(f"{type(e)} during subscribe, caused by: {e}")
@@ -164,7 +171,7 @@ class NodeSubscriber:
                                       blockchain.get_expected_generator(confirmed_block.header.peer_id),
                                       reps_getter=reps_getter)
             except Exception as e:
-                raise AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
+                self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:
                 logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
                               f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped})")
@@ -175,7 +182,7 @@ class NodeSubscriber:
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
-            raise exception
+            self._exception = exception
 
         if not self._subscribe_event.is_set():
             # set subscribe_event to transit the state to Watch.
