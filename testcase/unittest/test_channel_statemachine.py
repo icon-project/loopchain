@@ -61,10 +61,16 @@ class MockBlockManagerCitizen(MockBlockManager):
         self.peer_type = loopchain_pb2.PEER
 
 
+class MockInnerService:
+    def notify_unregister(self):
+        pass
+
+
 class MockChannelService:
     def __init__(self):
         self.block_manager = MockBlockManager()
         self.peer_manager = MockPeerManager()
+        self.inner_service = MockInnerService()
 
     async def evaluate_network(self):
         pass

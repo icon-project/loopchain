@@ -6,7 +6,8 @@ import pytest
 import websockets
 
 from loopchain.baseservice import ObjectManager
-from loopchain.baseservice.node_subscriber import NodeSubscriber, _check_error_in_response, CONNECTION_FAIL_CONDITIONS
+from loopchain.baseservice.node_subscriber import (NodeSubscriber, _check_error_in_response,
+                                                   CONNECTION_FAIL_CONDITIONS, UnregisteredException)
 from loopchain.protos import message_code
 
 from loopchain.blockchain import AnnounceNewBlockError
@@ -73,7 +74,7 @@ class TestHelper:
                 "code": code
             }
         }
-        with pytest.raises(ConnectionError):
+        with pytest.raises(UnregisteredException):
             _check_error_in_response(response_dict)
 
     @pytest.mark.parametrize("response_dict", [
@@ -129,7 +130,7 @@ class TestNodeSubscriberBasic:
         node_subscriber._websocket = mock_ws
         node_subscriber._subscribe_event = asyncio.Event()
 
-        with pytest.raises(ConnectionError):
+        with pytest.raises(UnregisteredException):
             await node_subscriber._recv_until_timeout()
 
 
@@ -179,7 +180,7 @@ class TestNodeSubscriberHandShake:
         node_subscriber._websocket = mock_ws
         assert mock_ws.closed
 
-        with pytest.raises(ConnectionError):
+        with pytest.raises(UnregisteredException):
             await node_subscriber._handshake(block_height=1)
 
         assert mock_ws.closed
