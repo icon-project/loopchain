@@ -520,7 +520,8 @@ class ChannelInnerTask:
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
-                await asyncio.sleep(5)  # To prevent excessive occupancy of the CPU in an infinite loop
+                # To prevent excessive occupancy of the CPU in an infinite loop
+                await asyncio.sleep(2 * conf.INTERVAL_BLOCKGENERATION)
                 continue
 
             confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)
