@@ -505,7 +505,13 @@ class ChannelInnerTask:
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):
         while True:
             my_block_height = self._blockchain.block_height
-            if subscriber_block_height >= my_block_height:
+            if subscriber_block_height > my_block_height:
+                logging.warning(f"subscriber's height({subscriber_block_height}) is higher "
+                                f"than this node's height({my_block_height}).")
+                self._channel_service.inner_service.notify_unregister()
+                error_msg = {"error": "Invalid block height from citizen."}
+                return json.dumps(error_msg), b''
+            elif subscriber_block_height == my_block_height:
                 async with self._citizen_condition_new_block:
                     await self._citizen_condition_new_block.wait()
 
@@ -514,7 +520,8 @@ class ChannelInnerTask:
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
-                await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
+                # To prevent excessive occupancy of the CPU in an infinite loop
+                await asyncio.sleep(2 * conf.INTERVAL_BLOCKGENERATION)
                 continue
 
             confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)

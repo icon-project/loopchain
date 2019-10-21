@@ -107,6 +107,10 @@ class ThereIsNoCandidateBlock(Exception):
 
 
 class AnnounceNewBlockError(Exception):
+    """When AnnounceNewBlockError is raised during Watch state,
+    this node would transit the state to BlockSync.
+
+    """
     message_code = message_code.Response.fail_announce_block
 
 
