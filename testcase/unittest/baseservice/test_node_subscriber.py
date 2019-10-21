@@ -13,6 +13,18 @@ from loopchain.protos import message_code
 from loopchain.blockchain import AnnounceNewBlockError
 
 
+def get_response_dict(code=message_code.Response.success):
+    return {
+        "jsonrpc": "2.0",
+        "method": "node_ws_PublishAnything",
+        "params": {
+            "error": "test",
+            "code": code
+        },
+        "id": 1234
+    }
+
+
 @pytest.fixture
 def mock_ws(mocker):
     class MockWebSocket:
@@ -68,28 +80,17 @@ def node_subscriber():
 class TestHelper:
     @pytest.mark.parametrize("code", CONNECTION_FAIL_CONDITIONS)
     def test_acceptable_errors_in_response(self, code):
-        response_dict = {
-            "error": "test",
-            "params": {
-                "code": code
-            }
-        }
+        response_dict = get_response_dict(code)
         with pytest.raises(UnregisteredException):
             _check_error_in_response(response_dict)
 
-    @pytest.mark.parametrize("response_dict", [
-        {"error": "test", "code": message_code.Response.fail},
+    @pytest.mark.parametrize("code", [
+        message_code.Response.fail
     ])
-    def test_critical_errors_in_in_response(self, response_dict, mocker):
-        class MockChannelService:
-            pass
-
-        mock_channel = MockChannelService()
-        mock_channel.shutdown_peer = mocker.MagicMock()
-        ObjectManager().channel_service = mock_channel
-
-        _check_error_in_response(response_dict)
-        assert mock_channel.shutdown_peer.called
+    def test_critical_errors_in_in_response(self, code):
+        response_dict = get_response_dict(code)
+        with pytest.raises(AnnounceNewBlockError):
+            _check_error_in_response(response_dict)
 
     @pytest.mark.parametrize("rs_target, expected_scheme", [
         ("https://test.com", "wss"),
@@ -119,14 +120,12 @@ class TestNodeSubscriberBasic:
 
         assert node_subscriber._websocket == mock_ws
 
-    async def test_response_msg_contains_error(self, node_subscriber, mock_ws):
-        response_msg = {
-            "error": "rs_target says an exception raised!",
-            "params": {
-                "code": message_code.Response.fail_subscribe_limit
-            }
-        }
-        mock_ws.mock_recv.return_value = json.dumps(response_msg)
+    @pytest.mark.parametrize("code", [
+        message_code.Response.fail_subscribe_limit
+    ])
+    async def test_response_msg_contains_error(self, node_subscriber, mock_ws, code):
+        response_dict = get_response_dict(code)
+        mock_ws.mock_recv.return_value = json.dumps(response_dict)
         node_subscriber._websocket = mock_ws
         node_subscriber._subscribe_event = asyncio.Event()
 
@@ -166,17 +165,10 @@ class TestNodeSubscriberHandShake:
 
         assert mock_ws.closed
 
-    @pytest.mark.parametrize("code", [
-        message_code.Response.fail_subscribe_limit, message_code.Response.fail_connection_closed
-    ])
+    @pytest.mark.parametrize("code", CONNECTION_FAIL_CONDITIONS)
     async def test_handshake_failure_by_returned_conn_fail_msgs_ensures_ws_close(self, node_subscriber, mock_ws, code):
-        mock_msg = {
-            "error": "rs_target says exception msg in handshake stage!",
-            "params": {
-                "code": code
-            }
-        }
-        mock_ws.mock_recv.return_value = json.dumps(mock_msg)
+        response_dict = get_response_dict(code)
+        mock_ws.mock_recv.return_value = json.dumps(response_dict)
         node_subscriber._websocket = mock_ws
         assert mock_ws.closed
 
