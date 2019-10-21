@@ -308,10 +308,13 @@ class BlockChain:
         """
         prev_hash = block.header.prev_hash
         candidate_blocks = self.__block_manager.candidate_blocks
+        prev_block = None
         if prev_hash in candidate_blocks.blocks.keys():
             prev_block = candidate_blocks.blocks[prev_hash].block
-        else:
+
+        if not prev_block:
             prev_block = self.find_block_by_hash(prev_hash) or self.last_block
+
         return prev_block
 
     def find_block_by_hash(self, block_hash: Union[str, Hash32]):
@@ -353,7 +356,7 @@ class BlockChain:
         try:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
-            utils.logger.spam(f"There is no block by hash: {block_hash}")
+            utils.logger.spam(f"There is no confirm info by block hash: {block_hash}")
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
