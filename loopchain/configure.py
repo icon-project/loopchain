@@ -148,6 +148,11 @@ class Configure(metaclass=SingletonMetaClass):
         for package in filtered_pkg:
             version = pkg_resources.get_distribution(package).version
             globals()['ICON_VERSIONS'][package] = version
+        command_result = os.popen('icon_rc -version').read()
+        match_result = re.match(r'([a-z_]+)\s([\da-zA-Z-_\.]+)', command_result)  # ('icon_rc', 'vX.X.X')
+        if match_result:
+            icon_rc_version = match_result.group(2)
+            globals()['ICON_VERSIONS']['icon_rc'] = icon_rc_version
 
 
 def get_configuration(configure_name):

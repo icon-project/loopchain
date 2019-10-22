@@ -415,7 +415,8 @@ ICON_VERSIONS = {
     'iconservice': '0.0.0',
     'iconrpcserver': '0.0.0',
     'iconcommons': '0.0.0',
-    'earlgrey': '0.0.0'
+    'earlgrey': '0.0.0',
+    'icon_rc': '0.0.0'
 }
 
 ####################
