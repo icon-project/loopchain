@@ -40,8 +40,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_tx_result: self.__handler_get_tx_result,
             message_code.Request.get_balance: self.__handler_get_balance,
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
-            message_code.Request.get_total_supply: self.__handler_get_total_supply,
-            message_code.Request.peer_peer_list: self.__handler_peer_list
+            message_code.Request.get_total_supply: self.__handler_get_total_supply
         }
 
         self.__status_cache_update_time = {}
@@ -77,23 +76,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         status_json = json.dumps(status)
 
         return loopchain_pb2.Message(code=message_code.Response.success, meta=status_json)
-
-    def __handler_peer_list(self, request, context):
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_peer_list(),
-            self.peer_service.inner_service.loop
-        )
-        all_group_peer_list_str, peer_list_str = future.result()
-
-        message = "All Group Peers count: " + all_group_peer_list_str
-
-        return loopchain_pb2.Message(
-            code=message_code.Response.success,
-            message=message,
-            meta=peer_list_str)
 
     def __handler_get_tx_result(self, request, context):
         """Get Transaction Result for json-rpc request

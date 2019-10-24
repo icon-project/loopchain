@@ -39,14 +39,6 @@ class PeerManager:
         self._prepared_reps_hash = None
 
     @property
-    def peer_list(self) -> dict:
-        """return peer_list of peer_list_data
-
-        :return:
-        """
-        return self._peer_list_data.peer_list
-
-    @property
     def prepared_reps_hash(self):
         return self._prepared_reps_hash
 
@@ -96,7 +88,7 @@ class PeerManager:
                                     f"\npeers({self._peer_list_data.peer_list})")
                 return None
 
-            self.peer_list[peer.peer_id] = peer
+            self._peer_list_data.peer_list[peer.peer_id] = peer
             self._prepared_reps_hash = self.reps_hash()
 
         return peer.order

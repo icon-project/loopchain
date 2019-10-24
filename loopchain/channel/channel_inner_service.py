@@ -572,11 +572,6 @@ class ChannelInnerTask:
         preps = self._blockchain.find_preps_by_roothash(new_reps_hash)
         return preps
 
-    @message_queue_task
-    def get_peer_list(self):
-        peer_manager = self._channel_service.peer_manager
-        return str(peer_manager.peer_list), str(peer_manager.peer_list)
-
     @message_queue_task(priority=255)
     async def get_status(self):
         status_data = dict()
@@ -585,11 +580,13 @@ class ChannelInnerTask:
 
         block_height = 0
         unconfirmed_block_height = None
+        peer_count = -1
         last_block = self._blockchain.last_block
         last_unconfirmed_block = self._blockchain.last_unconfirmed_block
 
         if last_block:
             block_height = last_block.header.height
+            peer_count = len(self._blockchain.find_preps_addresses_by_header(last_block.header))
 
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
@@ -611,7 +608,7 @@ class ChannelInnerTask:
         status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
-        status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
+        status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["versions"] = conf.ICON_VERSIONS

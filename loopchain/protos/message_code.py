@@ -19,7 +19,6 @@ class Request:
     is_alive = 2
     stop = -9
 
-    peer_peer_list = 600
     peer_get_leader = 601  # get leader peer object
     peer_complain_leader = 602  # complain leader peer is no response
     peer_reconnect_to_rs = 603  # reconnect to rs when rs restart detected.
