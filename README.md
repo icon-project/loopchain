@@ -1,5 +1,7 @@
 # Loopchain
 
+[![loopchain](https://snapcraft.io/loopchain/badge.svg)](https://snapcraft.io/loopchain)
+
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
 
  In order to run a loopchain node, you need to install [ICON Service]
@@ -24,7 +26,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
  Loopchain development and execution requires following environments.
 
-1. Python 3.6.5+ **(recommended 3.7.x)**
+1. **Python 3.7.x**
 
     We recommend to create an isolated Python 3 virtual environment with [virtualenv].
 
@@ -33,7 +35,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
     $ source venv/bin/activate
     ```
 
-    > **_NOTE:_** We will support 3.7.x only in the future. Please upgrade python version to 3.7.x
+    > **_NOTE:_** Now we support 3.7.x only. Please upgrade python version to 3.7.x
 
 1. **RabbitMQ 3.7+**
 
