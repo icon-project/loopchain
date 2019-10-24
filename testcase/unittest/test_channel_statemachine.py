@@ -23,8 +23,6 @@ from loopchain.protos import loopchain_pb2
 
 
 class MockBlockManager:
-    peer_type = loopchain_pb2.BLOCK_GENERATOR
-
     def __init__(self):
         self.timer_called = 0
         self.peer_type = loopchain_pb2.BLOCK_GENERATOR
@@ -45,26 +43,34 @@ class MockBlockManager:
     def update_service_status(self, status):
         pass
 
-
-class MockBlockManagerCitizen:
-    peer_type = loopchain_pb2.PEER
-
-    def start_block_generate_timer(self):
+    def start_epoch(self):
         pass
 
-    def block_height_sync(self):
+    async def relay_all_txs(self):
         pass
 
-    def stop_block_height_sync_timer(self):
+
+class MockPeerManager:
+    def update_all_peers(self):
         pass
 
-    def update_service_status(self, status):
+
+class MockBlockManagerCitizen(MockBlockManager):
+    def __init__(self):
+        super().__init__()
+        self.peer_type = loopchain_pb2.PEER
+
+
+class MockInnerService:
+    def notify_unregister(self):
         pass
 
 
 class MockChannelService:
     def __init__(self):
         self.block_manager = MockBlockManager()
+        self.peer_manager = MockPeerManager()
+        self.inner_service = MockInnerService()
 
     async def evaluate_network(self):
         pass
@@ -78,44 +84,32 @@ class MockChannelService:
     def start_subscribe_timer(self):
         pass
 
-    def start_shutdown_timer(self):
+    def start_shutdown_timer_when_fail_subscribe(self):
         pass
 
     def stop_subscribe_timer(self):
         pass
 
-    def stop_shutdown_timer(self):
+    def stop_shutdown_timer_when_fail_subscribe(self):
+        pass
+
+    def is_support_node_function(self, _):
+        return True
+
+    def start_block_monitoring_timer(self):
+        pass
+
+    def stop_block_monitoring_timer(self):
         pass
 
 
-class MockChannelServiceCitizen:
-    async def evaluate_network(self):
-        pass
-
-    async def subscribe_network(self):
-        pass
-
-    def update_sub_services_properties(self):
-        pass
-
-    def start_subscribe_timer(self):
-        pass
-
-    def start_shutdown_timer(self):
-        pass
-
-    def stop_subscribe_timer(self):
-        pass
-
-    def stop_shutdown_timer(self):
-        pass
+class MockChannelServiceCitizen(MockChannelService):
+    def __init__(self):
+        super().__init__()
+        self.block_manager = MockBlockManagerCitizen()
 
     def is_support_node_function(self, node_function):
         return False
-
-    @property
-    def block_manager(self):
-        return MockBlockManagerCitizen()
 
 
 class TestChannelStateMachine(unittest.TestCase):

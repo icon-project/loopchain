@@ -16,26 +16,27 @@
 # limitations under the License.
 """Test Block functions"""
 
-import logging
 import json
+import logging
 import os
 import random
 import sys
 import unittest
 
-import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.baseservice import ObjectManager
+from loopchain.blockchain import InvalidBlock
 from loopchain.crypto.signature import Signer
 from testcase.unittest.mock_peer import set_mock
 
 sys.path.append('../')
-from loopchain.blockchain import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
-from loopchain.blockchain import TransactionBuilder, TransactionSerializer, TransactionVersioner
-from loopchain.blockchain import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
+from loopchain.blockchain.transactions import TransactionBuilder, TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.votes.v0_3 import BlockVotes, BlockVote
 
 
 from loopchain.utils import loggers
@@ -123,7 +124,7 @@ class TestBlock(unittest.TestCase):
         invalid_signature_block = self.__generate_invalid_block()
 
         # WHEN THEN
-        with self.assertRaises(BlockInValidError):
+        with self.assertRaises(InvalidBlock):
             Block.validate(invalid_signature_block)
 
     @unittest.skip("BVS")
@@ -191,8 +192,8 @@ class TestBlock(unittest.TestCase):
         block1.commit_state = {"TEST": "TEST_VALUE1234"}
         block1.generate_block()
         block2.generate_block()
-        util.logger.spam(f"block1 hash({block1.block_hash})")
-        util.logger.spam(f"block1 hash({block2.block_hash})")
+        utils.logger.spam(f"block1 hash({block1.block_hash})")
+        utils.logger.spam(f"block1 hash({block2.block_hash})")
 
         # THEN
         self.assertEqual(block1.block_hash, block2.block_hash)
@@ -229,8 +230,8 @@ class TestBlock(unittest.TestCase):
 
         dummy_receipts = {}
         block_builder = BlockBuilder.new("0.3", tx_versioner)
-        for i in range(1000):
-            tx_builder = TransactionBuilder.new("0x3", tx_versioner)
+        for i in range(5):
+            tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
             tx_builder.signer = test_signer
             tx_builder.to_address = ExternalAddress.new()
             tx_builder.step_limit = random.randint(0, 10000)
@@ -238,7 +239,7 @@ class TestBlock(unittest.TestCase):
             tx_builder.nid = 2
             tx = tx_builder.build()
 
-            tx_serializer = TransactionSerializer.new(tx.version, tx_versioner)
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
             block_builder.transactions[tx.hash] = tx
             dummy_receipts[tx.hash.hex()] = {
                 "dummy_receipt": "dummy",
@@ -246,37 +247,104 @@ class TestBlock(unittest.TestCase):
             }
 
         block_builder.signer = test_signer
-        block_builder.height = 3
+        block_builder.height = 0
         block_builder.prev_hash = Hash32(bytes(Hash32.size))
         block_builder.state_hash = Hash32(bytes(Hash32.size))
         block_builder.receipts = dummy_receipts
         block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
         block_builder.next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
+        vote = BlockVote.new(test_signer, utils.get_time_stamp(), block_builder.height - 1, 0, block_builder.prev_hash)
+        votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, 0, block_builder.prev_hash)
+        votes.add_vote(vote)
+        block_builder.prev_votes = votes.votes
+
         block = block_builder.build()
         block_verifier = BlockVerifier.new("0.3", tx_versioner)
-        block_verifier.invoke_func = lambda b: (block, dummy_receipts)
-        block_verifier.verify(block, None, None, block.header.peer_id, reps=block_builder.reps)
+
+        block_verifier.invoke_func = lambda b, prev_b: (block, dummy_receipts)
+        reps_getter = lambda _: block_builder.reps
+        block_verifier.verify(block, None, None, block.header.peer_id, reps_getter=reps_getter)
 
         block_serializer = BlockSerializer.new("0.3", tx_versioner)
         block_serialized = block_serializer.serialize(block)
+        logging.info(json.dumps(block_serialized, indent=4))
         block_deserialized = block_serializer.deserialize(block_serialized)
+        logging.info(json.dumps(block_serializer.serialize(block_deserialized), indent=4))
 
         assert block.header == block_deserialized.header
-        # FIXME : confirm_prev_block not serialized
-        # assert block.body == block_deserialized.body
+        assert block.body == block_deserialized.body
 
         tx_hashes = list(block.body.transactions)
         tx_index = random.randrange(0, len(tx_hashes))
 
         block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
         tx_proof = block_prover.get_proof(tx_index)
-        assert block_prover.prove(tx_hashes[tx_index], block.header.transaction_hash, tx_proof)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transactions_hash, tx_proof)
 
         block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
         receipt_proof = block_prover.get_proof(tx_index)
-        receipt_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
-        assert block_prover.prove(receipt_hash, block.header.receipt_hash, receipt_proof)
+        receipts_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
+        assert block_prover.prove(receipts_hash, block.header.receipts_hash, receipt_proof)
+
+    def test_valid_timestamp(self):
+        """Test for timestamp buffer in block verifier"""
+        def block_maker(timestamp: int, height: int = 0, prev_hash=None):
+            """Make dummy block"""
+            tx_versioner = TransactionVersioner()
+
+            dummy_receipts = {}
+            block_builder = BlockBuilder.new("0.1a", tx_versioner)
+
+            for i in range(1000):
+                tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
+                tx_builder.signer = test_signer
+                tx_builder.to_address = ExternalAddress.new()
+                tx_builder.step_limit = random.randint(0, 10000)
+                tx_builder.value = random.randint(0, 10000)
+                tx_builder.nid = 2
+                tx = tx_builder.build()
+
+                tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
+                block_builder.transactions[tx.hash] = tx
+                dummy_receipts[tx.hash.hex()] = {
+                    "dummy_receipt": "dummy",
+                    "tx_dumped": tx_serializer.to_full_data(tx)
+                }
+
+            block_builder.signer = test_signer
+            block_builder.prev_hash = prev_hash
+            block_builder.height = height
+            block_builder.state_hash = Hash32(bytes(Hash32.size))
+            block_builder.receipts = dummy_receipts
+            block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
+            block_builder.peer_id = ExternalAddress.fromhex(test_signer.address)
+            block_builder.next_leader = ExternalAddress.fromhex(test_signer.address)
+            block_builder.fixed_timestamp = timestamp
+
+            b = block_builder.build()
+            assert b.header.timestamp == timestamp
+
+            return b
+
+        test_signer = Signer.from_prikey(os.urandom(32))
+
+        first_block = block_maker(height=0, timestamp=utils.get_time_stamp())
+        second_block = block_maker(height=1, timestamp=utils.get_time_stamp() + 5, prev_hash=first_block.header.hash)
+        third_block_from_far_future = block_maker(height=2, prev_hash=second_block.header.hash,
+                                                  timestamp=utils.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER + 5_000_000)
+
+        block_verifier = BlockVerifier.new("0.1a", TransactionVersioner())
+        leader = first_block.header.peer_id
+        reps = [ExternalAddress.fromhex_address(test_signer.address)]
+        print("*---Normal time range")
+        block_verifier.verify(block=second_block, prev_block=first_block,
+                              blockchain=None, generator=leader, reps=reps)
+
+        print("*---Abnormal time range")
+        with self.assertRaises(Exception):
+            block_verifier.verify(block=third_block_from_far_future, prev_block=second_block,
+                                  blockchain=None, generator=leader, reps=reps)
 
 
 if __name__ == '__main__':

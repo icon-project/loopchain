@@ -14,15 +14,17 @@
 """ A class for icx authorization of Peer"""
 
 import binascii
-import getpass
 import hashlib
 import logging
-from typing import Union
+from typing import Union, Type, TypeVar
 
-from asn1crypto import keys
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from secp256k1 import Base, ALL_FLAGS, PrivateKey, PublicKey
+import eth_keyfile
+from secp256k1 import Base, ALL_FLAGS
+from secp256k1 import PrivateKey, PublicKey
+
+from loopchain.crypto.cert_serializers import DerSerializer, PemSerializer
+
+T = TypeVar('T', bound='SignVerifier')
 
 
 class SignVerifier:
@@ -42,7 +44,7 @@ class SignVerifier:
     def verify_data(self, origin_data: bytes, signature: bytes):
         self.verify_signature(origin_data, signature, False)
 
-    def verify_hash(self, origin_data, signature):
+    def verify_hash(self, origin_data: bytes, signature):
         self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
@@ -65,75 +67,51 @@ class SignVerifier:
         return f"hx{hash_pub[-40:]}"
 
     @classmethod
-    def address_from_prikey(cls, prikey: bytes):
-        pubkey = PrivateKey(prikey, ctx=cls._base.ctx).pubkey.serialize(compressed=False)
+    def address_from_prikey(cls, prikey: Union[bytes, PrivateKey]):
+        prikey = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey)
+        pubkey = prikey.pubkey.serialize(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
-    def from_address(cls, address: str):
+    def from_address(cls: Type[T], address: str) -> T:
         verifier = SignVerifier()
         verifier.address = address
         return verifier
 
     @classmethod
-    def from_channel(cls, channel: str):
-        from loopchain import configure as conf
-
-        if 'public_path' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(public_path) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            public_file = conf.CHANNEL_OPTION[channel]['public_path']
+    def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
+        if pubkey_file.endswith('.der'):
+            pubkey = DerSerializer.deserialize_public_key_file(pubkey_file)
+        elif pubkey_file.endswith('.pem'):
+            pubkey = PemSerializer.deserialize_public_key_file(pubkey_file)
         else:
-            public_file = conf.PUBLIC_PATH
-        return cls.from_pubkey_file(public_file)
-
-    @classmethod
-    def from_pubkey_file(cls, pubkey_file: str):
-        with open(pubkey_file, "rb") as der:
-            pubkey = der.read()
+            raise RuntimeError(f"Not supported file {pubkey_file}")
         return cls.from_pubkey(pubkey)
 
     @classmethod
-    def from_pubkey(cls, pubkey: bytes):
+    def from_pubkey(cls: Type[T], pubkey: bytes) -> T:
         address = cls.address_from_pubkey(pubkey)
         return cls.from_address(address)
 
     @classmethod
-    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+    def from_prikey_file(cls: Type[T], prikey_file: str, password: Union[str, bytes]) -> T:
         if isinstance(password, str):
             password = password.encode()
 
-        if prikey_file.endswith('.der') or prikey_file.endswith('.pem'):
-            with open(prikey_file, "rb") as file:
-                private_bytes = file.read()
-            try:
-                if prikey_file.endswith('.der'):
-                    temp_private = serialization \
-                        .load_der_private_key(private_bytes,
-                                              password,
-                                              default_backend())
-                if prikey_file.endswith('.pem'):
-                    temp_private = serialization \
-                        .load_pem_private_key(private_bytes,
-                                              password,
-                                              default_backend())
-            except Exception as e:
-                raise ValueError("Invalid Password(Peer Certificate load test)")
-
-            no_pass_private = temp_private.private_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption()
-            )
-            key_info = keys.PrivateKeyInfo.load(no_pass_private)
-            prikey = long_to_bytes(key_info['private_key'].native['private_key'])
-        else:
-            from tbears.libs.icx_signer import key_from_key_store
-            prikey = key_from_key_store(prikey_file, password)
+        try:
+            if prikey_file.endswith('.der'):
+                prikey = DerSerializer.deserialize_private_key_file(prikey_file, password)
+            elif prikey_file.endswith('.pem'):
+                prikey = PemSerializer.deserialize_private_key_file(prikey_file, password)
+            else:
+                with open(prikey_file, 'rb') as file:
+                    prikey = eth_keyfile.extract_key_from_keyfile(file, password)
+        except Exception:
+            raise ValueError("Invalid Password.")
         return cls.from_prikey(prikey)
 
     @classmethod
-    def from_prikey(cls, prikey: bytes):
+    def from_prikey(cls: Type[T], prikey: bytes) -> T:
         address = cls.address_from_prikey(prikey)
         return cls.from_address(address)
 
@@ -170,56 +148,31 @@ class Signer(SignVerifier):
         return serialized_sig + bytes((recover_id, ))
 
     @classmethod
-    def from_address(cls, address: str):
+    def from_address(cls: Type[T], address: str) -> T:
         raise TypeError("Cannot create `Signer` from address")
 
     @classmethod
-    def from_channel(cls, channel: str):
-        from loopchain import configure as conf
-
-        if 'private_path' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(private_path) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            prikey_file = conf.CHANNEL_OPTION[channel]['private_path']
-        else:
-            prikey_file = conf.PRIVATE_PATH
-
-        if 'private_password' in conf.CHANNEL_OPTION[channel]:
-            logging.warning(f"This setting(private_password) will be deprecated soon. "
-                            f"Please refer to the key configuration guide.")
-            password = conf.CHANNEL_OPTION[channel]['private_password']
-        elif conf.PRIVATE_PASSWORD:
-            password = conf.PRIVATE_PASSWORD
-        else:
-            # created the private key file from tbears.
-            password = getpass.getpass(f"Input your keystore password for channel({channel}): ")
-        return cls.from_prikey_file(prikey_file, password)
-
-    @classmethod
-    def from_pubkey(cls, pubkey: bytes):
+    def from_pubkey(cls: Type[T], pubkey: bytes) -> T:
         raise TypeError("Cannot create `Signer` from pubkey")
 
     @classmethod
-    def from_pubkey_file(cls, pubkey_file: str):
+    def from_pubkey_file(cls: Type[T], pubkey_file: str) -> T:
         raise TypeError("Cannot create `Signer` from pubkey file")
 
     @classmethod
-    def from_prikey_file(cls, prikey_file: str, password: Union[str, bytes]):
+    def from_prikey_file(cls: Type[T], prikey_file: str, password: Union[str, bytes]) -> T:
         return super().from_prikey_file(prikey_file, password)
 
     @classmethod
-    def from_prikey(cls, prikey: bytes):
-        auth = Signer()
-        auth.private_key = PrivateKey(prikey, ctx=cls._base.ctx)
-        auth.address = cls.address_from_prikey(prikey)
+    def from_prikey(cls: Type[T], prikey: Union[bytes, PrivateKey]):
+        signer = Signer()
+        signer.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
+        signer.address = cls.address_from_prikey(prikey)
+        return signer
 
-        # verify
-        sign = auth.sign_data(b'TEST')
-        try:
-            auth.verify_data(b'TEST', sign)
-        except:
-            raise ValueError("Invalid Signature(Peer Certificate load test)")
-        return auth
+    @classmethod
+    def new(cls):
+        return cls.from_prikey(PrivateKey())
 
 
 def long_to_bytes(val, endianness='big'):

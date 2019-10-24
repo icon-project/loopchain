@@ -3,8 +3,7 @@ from typing import TYPE_CHECKING
 from loopchain.crypto.hashing import build_hash_generator
 
 if TYPE_CHECKING:
-    from . import TransactionVersioner
-    from .transaction import Transaction
+    from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 
 
 class TransactionSerializer(ABC):
@@ -38,8 +37,13 @@ class TransactionSerializer(ABC):
         raise NotImplementedError
 
     @classmethod
-    def new(cls, version: str, versioner: 'TransactionVersioner'):
+    def new(cls, version: str, type_: str, versioner: 'TransactionVersioner'):
         hash_generator_version = versioner.get_hash_generator_version(version)
+
+        from . import v3_issue
+        if version == v3_issue.version and type_ == "base":
+            return v3_issue.TransactionSerializer(hash_generator_version)
+
         from . import v3
         if version == v3.version:
             return v3.TransactionSerializer(hash_generator_version)

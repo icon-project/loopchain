@@ -1,7 +1,9 @@
 import base64
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 from enum import Enum
-from typing import Union
+from typing import Union, Type, TypeVar
+
+T = TypeVar('T', bound='Bytes')
 
 
 class Bytes(bytes):
@@ -24,7 +26,7 @@ class Bytes(bytes):
         return type_name + "(" + self.hex_xx() + ")"
 
     @classmethod
-    def new(cls):
+    def new(cls: Type[T]) -> T:
         """
         create sized value.
         :return:
@@ -41,7 +43,7 @@ class Bytes(bytes):
         return self.hex()
 
     @classmethod
-    def fromhex(cls, value: str, ignore_prefix=False, allow_malformed=False):
+    def fromhex(cls: Type[T], value: str, ignore_prefix=False, allow_malformed=False) -> Union[T, 'MalformedStr']:
         if isinstance(cls, Address):
             raise TypeError("Address.fromhex() cannot be used. Because Address is ABC.")
 
@@ -80,8 +82,14 @@ class Hash32(VarBytes):
 class Address(Bytes, metaclass=ABCMeta):
     size = 20
 
+    @abstractmethod
+    def extend(self) -> 'AddressEx':
+        raise NotImplementedError
+
     @classmethod
-    def fromhex_address(cls, value: str, allow_malformed=False):
+    def fromhex_address(cls,
+                        value: str,
+                        allow_malformed=False) -> Union['ExternalAddress', 'ContractAddress', 'MalformedStr']:
         try:
             prefix, contents = value[:2], value[2:]
 
@@ -110,12 +118,52 @@ class ExternalAddress(Address):
     def hex_hx(self):
         return self.prefix + self.hex()
 
+    def extend(self) -> 'ExternalAddressEx':
+        return ExternalAddressEx(ExternalAddressEx.prefix_bytes + self)
+
 
 class ContractAddress(Address):
     prefix = "cx"
 
     def hex_cx(self):
         return self.prefix + self.hex()
+
+    def extend(self) -> 'ContractAddressEx':
+        return ContractAddressEx(ContractAddressEx.prefix_bytes + self)
+
+
+class AddressEx(Bytes, metaclass=ABCMeta):
+    prefix_bytes = b''
+    size = 21
+
+    def hex_xx(self):
+        return self.prefix + self.hex()[2:]
+
+    @abstractmethod
+    def shorten(self) -> 'Address':
+        raise NotImplementedError
+
+
+class ExternalAddressEx(AddressEx):
+    prefix_bytes = b'\x00'
+    prefix = "hx"
+
+    def hex_hx(self):
+        return self.hex_xx()
+
+    def shorten(self) -> 'ExternalAddress':
+        return ExternalAddress(self[len(self.prefix_bytes):])
+
+
+class ContractAddressEx(AddressEx):
+    prefix_bytes = b'\x01'
+    prefix = "cx"
+
+    def hex_cx(self):
+        return self.hex_xx()
+
+    def shorten(self) -> 'ContractAddress':
+        return ContractAddress(self[len(self.prefix_bytes):])
 
 
 class BloomFilter(VarBytes):

@@ -15,222 +15,136 @@
 It has secure outer service for p2p consensus and status monitoring.
 And also has insecure inner service for inner process modules."""
 
+import getpass
+import logging
 import multiprocessing
+import os
 import signal
 import timeit
-from functools import partial
 
 import grpc
 
-from loopchain.baseservice import CommonSubprocess
-from loopchain.baseservice import StubManager, ObjectManager, RestStubManager
-from loopchain.blockchain import *
-from loopchain.container import RestService
+from loopchain import configure as conf
+from loopchain import utils
+from loopchain.baseservice import CommonSubprocess, ObjectManager, RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.protos import loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.message_queue import StubCollection
 
 
 class PeerService:
-    """Peer Service 의 main Class
-    outer 와 inner gRPC 인터페이스를 가진다.
-    서비스 루프 및 공통 요소는 commonservice 를 통해서 처리한다.
-    channel 관련 instance 는 channel manager 를 통해서 관리한다.
-    """
+    """Main class of peer service having outer & inner gRPC interface
 
-    def __init__(self, group_id=None, radio_station_target=None, node_type=None):
+    """
+    def __init__(self):
         """Peer는 Radio Station 에 접속하여 leader 및 다른 Peer에 대한 접속 정보를 전달 받는다.
 
-        :param group_id: Peer Group 을 구분하기 위한 ID, None 이면 Single Peer Group 이 된다. (peer_id is group_id)
-        conf.PEER_GROUP_ID 를 사용하면 configure 파일에 저장된 값을 group_id 로 사용하게 된다.
-        :param radio_station_ip: RS IP
-        :param radio_station_port: RS Port
         :return:
         """
-        node_type = node_type or conf.NodeType.CommunityNode
-
-        self.is_support_node_function = \
-            partial(conf.NodeType.is_support_node_function, node_type=node_type)
-
-        util.logger.spam(f"Your Peer Service runs on debugging MODE!")
-        util.logger.spam(f"You can see many terrible garbage logs just for debugging, DO U Really want it?")
-
-        self.__node_type = node_type
-
-        self.__radio_station_target = radio_station_target
-        logging.info("Set Radio Station target is " + self.__radio_station_target)
-
-        self.__radio_station_stub = None
-
-        self.__peer_id = None
-        self.__group_id = group_id
-        if self.__group_id is None and conf.PEER_GROUP_ID != "":
-            self.__group_id = conf.PEER_GROUP_ID
-
+        self._peer_id = None
+        self._node_key = bytes()
         self.p2p_outer_server: grpc.Server = None
-        self.__channel_infos = None
-
-        self.__rest_service = None
-        self.__rest_proxy_server = None
+        self._channel_infos = None
 
         # peer status cache for channel
         self.status_cache = {}  # {channel:status}
 
-        self.__score = None
-        self.__peer_target = None
-        self.__rest_target = None
-        self.__peer_port = 0
+        self._peer_target = None
+        self._rest_target = None
+        self._peer_port = 0
 
         # gRPC service for Peer
-        self.__inner_service: PeerInnerService = None
-        self.__outer_service: PeerOuterService = None
-        self.__channel_services = {}
+        self._inner_service: PeerInnerService = None
+        self._outer_service: PeerOuterService = None
 
-        self.__node_keys: dict = {}
+        self._channel_services = {}
+        self._rest_service = None
 
         ObjectManager().peer_service = self
 
     @property
     def inner_service(self):
-        return self.__inner_service
+        return self._inner_service
 
     @property
     def outer_service(self):
-        return self.__outer_service
+        return self._outer_service
 
     @property
     def peer_target(self):
-        return self.__peer_target
+        return self._peer_target
 
     @property
     def rest_target(self):
-        return self.__rest_target
+        return self._rest_target
 
     @property
     def channel_infos(self):
-        return self.__channel_infos
-
-    @property
-    def node_type(self):
-        return self.__node_type
-
-    @property
-    def radio_station_target(self):
-        return self.__radio_station_target
-
-    @property
-    def stub_to_radiostation(self):
-        if self.__radio_station_stub is None:
-            if self.is_support_node_function(conf.NodeFunction.Vote):
-                if conf.ENABLE_REP_RADIO_STATION:
-                    self.__radio_station_stub = StubManager.get_stub_manager_to_server(
-                        self.__radio_station_target,
-                        loopchain_pb2_grpc.RadioStationStub,
-                        conf.CONNECTION_RETRY_TIMEOUT_TO_RS,
-                        ssl_auth_type=conf.GRPC_SSL_TYPE)
-                else:
-                    self.__radio_station_stub = None
-            else:
-                self.__radio_station_stub = RestStubManager(self.__radio_station_target)
-
-        return self.__radio_station_stub
+        return self._channel_infos
 
     @property
     def peer_port(self):
-        return self.__peer_port
+        return self._peer_port
 
     @property
     def peer_id(self):
-        return self.__peer_id
+        return self._peer_id
 
     @property
-    def group_id(self):
-        if self.__group_id is None:
-            self.__group_id = self.__peer_id
-        return self.__group_id
-
-    @property
-    def node_keys(self):
-        return self.__node_keys
+    def node_key(self):
+        return self._node_key
 
     def p2p_server_stop(self):
         self.p2p_outer_server.stop(None)
 
-    def __get_channel_infos(self):
-        # util.logger.spam(f"__get_channel_infos:node_type::{self.__node_type}")
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            if conf.ENABLE_REP_RADIO_STATION:
-                response = self.stub_to_radiostation.call_in_times(
-                    method_name="GetChannelInfos",
-                    message=loopchain_pb2.GetChannelInfosRequest(
-                        peer_id=self.__peer_id,
-                        peer_target=self.__peer_target,
-                        group_id=self.group_id),
-                    retry_times=conf.CONNECTION_RETRY_TIMES_TO_RS,
-                    is_stub_reuse=False,
-                    timeout=conf.CONNECTION_TIMEOUT_TO_RS
-                )
-                # util.logger.spam(f"__get_channel_infos:response::{response}")
-
-                if not response:
-                    return None
-                logging.info(f"Connect to channels({util.pretty_json(response.channel_infos)})")
-                channels = json.loads(response.channel_infos)
-            else:
-                channels = util.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-
-                if conf.ENABLE_CHANNEL_AUTH:
-                    filtered_channels = {channel: channels[channel] for channel in channels
-                                         for peer in channels[channel]['peers']
-                                         if self.__peer_id == peer['id']}
-                    channels = filtered_channels
+    def _get_channel_infos(self):
+        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+            return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         else:
-            response = self.stub_to_radiostation.call_in_times(method_name="GetChannelInfos")
-            channels = {channel: value for channel, value in response["channel_infos"].items()}
+            return conf.CHANNEL_OPTION
 
-        return channels
-
-    def __init_port(self, port):
+    def _init_port(self, port):
         # service 초기화 작업
-        target_ip = util.get_private_ip()
-        self.__peer_target = util.get_private_ip() + ":" + str(port)
-        self.__peer_port = int(port)
+        target_ip = utils.get_private_ip()
+        self._peer_target = f"{target_ip}:{port}"
+        self._peer_port = int(port)
 
         rest_port = int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
-        self.__rest_target = f"{target_ip}:{rest_port}"
+        self._rest_target = f"{target_ip}:{rest_port}"
 
         logging.info("Start Peer Service at port: " + str(port))
 
-    def __run_rest_services(self, port):
+    def _run_rest_services(self, port):
         if conf.ENABLE_REST_SERVICE and conf.RUN_ICON_IN_LAUNCHER:
             logging.debug(f'Launch Sanic RESTful server. '
                           f'Port = {int(port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER}')
-            self.__rest_service = RestService(int(port))
+            self._rest_service = RestService(int(port))
 
-    def __init_key_by_channel(self):
-        for channel in conf.CHANNEL_OPTION:
-            signer = Signer.from_channel(channel)
-            if channel == conf.LOOPCHAIN_DEFAULT_CHANNEL:
-                self.__make_peer_id(signer.address)
-            self.__node_keys[channel] = signer.private_key.private_key
+    def _init_node_key(self):
+        prikey_file = conf.PRIVATE_PATH
 
-    def __make_peer_id(self, address):
-        self.__peer_id = address
+        if conf.PRIVATE_PASSWORD:
+            password = conf.PRIVATE_PASSWORD
+        else:
+            password = getpass.getpass(f"Input your keystore password: ")
+        signer = Signer.from_prikey_file(prikey_file, password)
+        self._make_peer_id(signer.address)
+        self._node_key = signer.private_key.private_key
+
+    def _make_peer_id(self, address):
+        self._peer_id = address
 
         logger_preset = loggers.get_preset()
         logger_preset.peer_id = self.peer_id
         logger_preset.update_logger()
 
-        logging.info(f"run peer_id : {self.__peer_id}")
-
-    def timer_test_callback_function(self, message):
-        logging.debug(f'timer test callback function :: ({message})')
+        logging.info(f"run peer_id : {self._peer_id}")
 
     @staticmethod
-    def __get_use_kms():
+    def _get_use_kms():
         if conf.GRPC_SSL_KEY_LOAD_TYPE == conf.KeyLoadType.KMS_LOAD:
             return True
         for value in conf.CHANNEL_OPTION.values():
@@ -238,19 +152,19 @@ class PeerService:
                 return True
         return False
 
-    def __init_kms_helper(self, agent_pin):
-        if self.__get_use_kms():
+    def _init_kms_helper(self, agent_pin):
+        if self._get_use_kms():
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().set_agent_pin(agent_pin)
 
-    def __close_kms_helper(self):
-        if self.__get_use_kms():
+    def _close_kms_helper(self):
+        if self._get_use_kms():
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
     def run_p2p_server(self):
-        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self.__peer_port))
-        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self.__outer_service, self.p2p_outer_server)
+        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
+        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self.p2p_outer_server)
 
     def serve(self,
               port,
@@ -272,31 +186,31 @@ class PeerService:
 
         stopwatch_start = timeit.default_timer()
 
-        self.__init_kms_helper(agent_pin)
-        self.__init_port(port)
-        self.__init_key_by_channel()
+        self._init_kms_helper(agent_pin)
+        self._init_port(port)
+        self._init_node_key()
 
         StubCollection().amqp_target = amqp_target
         StubCollection().amqp_key = amqp_key
 
         peer_queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=amqp_key)
-        self.__outer_service = PeerOuterService()
-        self.__inner_service = PeerInnerService(
+        self._outer_service = PeerOuterService()
+        self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        self.__reset_channel_infos()
+        self._load_channel_infos()
 
-        self.__run_rest_services(port)
+        self._run_rest_services(port)
         self.run_p2p_server()
 
-        self.__close_kms_helper()
+        self._close_kms_helper()
 
         stopwatch_duration = timeit.default_timer() - stopwatch_start
         logging.info(f"Start Peer Service at port: {port} start duration({stopwatch_duration})")
 
         async def _serve():
             await self.ready_tasks()
-            await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPS, conf.AMQP_RETRY_DELAY, exclusive=True)
+            await self._inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
             if conf.CHANNEL_BUILTIN:
                 await self.serve_channels()
@@ -306,7 +220,7 @@ class PeerService:
 
             logging.info(f'peer_service: init complete peer: {self.peer_id}')
 
-        loop = self.__inner_service.loop
+        loop = self._inner_service.loop
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)
@@ -321,11 +235,8 @@ class PeerService:
         # Monitor().stop()
 
         logging.info("Peer Service Ended.")
-        if self.__rest_service is not None:
-            self.__rest_service.stop()
-
-        if self.__rest_proxy_server is not None:
-            self.__rest_proxy_server.stop()
+        if self._rest_service is not None:
+            self._rest_service.stop()
 
     def close(self):
         async def _close():
@@ -335,12 +246,12 @@ class PeerService:
             self.p2p_server_stop()
             loop.stop()
 
-        loop = self.__inner_service.loop
+        loop = self._inner_service.loop
         loop.create_task(_close())
 
     async def serve_channels(self):
-        for i, channel_name in enumerate(self.__channel_infos.keys()):
-            score_port = self.__peer_port + conf.PORT_DIFF_SCORE_CONTAINER + conf.PORT_DIFF_BETWEEN_SCORE_CONTAINER * i
+        for i, channel_name in enumerate(self._channel_infos):
+            score_port = self._peer_port + conf.PORT_DIFF_SCORE_CONTAINER + conf.PORT_DIFF_BETWEEN_SCORE_CONTAINER * i
 
             args = ['python3', '-m', 'loopchain', 'channel']
             args += ['-p', str(score_port)]
@@ -358,31 +269,16 @@ class PeerService:
             channel_stub = StubCollection().channel_stubs[channel_name]
             await channel_stub.async_task().hello()
 
-            self.__channel_services[channel_name] = service
+            self._channel_services[channel_name] = service
 
     async def ready_tasks(self):
         await StubCollection().create_peer_stub()  # for getting status info
 
-        for channel_name, channel_info in self.__channel_infos.items():
+        for channel_name in self._channel_infos:
             await StubCollection().create_channel_stub(channel_name)
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
 
-    def __reset_channel_infos(self):
-        self.__channel_infos = self.__get_channel_infos()
-        if not self.__channel_infos:
-            util.exit_and_msg("There is no peer_list, initial network is not allowed without RS!")
-
-    async def change_node_type(self, node_type):
-        if self.__node_type.value == node_type:
-            util.logger.warning(f"Does not change node type because new note type equals current node type")
-            return
-
-        self.__node_type = conf.NodeType(node_type)
-        self.is_support_node_function = \
-            partial(conf.NodeType.is_support_node_function, node_type=node_type)
-
-        self.__radio_station_stub = None
-
-        self.__reset_channel_infos()
+    def _load_channel_infos(self):
+        self._channel_infos = self._get_channel_infos()

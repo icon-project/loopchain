@@ -31,8 +31,8 @@ from grpc._channel import _Rendezvous
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
     TimerService, Timer
-from loopchain.baseservice.tx_item_helper import *
-from loopchain.protos import loopchain_pb2_grpc
+from loopchain.baseservice.tx_item_helper import TxItem
+from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
@@ -71,6 +71,7 @@ class _Broadcaster:
             BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
+            BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handler_send_to_single_target,
         }
 
         self.__broadcast_with_self_target_methods = {
@@ -203,8 +204,14 @@ class _Broadcaster:
             except KeyError as e:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
+    def __handler_send_to_single_target(self, param):
+        method_name = param[0]
+        method_param = param[1]
+        target = param[2]
+        self.__call_async_to_target(target, method_name, method_param, True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
+
     def __handler_subscribe(self, audience_target):
-        logging.debug("BroadcastThread received subscribe command peer_target: " + str(audience_target))
+        util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -215,19 +222,19 @@ class _Broadcaster:
             self.__audience[audience_target] = stub_manager
 
     def __handler_unsubscribe(self, audience_target):
-        # logging.debug(f"BroadcastThread received unsubscribe command peer_target({unsubscribe_peer_target})")
+        util.logger.debug(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
         try:
             del self.__audience[audience_target]
         except KeyError:
-            logging.warning(f"Already deleted peer: {audience_target}")
+            logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
 
     def __handler_broadcast(self, broadcast_param):
-        # logging.debug("BroadcastThread received broadcast command")
+        # util.logger.debug(f"BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
         broadcast_method_kwparam = broadcast_param[2]
-        # logging.debug("BroadcastThread method name: " + broadcast_method_name)
-        # logging.debug("BroadcastThread method param: " + str(broadcast_method_param))
+        # util.logger.debug("BroadcastThread method name: " + broadcast_method_name)
+        # util.logger.debug("BroadcastThread method param: " + str(broadcast_method_param))
         self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
     def __make_tx_list_message(self):
@@ -325,17 +332,15 @@ class _Broadcaster:
     def __get_broadcast_targets(self, method_name):
 
         peer_targets = list(self.__audience)
-        if ObjectManager().rs_service:
-            return peer_targets
-        else:
-            if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
-                peer_targets.remove(self.__self_target)
-            return peer_targets
+        if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
+            peer_targets.remove(self.__self_target)
+        return peer_targets
 
 
 class BroadcastScheduler(metaclass=abc.ABCMeta):
     def __init__(self):
         self.__schedule_listeners = dict()
+        self.__audience_reps_hash = None
 
     @abc.abstractmethod
     def start(self):
@@ -390,13 +395,51 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def schedule_broadcast(self, method_name, method_param, *, retry_times=None, timeout=None):
+    def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+
+        if update_command:
+            update_reps = blockchain.find_preps_by_roothash(reps_hash)
+            util.logger.info(
+                f"update audience command({update_command})"
+                f"\nupdate_reps({update_reps})"
+            )
+            for rep in update_reps:
+                self.schedule_job(update_command, rep['p2pEndpoint'])
+            return
+
+        self._update_audience(self.__audience_reps_hash, BroadcastCommand.UNSUBSCRIBE)
+        self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
+        self.__audience_reps_hash = reps_hash
+
+    def update_audience(self, reps_hash):
+        self._update_audience(reps_hash)
+
+    def schedule_broadcast(
+            self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
+        update_audience_hash = None
+
+        if not self.__audience_reps_hash:
+            self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
+            update_audience_hash = self.__audience_reps_hash
+
+        if reps_hash and reps_hash != self.__audience_reps_hash:
+            update_audience_hash = reps_hash
+
+        if update_audience_hash:
+            self._update_audience(update_audience_hash)
+
         kwargs = {}
         if retry_times is not None:
             kwargs['retry_times'] = retry_times
         if timeout is not None:
             kwargs['timeout'] = timeout
+
+        util.logger.debug(f"broadcast method_name({method_name})")
         self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+
+    def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
+        self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
 
 
 class _BroadcastThread(CommonThread):

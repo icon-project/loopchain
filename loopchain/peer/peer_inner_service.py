@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from typing import TYPE_CHECKING
+
 from earlgrey import *
 
 from loopchain import utils as util
@@ -35,17 +36,17 @@ class PeerInnerTask:
         return self._peer_service.channel_infos
 
     @message_queue_task
-    async def get_channel_info_detail(self, channel_name):
-        channels_info = self._peer_service.channel_infos
-
-        return \
-            self._peer_service.peer_port, self._peer_service.peer_target, self._peer_service.rest_target, \
-            self._peer_service.radio_station_target, self._peer_service.peer_id, self._peer_service.group_id, \
-            self._peer_service.node_type.value, channels_info[channel_name]['score_package']
+    async def get_node_info_detail(self):
+        return {
+            'peer_port': self._peer_service.peer_port,
+            'peer_target': self._peer_service.peer_target,
+            'rest_target': self._peer_service.rest_target,
+            'peer_id': self._peer_service.peer_id
+        }
 
     @message_queue_task
-    async def get_node_key(self, channel_name) -> bytes:
-        return self._peer_service.node_keys[channel_name]
+    async def get_node_key(self) -> bytes:
+        return self._peer_service.node_key
 
     # FIXME : not used?
     @message_queue_task
@@ -85,9 +86,6 @@ class PeerInnerTask:
 
         util.exit_and_msg(message)
 
-    @message_queue_task
-    async def change_node_type(self, node_type):
-        await self._peer_service.change_node_type(node_type)
 
 class PeerInnerService(MessageQueueService[PeerInnerTask]):
     TaskType = PeerInnerTask

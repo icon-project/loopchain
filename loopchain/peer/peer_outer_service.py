@@ -16,10 +16,15 @@
 import asyncio
 import copy
 import datetime
+import json
+import logging
 from functools import partial
+from typing import cast
 
-from loopchain.baseservice import TimerService
-from loopchain.blockchain import *
+from loopchain import configure as conf
+from loopchain import utils
+from loopchain.baseservice import ObjectManager
+from loopchain.blockchain import ChannelStatusError
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
 from loopchain.utils.message_queue import StubCollection
@@ -36,9 +41,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_balance: self.__handler_get_balance,
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
             message_code.Request.get_total_supply: self.__handler_get_total_supply,
-            message_code.Request.peer_peer_list: self.__handler_peer_list,
-            message_code.Request.peer_reconnect_to_rs: self.__handler_reconnect_to_rs,
-            message_code.Request.peer_restart_channel: self.__handler_restart_channel
+            message_code.Request.peer_peer_list: self.__handler_peer_list
         }
 
         self.__status_cache_update_time = {}
@@ -48,7 +51,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return ObjectManager().peer_service
 
     def __handler_status(self, request, context):
-        util.logger.debug(f"peer_outer_service:handler_status ({request.message})")
+        utils.logger.debug(f"peer_outer_service:handler_status ({request.message})")
 
         if request.message == "get_stub_manager_to_server":
             # this case is check only gRPC available
@@ -56,11 +59,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         channel_stub = StubCollection().channel_stubs[channel_name]
-
-        # FIXME : is need?
-        if conf.ENABLE_REP_RADIO_STATION and request.message == "check peer status by rs":
-            channel_stub.sync_task().reset_timer(TimerService.TIMER_KEY_CONNECT_PEER)
-
         callback = partial(self.__status_update, request.channel)
         future = asyncio.run_coroutine_threadsafe(
             channel_stub.async_task().get_status(),
@@ -74,7 +72,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         meta = json.loads(request.meta) if request.meta else {}
         if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
-            util.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
+            utils.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
 
         status_json = json.dumps(status)
 
@@ -104,14 +102,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
-        util.logger.spam(f"checking for test, code: {request.code}")
-        util.logger.spam(f"checking for test, channel name: {request.channel}")
-        util.logger.spam(f"checking for test, message: {request.message}")
-        util.logger.spam(f"checking for test, meta: {json.loads(request.meta)}")
+        utils.logger.spam(f"checking for test, code: {request.code}")
+        utils.logger.spam(f"checking for test, channel name: {request.channel}")
+        utils.logger.spam(f"checking for test, message: {request.message}")
+        utils.logger.spam(f"checking for test, meta: {json.loads(request.meta)}")
 
         params = json.loads(request.meta)
 
-        util.logger.spam(f"params tx_hash({params['tx_hash']})")
+        utils.logger.spam(f"params tx_hash({params['tx_hash']})")
 
         return loopchain_pb2.Message(code=message_code.Response.success)
 
@@ -128,7 +126,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         query_request = loopchain_pb2.QueryRequest(params=request.meta, channel=request.channel)
         response = self.Query(query_request, context)
-        util.logger.spam(f"peer_outer_service:__handler_get_balance response({response})")
+        utils.logger.spam(f"peer_outer_service:__handler_get_balance response({response})")
 
         return loopchain_pb2.Message(code=response.response_code, meta=response.response)
 
@@ -141,7 +139,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         """
         query_request = loopchain_pb2.QueryRequest(params=request.meta, channel=request.channel)
         response = self.Query(query_request, context)
-        util.logger.spam(f"peer_outer_service:__handler_get_total_supply response({response})")
+        utils.logger.spam(f"peer_outer_service:__handler_get_total_supply response({response})")
 
         return loopchain_pb2.Message(code=response.response_code, meta=response.response)
 
@@ -171,36 +169,22 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                                      meta=str(next_index),
                                      object=tx_list_dumped)
 
-    def __handler_reconnect_to_rs(self, request, context):
-        logging.warning(f"RS lost peer info (candidate reason: RS restart)")
-        logging.warning(f"try reconnect to RS....")
-        ObjectManager().channel_service.connect_to_radio_station(is_reconnect=True)
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
-
-    def __handler_restart_channel(self, request, context):
-        logging.debug(f"Restart_channel({request.channel}) code({request.code}), message({request.message})")
-
-        ObjectManager().peer_service.start_channel(
-            channel=request.channel,
-            is_restart=True
-        )
-
-        return loopchain_pb2.Message(code=message_code.Response.success)
-
     def Request(self, request, context):
-        # util.logger.debug(f"Peer Service got request({request.code})")
+        # utils.logger.debug(f"Peer Service got request({request.code})")
 
         if request.code in self.__handler_map.keys():
             return self.__handler_map[request.code](request, context)
 
         return loopchain_pb2.Message(code=message_code.Response.not_treat_message_code)
 
+    def __set_status_cache(self, channel, status):
+        self.__status_cache_update_time[channel] = datetime.datetime.now()
+        self.peer_service.status_cache[channel] = status
+
     def __status_update(self, channel, future):
         # update peer outer status cache by channel
-        util.logger.spam(f"status_update channel({channel}) result({future.result()})")
-        self.__status_cache_update_time[channel] = datetime.datetime.now()
-        self.peer_service.status_cache[channel] = future.result()
+        # utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
+        self.__set_status_cache(channel, future.result())
 
     def __get_status_data(self, channel: str):
         return self.__get_status_from_cache(channel)
@@ -218,9 +202,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __get_status_from_cache(self, channel: str):
         if channel in self.peer_service.status_cache:
             if channel in self.__status_cache_update_time:
-                if util.datetime_diff_in_mins(
-                        self.__status_cache_update_time[channel]) \
-                        > conf.ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
+                update_time = self.__status_cache_update_time[channel]
+                if utils.datetime_diff_in_mins(update_time) > conf.STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
                     return None
             status_data = self.peer_service.status_cache[channel]
         else:
@@ -245,18 +228,31 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            raise ChannelStatusError(f"Invalid channel({channel_name})")
 
-            callback = partial(self.__status_update, channel_name)
-            future = asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().get_status(),
-                self.peer_service.inner_service.loop
-            )
-            future.add_done_callback(callback)
+        status_data = None
+        if request.request == 'block_sync':
+            try:
+                status_data = channel_stub.sync_task().get_status()
+                logging.debug(f"Got status for block_sync. status_data={status_data}")
+            except BaseException as e:
+                logging.error(f"Peer GetStatus(block_sync) Exception : {e}")
+            else:
+                if status_data is not None:
+                    self.__set_status_cache(channel_name, status_data)
+        else:
+            try:
+                callback = partial(self.__status_update, channel_name)
+                future = asyncio.run_coroutine_threadsafe(
+                    channel_stub.async_task().get_status(),
+                    self.peer_service.inner_service.loop)
+                future.add_done_callback(callback)
+            except BaseException as e:
+                logging.error(f"Peer GetStatus Exception : {e}")
 
-        except BaseException as e:
-            logging.error(f"Peer GetStatus Exception : {e}")
+            status_data = self.__get_status_data(channel_name)
 
-        status_data = self.__get_status_data(channel_name)
         if status_data is None:
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
 
@@ -329,7 +325,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             logging.info('Peer will stop... by: ' + request.reason)
 
         try:
-            for channel_name in self.peer_service.channel_infos:
+            for channel_name in conf.CHANNEL_OPTION:
                 channel_stub = StubCollection().channel_stubs[channel_name]
                 asyncio.run_coroutine_threadsafe(channel_stub.async_task().stop(), self.peer_service.inner_service.loop)
 
@@ -350,19 +346,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        util.logger.notice(f"ComplainLeader "
-                           f"height({request.block_height}) complained_peer({request.complained_leader_id})")
+        utils.logger.info(f"ComplainLeader {request.complain_vote}")
 
         channel_stub = StubCollection().channel_stubs[channel]
-
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().complain_leader(
-                complained_leader_id=request.complained_leader_id,
-                new_leader_id=request.new_leader_id,
-                block_height=request.block_height,
-                peer_id=request.peer_id,
-                group_id=request.group_id
-            ),
+            channel_stub.async_task().complain_leader(vote_dumped=request.complain_vote),
             self.peer_service.inner_service.loop
         )
 
@@ -397,7 +385,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
 
-        util.logger.spam(f"peer_outer_service:AddTx try validate_dumped_tx_message")
+        utils.logger.spam(f"peer_outer_service:AddTx try validate_dumped_tx_message")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         StubCollection().channel_stubs[channel_name].sync_task().add_tx(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -409,7 +397,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
-        util.logger.spam(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
+        utils.logger.spam(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         StubCollection().channel_tx_receiver_stubs[channel_name].sync_task().add_tx_list(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -448,64 +436,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                                         signature=response_sign,
                                         public_key=response_public_key,
                                         more_info=response_msg)
-
-    def GetLastBlockHash(self, request, context):
-        """ 마지막 블럭 조회
-
-        :param request: 블럭요청
-        :param context:
-        :return: 마지막 블럭
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        # Peer To Client
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_block(
-                block_height=-1,
-                block_hash='',
-                block_data_filter='block_hash',
-                tx_data_filter=''
-            ), self.peer_service.inner_service.loop
-        )
-        response_code, block_hash, _, block_data_json, tx_data_json_list = future.result()
-        response_code, response_msg = message_code.get_response(response_code)
-
-        return loopchain_pb2.BlockReply(response_code=response_code,
-                                        message=response_msg,
-                                        block_hash=block_hash)
-
-    def GetBlock(self, request, context):
-        """Block 정보를 조회한다.
-
-        :param request: loopchain.proto 의 GetBlockRequest 참고
-         request.block_hash: 조회할 block 의 hash 값, "" 로 조회하면 마지막 block 의 hash 값을 리턴한다.
-         request.block_data_filter: block 정보 중 조회하고 싶은 key 값 목록 "key1, key2, key3" 형식의 string
-         request.tx_data_filter: block 에 포함된 transaction(tx) 중 조회하고 싶은 key 값 목록
-        "key1, key2, key3" 형식의 string
-        :param context:
-        :return: loopchain.proto 의 GetBlockReply 참고,
-        block_hash, block 정보 json, block 에 포함된 tx 정보의 json 리스트를 받는다.
-        포함되는 정보는 param 의 filter 에 따른다.
-        """
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_block(
-                block_height=request.block_height,
-                block_hash=request.block_hash,
-                block_data_filter=request.block_data_filter,
-                tx_data_filter=request.tx_data_filter
-            ), self.peer_service.inner_service.loop
-        )
-        response_code, block_hash, confirm_info, block_data_json, tx_data_json_list = future.result()
-
-        return loopchain_pb2.GetBlockReply(response_code=response_code,
-                                           block_hash=block_hash,
-                                           block_data_json=block_data_json,
-                                           confirm_info=confirm_info,
-                                           tx_data_json=tx_data_json_list)
 
     def GetPrecommitBlock(self, request, context):
         """Return the precommit bock.
@@ -555,18 +485,22 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         return loopchain_pb2.GetInvokeResultReply(response_code=response_code, result=result)
 
     def AnnounceUnconfirmedBlock(self, request, context):
-        """수집된 tx 로 생성한 Block 을 각 peer 에 전송하여 검증을 요청한다.
+        """Send the UnconfirmedBlock includes collected transactions to reps and request to verify it.
 
         :param request:
         :param context:
         :return:
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        util.logger.debug(f"peer_outer_service::AnnounceUnconfirmedBlock channel({channel_name})")
-
         channel_stub = StubCollection().channel_stubs[channel_name]
+
+        try:
+            round_ = request.round_
+        except AttributeError:
+            round_ = 0
+
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().announce_unconfirmed_block(request.block),
+            channel_stub.async_task().announce_unconfirmed_block(request.block, round_),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
@@ -593,140 +527,14 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             block=block_dumped,
             unconfirmed_block_height=unconfirmed_block_height)
 
-    def Subscribe(self, request, context):
-        """BlockGenerator 가 broadcast(unconfirmed or confirmed block) 하는 채널에
-        Peer 를 등록한다.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        if not request.peer_id or not request.peer_target:
-            return loopchain_pb2.CommonReply(
-                response_code=message_code.get_response_code(message_code.Response.fail_wrong_subscribe_info),
-                message=message_code.get_response_msg(message_code.Response.fail_wrong_subscribe_info)
-            )
-
-        try:
-            channel_stub = StubCollection().channel_stubs[channel_name]
-        except KeyError:
-            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
-                                             message=f"There is no channel_stubs for channel({channel_name}).")
-
-        peer_list = [target['peer_target'] for target in self.peer_service.channel_infos[channel_name]["peers"]]
-
-        if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
-                (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
-            asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().add_audience(peer_target=request.peer_target),
-                self.peer_service.inner_service.loop
-            )
-            util.logger.debug(f"peer_outer_service::Subscribe add_audience "
-                              f"target({request.peer_target}) in channel({request.channel}), "
-                              f"order({request.peer_order})")
-        else:
-            logging.error(f"This target({request.peer_target}, {request.node_type}) failed to subscribe.")
-            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
-                                             message=message_code.get_response_msg("Unknown type peer"))
-
-        return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.success),
-                                         message=message_code.get_response_msg(message_code.Response.success))
-
-    def UnSubscribe(self, request, context):
-        """BlockGenerator 의 broadcast 채널에서 Peer 를 제외한다.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        peer_list = [target['peer_target'] for target in self.peer_service.channel_infos[channel_name]["peers"]]
-
-        if (request.peer_target in peer_list and conf.ENABLE_CHANNEL_AUTH) or \
-                (request.node_type == loopchain_pb2.CommunityNode and not conf.ENABLE_CHANNEL_AUTH):
-            asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().remove_audience(peer_target=request.peer_target),
-                self.peer_service.inner_service.loop
-            )
-            util.logger.spam(f"peer_outer_service::Unsubscribe remove_audience target({request.peer_target}) "
-                             f"in channel({request.channel})")
-        else:
-            logging.error(f"This target({request.peer_target}), {request.node_type} failed to unsubscribe.")
-            return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.fail),
-                                             message=message_code.get_response_msg("Unknown type peer"))
-
-        return loopchain_pb2.CommonReply(response_code=message_code.get_response_code(message_code.Response.success),
-                                         message=message_code.get_response_msg(message_code.Response.success))
-
-    def AnnounceNewPeer(self, request, context):
-        """RadioStation에서 Broadcasting 으로 신규 피어정보를 받아온다
-
-        :param request: PeerRequest
-        :param context:
-        :return:
-        """
-        # RadioStation To Peer
-        # prevent to show certificate content
-        # logging.info('Here Comes new peer: ' + str(request))
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"peer outer service::AnnounceNewPeer channel({channel})")
-
-        if request.peer_object:
-            channel_stub = StubCollection().channel_stubs[channel]
-            asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().announce_new_peer(request.peer_object, request.peer_target),
-                self.peer_service.inner_service.loop
-            )
-
-        return loopchain_pb2.CommonReply(response_code=0, message="success")
-
-    def AnnounceDeletePeer(self, request, context):
-        """delete peer by radio station heartbeat, It delete peer info over whole channels.
-
-        :param request:
-        :param context:
-        :return:
-        """
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"AnnounceDeletePeer peer_id({request.peer_id}) group_id({request.group_id})")
-
-        if self.peer_service.peer_id != request.peer_id:
-            channel_stub = StubCollection().channel_stubs[channel]
-            channel_stub.sync_task().delete_peer(request.peer_id, request.group_id)
-
-        return loopchain_pb2.CommonReply(response_code=0, message="success")
-
     def VoteUnconfirmedBlock(self, request, context):
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
-        util.logger.debug(f"VoteUnconfirmedBlock block_hash({request.block_hash.hex()})")
+        utils.logger.debug(f"VoteUnconfirmedBlock vote({request.vote})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().vote_unconfirmed_block(
-                peer_id=request.peer_id,
-                group_id=request.group_id,
-                block_hash=request.block_hash,
-                vote_code=request.vote_code
-            ),
+            channel_stub.async_task().vote_unconfirmed_block(request.vote),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
-
-    def GetChannelInfos(self, request: loopchain_pb2.GetChannelInfosRequest, context):
-        """Return channels by peer target
-
-        :param request:
-        :param context:
-        :return:
-        """
-        logging.info(f"peer_outer_service:GetChannelInfos target({request.peer_target}) "
-                     f"channel_infos({ObjectManager().peer_service.channel_infos})")
-
-        return loopchain_pb2.GetChannelInfosReply(
-            response_code=message_code.Response.success,
-            channel_infos=json.dumps(ObjectManager().peer_service.channel_infos)
-        )

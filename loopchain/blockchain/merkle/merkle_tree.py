@@ -13,9 +13,9 @@
 # limitations under the License.
 
 # link: https://github.com/Tierion/pymerkletools/
+
 import hashlib
-from collections import Iterable
-from typing import Union
+from typing import Union, Iterable, ByteString
 
 
 class MerkleTree:
@@ -33,7 +33,7 @@ class MerkleTree:
         self.levels = None
         self.is_ready = False
 
-    def add_leaf(self, values: Union[Iterable, bytes, bytearray], do_hash=False):
+    def add_leaf(self, values: Union[Iterable[ByteString], ByteString], do_hash=False):
         self.is_ready = False
         # check if single leaf
         if not isinstance(values, Iterable):
@@ -42,7 +42,7 @@ class MerkleTree:
         for v in values:
             if do_hash:
                 v = self.hash_function(v).digest()
-            v = bytearray(v)
+            v = bytes(v)
             self.leaves.append(v)
 
     def get_leaf(self, index):
@@ -107,8 +107,8 @@ class MerkleTree:
 
     @classmethod
     def validate_proof(cls, proof, target_hash, merkle_root):
-        merkle_root = bytearray(merkle_root)
-        target_hash = bytearray(target_hash)
+        merkle_root = bytes(merkle_root)
+        target_hash = bytes(target_hash)
         if len(proof) == 0:
             return target_hash == merkle_root
         else:
@@ -116,10 +116,10 @@ class MerkleTree:
             for p in proof:
                 try:
                     # the sibling is a left node
-                    sibling = bytearray(p['left'])
+                    sibling = bytes(p['left'])
                     proof_hash = cls.hash_function(sibling + proof_hash).digest()
-                except:
+                except KeyError:
                     # the sibling is a right node
-                    sibling = bytearray(p['right'])
+                    sibling = bytes(p['right'])
                     proof_hash = cls.hash_function(proof_hash + sibling).digest()
             return proof_hash == merkle_root

@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from typing import Dict
 
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.crypto.signature import Signer
-from . import Block
-from .. import Hash32, ExternalAddress, Signature
-from ..transactions import Transaction, TransactionVersioner
 
 
 class BlockBuilder(ABC):
@@ -19,7 +18,7 @@ class BlockBuilder(ABC):
         self.prev_hash: 'Hash32' = None
         self.signer: 'Signer' = None
 
-        self.transactions: Dict['Hash32', 'Transaction'] = OrderedDict()
+        self.transactions: OrderedDict[Hash32, Transaction] = OrderedDict()
 
         # Attributes to be generated
         self.block: Block = None
@@ -33,6 +32,7 @@ class BlockBuilder(ABC):
         return sum(tx.size(self._tx_versioner) for tx in self.transactions.values())
 
     def reset_cache(self):
+        # clear generated attributes
         self.block = None
         self.hash = None
         self.signature = None

@@ -66,7 +66,6 @@ fabric.properties
 ### Grpc Samples and Personal note ###
 grpc
 worknote
-loopchain/peer/radiopeer_pb2.py
 loopchain/protos/loopchain_pb2*.py
 
 ### level db and sqlite dirs ###
@@ -191,26 +190,13 @@ test_performance_result.txt
 # tmux_splitter_*.py
 
 # *.pem
-nouse_*
 resources/unittest/*
 docs_mine/
-resources/test_score_deploy/
-resources/test_score_repository/loopchain/
-resources/test_score_repository/develop/test_score/deploy/
-resources/test_score_repository/develop/test_query_exception/deploy/
-resources/ssl_grpc_test_cert/ssl.crt
-resources/ssl_test_cert/ssl.crt
-# resources/default_pki/*.der
-score/loopchain/
-score/develop/dev_score/deploy
-score/develop/test_score/deploy
-score/develop/test_score/.git
-score/develop/certificate
 testcase/unittest/blockchain_db*
 channel_manage_data_test2.json
 channel_manage_data_ori.json
 channel_manage_data.json
-citizen_0_conf.json
+monitoring_list.json
 run_a_test.sh
 todo.md
 
@@ -218,24 +204,19 @@ gen_docs/_build
 gen_docs/docs
 
 
-#!score/sample
-#score/
-score/.database_store/
 .storage
 
 deploy/LOOPCHAIN_VERSION
 parser_py.py
 
-resources/test_score_repository/develop/leveldb_test/deploy/
-resources/test_score_repository/develop/score_duplicate_test/deploy/
-score/score/
-test_rest_cert.sh
-test_rest_fine.sh
-virtualenv-15.2.0-py2.py3-none-any.whl
-
 *.whl
 
 user.mk
+
+# Test related
+.xprocess/
+.hypothesis/
+.pytest_cache/
 
 # start with _
 _*/

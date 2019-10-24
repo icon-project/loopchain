@@ -16,13 +16,13 @@
 # limitations under the License.
 """Test Generator blocks"""
 
-import leveldb
 import logging
 import os
 import unittest
 
 import testcase.unittest.test_util as test_util
 from loopchain import configure as conf
+from loopchain.blockchain import BlockChain
 from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
@@ -34,6 +34,9 @@ loggers.update_preset()
 
 @unittest.skip("BVS")
 class TestGeneratorBlock(unittest.TestCase):
+    """
+    TODO : rewrite this test class
+    """
     last_block = None
     __peer_id = 'aaa'
 
@@ -65,18 +68,17 @@ class TestGeneratorBlock(unittest.TestCase):
 
     def test_block_genesis(self):
         """
-        제네시스 블럭 생성 테스트
+        create genesis block
         """
-        db_name = 'genesis_db'
-        test_db = test_util.make_level_db(db_name)
-        self.assertIsNotNone(test_db, "DB생성 불가")
-        chain = BlockChain(test_db)
+        store_identity = 'genesis_db'
+        chain = BlockChain(store_id=store_identity)
+        self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
         block = test_util.add_genesis_block()
         chain.add_block(block)
 
-        self.assertIsNotNone(chain.last_block.block_hash, "제너릭 블럭 생성 불가")
-        # 테스트 DB 제거
-        leveldb.DestroyDB(db_name)
+        self.assertIsNotNone(chain.last_block.block_hash, "impossible create genesis block")
+        # remove test DB
+        chain.close_blockchain_store()
 
     def test_block_add(self):
         """
@@ -84,10 +86,10 @@ class TestGeneratorBlock(unittest.TestCase):
         제네시스 블럭을 만든후 10개의 트랜잭션을 가진 10개의 블럭을 생성하여
         블럭체인에 추가
         """
-        db_name = 'add_test_db'
-        test_db = test_util.make_level_db(db_name)
-        self.assertIsNotNone(test_db, "DB생성 불가")
-        chain = BlockChain(test_db)
+        store_identity = 'add_test_db'
+        # test_store = test_util.make_key_value_store(store_identity)
+        chain = BlockChain(store_id=store_identity)
+        self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
 
         block = test_util.add_genesis_block()
         chain.add_block(block)
@@ -119,14 +121,14 @@ class TestGeneratorBlock(unittest.TestCase):
         self.assertNotEqual(last_block_hash, chain.last_block.block_hash)
         self.assertIsNotNone(chain.last_block)
 
-        # 테스트 DB 제거
-        leveldb.DestroyDB(db_name)
+        # remove test DB
+        chain.close_blockchain_store()
 
     def test_block_confirm(self):
-        db_name = 'block_confirm_db'
-        test_db = test_util.make_level_db(db_name)
-        self.assertIsNotNone(test_db, "DB생성 불가")
-        chain = BlockChain(test_db)
+        store_identity = 'block_confirm_db'
+        chain = BlockChain(store_id=store_identity)
+
+        self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
         block = test_util.add_genesis_block()
         chain.add_block(block)
         self.last_block = block
@@ -142,7 +144,7 @@ class TestGeneratorBlock(unittest.TestCase):
         # 블럭 검증완료
         self.assertEqual(chain.last_block.block_hash, unconfirm_block.block_hash, "블럭이 추가되지 않았습니다.")
 
-        leveldb.DestroyDB(db_name)
+        chain.close_blockchain_store()
 
 
 if __name__ == '__main__':

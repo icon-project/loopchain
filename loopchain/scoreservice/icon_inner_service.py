@@ -11,7 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-from earlgrey import message_queue_task, MessageQueueService, MessageQueueStub
+
+from earlgrey import message_queue_task, MessageQueueStub
+
 from loopchain import utils
 
 
@@ -31,6 +33,10 @@ class IconScoreInnerTask:
 
     @message_queue_task
     async def query(self, request: dict) -> dict:
+        pass
+
+    @message_queue_task
+    async def call(self, request: dict) -> dict:
         pass
 
     @message_queue_task

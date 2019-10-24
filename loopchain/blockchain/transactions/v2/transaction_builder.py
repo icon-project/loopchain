@@ -1,11 +1,11 @@
 import time
 from typing import TYPE_CHECKING
-from . import Transaction, HASH_SALT
-from .. import TransactionBuilder as BaseTransactionBuilder
-from ... import Hash32
+from loopchain.blockchain.transactions import TransactionBuilder as BaseTransactionBuilder
+from loopchain.blockchain.transactions.v2 import Transaction, HASH_SALT
+from loopchain.blockchain.types import Signature
 
 if TYPE_CHECKING:
-    from ... import Address
+    from loopchain.blockchain.types import Address
 
 
 ICX_FEE = int(0.01 * 10**18)
@@ -33,12 +33,13 @@ class TransactionBuilder(BaseTransactionBuilder):
         super().reset_cache()
         self._timestamp = None
 
-    def build(self):
+    def build(self, is_signing=True):
         self.build_from_address()
         self.build_origin_data()
         self.build_hash()
-        self.sign()
-        self.build_raw_data()
+        if is_signing:
+            self.sign()
+        self.build_raw_data(is_signing)
 
         return Transaction(
             raw_data=self.raw_data,
@@ -71,9 +72,31 @@ class TransactionBuilder(BaseTransactionBuilder):
         self.origin_data = origin_data
         return self.origin_data
 
-    def build_raw_data(self):
+    def build_raw_data(self, is_signing=True):
         raw_data = dict(self.origin_data)
-        raw_data["signature"] = self.signature.to_base64str()
         raw_data["tx_hash"] = self.hash.hex()
+        if is_signing:
+            raw_data["signature"] = self.signature.to_base64str()
         self.raw_data = raw_data
         return self.raw_data
+
+    def sign_transaction(self, tx: 'Transaction'):
+        if self.signer.address != tx.signer_address.hex_hx():
+            raise RuntimeError(f"Signer not match. {self.signer.address} != {tx.signer_address.hex_hx()}")
+
+        signature = Signature(self.signer.sign_hash(tx.hash))
+
+        raw_data = dict(tx.raw_data)
+        raw_data["signature"] = signature.to_base64str()
+
+        return Transaction(
+            raw_data=raw_data,
+            hash=tx.hash,
+            signature=signature,
+            timestamp=tx.timestamp,
+            from_address=tx.from_address,
+            to_address=tx.to_address,
+            value=tx.value,
+            fee=tx.fee,
+            nonce=tx.nonce
+        )

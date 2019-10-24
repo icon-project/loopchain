@@ -21,14 +21,32 @@ import os
 import time
 from urllib.parse import urlparse, ParseResult
 
-import loopchain.utils as util
 from loopchain import configure as conf
+from loopchain import utils
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
-from loopchain.radiostation import RadioStationService
-from loopchain.rest_server.rest_server_rs import ServerComponents as RSServerComponents
 from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async_
+
+
+def parse_args_include_unknowns(parser, args=None, namespace=None):
+    args, argv = parser.parse_known_args(args, namespace)
+    unknowns = None
+    if argv:
+        print(f'unrecognized arguments: {argv}')
+        unknowns = ''.join(argv)
+    return args, unknowns
+
+
+def get_quick_command(unknowns):
+    if not unknowns:
+        return None
+
+    quick_command = ''.join(unknowns.split('-'))
+    if quick_command.isnumeric():
+        return unknowns
+
+    raise Exception(f'There is unrecognized argument {unknowns}')
 
 
 def main(argv):
@@ -37,7 +55,9 @@ def main(argv):
         cmd_arg_attr = command_arguments.attributes[cmd_arg_type]
         parser.add_argument(*cmd_arg_attr.names, **cmd_arg_attr.kwargs)
 
-    args = parser.parse_args(argv)
+    args, unknowns = parse_args_include_unknowns(parser, argv)
+    quick_command = get_quick_command(unknowns)
+
     command_arguments.set_raw_commands(args)
 
     if args.radio_station_target == 'testnet':
@@ -63,24 +83,18 @@ def main(argv):
     async_.thread_monkey_patch()
     async_.concurrent_future_monkey_patch()
 
-    if args.service_type == "peer":
-        start_as_peer(args, conf.NodeType.CommunityNode)
-    elif args.service_type == "citizen":
-        start_as_peer(args, conf.NodeType.CitizenNode)
-    elif args.service_type == "rs" or args.service_type == "radiostation":
-        start_as_rs(args)
+    if args.service_type in ("peer", "citizen"):
+        start_as_peer(args)
     elif args.service_type == "rest":
         start_as_rest_server(args)
-    elif args.service_type == "rest-rs":
-        start_as_rest_server_rs(args)
     elif args.service_type == "score":
         start_as_score(args)
     elif args.service_type == "channel":
         start_as_channel(args)
     elif args.service_type == "tool":
-        start_as_tool(args)
+        start_as_tool(args, quick_command)
     elif args.service_type == "admin":
-        start_as_admin(args)
+        start_as_admin(args, quick_command)
     else:
         print(f"not supported service type {args.service_type}\ncheck loopchain help.\n")
         os.system("python3 ./loopchain.py -h")
@@ -88,8 +102,8 @@ def main(argv):
 
 def check_port_available(port):
     # Check Port is Using
-    if util.check_port_using(int(port)):
-        util.exit_and_msg(f"not available port({port})")
+    if utils.check_port_using(int(port)):
+        utils.exit_and_msg(f"not available port({port})")
 
 
 def start_as_channel(args):
@@ -103,8 +117,9 @@ def start_as_channel(args):
 
 def start_as_rest_server(args):
     from iconcommons.icon_config import IconConfig
+    from iconcommons.logger import Logger
     from iconrpcserver.default_conf.icon_rpcserver_config import default_rpcserver_config
-    from iconrpcserver import icon_rpcserver_cli
+    from iconrpcserver import icon_rpcserver_app
 
     amqp_key = args.amqp_key or conf.AMQP_KEY
     api_port = int(args.port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
@@ -117,29 +132,17 @@ def start_as_rest_server(args):
 
     additional_conf = {
         "port": api_port,
-        "config": conf_path,
         "amqpTarget": conf.AMQP_TARGET,
         "amqpKey": amqp_key,
-        "channel": conf.LOOPCHAIN_DEFAULT_CHANNEL,
-        "tbearsMode": False
+        "channel": conf.LOOPCHAIN_DEFAULT_CHANNEL
     }
 
-    rpcserver_conf: IconConfig = IconConfig("", default_rpcserver_config)
+    rpcserver_conf: IconConfig = IconConfig(conf_path, default_rpcserver_config)
     rpcserver_conf.load()
     rpcserver_conf.update_conf(additional_conf)
+    Logger.load_config(rpcserver_conf)
 
-    icon_rpcserver_cli.start(rpcserver_conf)
-
-
-def start_as_rest_server_rs(args):
-    rs_port = args.port
-    api_port = int(rs_port) + conf.PORT_DIFF_REST_SERVICE_CONTAINER
-
-    RSServerComponents().set_resource()
-    RSServerComponents().set_stub_port(port=rs_port)
-
-    logging.info(f"Sanic rest server for RS is running!: {api_port}")
-    RSServerComponents().serve(api_port)
+    icon_rpcserver_app.run_in_foreground(rpcserver_conf)
 
 
 def start_as_score(args):
@@ -166,6 +169,7 @@ def start_as_score(args):
         "log": {
             "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
         },
+        "iissDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.iiss_{amqp_key}_{channel}",
         "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
         "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
         "channel": channel,
@@ -183,101 +187,47 @@ def start_as_score(args):
     icon_service.serve(config=icon_conf)
 
 
-def start_as_rs(args):
-    print_prologue()
-
-    # apply default configure values
-    port = args.port or conf.PORT_RADIOSTATION
-    cert = args.cert or None
-    pw = None
-    seed = args.seed or None
-    check_port_available(int(port))
-
-    if seed:
-        try:
-            seed = int(seed)
-        except ValueError as e:
-            util.exit_and_msg(f"seed or s opt must be int \n"
-                              f"input value : {seed}")
-
-    RadioStationService(conf.IP_RADIOSTATION, cert, pw, seed).serve(port)
-    print_epilogue()
-
-
-def start_as_admin(args):
+def start_as_admin(args, quick_command):
     print_prologue()
     try:
         from _tools.loopchain_private_tools import gtool
     except Exception as e:
         logging.error(f"admin service does not be provided. {e}")
     else:
-        gtool.main()
+        gtool.main(quick_command)
 
     print_epilogue()
 
 
-def start_as_tool(args):
+def start_as_tool(args, quick_command):
     print_prologue()
 
     try:
-        from _tools.loopchain_private_tools import demotool
+        from _tools.loopchain_private_tools.demotool import DemoTool
     except Exception as e:
         logging.error(f"tool service does not be provided. {e}")
     else:
-        demotool.main_menu(True)
+        DemoTool().main()
 
     print_epilogue()
 
 
-def start_as_peer(args, node_type=None):
+def start_as_peer(args):
     print_prologue()
 
     # apply default configure values
     port = args.port or conf.PORT_PEER
-    radio_station_target = f"{conf.IP_RADIOSTATION}:{conf.PORT_RADIOSTATION}"
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
     if conf.CHANNEL_BUILTIN:
         if not amqp_key or amqp_key == conf.AMQP_KEY_DEFAULT:
-            amqp_key = f"{util.get_private_ip()}:{port}"
+            amqp_key = f"{utils.get_private_ip()}:{port}"
             command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
     check_port_available(int(port))
 
-    if node_type is None:
-        node_type = conf.NodeType.CommunityNode
-    elif node_type == conf.NodeType.CitizenNode and not args.radio_station_target:
-        util.exit_and_msg(f"citizen node needs subscribing peer target input")
-
-    if args.radio_station_target:
-        try:
-            parse_result: ParseResult = urlparse(args.radio_station_target)
-
-            if conf.SUBSCRIBE_USE_HTTPS:
-                if not parse_result.scheme:
-                    parse_result = urlparse(f"https://{args.radio_station_target}")
-            else:
-                if not parse_result.scheme:
-                    parse_result = urlparse(f"http://{args.radio_station_target}")
-                    if not parse_result.port:
-                        parse_result = urlparse(f"http://{args.radio_station_target}:{conf.PORT_RADIOSTATION}")
-
-            radio_station_target = parse_result.netloc
-
-        except Exception as e:
-            util.exit_and_msg(f"'-r' or '--radio_station_target' option requires "
-                              f"[IP Address of Radio Station]:[PORT number of Radio Station], "
-                              f"or just [IP Address of Radio Station] format. error({e})")
-
-    # run peer service with parameters
-    logging.info(f"loopchain peer run with: port({port}) "
-                 f"radio station target({radio_station_target})")
-
-    PeerService(
-        radio_station_target=radio_station_target,
-        node_type=node_type
-    ).serve(
+    PeerService().serve(
         port=port,
         agent_pin=args.agent_pin,
         amqp_target=amqp_target,

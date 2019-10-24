@@ -14,7 +14,7 @@
 
 from argparse import Namespace
 from enum import IntEnum
-from typing import Dict, List
+from typing import Dict
 
 
 class Type(IntEnum):
@@ -27,9 +27,8 @@ class Type(IntEnum):
     Cert = 6
     Seed = 7
     Channel = 8
-    ScorePackage = 9
-    AMQPTarget = 10
-    AMQPKey = 11
+    AMQPTarget = 9
+    AMQPKey = 10
 
 
 class Attribute:
@@ -60,15 +59,14 @@ types_by_names = {
     "cert": Type.Cert,
     "seed": Type.Seed,
     "channel": Type.Channel,
-    "score_package": Type.ScorePackage,
     "amqp_target": Type.AMQPTarget,
     "amqp_key": Type.AMQPKey
 }
 
 attributes = {
     Type.ServiceType:
-        Attribute("service_type", type=str,
-                  help="loopchain service to start [rs|peer|citizen|rest|rest-rs|score|tool|admin]"),
+        Attribute("service_type", type=str, default='citizen', nargs='?',
+                  help="loopchain service to start [peer|citizen|tool|admin]"),
 
     Type.Port:
         Attribute("-p", "--port",
@@ -106,10 +104,6 @@ attributes = {
     Type.Channel:
         Attribute("--channel",
                   help="channel name for score service"),
-
-    Type.ScorePackage:
-        Attribute("--score_package",
-                  help="score package name"),
 
     Type.AMQPTarget:
         Attribute("--amqp_target",

@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from typing import TYPE_CHECKING, Optional
+
 from loopchain.components import SingletonMetaClass
+
+if TYPE_CHECKING:
+    from loopchain.blockchain import ExternalAddress
 
 
 class ChannelProperty(metaclass=SingletonMetaClass):
@@ -20,11 +25,11 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.name = None
         self.peer_target = None
         self.rest_target = None
-        self.radio_station_target = None
+        self.rs_target = None
         self.amqp_target = None
         self.peer_port = None
         self.peer_id = None
-        self.group_id = None
+        self.peer_address: Optional[ExternalAddress] = None
+        self.peer_auth = None
         self.node_type = None
-        self.score_package = None
         self.nid = None

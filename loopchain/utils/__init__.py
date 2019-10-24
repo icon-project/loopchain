@@ -16,10 +16,8 @@
 import datetime
 import importlib.machinery
 import json
-import leveldb
 import logging
 import os
-import os.path as osp
 import re
 import signal
 import socket
@@ -27,16 +25,19 @@ import sys
 import time
 import timeit
 import traceback
-import verboselogs
 from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
-from fluent import event
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
+from typing import Tuple, Optional, Union
+
+import verboselogs
+from fluent import event
 
 from loopchain import configure as conf
 from loopchain.protos import loopchain_pb2, message_code
+from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 
 apm_event = None
@@ -44,7 +45,7 @@ apm_event = None
 logger = verboselogs.VerboseLogger("dev")
 
 
-def long_to_bytes (val, endianness='big'):
+def long_to_bytes(val, endianness='big'):
     """Use :ref:`string formatting` and :func:`~binascii.unhexlify` to
     convert ``val``, a :func:`long`, to a byte :func:`str`.
 
@@ -223,9 +224,14 @@ def request_server_wait_response(stub_method, message, time_out_seconds=None):
     return None
 
 
-def normalize_request_url(url_input, version, channel=None):
+def normalize_request_url(url_input, version=None, channel=None):
+    use_https = False
+
     if 'http://' in url_input:
         url_input = url_input.split("http://")[1]
+
+    if 'https://' in url_input:
+        use_https = True
 
     if not url_input:  # ex) '' => http://localhost:9000/api/v3
         url = generate_url_from_params(version=version, channel=channel)
@@ -251,29 +257,26 @@ def normalize_request_url(url_input, version, channel=None):
     elif url_input.count('.') == 3 and url_input.replace(".", "").isdigit():  # ex) 127.0.0.1
         url = generate_url_from_params(ip=url_input, version=version, channel=channel)
     else:  # ex) testwallet.icon.foundation => https://testwallet.icon.foundation/api/v3
-        url = generate_url_from_params(dns=url_input, version=version, use_https=True, channel=channel)
+        url = generate_url_from_params(dns=url_input, version=version, use_https=use_https, channel=channel)
 
     return url
 
 
 def generate_url_from_params(ip=None, dns=None, port=None, version=None, use_https=False, channel=None):
-    if ip is None:
-        ip = conf.IP_LOCAL
-    if port is None:
-        port = conf.PORT_PEER_FOR_REST
-    if version is None:
-        version = conf.ApiVersion.v3
-    if channel is None:
-        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL
+    ip = ip or conf.IP_LOCAL
+    port = port or conf.PORT_PEER_FOR_REST
+    version = version or conf.ApiVersion.v3
+    channel = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
+    scheme = 'https' if use_https else 'http'
 
     if dns:
         ip = dns
         port = '443'
 
-    if conf.ENABLE_MULTI_CHANNEL_REQUEST and version in (conf.ApiVersion.v3, conf.ApiVersion.node):
-        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}/{channel}"
+    if version in (conf.ApiVersion.v3, conf.ApiVersion.node):
+        url = f"{scheme}://{ip}:{port}/api/{version.name}/{channel}"
     else:
-        url = f"{'https' if use_https else 'http'}://{ip}:{port}/api/{version.name}"
+        url = f"{scheme}://{ip}:{port}/api/{version.name}"
     return url
 
 
@@ -351,6 +354,11 @@ def get_private_ip():
         return get_private_ip3()
 
 
+def convert_local_ip_to_private_ip(data: Union[list, dict]):
+    converted = json.dumps(data).replace('[local_ip]', get_private_ip())
+    return json.loads(converted)
+
+
 def load_json_data(channel_manage_data_path: str):
     try:
         logging.debug(f"load_json_data() : try to load channel management"
@@ -358,8 +366,7 @@ def load_json_data(channel_manage_data_path: str):
         with open(channel_manage_data_path) as file:
             json_data = json.load(file)
 
-        json_string = json.dumps(json_data).replace('[local_ip]', get_private_ip())
-        json_data = json.loads(json_string)
+        json_data = convert_local_ip_to_private_ip(json_data)
         logging.info(f"loading channel info : {json_data}")
         return json_data
     except FileNotFoundError as e:
@@ -465,37 +472,35 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def init_level_db(level_db_identity, allow_rename_path=True):
-    """init Level Db
+def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
+    """init default key value store
 
-    :param level_db_identity: identity for leveldb
-    :return: level_db, level_db_path
+    :param store_identity: identity for store
+    :return: KeyValueStore, store_path
     """
-    level_db = None
-
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    db_default_path = osp.join(conf.DEFAULT_STORAGE_PATH, 'db_' + level_db_identity)
-    db_path = db_default_path
-    logger.spam(f"utils:init_level_db ({level_db_identity})")
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
+    logger.spam(f"utils:init_default_key_value_store ({store_identity})")
 
     retry_count = 0
-    while level_db is None and retry_count < conf.MAX_RETRY_CREATE_DB:
+    store = None
+    while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            level_db = leveldb.LevelDB(db_path, create_if_missing=True)
-        except leveldb.LevelDBError as e:
-            logging.error(f"LevelDBError: {e}")
-            logger.debug(f"retry_count: {retry_count}, path: {db_path}")
-            if allow_rename_path:
-                db_path = db_default_path + str(retry_count)
+            uri = f"file://{store_path}"
+            store = KeyValueStore.new(uri, create_if_missing=True)
+        except KeyValueStoreError as e:
+            logging.error(f"KeyValueStoreError: {e}")
+            logger.debug(f"retry_count: {retry_count}, uri: {uri}")
+            traceback.print_exc()
         retry_count += 1
 
-    if level_db is None:
-        logging.error("Fail! Initialize LevelDB")
-        raise leveldb.LevelDBError("Fail To Initialize Level DB(path): " + db_path)
+    if store is None:
+        logging.error("Fail! Create key value store")
+        raise KeyValueStoreError(f"Fail to create key value store. path={store_path}")
 
-    return level_db, db_path
+    return store, store_path
 
 
 def no_send_apm_event(peer_id, event_param):
@@ -520,11 +525,12 @@ def get_now_time_stamp(init_time_seconds=None):
     return int(time_seconds * 1_000_000)
 
 
-def is_in_time_boundary(timestamp, range_second):
-    now_timestamp = get_now_time_stamp()
+def is_in_time_boundary(timestamp, range_second, pivot_timestamp=None):
+    if pivot_timestamp is None:
+        pivot_timestamp = get_now_time_stamp()
     timestamp_range = get_now_time_stamp(range_second)
-    left_timestamp_bound = now_timestamp - timestamp_range
-    right_timestamp_bound = now_timestamp + timestamp_range
+    left_timestamp_bound = pivot_timestamp - timestamp_range
+    right_timestamp_bound = pivot_timestamp + timestamp_range
     return left_timestamp_bound <= timestamp <= right_timestamp_bound
 
 

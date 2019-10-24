@@ -13,10 +13,15 @@
 # limitations under the License.
 """loopchain timer service."""
 import asyncio
+import logging
+import threading
 import time
+import traceback
+from enum import Enum
+from typing import Dict, Callable, Awaitable, Union, Optional
 
+from loopchain import utils as util
 from loopchain.baseservice import CommonThread
-from loopchain.blockchain import *
 
 
 class OffType(Enum):
@@ -41,25 +46,38 @@ class Timer:
         """
         self.target = kwargs.get("target")
         self.duration = kwargs.get("duration")
-        self.is_run_at_start = kwargs.get("is_run_at_start", False)
-        self.is_repeat = kwargs.get("is_repeat", False)
+        self.is_run_at_start: bool = kwargs.get("is_run_at_start", False)
+        self._is_repeat: bool = kwargs.get("is_repeat", False)
+
+        # only works If is_repeat=True. 0 means no timeout.
+        self._repeat_timeout: int = kwargs.get("repeat_timeout", 0)
 
         self.__start_time = time.time()
-        self.__callback = kwargs.get("callback", None)
+        self.__repeat_start_time = self.__start_time
+        self.__callback: Union[Callable, Awaitable] = kwargs.get("callback", None)
         self.__kwargs = kwargs.get("callback_kwargs") or {}
 
-    def is_timeout(self):
+    def is_timeout(self) -> bool:
         if time.time() - self.__start_time < self.duration:
             return False
 
         util.logger.spam(f'timer({self.target}) gap: {time.time() - self.__start_time}')
         return True
 
+    @property
+    def is_repeat(self) -> bool:
+        if self._is_repeat and \
+                (self._repeat_timeout == 0 or
+                 (time.time() - self.__repeat_start_time < self._repeat_timeout)):
+            return True
+
+        return False
+
     def reset(self):
         self.__start_time = time.time()
         util.logger.spam(f"reset_timer: {self.target}")
 
-    def remain_time(self):
+    def remain_time(self) -> Union[int, float]:
         end_time = self.__start_time + self.duration
         remain = end_time - time.time()
         return remain if remain > 0 else 0
@@ -75,9 +93,24 @@ class Timer:
         if off_type is OffType.time_out:
             logging.debug(f'timer({self.target}) is turned off by timeout')
             if asyncio.iscoroutinefunction(self.__callback):
-                asyncio.get_event_loop().create_task(self.__callback(**self.__kwargs))
+                self.try_coroutine()
             else:
-                self.__callback(**self.__kwargs)
+                self.try_func()
+
+    def try_func(self):
+        try:
+            self.__callback(**self.__kwargs)
+        except Exception:
+            traceback.print_exc()
+
+    def try_coroutine(self):
+        async def _try_coroutine():
+            try:
+                await self.__callback(**self.__kwargs)
+            except Exception:
+                traceback.print_exc()
+
+        asyncio.get_event_loop().create_task(_try_coroutine())
 
     def __repr__(self):
         return f"{self.__callback}, {self.remain_time()}"
@@ -89,17 +122,17 @@ class TimerService(CommonThread):
     TIMER_KEY_BLOCK_HEIGHT_SYNC = "TIMER_KEY_BLOCK_HEIGHT_SYNC"
     TIMER_KEY_ADD_TX = "TIMER_KEY_ADD_TX"
     TIMER_KEY_SUBSCRIBE = "TIMER_KEY_SUBSCRIBE"
-    TIMER_KEY_CONNECT_PEER = "TIMER_KEY_CONNECT_PEER"
-    TIMER_KEY_RS_HEARTBEAT = "TIMER_KEY_RS_HEARTBEAT"
     TIMER_KEY_WS_HEARTBEAT = "TIMER_KEY_WS_HEARTBEAT"
     TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE = "TIMER_KEY_SHUTDOWN_WHEN_FAIL_SUBSCRIBE"
+    TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED = "TIMER_KEY_SHUTDOWN_WHEN_TERM_EXPIRED"
+    TIMER_KEY_BLOCK_MONITOR = "TIMER_KEY_BLOCK_MONITOR"
     TIMER_KEY_BLOCK_GENERATE = "TIMER_KEY_BLOCK_GENERATE"
     TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK = "TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK"
     TIMER_KEY_LEADER_COMPLAIN = "TIMER_KEY_LEADER_COMPLAIN"
 
     def __init__(self):
         CommonThread.__init__(self)
-        self.__timer_list = {}
+        self.__timer_list: Dict[str, Timer] = {}
         self.__loop: asyncio.BaseEventLoop = asyncio.new_event_loop()
         # self.__loop.set_debug(True)
 
@@ -108,10 +141,10 @@ class TimerService(CommonThread):
         return self.__loop
 
     @property
-    def timer_list(self):
+    def timer_list(self) -> Dict[str, Timer]:
         return self.__timer_list
 
-    def add_timer(self, key, timer):
+    def add_timer(self, key, timer: Timer):
         """add timer to self.__timer_list
 
         :param key: key
@@ -149,7 +182,7 @@ class TimerService(CommonThread):
         else:
             logging.warning(f'({key}) is not in timer list.')
 
-    def get_timer(self, key):
+    def get_timer(self, key) -> Union[Timer]:
         """get a timer by key
 
         :param key: key
@@ -186,7 +219,7 @@ class TimerService(CommonThread):
         else:
             logging.warning(f"restart_timer:There is no value by this key: {key}")
 
-    def stop_timer(self, key, off_type=OffType.normal):
+    def stop_timer(self, key, off_type: OffType = OffType.normal):
         """stop timer
 
         :param key: key
@@ -208,8 +241,11 @@ class TimerService(CommonThread):
 
         self.__loop.call_soon_threadsafe(self.__loop.stop)
 
-    def clean(self):
+    def clean(self, except_key: Optional[str] = None):
+        temp_timer = self.__timer_list.get(except_key)
         self.__timer_list = {}
+        if temp_timer is not None:
+            self.__timer_list[except_key] = temp_timer
 
     def run(self, e: threading.Event):
         e.set()
@@ -221,7 +257,7 @@ class TimerService(CommonThread):
         try:
             timer_in_list = self.__timer_list[key]
         except KeyError:
-            pass
+            util.logger.spam(f"There is no timer of {key} in {self.__timer_list.keys()}")
         else:
             if timer is not timer_in_list:
                 return

@@ -1,18 +1,21 @@
 {
-  "log": {
-    "logger": "iconrpcserver",
-    "colorLog": true,
-    "level": "warning",
-    "filePath": "./log/mainnet/icon_dex/iconrpcserver.log",
-    "outputType": "console|file",
-    "rotate": {
-      "type": "period|bytes",
-      "period": "daily",
-      "interval": 1,
-      "backupCount": 10,
-      "maxBytes": 50000000
+    "log": {
+        "logger": "iconrpcserver",
+        "colorLog": true,
+        "level": "warning",
+        "filePath": "./log/mainnet/icon_dex/iconrpcserver.log",
+        "outputType": "console|file",
+        "rotate": {
+            "type": "period|bytes",
+            "period": "daily",
+            "interval": 1,
+            "backupCount": 10,
+            "maxBytes": 50000000
+        }
+    },
+    "redirectProtocol": "https",
+    "gunicornConfig": {
+        "workers": 1,
+        "graceful_timeout": 0
     }
-  },
-  "gunicornWorkerCount": 1,
-  "redirectProtocol": "https"
 }

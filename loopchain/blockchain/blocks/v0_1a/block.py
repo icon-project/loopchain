@@ -1,9 +1,9 @@
 from collections import OrderedDict
-
 from dataclasses import dataclass
 
-from .. import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, _dict__str__
-from ... import Hash32, Address, Signature, ExternalAddress
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody, \
+    _dict__str__
+from loopchain.blockchain.types import Hash32, Address, Signature, ExternalAddress
 
 
 @dataclass(frozen=True)
@@ -29,9 +29,33 @@ class BlockHeader(BaseBlockHeader):
             object.__setattr__(self, "commit_state", commit_state)
 
     @property
+    def reps_hash(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
+        return None
+
+    @property
     def complained(self) -> bool:
         # tx == 0 and peer_id == next_leader >> complained = True
         return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
+
+    @property
+    def prep_changed(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
+        return None
+
+    @property
+    def is_unrecorded(self) -> bool:
+        """If the block version doesn't support this, it should return False.
+        """
+        return False
+
+    @property
+    def revealed_next_reps_hash(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
+        return None
 
 
 @dataclass(frozen=True)

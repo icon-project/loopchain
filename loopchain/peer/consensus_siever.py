@@ -1,4 +1,4 @@
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,24 +14,36 @@
 """A consensus class based on the Siever algorithm for the loopchain"""
 
 import asyncio
+import json
 from functools import partial
+from typing import TYPE_CHECKING, Optional
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import ExternalAddress, Block, Epoch, NotEnoughVotes
+from loopchain.blockchain import Epoch
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.types import ExternalAddress, Hash32
+from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
+if TYPE_CHECKING:
+    from loopchain.peer import BlockManager
+
 
 class ConsensusSiever(ConsensusBase):
-    def __init__(self, block_manager):
+    def __init__(self, block_manager: 'BlockManager'):
         super().__init__(block_manager)
         self.__block_generation_timer = None
         self.__lock = None
 
         self._loop: asyncio.BaseEventLoop = None
         self._vote_queue: asyncio.Queue = None
+
+        util.logger.debug(f"Stop previous broadcast!")
+        self.stop_broadcast_send_unconfirmed_block_timer()
 
     def start_timer(self, timer_service: TimerService):
         self._loop = timer_service.get_event_loop()
@@ -55,8 +67,6 @@ class ConsensusSiever(ConsensusBase):
 
     def stop(self):
         self.__block_generation_timer.stop()
-        self.__stop_broadcast_send_unconfirmed_block_timer()
-
         if self._loop:
             self.__put_vote(None)
 
@@ -64,163 +74,265 @@ class ConsensusSiever(ConsensusBase):
     def is_running(self):
         return self.__block_generation_timer.is_running
 
-    def vote(self, vote_block_hash, vote_code, peer_id, group_id):
+    def vote(self, vote):
         if self._loop:
-            self.__put_vote((vote_block_hash, vote_code, peer_id, group_id))
+            self.__put_vote(vote)
             return
 
         util.logger.debug("Cannot vote before starting consensus.")
         # raise RuntimeError("Cannot vote before starting consensus.")
 
-    def __build_candidate_block(self, block_builder, next_leader, vote_result):
+    def __build_candidate_block(self, block_builder):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
-        block_builder.next_leader = next_leader
-        block_builder.signer = ObjectManager().channel_service.peer_auth
-        block_builder.confirm_prev_block = vote_result or (self._made_block_count > 0)
+        block_builder.signer = ChannelProperty().peer_auth
+        block_builder.confirm_prev_block = (block_builder.version == '0.1a')
 
-        # TODO: This should be changed when IISS is applied.
-        block_builder.reps = ObjectManager().channel_service.get_rep_ids()
+        if block_builder.version == '0.1a' or (not block_builder.next_leader and not block_builder.reps):
+            block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
+            block_builder.reps = self._block_manager.epoch.reps
 
         return block_builder.build()
 
     async def __add_block(self, block: Block):
-        vote = self._block_manager.candidate_blocks.get_vote(block.header.hash)
-        vote_result = await self._wait_for_voting(block)
-        if not vote_result:
+        vote = await self._wait_for_voting(block)
+        if not vote:
             raise NotEnoughVotes
+        elif not vote.get_result():
+            raise InvalidBlock
 
-        self._block_manager.get_blockchain().add_block(block, vote)
+        self._blockchain.add_block(block, confirm_info=vote.votes)
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
-        self._made_block_count += 1
 
-    async def __add_block_and_new_epoch(self, block_builder, last_unconfirmed_block: Block):
-        """Add Block and start new epoch
+    def _makeup_new_block(self, block_version, complain_votes, block_hash):
+        self._blockchain.last_unconfirmed_block = None
+        dumped_votes = self._blockchain.find_confirm_info_by_hash(block_hash)
 
-        :param block_builder:
-        :param last_unconfirmed_block:
-        :return: next leader
-        """
-        await self.__add_block(last_unconfirmed_block)
-        self.__remove_duplicate_tx_when_turn_to_leader(block_builder, last_unconfirmed_block)
-        self._block_manager.epoch = Epoch.new_epoch(ChannelProperty().peer_id)
-        return last_unconfirmed_block.header.next_leader
+        if block_version == '0.1a':
+            votes = dumped_votes
+        else:
+            votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
-    def __remove_duplicate_tx_when_turn_to_leader(self, block_builder, last_unconfirmed_block):
-        if self.made_block_count == 1:
-            for tx_hash_in_unconfirmed_block in last_unconfirmed_block.body.transactions:
-                block_builder.transactions.pop(tx_hash_in_unconfirmed_block, None)
+        return self._block_manager.epoch.makeup_block(complain_votes, votes)
+
+    def __get_complaint_votes(self):
+        if self._block_manager.epoch.complained_result:
+            return self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
+        return None
 
     async def consensus(self):
-        util.logger.debug(f"-------------------consensus "
-                          f"candidate_blocks({len(self._block_manager.candidate_blocks.blocks)})")
+        util.logger.debug(f"-------------------consensus-------------------")
         async with self.__lock:
             if self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
-                util.logger.warning(f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
-                return
+                util.logger.warning(
+                    f"This peer is not leader. epoch leader={self._block_manager.epoch.leader_id}")
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
-
+            complain_votes = self.__get_complaint_votes()
             complained_result = self._block_manager.epoch.complained_result
-            block_builder = self._block_manager.epoch.makeup_block(complained_result)
-            vote_result = None
-            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
-            next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
+            if complained_result:
+                self._blockchain.last_unconfirmed_block = None
+            else:
+                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
 
+            last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
+            if last_block_vote_list is None:
+                return
+
+            last_unconfirmed_block: Optional[Block] = self._blockchain.last_unconfirmed_block
+            last_block_header = self._blockchain.last_block.header
+
+            if last_block_header.prep_changed:
+                new_term = last_unconfirmed_block is None
+            else:
+                new_term = False
+
+            if last_unconfirmed_block and not last_block_vote_list and not new_term:
+                return
+
+            # unrecorded_block means the last block of term to add prep changed block.
+            if last_unconfirmed_block and last_unconfirmed_block.header.prep_changed:
+                first_leader_of_term = self._blockchain.find_preps_ids_by_roothash(
+                    last_unconfirmed_block.header.revealed_next_reps_hash)[0]
+                is_unrecorded_block = ChannelProperty().peer_address != first_leader_of_term
+            else:
+                is_unrecorded_block = False
+
+            block_builder = self._block_manager.epoch.makeup_block(
+                complain_votes, last_block_vote_list, new_term, is_unrecorded_block)
             need_next_call = False
             try:
-                if complained_result:
-                    util.logger.spam("consensus block_builder.complained")
+                if complained_result or new_term:
+                    util.logger.spam("consensus block_builder.complained or new term")
                     """
                     confirm_info = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
                     if not confirm_info and self._blockchain.last_block.header.height > 0:
                         util.logger.spam("Can't make a block as a leader, this peer will be complained too.")
                         return
                     """
-                    self._made_block_count += 1
-                elif self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
+                    block_builder = self._makeup_new_block(block_builder.version,
+                                                           complain_votes,
+                                                           self._blockchain.last_block.header.hash)
+                elif self._blockchain.my_made_block_count == (conf.MAX_MADE_BLOCK_COUNT - 2):
+                    # (conf.MAX_MADE_BLOCK_COUNT - 2) means if made_block_count is 8,
+                    # but after __add_block, it becomes 9
+                    # so next unconfirmed block height is 10 (last).
                     if last_unconfirmed_block:
                         await self.__add_block(last_unconfirmed_block)
-                        peer_manager = ObjectManager().channel_service.peer_manager
-                        next_leader = ExternalAddress.fromhex(peer_manager.get_next_leader_peer(
-                            current_leader_peer_id=ChannelProperty().peer_id).peer_id)
                     else:
-                        util.logger.info(f"This leader already made {self.made_block_count} blocks. "
+                        util.logger.info(f"This leader already made "
+                                         f"{self._blockchain.my_made_block_count} blocks. "
                                          f"MAX_MADE_BLOCK_COUNT is {conf.MAX_MADE_BLOCK_COUNT} "
                                          f"There is no more right. Consensus loop will return.")
                         return
-                elif len(block_builder.transactions) > 0 or conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    if last_unconfirmed_block:
-                        next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
-                elif len(block_builder.transactions) == 0 and (
-                        last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) > 0):
-                    next_leader = await self.__add_block_and_new_epoch(block_builder, last_unconfirmed_block)
-                else:
+                elif len(block_builder.transactions) == 0 and not conf.ALLOW_MAKE_EMPTY_BLOCK and \
+                        (last_unconfirmed_block and len(last_unconfirmed_block.body.transactions) == 0):
                     need_next_call = True
-            except NotEnoughVotes:
+                elif last_unconfirmed_block:
+                    await self.__add_block(last_unconfirmed_block)
+            except (NotEnoughVotes, InvalidBlock):
                 need_next_call = True
+            except ThereIsNoCandidateBlock:
+                util.logger.warning(f"There is no candidate block.")
+                return
             finally:
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
-            candidate_block = self.__build_candidate_block(block_builder, next_leader, vote_result)
-            candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
-            self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
+            util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
+            candidate_block = self.__build_candidate_block(block_builder)
+            candidate_block, invoke_results = self._blockchain.score_invoke(
+                candidate_block, self._blockchain.latest_block,
+                is_block_editable=True, is_unrecorded_block=is_unrecorded_block)
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
+            self._block_manager.candidate_blocks.add_block(
+                candidate_block, self._blockchain.find_preps_addresses_by_header(candidate_block.header))
+            self.__broadcast_block(candidate_block)
 
-            self._block_manager.vote_unconfirmed_block(candidate_block.header.hash, True)
-            self._block_manager.candidate_blocks.add_block(candidate_block)
-            self._blockchain.last_unconfirmed_block = candidate_block
-
-            broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block, candidate_block)
-            self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)
-            if await self._wait_for_voting(candidate_block) is None:
-                return
-
-            if next_leader.hex_hx() != ChannelProperty().peer_id:
-                util.logger.spam(f"-------------------turn_to_peer "
-                                 f"next_leader({next_leader.hex_hx()}) "
-                                 f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.reset_leader(next_leader.hex_hx())
-                ObjectManager().channel_service.turn_on_leader_complain_timer()
+            if is_unrecorded_block:
+                self._blockchain.last_unconfirmed_block = None
             else:
-                self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())
+                self._block_manager.vote_unconfirmed_block(candidate_block,
+                                                           self._block_manager.epoch.round,
+                                                           True)
+                self._blockchain.last_unconfirmed_block = candidate_block
+                try:
+                    await self._wait_for_voting(candidate_block)
+                except NotEnoughVotes:
+                    return
+
+            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
+                    and not candidate_block.header.prep_changed:
+                util.logger.spam(
+                    f"-------------------turn_to_peer "
+                    f"next_leader({self._block_manager.epoch.leader_id}) "
+                    f"peer_id({ChannelProperty().peer_id})")
+                ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
+            else:
+                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) \
+                        and not candidate_block.header.prep_changed:
+                    # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
+                    # next unconfirmed block height is 10
+                    ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
+
                 if not conf.ALLOW_MAKE_EMPTY_BLOCK:
                     self.__block_generation_timer.call_instantly()
                 else:
                     self.__block_generation_timer.call()
 
-    async def _wait_for_voting(self, candidate_block: 'Block'):
+    async def _wait_for_voting(self, block: 'Block'):
         """Waiting validator's vote for the candidate_block.
 
-        :param candidate_block:
+        :param block:
         :return: vote_result or None
         """
-        # util.logger.notice(f"_wait_for_voting block({candidate_block.header.hash})")
         while True:
-            vote = self._block_manager.candidate_blocks.get_vote(candidate_block.header.hash)
-            vote_result = vote.get_result(candidate_block.header.hash.hex(), conf.VOTING_RATIO)
-            if vote_result:
-                self.__stop_broadcast_send_unconfirmed_block_timer()
-                return vote_result
+            vote = self._block_manager.candidate_blocks.get_votes(block.header.hash, self._block_manager.epoch.round)
+            if not vote:
+                raise ThereIsNoCandidateBlock
+
+            util.logger.info(f"Votes : {vote.get_summary()}")
+            if vote.is_completed():
+                self._block_manager.epoch.complained_result = None
+                self.stop_broadcast_send_unconfirmed_block_timer()
+                return vote
+
             await asyncio.sleep(conf.WAIT_SECONDS_FOR_VOTE)
 
-            timeout_timestamp = candidate_block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
-            timeout = -util.diff_in_seconds(timeout_timestamp)
             try:
-                if timeout < 0:
-                    raise asyncio.TimeoutError
+                timeout = self.__check_timeout(block)
+                if not await asyncio.wait_for(self._vote_queue.get(), timeout=timeout):  # sentinel
+                    raise NotEnoughVotes
+            except (TimeoutError, asyncio.TimeoutError):
+                util.logger.warning("Timed Out Block not confirmed duration: " +
+                                    str(util.diff_in_seconds(block.header.timestamp)))
+                raise NotEnoughVotes
 
-                if await asyncio.wait_for(self._vote_queue.get(), timeout=timeout) is None:  # sentinel
+    def __check_timeout(self, block):
+        timeout_timestamp = block.header.timestamp + conf.BLOCK_VOTE_TIMEOUT * 1_000_000
+        timeout = -util.diff_in_seconds(timeout_timestamp)
+
+        if timeout < 0:
+            raise TimeoutError
+        return timeout
+
+    async def __get_votes(self, block_hash: Hash32):
+        try:
+            prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash, self._block_manager.epoch.round)
+        except KeyError as e:
+            util.logger.spam(f"There is no block in candidates list: {e}")
+            prev_votes = None
+
+        if prev_votes:
+            try:
+                last_unconfirmed_block = self._blockchain.last_unconfirmed_block
+                if last_unconfirmed_block is None:
+                    warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
+                    if self._blockchain.find_block_by_hash(block_hash):
+                        warning_msg += "\nBut already added block so  no longer have to wait for the vote."
+                        # TODO An analysis of the cause of this situation is necessary.
+                        util.logger.notice(warning_msg)
+                        self._block_manager.candidate_blocks.remove_block(block_hash)
+                    else:
+                        util.logger.warning(warning_msg)
                     return None
 
-            except asyncio.TimeoutError:
-                util.logger.warning("Timed Out Block not confirmed duration: " +
-                                    str(util.diff_in_seconds(candidate_block.header.timestamp)))
+                self.__check_timeout(last_unconfirmed_block)
+                if not prev_votes.is_completed():
+                    self.__broadcast_block(last_unconfirmed_block)
+                    if await self._wait_for_voting(last_unconfirmed_block) is None:
+                        return None
+
+                prev_votes_list = prev_votes.votes
+            except TimeoutError:
+                util.logger.warning(f"Timeout block of hash : {block_hash}")
+                if self._block_manager.epoch.complained_result:
+                    self._blockchain.last_unconfirmed_block = None
+                self.stop_broadcast_send_unconfirmed_block_timer()
+                ObjectManager().channel_service.state_machine.switch_role()
                 return None
+            except NotEnoughVotes:
+                if last_unconfirmed_block:
+                    util.logger.warning(f"The last unconfirmed block has not enough votes. {block_hash}")
+                    return None
+                else:
+                    util.exit_and_msg(f"The block that has not enough votes added to the blockchain.")
+        else:
+            prev_votes_dumped = self._blockchain.find_confirm_info_by_hash(block_hash)
+            try:
+                prev_votes_serialized = json.loads(prev_votes_dumped)
+            except json.JSONDecodeError as e:  # handle exception for old votes
+                util.logger.spam(f"{e}")
+                prev_votes_list = []
+            except TypeError as e:  # handle exception for not existing (NoneType) votes
+                util.logger.spam(f"{e}")
+                prev_votes_list = []
+            else:
+                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
+        return prev_votes_list
 
     @staticmethod
     def __start_broadcast_send_unconfirmed_block_timer(broadcast_func):
@@ -232,14 +344,21 @@ class ConsensusSiever(ConsensusBase):
                 target=timer_key,
                 duration=conf.INTERVAL_BROADCAST_SEND_UNCONFIRMED_BLOCK,
                 is_repeat=True,
+                repeat_timeout=conf.TIMEOUT_FOR_LEADER_COMPLAIN,
                 is_run_at_start=True,
                 callback=broadcast_func
             )
         )
 
     @staticmethod
-    def __stop_broadcast_send_unconfirmed_block_timer():
+    def stop_broadcast_send_unconfirmed_block_timer():
         timer_key = TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
             timer_service.stop_timer(timer_key)
+
+    def __broadcast_block(self, block: 'Block'):
+        broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block,
+                                 block,
+                                 self._block_manager.epoch.round)
+        self.__start_broadcast_send_unconfirmed_block_timer(broadcast_func)

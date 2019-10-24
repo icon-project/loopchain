@@ -19,6 +19,7 @@ import unittest
 
 import testcase.unittest.test_util as test_util
 
+from loopchain import configure as conf
 from loopchain.baseservice.timer_service import *
 from loopchain.utils import loggers
 
@@ -40,6 +41,12 @@ class TestTimerService(unittest.TestCase):
     def __timer_callback(self, **kwargs):
         self.__timer_callback_result = kwargs.get("key", None)
         logging.debug(f'timer_callback_result : {self.__timer_callback_result}')
+
+    def __timer_callback_increase_result(self):
+        if self.__timer_callback_result is None:
+            self.__timer_callback_result = 1
+        else:
+            self.__timer_callback_result += 1
 
     def test_add_timer(self):
         # GIVEN
@@ -158,6 +165,28 @@ class TestTimerService(unittest.TestCase):
 
         # THEN
         self.assertIsNotNone(self.__timer_callback_result)
+
+        timer_service.stop()
+
+    def test_repeat_timeout(self):
+        # GIVEN
+        timer_service = TimerService()
+        timer_service.start()
+        duration = 2
+        repeat_timeout = 5
+        expected_result = int(repeat_timeout / duration) + 1
+        key1 = 'test_repeat_timeout'
+
+        timer_service.add_timer(key1, Timer(
+            target=key1, duration=duration,
+            is_repeat=True, repeat_timeout=repeat_timeout,
+            callback=self.__timer_callback_increase_result))
+
+        # WHEN
+        time.sleep(repeat_timeout * 2)
+
+        # THEN
+        self.assertEqual(expected_result, self.__timer_callback_result)
 
         timer_service.stop()
 

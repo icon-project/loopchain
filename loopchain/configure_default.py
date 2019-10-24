@@ -48,7 +48,7 @@ class LogOutputType(IntFlag):
 LOOPCHAIN_LOG_LEVEL = os.getenv('LOOPCHAIN_LOG_LEVEL', 'DEBUG')
 LOOPCHAIN_DEVELOP_LOG_LEVEL = "SPAM"
 LOOPCHAIN_OTHER_LOG_LEVEL = "WARNING"
-LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_NAME}{SCORE_PACKAGE} " \
+LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_NAME} " \
              "%(levelname)s %(filename)s(%(lineno)d) %(message)s"
 
 LOG_OUTPUT_TYPE = LogOutputType.console | LogOutputType.file
@@ -151,6 +151,8 @@ MAX_MADE_BLOCK_COUNT = 10
 WAIT_SECONDS_FOR_VOTE = 0.2
 # blockchain 용 level db 생성 재시도 횟수, 테스트가 아닌 경우 1로 설정하여도 무방하다.
 MAX_RETRY_CREATE_DB = 10
+# default key value store type
+DEFAULT_KEY_VALUE_STORE_TYPE = "plyvel"
 # default level db path
 DEFAULT_LEVEL_DB_PATH = "./db"
 # peer_id (UUID) 는 최초 1회 생성하여 level db에 저장한다.
@@ -182,11 +184,12 @@ DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_
 TX_LIST_ADDRESS_PREFIX = b'tx_list_by_address_'
 MAX_TX_LIST_SIZE_BY_ADDRESS = 100
 MAX_PRE_VALIDATE_TX_CACHE = 10000
-ALLOW_TIMESTAMP_BOUNDARY_SECOND = 60 * 5
+TIMESTAMP_BOUNDARY_SECOND = 60 * 15
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
-ALLOW_TIMESTAMP_BOUNDARY_SECOND_IN_BLOCK = 60 * 15
+TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
+INVOKE_RESULT_AGING_SECONDS = 60 * 60
 READ_CACHED_TX_COUNT = True
 
 
@@ -196,38 +199,6 @@ class SendTxType(IntEnum):
     icx = 2
     genesis_block = 3
 
-
-###########
-# SCORE ###
-###########
-DEFAULT_SCORE_HOST = os.getenv('DEFAULT_SCORE_HOST', '')
-DEFAULT_SCORE_BASE = os.getenv('DEFAULT_SCORE_BASE', 'git@'+DEFAULT_SCORE_HOST)
-DEFAULT_SCORE_REPOSITORY_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'score')
-DEFAULT_SCORE_STORAGE_PATH = os.getenv('DEFAULT_SCORE_STORAGE_PATH', os.path.join(DEFAULT_STORAGE_PATH, 'score'))
-DEFAULT_SCORE_PACKAGE = 'loopchain/default'
-DEFAULT_SCORE_BRANCH_MASTER = 'master'
-DEFAULT_SCORE_BRANCH = os.getenv('DEFAULT_SCORE_BRANCH', DEFAULT_SCORE_BRANCH_MASTER)
-
-# DEFAULT USER / PASSWORD
-DEFAULT_SCORE_BASE_USER = 'score'
-DEFAULT_SCORE_BASE_PASSWORD = 'score'
-# FOR SCORE DEVELOP
-ALLOW_LOAD_SCORE_IN_DEVELOP = os.getenv('ALLOW_LOAD_SCORE_IN_DEVELOP', 'allow') == 'allow'
-DEVELOP_SCORE_PACKAGE_ROOT = 'develop'
-DEFAULT_SCORE_REPOSITORY_KEY = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/loopchain_deploy')
-# repository key
-DEFAULT_SCORE_REPOSITORY_KEY = os.getenv('DEFAULT_SCORE_REPOSITORY_KEY', DEFAULT_SCORE_REPOSITORY_KEY)
-SCORE_LOAD_TIMEOUT = GRPC_TIMEOUT * 180  # seconds, Git repository 접속해서 파일 다운로드 등 시간이 필요함
-# REMOTE PULL PACKAGE FLAG
-REMOTE_PULL_SCORE = False
-INTERVAL_LOAD_SCORE = 1  # seconds
-SCORE_RETRY_TIMES = 3
-SCORE_QUERY_TIMEOUT = 120
-SCORE_INVOKE_TIMEOUT = 60 * 5  # seconds
-SCORE_LOAD_RETRY_TIMES = 3  # times
-SCORE_LOAD_RETRY_INTERVAL = 5.0  # seconds
-SCORE_GIT_LOAD_RETRY_TIMES = 5
-SCORE_GIT_LOAD_SLEEP = 2
 
 RUN_ICON_IN_LAUNCHER = False
 
@@ -243,18 +214,17 @@ REST_SSL_VERIFY = True
 DEFAULT_SSL_CERT_PATH = 'resources/ssl_test_cert/ssl.crt'
 DEFAULT_SSL_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
+REST_TIMEOUT = 5
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
-REST_PROXY_DEFAULT_PORT = 5000
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
 DISABLE_V1_API = True
-ENABLE_MULTI_CHANNEL_REQUEST = True
 
 
 class ApiVersion(IntEnum):
-    node = 0
-    v1 = 1
-    v2 = 2
-    v3 = 3
+    node = 1
+    v1 = 2
+    v2 = 3
+    v3 = 4
 
 
 ##########
@@ -267,25 +237,24 @@ CONNECTION_RETRY_TIMEOUT = 60  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS = 60 * 5  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS_TEST = 30  # seconds for testcase
 CONNECTION_RETRY_TIMES = 3  # times
-CONNECTION_RETRY_TIMES_TO_RS = 5  # times
-CONNECTION_TIMEOUT_TO_RS = 60 * 2  # seconds
 BROADCAST_RETRY_TIMES = 1  # times
+RELAY_RETRY_TIMES = 3 # times
 REQUEST_BLOCK_GENERATOR_TIMEOUT = 10  # seconds
 BLOCK_GENERATOR_BROADCAST_TIMEOUT = 5  # seconds
 WAIT_GRPC_SERVICE_START = 5  # seconds
 WAIT_SECONDS_FOR_SUB_THREAD_START = 5  # seconds
 SLEEP_SECONDS_FOR_SUB_PROCESS_START = 1  # seconds
 WAIT_SUB_PROCESS_RETRY_TIMES = 5
-PEER_GROUP_ID = ""  # "8d4e8d08-0d2c-11e7-a589-acbc32b0aaa1"  # vote group id
 INTERVAL_SECONDS_PROCESS_MONITORING = 30  # seconds
 PEER_NAME = "no_name"
 IS_BROADCAST_ASYNC = True
 SUBSCRIBE_LIMIT = 10
-SUBSCRIBE_RETRY_TIMER = 60
-SUBSCRIBE_USE_HTTPS = False
+SUBSCRIBE_RETRY_TIMER = 14
 SHUTDOWN_TIMER = 60 * 120
 GET_LAST_BLOCK_TIMER = 30
 BLOCK_SYNC_RETRY_NUMBER = 5
+TIMEOUT_FOR_LEADER_COMPLAIN = 60
+MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
 
 
 class NodeFunction(IntEnum):
@@ -308,12 +277,7 @@ class NodeType(IntEnum):
 ##################
 # RadioStation ###
 ##################
-ALL_GROUP_ID = "all_group_id"  # "98fad20a-0df1-11e7-bc4b-acbc32b0aaa1"
-TEST_GROUP_ID = "test_group_id"  # "ea8f365c-7fb8-11e6-af03-38c98627c586"
 LEVEL_DB_KEY_FOR_PEER_LIST = "peer_manager_key"
-# RS heartbeat 으로 리더선정 및 무응답피어 제거를 할지 여부를 정한다. False 일때 네트워크는 더 안정적이 된다.
-# LFT 에 의한 장애 처리 전까지 임시적으로만 True 로 사용한다. by winDy
-ENABLE_RADIOSTATION_HEARTBEAT = True
 SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT = 15   # 60 * 60  # seconds, RS 의 peer status heartbeat 주기
 # How many non-response will allow. After this count RS. will delete that node in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
@@ -321,21 +285,16 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
 # If the cache is not updated within this time, the channel is considered dead.
-ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
-# Peer 의 중복 재접속을 허용한다.
-ALLOW_PEER_RECONNECT = True
-# 토큰 유효시간(분)
-TOKEN_INTERVAL = 10
+STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
-TIMEOUT_PEER_REMOVE_IN_LIST = 5  # minutes, replace by NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
 LOOPCHAIN_TEST_CHANNEL = "loopchain_test"
 CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_data.json')  # Channel Manage Data Path
 ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel infos to which it belongs.
-ENABLE_REP_RADIO_STATION = False
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
+
 
 ########
 # MQ ###
@@ -343,7 +302,7 @@ CHANNEL_BUILTIN = True
 AMQP_TARGET = "127.0.0.1"
 AMQP_USERNAME = os.getenv("AMQP_USERNAME", "guest")
 AMQP_PASSWORD = os.getenv("AMQP_PASSWORD", "guest")
-AMQP_CONNECTION_ATTEMPS = 32
+AMQP_CONNECTION_ATTEMPTS = 32
 AMQP_RETRY_DELAY = 5
 PEER_QUEUE_NAME_FORMAT = "Peer.{amqp_key}"
 CHANNEL_QUEUE_NAME_FORMAT = "Channel.{channel_name}.{amqp_key}"
@@ -379,7 +338,7 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "role_switch_block_height": -1
+        "crep_root_hash": ""
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
@@ -394,18 +353,15 @@ CHANNEL_OPTION = {
         "consensus_cert_use": False,
         "tx_cert_use": False,
         "key_load_type": KeyLoadType.FILE_LOAD,
-        "role_switch_block_height": -1
+        "crep_root_hash": ""
     }
 }
 
-PUBLIC_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/public.der')
 PRIVATE_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der')
 PRIVATE_PASSWORD = None
 
 # KMS
 KMS_AGENT_PASSWORD = ""
-KMS_SIGNATURE_KEY_ID = ""
-KMS_SIGNATURE_KEY_ID_LIST = {}
 KMS_TLS_KEY_ID = ""
 KMS_SECRET_KEY_LABEL = "KEY_ENCRYPTION"
 
@@ -425,6 +381,7 @@ NO_TIMEOUT_FOR_RS_INIT = -1
 TIMEOUT_FOR_FUTURE = 30
 TIMEOUT_FOR_WS_HEARTBEAT = 30
 
+TIMEOUT_FOR_BLOCK_MONITOR = 14
 SLEEP_SECONDS_FOR_INIT_COMMON_PROCESS = 0.5
 
 
@@ -453,8 +410,13 @@ CONF_PATH_ICONSERVICE_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/
 CONF_PATH_ICONRPCSERVER_DEV = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/develop/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/iconrpcserver_conf.json')
 CONF_PATH_ICONRPCSERVER_MAINNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/mainnet/iconrpcserver_conf.json')
-TIMEOUT_FOR_LEADER_COMPLAIN = 60
-MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
+ICON_VERSIONS = {
+    'loopchain': '0.0.0',
+    'iconservice': '0.0.0',
+    'iconrpcserver': '0.0.0',
+    'iconcommons': '0.0.0',
+    'earlgrey': '0.0.0'
+}
 
 ####################
 # QOS ####

@@ -15,13 +15,16 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable
 
+from loopchain import configure as conf
 from loopchain import utils
+from loopchain.blockchain.exception import BlockVersionNotMatch, TransactionOutOfTimeBound
+from loopchain.blockchain.transactions import TransactionVerifier
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
-from .. import ExternalAddress, BlockVersionNotMatch, TransactionVerifier
 
 if TYPE_CHECKING:
-    from . import Block, BlockHeader
-    from .. import TransactionVersioner
+    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.transactions import TransactionVersioner
 
 
 class BlockVerifier(ABC):
@@ -54,15 +57,9 @@ class BlockVerifier(ABC):
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} does not have prev_hash.")
             self._handle_exception(exception)
 
-        if prev_block and not (prev_block.header.timestamp < header.timestamp < utils.get_time_stamp()):
-            exception = RuntimeError(f"Block({header.height}, {header.hash.hex()} timestamp({header.timestamp} is invalid. "
-                                     f"prev_block timestamp({prev_block.header.timestamp}), "
-                                     f"current timestamp({utils.get_now_time_stamp()}")
-            self._handle_exception(exception)
-
         self.verify_version(block)
 
-        if block.header.height > 0:
+        if block.header.signature or block.header.height > 0:
             self.verify_signature(block)
 
         if prev_block:
@@ -71,19 +68,28 @@ class BlockVerifier(ABC):
         return self._verify_common(block, prev_block, generator, **kwargs)
 
     @abstractmethod
+    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
+        raise NotImplementedError
+
+    @abstractmethod
     def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         raise NotImplementedError
 
     def verify_transactions(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
+            if not utils.is_in_time_boundary(
+                    tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND, block.header.timestamp):
+                exception = TransactionOutOfTimeBound(tx, block.header.timestamp)
+                self._handle_exception(exception)
+
+            tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
             tv.verify(tx, blockchain)
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)
 
     def verify_transactions_loosely(self, block: 'Block', blockchain=None):
         for tx in block.body.transactions.values():
-            tv = TransactionVerifier.new(tx.version, self._tx_versioner, self._raise_exceptions)
+            tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
             tv.verify_loosely(tx, blockchain)
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)
@@ -105,6 +111,14 @@ class BlockVerifier(ABC):
             exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
                                      f"PrevHash({block.header.prev_hash.hex()}), "
                                      f"Expected({prev_block.header.hash.hex()}).")
+            self._handle_exception(exception)
+
+        valid_max_timestamp = utils.get_time_stamp() + conf.TIMESTAMP_BUFFER_IN_VERIFIER
+        if prev_block and not (prev_block.header.timestamp < block.header.timestamp < valid_max_timestamp):
+            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()},"
+                                     f"timestamp({block.header.timestamp} is invalid. "
+                                     f"prev_block timestamp({prev_block.header.timestamp}), "
+                                     f"current timestamp({utils.get_now_time_stamp()}")
             self._handle_exception(exception)
 
     def verify_signature(self, block: 'Block'):

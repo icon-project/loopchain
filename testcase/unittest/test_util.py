@@ -18,9 +18,7 @@
 
 import asyncio
 import json
-import leveldb
 import logging
-import multiprocessing
 import os
 import random
 import time
@@ -29,41 +27,19 @@ from sys import platform
 import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, StubManager, Block, CommonSubprocess
-from loopchain.blockchain import Transaction, TransactionBuilder, TransactionVersioner, Address
+from loopchain.baseservice import StubManager, CommonSubprocess
+from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVersioner
+from loopchain.blockchain.types import Address
 from loopchain.components import SingletonMetaClass
-from loopchain.peer import PeerService, Signer
+from loopchain.peer import Signer
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
-from loopchain.radiostation import RadioStationService
+from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
 
-
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
-
-
-def run_peer_server(port, rs_port=None, group_id=None, score=None, event_for_init=None):
-    if rs_port is None:
-        rs_port = conf.PORT_RADIOSTATION
-    radio_station_target = f"{conf.IP_RADIOSTATION}:{rs_port}"
-    ObjectManager().peer_service = PeerService(group_id, radio_station_target)
-
-    if score is not None:
-        ObjectManager().peer_service.set_chain_code(score)
-
-    conf.DEFAULT_SCORE_REPOSITORY_PATH = \
-        os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'test_score_repository')
-    try:
-        ObjectManager().peer_service.serve(port, conf.DEFAULT_SCORE_PACKAGE, event_for_init=event_for_init)
-    except FileNotFoundError:
-        logging.debug("Score Load Fail")
-    except TimeoutError as e:
-        logging.exception(e)
-
-
-def run_radio_station(port, event_for_init: multiprocessing.Event=None):
-    RadioStationService().serve(port, event_for_init)
 
 
 def run_peer_server_as_process(port, radiostation_port=conf.PORT_RADIOSTATION, group_id=None, score=None):
@@ -173,21 +149,22 @@ def print_testname(testname):
     print("======================================================================")
 
 
-def make_level_db(db_name=""):
-    db_default_path = './' + (db_name, "db_test")[db_name == ""]
-    db_path = db_default_path
-    blockchain_db = None
+def make_key_value_store(store_identity="") -> KeyValueStore:
+    store_default_path = './' + (store_identity, "db_test")[store_identity == ""]
+    store_path = store_default_path
+    store = None
     retry_count = 0
 
-    while blockchain_db is None and retry_count < conf.MAX_RETRY_CREATE_DB:
+    while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            blockchain_db = leveldb.LevelDB(db_path, create_if_missing=True)
-            logging.debug("make level db path: " + db_path)
-        except leveldb.LevelDBError:
-            db_path = db_default_path + str(retry_count)
+            uri = f"file://{store_path}"
+            store = KeyValueStore.new(uri, create_if_missing=True)
+            logging.debug(f"make key value store uri: {uri}")
+        except KeyValueStoreError:
+            store_path = store_default_path + str(retry_count)
         retry_count += 1
 
-    return blockchain_db
+    return store
 
 
 def close_open_python_process():
@@ -213,17 +190,6 @@ def clean_up_temp_db_files(kill_process=True):
     os.system(f'rm -rf $(find {loopchain_root} -name *_block)')
     os.system(f"rm -rf {loopchain_root}/testcase/db_*")
     os.system(f"rm -rf {loopchain_root}/.storage")
-    os.system(f"rm -rf {loopchain_root}/log")
-    os.system(f"rm -rf {loopchain_root}/chaindb_*")
-    os.system(f"rm -rf {loopchain_root}/blockchain_db*")
-    os.system(f"rm -rf {loopchain_root}/block_confirm_db*")
-    os.system(f"rm -rf {loopchain_root}/genesis_db*")
-    os.system(f"rm -rf {loopchain_root}/testcase/chaindb_*")
-    os.system(f"rm -rf {loopchain_root}/sample_score")
-    os.system(f"rm -rf {loopchain_root}/testcase/sample_score")
-    os.system(f"rm -rf {loopchain_root}/certificate_db")
-    os.system(f"rm -rf {loopchain_root}/resources/test_score_deploy")
-    os.system(f"rm -rf {loopchain_root}/resources/test_score_repository/loopchain")
     time.sleep(1)
 
 
@@ -239,7 +205,7 @@ def create_basic_tx(peer_auth: Signer) -> Transaction:
     :return: transaction
     """
     tx_builder = TransactionBuilder.new("0x3", TransactionVersioner())
-    tx_builder.private_key = peer_auth.private_key
+    tx_builder.private_key = peer_auth._private_key
     tx_builder.to_address = Address("hx3f376559204079671b6a8df481c976e7d51b3c7c")
     tx_builder.value = 1
     tx_builder.step_limit = 100000000

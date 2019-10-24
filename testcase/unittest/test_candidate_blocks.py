@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright 2018 ICON Foundation
+# Copyright 2019 ICON Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Candidate Blocks"""
+
 import unittest
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.blockchain import BlockBuilder, CandidateBlocks, TransactionVersioner
-from loopchain.blockchain import CandidateBlock
+from loopchain.blockchain import CandidateBlock, CandidateBlocks, BlockChain, ExternalAddress
+from loopchain.blockchain.blocks import BlockBuilder
+from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
@@ -47,7 +49,7 @@ class TestCandidateBlocks(unittest.TestCase):
         block = self.__get_test_block()
 
         # WHEN
-        candidate_block = CandidateBlock.from_block(block)
+        candidate_block = CandidateBlock.from_block(block, [])
         util.logger.spam(f"block hash({block.header.hash}) candidate hash({candidate_block.hash})")
 
         # THEN
@@ -59,7 +61,7 @@ class TestCandidateBlocks(unittest.TestCase):
         block = self.__get_test_block()
 
         # WHEN CandidateBlock.from_hash
-        candidate_block = CandidateBlock.from_hash(block.header.hash)
+        candidate_block = CandidateBlock.from_hash(block.header.hash, block.header.height)
         util.logger.spam(f"block hash({block.header.hash}) candidate hash({candidate_block.hash})")
 
         # THEN
@@ -67,7 +69,7 @@ class TestCandidateBlocks(unittest.TestCase):
         self.assertIsNone(candidate_block.block)
 
         # WHEN Set candidate_block.block
-        candidate_block.block = block
+        candidate_block.add_block(block, [])
 
         # THEN
         self.assertEqual(block.header.hash, candidate_block.hash)
@@ -75,11 +77,15 @@ class TestCandidateBlocks(unittest.TestCase):
 
     def test_add_remove_block_to_candidate_blocks(self):
         # GIVEN
+        block0 = self.__get_test_block()
+        block0.header.__dict__['height'] = -1
         block = self.__get_test_block()
-        candidate_blocks = CandidateBlocks()
+        blockchain = BlockChain('icon_dex', '', self)
+        blockchain.__dict__['_BlockChain__last_block'] = block0
+        candidate_blocks = CandidateBlocks(blockchain)
 
         # WHEN add
-        candidate_blocks.add_block(block)
+        candidate_blocks.add_block(block, [ExternalAddress.empty()])
 
         # THEN
         self.assertTrue(block.header.hash in candidate_blocks.blocks)
