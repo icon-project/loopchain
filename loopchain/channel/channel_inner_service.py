@@ -335,7 +335,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
                       crash_callback_in_join_thread=crash_callback_in_join_thread)
 
         self.__broadcast_scheduler = broadcast_scheduler
-        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE)
+        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE, BroadcastCommand.UPDATE_AUDIENCE)
         broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
 
     def start(self, target, args=(), crash_callback_in_join_thread=None):
