@@ -395,6 +395,23 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
+    def _update_audience_bak(self, reps_hash, update_command: BroadcastCommand = None):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+
+        if update_command:
+            update_reps = blockchain.find_preps_by_roothash(reps_hash)
+            util.logger.info(
+                f"update audience command({update_command})"
+                f"\nupdate_reps({update_reps})"
+            )
+            for rep in update_reps:
+                self.schedule_job(update_command, rep['p2pEndpoint'])
+            return
+
+        self._update_audience(self.__audience_reps_hash, BroadcastCommand.UNSUBSCRIBE)
+        self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
+        self.__audience_reps_hash = reps_hash
+
     def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
@@ -412,22 +429,13 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
         self.__audience_reps_hash = reps_hash
 
-    def update_audience(self, reps_hash):
-        self._update_audience(reps_hash)
-
-    def schedule_broadcast(
-            self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
-        update_audience_hash = None
-
-        if not self.__audience_reps_hash:
-            self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
-            update_audience_hash = self.__audience_reps_hash
+    def schedule_broadcast(self,
+                           method_name,
+                           method_param, *,
+                           reps_hash=None, retry_times=None, timeout=None):
 
         if reps_hash and reps_hash != self.__audience_reps_hash:
-            update_audience_hash = reps_hash
-
-        if update_audience_hash:
-            self._update_audience(update_audience_hash)
+            self._update_audience(reps_hash)
 
         kwargs = {}
         if retry_times is not None:
