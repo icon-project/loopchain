@@ -13,14 +13,14 @@
 # limitations under the License.
 """gRPC broadcast thread"""
 
-import logging
-import queue
-import threading
-import signal
 import abc
-import time
-import os
+import logging
 import multiprocessing as mp
+import os
+import queue
+import signal
+import threading
+import time
 from concurrent import futures
 from enum import Enum
 from functools import partial
@@ -31,9 +31,9 @@ from grpc._channel import _Rendezvous
 from loopchain import configure as conf, utils as util
 from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
     TimerService, Timer
+from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.baseservice.tx_item_helper import TxItem
 from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
-from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 
 
 class PeerThreadStatus(Enum):
@@ -69,6 +69,7 @@ class _Broadcaster:
             BroadcastCommand.CONNECT_TO_LEADER: self.__handler_connect_to_leader,
             BroadcastCommand.SUBSCRIBE: self.__handler_subscribe,
             BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
+            BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
             BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
             BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handler_send_to_single_target,
@@ -227,6 +228,18 @@ class _Broadcaster:
             del self.__audience[audience_target]
         except KeyError:
             logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
+
+    def __handler_update_audience(self, update_reps):
+        old_audience = self.__audience.copy()
+
+        for rep in update_reps:
+            audience_target = rep['p2pEndpoint']
+            self.__handler_subscribe(audience_target)
+            old_audience.pop(audience_target, None)
+
+        for old_audience_target in old_audience:
+            old_stubmanager: StubManager = self.__audience.pop(old_audience_target, None)
+            # TODO If necessary, close grpc with old_stubmanager. If not necessary just remove this comment.
 
     def __handler_broadcast(self, broadcast_param):
         # util.logger.debug(f"BroadcastThread received broadcast command")
@@ -395,39 +408,24 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def _update_audience(self, reps_hash, update_command: BroadcastCommand = None):
+    def _update_audience(self, reps_hash):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
+        update_reps = blockchain.find_preps_by_roothash(reps_hash)
+        if update_reps:
+            util.logger.info(f"\nupdate_reps({update_reps})")
+            self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, update_reps)
+            self.__audience_reps_hash = reps_hash
+        else:
+            util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
 
-        if update_command:
-            update_reps = blockchain.find_preps_by_roothash(reps_hash)
-            util.logger.info(
-                f"update audience command({update_command})"
-                f"\nupdate_reps({update_reps})"
-            )
-            for rep in update_reps:
-                self.schedule_job(update_command, rep['p2pEndpoint'])
-            return
-
-        self._update_audience(self.__audience_reps_hash, BroadcastCommand.UNSUBSCRIBE)
-        self._update_audience(reps_hash, BroadcastCommand.SUBSCRIBE)
-        self.__audience_reps_hash = reps_hash
-
-    def update_audience(self, reps_hash):
-        self._update_audience(reps_hash)
-
-    def schedule_broadcast(
-            self, method_name, method_param, *, reps_hash=None, retry_times=None, timeout=None):
-        update_audience_hash = None
-
-        if not self.__audience_reps_hash:
-            self.__audience_reps_hash = ObjectManager().channel_service.peer_manager.reps_hash()
-            update_audience_hash = self.__audience_reps_hash
-
+    def schedule_broadcast(self,
+                           method_name,
+                           method_param, *,
+                           reps_hash=None, retry_times=None, timeout=None):
         if reps_hash and reps_hash != self.__audience_reps_hash:
-            update_audience_hash = reps_hash
-
-        if update_audience_hash:
-            self._update_audience(update_audience_hash)
+            self._update_audience(reps_hash)
+        elif not self.__audience_reps_hash:
+            self._update_audience(ObjectManager().channel_service.peer_manager.reps_hash())
 
         kwargs = {}
         if retry_times is not None:
