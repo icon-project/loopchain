@@ -308,11 +308,7 @@ class ChannelService:
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
                                                   self_target=ChannelProperty().peer_target)
         scheduler.start()
-
         self.__broadcast_scheduler = scheduler
-
-        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
-                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def _get_radiostations(self):
         radiostations: list = self.get_channel_option().get('radiostations')
