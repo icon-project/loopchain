@@ -52,12 +52,7 @@ class ChannelTxCreatorInnerTask:
                                                   self_target=peer_target,
                                                   is_multiprocessing=True)
         scheduler.start()
-
         self.__broadcast_scheduler = scheduler
-
-        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target,
-                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
-
         self.__qos_controller = QosController()
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
 
@@ -335,7 +330,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
                       crash_callback_in_join_thread=crash_callback_in_join_thread)
 
         self.__broadcast_scheduler = broadcast_scheduler
-        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE, BroadcastCommand.UPDATE_AUDIENCE)
+        commands = (BroadcastCommand.UPDATE_AUDIENCE,)
         broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
 
     def start(self, target, args=(), crash_callback_in_join_thread=None):

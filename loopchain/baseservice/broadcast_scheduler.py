@@ -43,13 +43,7 @@ class PeerThreadStatus(Enum):
 
 class _Broadcaster:
     """broadcast class for each channel"""
-
-    THREAD_INFO_KEY = "thread_info"
-    THREAD_VARIABLE_STUB_TO_SELF_PEER = "stub_to_self_peer"
     THREAD_VARIABLE_PEER_STATUS = "peer_status"
-
-    SELF_PEER_TARGET_KEY = "self_peer_target"
-    LEADER_PEER_TARGET_KEY = "leader_peer_target"
 
     def __init__(self, channel: str, self_target: str=None):
         self.__channel = channel
@@ -66,12 +60,8 @@ class _Broadcaster:
 
         self.__handler_map = {
             BroadcastCommand.CREATE_TX: self.__handler_create_tx,
-            BroadcastCommand.CONNECT_TO_LEADER: self.__handler_connect_to_leader,
-            BroadcastCommand.SUBSCRIBE: self.__handler_subscribe,
-            BroadcastCommand.UNSUBSCRIBE: self.__handler_unsubscribe,
             BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
             BroadcastCommand.BROADCAST: self.__handler_broadcast,
-            BroadcastCommand.MAKE_SELF_PEER_CONNECTION: self.__handler_connect_to_self_peer,
             BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handler_send_to_single_target,
         }
 
@@ -211,8 +201,8 @@ class _Broadcaster:
         target = param[2]
         self.__call_async_to_target(target, method_name, method_param, True, 0, conf.GRPC_TIMEOUT_BROADCAST_RETRY)
 
-    def __handler_subscribe(self, audience_target):
-        util.logger.debug(f"_Broadcaster received subscribe command audience_target({audience_target})")
+    def __add_audience(self, audience_target):
+        util.logger.debug(f"audience_target({audience_target})")
         if audience_target not in self.__audience:
             stub_manager = StubManager.get_stub_manager_to_server(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
@@ -222,19 +212,11 @@ class _Broadcaster:
             )
             self.__audience[audience_target] = stub_manager
 
-    def __handler_unsubscribe(self, audience_target):
-        util.logger.debug(f"BroadcastThread received un-subscribe command audience_target({audience_target})")
-        try:
-            del self.__audience[audience_target]
-        except KeyError:
-            logging.debug(f"deleted peer or unsubscribed peer: {audience_target}")
-
-    def __handler_update_audience(self, update_reps):
+    def __handler_update_audience(self, audience_targets):
         old_audience = self.__audience.copy()
 
-        for rep in update_reps:
-            audience_target = rep['p2pEndpoint']
-            self.__handler_subscribe(audience_target)
+        for audience_target in audience_targets:
+            self.__add_audience(audience_target)
             old_audience.pop(audience_target, None)
 
         for old_audience_target in old_audience:
@@ -319,29 +301,6 @@ class _Broadcaster:
 
         self.__send_tx_in_timer(tx_item)
 
-    def __handler_connect_to_leader(self, connect_to_leader_param):
-        # logging.debug("(tx thread) try... connect to leader: " + str(connect_to_leader_param))
-        self.__thread_variables[self.LEADER_PEER_TARGET_KEY] = connect_to_leader_param
-
-        # stub_to_self_peer = __thread_variables[self.THREAD_VARIABLE_STUB_TO_SELF_PEER]
-
-        self.__thread_variables[self.THREAD_VARIABLE_PEER_STATUS] = PeerThreadStatus.normal
-
-    def __handler_connect_to_self_peer(self, connect_param):
-        # 자신을 생성한 부모 Peer 에 접속하기 위한 stub 을 만든다.
-        # pipe 를 통한 return 은 pipe send 와 쌍이 맞지 않은 경우 오류를 발생시킬 수 있다.
-        # 안전한 연결을 위하여 부모 프로세스와도 gRPC stub 을 이용하여 통신한다.
-        logging.debug("try connect to self peer: " + str(connect_param))
-
-        stub_to_self_peer = StubManager.get_stub_manager_to_server(
-            connect_param, loopchain_pb2_grpc.InnerServiceStub,
-            time_out_seconds=conf.CONNECTION_RETRY_TIMEOUT_WHEN_INITIAL,
-            is_allow_null_stub=True,
-            ssl_auth_type=conf.SSLAuthType.none
-        )
-        self.__thread_variables[self.SELF_PEER_TARGET_KEY] = connect_param
-        self.__thread_variables[self.THREAD_VARIABLE_STUB_TO_SELF_PEER] = stub_to_self_peer
-
     def __get_broadcast_targets(self, method_name):
 
         peer_targets = list(self.__audience)
@@ -410,10 +369,13 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
     def _update_audience(self, reps_hash):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
-        update_reps = blockchain.find_preps_by_roothash(reps_hash)
+        update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
+
         if update_reps:
             util.logger.info(f"\nupdate_reps({update_reps})")
-            self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, update_reps)
+            audience_targets = list(update_reps.values())
+
+            self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
             self.__audience_reps_hash = reps_hash
         else:
             util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
