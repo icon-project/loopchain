@@ -748,14 +748,14 @@ class ChannelInnerTask:
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
-        response_message = None
+        response_code = None
         block: Block = None
         if block_hash != "":
             block = self._blockchain.find_block_by_hash(block_hash)
         elif block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
         else:
-            response_message = message_code.Response.fail_not_enough_data
+            response_code = message_code.Response.fail_not_enough_data
 
         if self._blockchain.last_unconfirmed_block is None:
             unconfirmed_block_height = -1
@@ -763,17 +763,19 @@ class ChannelInnerTask:
             unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
         if block is None:
-            if response_message is None:
-                response_message = message_code.Response.fail_wrong_block_hash
-            return response_message, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
+            if response_code is None:
+                response_code = message_code.Response.fail_wrong_block_hash
+            return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
         if block.header.height <= self._blockchain.block_height:
             confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
+            if not confirm_info:
+                response_code = message_code.Response.fail_invalid_block_height
+                return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
-        return \
-            message_code.Response.success, block.header.height, self._blockchain.block_height,\
-            unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block)
+        return (message_code.Response.success, block.header.height, self._blockchain.block_height,
+                unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block))
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:
