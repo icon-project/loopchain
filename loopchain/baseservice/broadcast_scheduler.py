@@ -219,7 +219,6 @@ class _Broadcaster:
             self.__add_audience(audience_target)
             old_audience.pop(audience_target, None)
 
-        print("self.add: ", self.__audience, type(self.__audience))
         for old_audience_target in old_audience:
             old_stubmanager: StubManager = self.__audience.pop(old_audience_target, None)
             # TODO If necessary, close grpc with old_stubmanager. If not necessary just remove this comment.
@@ -370,10 +369,11 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 
     def _update_audience(self, reps_hash):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
-        update_reps = blockchain.find_preps_by_roothash(reps_hash)
+        update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
+
         if update_reps:
             util.logger.info(f"\nupdate_reps({update_reps})")
-            audience_targets = [rep["p2pEndpoint"] for rep in update_reps]
+            audience_targets = list(update_reps.values())
 
             self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
             self.__audience_reps_hash = reps_hash

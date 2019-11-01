@@ -218,7 +218,7 @@ class TestBroadcastScheduler:
         ObjectManager().channel_service = mock_channel_service
 
     def test_update_audience_with_valid_reps_hash(self, mocking_, bc_scheduler: BroadcastScheduler):
-        fake_update_reps: List[dict] = ObjectManager().channel_service.block_manager.blockchain.find_preps_by_roothash("")
+        fake_update_reps: List[dict] = ObjectManager().channel_service.block_manager.blockchain.find_preps_targets_by_roothash("")
         expected_reps = [rep["p2pEndpoint"] for rep in fake_update_reps]
 
         # Mocking end. Actual Test
