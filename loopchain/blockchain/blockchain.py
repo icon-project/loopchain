@@ -906,7 +906,8 @@ class BlockChain:
         """
         candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
-            logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
+            logging.debug(f"confirm_prev_block with "
+                          f"current_block({current_block.header.height}, {current_block.header.hash})")
 
             try:
                 unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block

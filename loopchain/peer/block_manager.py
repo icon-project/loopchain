@@ -883,7 +883,7 @@ class BlockManager:
                                                                       reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
-        logging.debug(f"vote_unconfirmed_block() ({self.channel_name}/{is_validated})")
+        logging.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
 
         vote = BlockVote.new(
             signer=ChannelProperty().peer_auth,
