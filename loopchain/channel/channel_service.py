@@ -22,8 +22,9 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
-                                   RestClient, NodeSubscriber, UnregisteredException, TimerService)
+from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory,
+                                   ObjectManager, CommonSubprocess, NodeSubscriber, UnregisteredException,
+                                   TimerService, NodePool)
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
@@ -48,10 +49,10 @@ class ChannelService:
         self.__peer_auth: Signer = None
         self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
-        self.__rs_client: RestClient = None
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__node_pool: NodePool = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -86,10 +87,6 @@ class ChannelService:
     @property
     def score_info(self):
         return self.__score_info
-
-    @property
-    def rs_client(self):
-        return self.__rs_client
 
     @property
     def peer_manager(self):
@@ -204,10 +201,12 @@ class ChannelService:
 
     async def evaluate_network(self):
         self._rebuild_block()
-        await self._init_rs_client()
 
         self.__peer_manager.load_peers()
         await self._select_node_type()
+
+        if not self.is_support_node_function(conf.NodeFunction.Vote):
+            self.__node_pool = NodePool(ChannelProperty().name)
 
         self.__state_machine.block_sync()
 
@@ -218,8 +217,6 @@ class ChannelService:
             await self.set_peer_type_in_channel()
         else:
             await self._init_rs_target()
-            if ChannelProperty().rs_target is None:
-                return
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
 
@@ -272,7 +269,6 @@ class ChannelService:
     async def reset_network(self):
         utils.logger.info("Reset network")
         self.__timer_service.clean(except_key=TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK)
-        self.__rs_client = None
         self.__state_machine.evaluate_network()
 
     async def __init_peer_auth(self):
@@ -316,24 +312,9 @@ class ChannelService:
 
         return radiostations
 
-    async def _init_rs_target(self, refresh_all: bool = False):
-        if refresh_all:
-            radiostations = self._get_radiostations()
-            if radiostations is None:
-                return
-            await self.__rs_client.init(radiostations)
-        else:
-            try:
-                self.__rs_client.init_next_target()
-            except StopIteration:
-                return await self._init_rs_target(refresh_all=True)
-
-        ChannelProperty().rs_target = self.__rs_client.target
+    async def _init_rs_target(self):
+        ChannelProperty().rs_target = self.__node_pool.target
         self.__inner_service.update_sub_services_properties(relay_target=ChannelProperty().rs_target)
-
-    async def _init_rs_client(self):
-        self.__rs_client = RestClient(channel=ChannelProperty().name)
-        await self._init_rs_target(refresh_all=True)
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
@@ -403,6 +384,7 @@ class ChannelService:
                 return
 
             if exc:
+                self.__node_pool.find_next()
                 if (self.__state_machine.state != "SubscribeNetwork"
                         or isinstance(exc, UnregisteredException)):
                     self.__state_machine.subscribe_network()
@@ -424,7 +406,7 @@ class ChannelService:
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
-        logging.debug(f"channel_service:shutdown_peer")
+        logging.debug(f"shutdown_peer")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):

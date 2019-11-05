@@ -179,9 +179,6 @@ class SendTxType(IntEnum):
     genesis_block = 3
 
 
-RUN_ICON_IN_LAUNCHER = False
-
-
 ##################
 # REST SERVICE ###
 ##################
@@ -270,7 +267,6 @@ CHANNEL_MANAGE_DATA_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'channel_manage_dat
 ENABLE_CHANNEL_AUTH = True  # if this option is true, peer only gets channel infos to which it belongs.
 CHANNEL_RESTART_TIMEOUT = 120
 CHANNEL_BUILTIN = True
-
 
 ########
 # MQ ###
@@ -371,6 +367,7 @@ ALLOW_MAKE_EMPTY_BLOCK = True
 ####################
 # ICON ####
 ####################
+RUN_ICON_IN_LAUNCHER = False
 URL_CITIZEN_TESTNET = 'https://test-ctz.solidwallet.io'
 URL_CITIZEN_MAINNET = 'https://ctz.solidwallet.io'
 CONF_PATH_LOOPCHAIN_TESTNET = os.path.join(LOOPCHAIN_ROOT_PATH, 'conf/testnet/loopchain_conf.json')

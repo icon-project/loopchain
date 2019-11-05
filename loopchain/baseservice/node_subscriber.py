@@ -119,7 +119,7 @@ class NodeSubscriber:
             if self._exception:
                 raise self._exception
         except Exception as e:
-            logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
+            logging.debug(f"Exception raised during handshake step: {e}")
             await self.close()
             raise
         else:
