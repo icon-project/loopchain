@@ -19,7 +19,7 @@ else ifeq ($(UNAME), Linux)
 endif
 
 CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test
-TEST_CMD := python -m pytest -vv
+TEST_CMD := python -m pytest -rsxX
 
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}'\
