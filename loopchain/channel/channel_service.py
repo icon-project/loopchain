@@ -497,7 +497,7 @@ class ChannelService:
         blockchain = self.__block_manager.blockchain
         prep_targets = blockchain.find_preps_targets_by_roothash(self.__block_manager.epoch.reps_hash)
         if ChannelProperty().peer_id not in prep_targets:
-            utils.logger.warning(f"This peer needs to switch to citizen.")
+            utils.logger.debug(f"This peer needs to switch to citizen.")
             return
 
         leader_peer_target = prep_targets.get(new_leader_id, None)

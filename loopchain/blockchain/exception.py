@@ -111,6 +111,12 @@ class ThereIsNoCandidateBlock(Exception):
     pass
 
 
+class NoConfirmInfo(Exception):
+    """
+    """
+    pass
+
+
 class AnnounceNewBlockError(Exception):
     """When AnnounceNewBlockError is raised during Watch state,
     this node would transit the state to BlockSync.
