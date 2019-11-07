@@ -31,6 +31,10 @@ class BlockProver(ABC):
 
     @classmethod
     def new(cls, version: str, values: Optional[Iterable], type_: 'BlockProverType'):
+        from . import v0_4
+        if version == v0_4.version:
+            return v0_4.BlockProver(values, type_)
+
         from . import v0_3
         if version == v0_3.version:
             return v0_3.BlockProver(values, type_)
