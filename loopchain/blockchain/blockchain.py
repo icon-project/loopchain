@@ -468,6 +468,8 @@ class BlockChain:
 
     def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
         with self.__add_block_lock:
+            channel_service = ObjectManager().channel_service
+
             receipts, next_prep = self.__invoke_results.get(block.header.hash, (None, None))
             if receipts is None and need_to_score_invoke:
                 self.get_invoke_func(block.header.height)(block, self.__last_block)
@@ -484,7 +486,7 @@ class BlockChain:
 
             try:
                 if need_to_score_invoke:
-                    ObjectManager().channel_service.score_write_precommit_state(block)
+                    channel_service.score_write_precommit_state(block)
             except Exception as e:
                 utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")
 
@@ -509,13 +511,14 @@ class BlockChain:
                     'block_height': self.__last_block.header.height
                 }})
 
-            # notify new block
-            if ObjectManager().channel_service.state_machine.state != 'BlockGenerate':
-                ObjectManager().channel_service.inner_service.notify_new_block()
-            if ObjectManager().channel_service.state_machine.state != 'BlockSync':
+            if channel_service.state_machine.state != 'BlockGenerate':
+                channel_service.inner_service.notify_new_block()
+                channel_service.reset_leader(new_leader_id=self.__block_manager.epoch.leader_id)
+
+            if channel_service.state_machine.state != 'BlockSync':
                 # reset_network_by_block_height is called in critical section by self.__add_block_lock.
                 # Other Blocks must not be added until reset_network_by_block_height function finishes.
-                ObjectManager().channel_service.switch_role()
+                channel_service.switch_role()
 
             return True
 
