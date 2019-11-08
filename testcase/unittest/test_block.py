@@ -225,11 +225,12 @@ class TestBlock(unittest.TestCase):
             tx_validator.refresh_tx_validators()
 
     def test_block_v0_3(self):
+        block_version = "0.3"
         test_signer = Signer.from_prikey(os.urandom(32))
         tx_versioner = TransactionVersioner()
 
         dummy_receipts = {}
-        block_builder = BlockBuilder.new("0.3", tx_versioner)
+        block_builder = BlockBuilder.new(block_version, tx_versioner)
         for i in range(5):
             tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
             tx_builder.signer = test_signer
@@ -263,14 +264,82 @@ class TestBlock(unittest.TestCase):
         block_builder.prev_votes = votes.votes
 
         block = block_builder.build()
-        block_verifier = BlockVerifier.new("0.3", tx_versioner)
+        block_verifier = BlockVerifier.new(block_version, tx_versioner)
 
         block_verifier.invoke_func = lambda b, prev_b: (block, dummy_receipts)
         reps_getter = lambda _: block_builder.reps
         generator = ExternalAddress.fromhex_address(test_signer.address)
         block_verifier.verify(block, None, None, generator=generator, reps_getter=reps_getter)
 
-        block_serializer = BlockSerializer.new("0.3", tx_versioner)
+        block_serializer = BlockSerializer.new(block_version, tx_versioner)
+        block_serialized = block_serializer.serialize(block)
+        logging.info(json.dumps(block_serialized, indent=4))
+        block_deserialized = block_serializer.deserialize(block_serialized)
+        logging.info(json.dumps(block_serializer.serialize(block_deserialized), indent=4))
+
+        assert block.header == block_deserialized.header
+        assert block.body == block_deserialized.body
+
+        tx_hashes = list(block.body.transactions)
+        tx_index = random.randrange(0, len(tx_hashes))
+
+        block_prover = BlockProver.new(block.header.version, tx_hashes, BlockProverType.Transaction)
+        tx_proof = block_prover.get_proof(tx_index)
+        assert block_prover.prove(tx_hashes[tx_index], block.header.transactions_hash, tx_proof)
+
+        block_prover = BlockProver.new(block.header.version, block_builder.receipts, BlockProverType.Receipt)
+        receipt_proof = block_prover.get_proof(tx_index)
+        receipts_hash = block_prover.to_hash32(block_builder.receipts[tx_index])
+        assert block_prover.prove(receipts_hash, block.header.receipts_hash, receipt_proof)
+
+    def test_block_v0_4(self):
+        block_version = "0.4"
+        test_signer = Signer.from_prikey(os.urandom(32))
+        tx_versioner = TransactionVersioner()
+
+        dummy_receipts = {}
+        block_builder = BlockBuilder.new(block_version, tx_versioner)
+        for i in range(5):
+            tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
+            tx_builder.signer = test_signer
+            tx_builder.to_address = ExternalAddress.new()
+            tx_builder.step_limit = random.randint(0, 10000)
+            tx_builder.value = random.randint(0, 10000)
+            tx_builder.nid = 2
+            tx = tx_builder.build()
+
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
+            block_builder.transactions[tx.hash] = tx
+            dummy_receipts[tx.hash.hex()] = {
+                "dummy_receipt": "dummy",
+                "tx_dumped": tx_serializer.to_full_data(tx)
+            }
+
+        next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
+
+        block_builder.signer = test_signer
+        block_builder.height = 0
+        block_builder.prev_hash = Hash32(bytes(Hash32.size))
+        block_builder.state_hash = Hash32(bytes(Hash32.size))
+        block_builder.receipts = dummy_receipts
+        block_builder.reps = [ExternalAddress.fromhex_address(test_signer.address)]
+        block_builder.next_leader = next_leader
+        block_builder.next_reps = []
+
+        vote = BlockVote.new(test_signer, utils.get_time_stamp(), block_builder.height - 1, 0, block_builder.prev_hash)
+        votes = BlockVotes(block_builder.reps, conf.VOTING_RATIO, block_builder.height - 1, 0, block_builder.prev_hash)
+        votes.add_vote(vote)
+        block_builder.prev_votes = votes.votes
+
+        block = block_builder.build()
+        block_verifier = BlockVerifier.new(block_version, tx_versioner)
+
+        block_verifier.invoke_func = lambda b, prev_b: (block, dummy_receipts)
+        reps_getter = lambda _: block_builder.reps
+        generator = ExternalAddress.fromhex_address(test_signer.address)
+        block_verifier.verify(block, None, None, generator=generator, reps_getter=reps_getter)
+
+        block_serializer = BlockSerializer.new(block_version, tx_versioner)
         block_serialized = block_serializer.serialize(block)
         logging.info(json.dumps(block_serialized, indent=4))
         block_deserialized = block_serializer.deserialize(block_serialized)
