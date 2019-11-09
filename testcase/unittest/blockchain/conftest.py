@@ -15,8 +15,8 @@ from loopchain.crypto.signature import Signer
 
 # ----- Global variables
 def pytest_configure():
-    signers = [Signer.from_prikey(os.urandom(32)) for _ in range(100)]
-    reps = [ExternalAddress.fromhex_address(signer.address) for signer in signers]
+    signers = tuple([Signer.from_prikey(os.urandom(32)) for _ in range(100)])
+    reps = tuple([ExternalAddress.fromhex_address(signer.address) for signer in signers])
 
     pytest.SIGNERS: List[Signer] = signers
     pytest.REPS: List[ExternalAddress] = reps

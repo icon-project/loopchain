@@ -13,7 +13,6 @@ from loopchain.blockchain.transactions import genesis, v2, v3, v3_issue
 from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
 from loopchain.jsonrpc.exception import GenericJsonRpcServerError
 
-
 tx_versioner = TransactionVersioner()
 tx_versions = [genesis.version, v2.version, v3.version, v3_issue.version]
 
@@ -214,10 +213,11 @@ class TestBlockVerifierBase:
             with pytest.raises(RuntimeError, match="timestamp"):
                 raise bv.exceptions[0]
 
-    @pytest.mark.xfail(reason="Fails in genesis tx")
     @pytest.mark.parametrize("tx_version", tx_versions)
     @pytest.mark.parametrize("raise_exc", [True, False])
     def test_verify_txs_with_timed_out_tx(self, block_version, tx_version, raise_exc, tx_factory, block_builder_factory):
+        if tx_version == genesis.version:
+            pytest.skip(msg="Fails in genesis tx")
         bv = BlockVerifier.new(version=block_version, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         tx: Transaction = tx_factory(tx_version=tx_version)
 
@@ -379,11 +379,150 @@ class TestBlockVerifier_v0_1a:
 
 class TestBlockVerifier_v0_3:
     BLOCK_VERSION = v0_3.version
+    REPS = pytest.REPS
+    GENERATOR = REPS[0]
 
-    def reps_getter(self, reps):
-        fake_reps_hash = Hash32(os.urandom(Hash32.size))
+    def reps_getter(self, reps_hash):
+        return self.REPS
 
-        return fake_reps_hash
+    @pytest.mark.parametrize("tx_version", tx_versions)
+    def test_verify_common(self, tx_version, tx_factory, block_builder_factory, mocker):
+        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        prev_block_builder.reps = self.REPS
+        prev_block_builder.next_reps_hash = Hash32.empty()
+        prev_block_builder.transactions[prev_tx.hash] = prev_tx
+        prev_block: Block = prev_block_builder.build()
+
+        curr_tx: Transaction = tx_factory(tx_version=tx_version)
+        current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        current_block_builder.height = prev_block.header.height + 1
+        current_block_builder.peer_id = self.REPS[0]
+        current_block_builder.prev_hash = prev_block.header.hash
+        current_block_builder.reps = self.REPS
+        current_block_builder.next_reps_hash = Hash32.empty()
+        current_block_builder.transactions[curr_tx.hash] = curr_tx
+
+        current_block: Block = current_block_builder.build()
+
+        bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner)
+        bv.verify_leader_votes = mocker.MagicMock()  # Test in another test suite
+        bv.verify_prev_votes = mocker.MagicMock()  # Test in another test suite
+
+        assert current_block.header.peer_id in self.reps_getter("reps_hash")
+        assert current_block.header.height > 1
+        assert prev_block.header.revealed_next_reps_hash == current_block.header.reps_hash
+        assert not bv.invoke_func  # Test in another suite.
+
+        bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+
+    @pytest.mark.parametrize("raise_exc", [True, False])
+    def test_verify_common_not_in_reps(self, block_builder_factory, raise_exc):
+        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        prev_block_builder.reps = self.REPS
+        prev_block_builder.next_reps_hash = Hash32.empty()
+        prev_block: Block = prev_block_builder.build()
+
+        current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        current_block_builder.height = prev_block.header.height + 1
+        current_block_builder.peer_id = ExternalAddress(os.urandom(ExternalAddress.size))
+        current_block_builder.prev_hash = prev_block.header.hash
+        current_block_builder.reps = self.REPS
+        current_block_builder.next_reps_hash = Hash32.empty()
+
+        current_block: Block = current_block_builder.build()
+
+        bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
+        assert current_block.header.peer_id not in self.reps_getter("reps_hash")
+
+        # THEN
+        if raise_exc:
+            with pytest.raises(NotInReps, match="not in Reps"):
+                bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+        else:
+            assert not bv.exceptions
+            bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+            with pytest.raises(NotInReps, match="not in Reps"):
+                raise bv.exceptions[0]
+
+    @pytest.mark.parametrize("raise_exc", [True, False])
+    def test_verify_common_with_diff_reps_hash(self, block_builder_factory, raise_exc, mocker):
+        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        prev_block_builder.reps = self.REPS
+        prev_block_builder.next_reps_hash = Hash32.empty()
+        prev_block: Block = prev_block_builder.build()
+
+        current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        current_block_builder.height = prev_block.header.height + 1
+        current_block_builder.peer_id = ExternalAddress(os.urandom(ExternalAddress.size))
+        current_block_builder.prev_hash = prev_block.header.hash
+        current_block_builder.reps = self.REPS
+        current_block_builder.next_reps_hash = Hash32.empty()
+
+        current_block: Block = current_block_builder.build()
+
+        bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
+        bv.verify_leader_votes = mocker.MagicMock()  # Test in another test suite
+        bv.verify_prev_votes = mocker.MagicMock()  # Test in another test suite
+
+        assert current_block.header.peer_id in self.reps_getter("reps_hash")
+        assert current_block.header.height > 1
+        assert prev_block.header.revealed_next_reps_hash != current_block.header.reps_hash
+        assert not bv.invoke_func  # Test in another suite.
+
+        # THEN
+        if raise_exc:
+            with pytest.raises(RuntimeError, match="RepsHash"):
+                bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+        else:
+            assert not bv.exceptions
+            bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+            with pytest.raises(RuntimeError, match="RepsHash"):
+                raise bv.exceptions[0]
+
+    @pytest.mark.parametrize("raise_exc", [True, False])
+    def test_verify_common_with_diff_reps(self, block_builder_factory, raise_exc, mocker):
+        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        prev_block_builder.reps = self.REPS
+        prev_block_builder.next_reps_hash = Hash32.empty()
+        prev_block: Block = prev_block_builder.build()
+
+        current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        current_block_builder.height = prev_block.header.height + 1
+        current_block_builder.peer_id = ExternalAddress(os.urandom(ExternalAddress.size))
+        current_block_builder.prev_hash = prev_block.header.hash
+        current_block_builder.reps = self.REPS
+        current_block_builder.next_reps_hash = Hash32.empty()
+
+        current_block: Block = current_block_builder.build()
+
+        bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
+        bv.verify_leader_votes = mocker.MagicMock()  # Test in another test suite
+        bv.verify_prev_votes = mocker.MagicMock()  # Test in another test suite
+
+        assert current_block.header.peer_id in self.reps_getter("reps_hash")
+        assert current_block.header.height > 1
+        assert prev_block.header.revealed_next_reps_hash != current_block.header.reps_hash
+        assert not bv.invoke_func  # Test in another suite.
+
+        # THEN
+        if raise_exc:
+            with pytest.raises(RuntimeError, match="RepsHash"):
+                bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+        else:
+            assert not bv.exceptions
+            bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
+            with pytest.raises(RuntimeError, match="RepsHash"):
+                raise bv.exceptions[0]
+
+
+
+
+
+class TestBlockVerifier_v0_3_VerifyInvoke:
+    BLOCK_VERSION = v0_3.version
+    REPS = pytest.REPS
+    GENERATOR = REPS[0]
 
     def make_invoke_func(self, mock_new_block):
         def invoke_func(block, prev_block):
@@ -394,27 +533,18 @@ class TestBlockVerifier_v0_3:
 
         return invoke_func
 
-    @pytest.mark.xfail(reason="hash not in hash? Check return type of reps_getter")
-    def test_verify_common_with_block_from_not_in_reps(self, raise_exc, build_curr_and_prev_block):
-        bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
-        current_block, prev_block = build_curr_and_prev_block(block_version=v0_3.version)
-
-        if raise_exc:
-            with pytest.raises(NotInReps):
-                bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
-        else:
-            with pytest.raises(Exception):
-                bv._verify_common(current_block, prev_block, reps_getter=self.reps_getter)
-            with pytest.raises(NotInReps):
-                raise bv.exceptions[0]
-
-    def test_verify_invoke(self, block_builder_factory):
+    @pytest.mark.parametrize("tx_version", tx_versions)
+    def test_verify_invoke(self, block_builder_factory, tx_version, tx_factory):
+        prev_tx: Transaction = tx_factory(tx_version=tx_version)
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
+        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
+        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
+        current_block_builder.transactions[curr_tx.hash] = curr_tx
 
         current_block: Block = current_block_builder.build()
 
@@ -423,28 +553,25 @@ class TestBlockVerifier_v0_3:
         bv.verify_invoke(current_block_builder, current_block, prev_block)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_invoke_with_diff_state_hash(self, block_builder_factory, tx_factory, tx_version, raise_exc):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_invoke_with_diff_state_hash(self, block_builder_factory, raise_exc):
+        # GIVEN
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
         current_block: Block = current_block_builder.build()
 
-        fake_state_hash = Hash32(os.urandom(Hash32.size))
-        current_block_builder.state_hash = fake_state_hash
+        # WHEN
+        current_block_builder.state_hash = Hash32(os.urandom(Hash32.size))
         new_block_by_invoke = current_block_builder.build()
         assert current_block.header.state_hash != new_block_by_invoke.header.state_hash
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         bv.invoke_func = self.make_invoke_func(mock_new_block=new_block_by_invoke)
 
+        # THEN
         if raise_exc:
             with pytest.raises(RuntimeError, match="StateRootHash"):
                 bv.verify_invoke(current_block_builder, current_block, prev_block)
@@ -455,29 +582,26 @@ class TestBlockVerifier_v0_3:
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_invoke_with_diff_next_reps_hash(self, block_builder_factory, tx_factory, tx_version, raise_exc):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_invoke_with_diff_next_reps_hash(self, block_builder_factory, raise_exc):
+        # GIVEN
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
         current_block_builder.next_reps_hash = Hash32.empty()
         current_block: Block = current_block_builder.build()
 
-        fake_reps_hash = Hash32(os.urandom(Hash32.size))
-        current_block_builder.next_reps_hash = fake_reps_hash
+        # WHEN
+        current_block_builder.next_reps_hash = Hash32(os.urandom(Hash32.size))
         new_block_by_invoke = current_block_builder.build()
         assert current_block.header.next_reps_hash != new_block_by_invoke.header.revealed_next_reps_hash
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         bv.invoke_func = self.make_invoke_func(mock_new_block=new_block_by_invoke)
 
+        # THEN
         if raise_exc:
             with pytest.raises(RuntimeError, match="NextRepsHash"):
                 bv.verify_invoke(current_block_builder, current_block, prev_block)
@@ -488,24 +612,23 @@ class TestBlockVerifier_v0_3:
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_invoke_with_diff_build_receipt_hash(self, block_builder_factory, tx_factory, tx_version, raise_exc):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_invoke_with_diff_build_receipt_hash(self, block_builder_factory, raise_exc):
+        # GIVEN
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
         current_block: Block = current_block_builder.build()
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         bv.invoke_func = self.make_invoke_func(mock_new_block=current_block)
 
+        # WHEN
         current_block_builder.receipts_hash = Hash32(os.urandom(Hash32.size))
+
+        # THEN
         if raise_exc:
             with pytest.raises(RuntimeError, match="ReceiptRootHash"):
                 bv.verify_invoke(current_block_builder, current_block, prev_block)
@@ -516,24 +639,23 @@ class TestBlockVerifier_v0_3:
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_invoke_with_diff_logs_bloom(self, block_builder_factory, tx_factory, tx_version, raise_exc):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_invoke_with_diff_logs_bloom(self, block_builder_factory, raise_exc):
+        # GIVEN
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
         current_block: Block = current_block_builder.build()
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         bv.invoke_func = self.make_invoke_func(mock_new_block=current_block)
 
+        # WHEN
         current_block_builder.logs_bloom = BloomFilter(os.urandom(BloomFilter.size))
+
+        # THEN
         if raise_exc:
             with pytest.raises(RuntimeError, match="LogsBloom"):
                 bv.verify_invoke(current_block_builder, current_block, prev_block)
@@ -543,82 +665,68 @@ class TestBlockVerifier_v0_3:
             with pytest.raises(RuntimeError, match="LogsBloom"):
                 raise bv.exceptions[0]
 
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_generator(self, block_builder_factory, tx_factory, tx_version):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
-        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
-        prev_block: Block = prev_block_builder.build()
 
-        generator = pytest.REPS[0]
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
+class TestBlockVerifier_v0_3_VerifyGenerator:
+    BLOCK_VERSION = v0_3.version
+    REPS = pytest.REPS
+    GENERATOR = REPS[0]
+
+    def test_verify_generator(self, block_builder_factory):
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = generator
-        current_block_builder.height = prev_block.header.height + 1
-        current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
+        current_block_builder.peer_id = self.GENERATOR
+        current_block_builder.height = 2
+        current_block_builder.prev_hash = Hash32(os.urandom(Hash32.size))
         current_block: Block = current_block_builder.build()
 
-        assert current_block.header.peer_id == generator
+        assert current_block.header.peer_id == self.GENERATOR
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner)
-        bv.verify_generator(block=current_block, generator=generator)
+        bv.verify_generator(block=current_block, generator=self.GENERATOR)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_generator_with_diff_generator(self, block_builder_factory, tx_factory, tx_version, raise_exc):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
-        prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
-        prev_block: Block = prev_block_builder.build()
-
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_generator_with_diff_generator(self, block_builder_factory, raise_exc):
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.height = prev_block.header.height + 1
-        current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
+        current_block_builder.height = 2
+        current_block_builder.prev_hash = Hash32(os.urandom(Hash32.size))
         current_block: Block = current_block_builder.build()
 
-        generator = pytest.REPS[0]
         assert not current_block.header.complained
-        assert current_block.header.peer_id != generator
+        assert current_block.header.peer_id != self.GENERATOR
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         if raise_exc:
             with pytest.raises(RuntimeError, match="Generator"):
-                bv.verify_generator(block=current_block, generator=generator)
+                bv.verify_generator(block=current_block, generator=self.GENERATOR)
         else:
             assert not bv.exceptions
-            bv.verify_generator(block=current_block, generator=generator)
+            bv.verify_generator(block=current_block, generator=self.GENERATOR)
             with pytest.raises(RuntimeError, match="Generator"):
                 raise bv.exceptions[0]
 
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_leader_votes(self, block_builder_factory, tx_factory, tx_version, leader_vote_factory, leader_votes_factory):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+
+class TestBlockVerifier_v0_3_VerifyLeaderVotes:
+    BLOCK_VERSION = v0_3.version
+    SIGNERS = pytest.SIGNERS
+    REPS = pytest.REPS
+    OLD_LEADER = REPS[0]
+    NEW_LEADER = REPS[1]
+    ROUND = 0
+
+    def test_verify_leader_votes(self, block_builder_factory, leader_vote_factory, leader_votes_factory):
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         leader_complain_ratio = conf.LEADER_COMPLAIN_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        old_leader = current_block_builder.peer_id
-        round_ = 0
-
-        leader_votes = leader_votes_factory(reps=reps, old_leader=old_leader, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=round_)
+        leader_votes = leader_votes_factory(reps=self.REPS, old_leader=self.OLD_LEADER, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=self.ROUND)
         portion = int(leader_complain_ratio * 100)
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=round_, old_leader=old_leader, new_leader=ExternalAddress.empty())
+            signer = self.SIGNERS[vote_num]
+            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=self.ROUND, old_leader=self.OLD_LEADER, new_leader=ExternalAddress.empty())
             leader_votes.add_vote(leader_vote)
 
         current_block_builder.leader_votes = leader_votes.votes
@@ -628,39 +736,27 @@ class TestBlockVerifier_v0_3:
         current_block: Block = current_block_builder.build()
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner)
-        bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+        bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
 
     @pytest.mark.xfail(reason="Can not reach intended line, because test is failed in LeaderVote verification!")
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_leader_votes_from_wrong_height(self, block_builder_factory, tx_factory, tx_version, raise_exc, leader_vote_factory, leader_votes_factory):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_leader_votes_from_wrong_height(self, block_builder_factory, raise_exc, leader_vote_factory, leader_votes_factory):
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
-
-        from loopchain import configure as conf
 
         leader_complain_ratio = conf.LEADER_COMPLAIN_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        old_leader = pytest.REPS[0]
-        round_ = 0
 
-        leader_votes = leader_votes_factory(reps=reps, old_leader=old_leader, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=round_)
+        leader_votes = leader_votes_factory(reps=self.REPS, old_leader=self.OLD_LEADER, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=self.ROUND)
         portion = int(leader_complain_ratio * 100) - 1
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=round_, old_leader=old_leader, new_leader=ExternalAddress.empty())
+            signer = self.SIGNERS[vote_num]
+            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=self.ROUND, old_leader=self.OLD_LEADER, new_leader=ExternalAddress.empty())
             leader_votes.add_vote(leader_vote)
 
-        # wrong_height = current_block_builder.height + 1
         current_block_builder.leader_votes = leader_votes.votes
         assert leader_votes.get_result() == ExternalAddress.empty()
         assert current_block_builder.leader_votes
@@ -672,41 +768,29 @@ class TestBlockVerifier_v0_3:
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         if raise_exc:
             with pytest.raises(RuntimeError, match="Height"):
-                bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+                bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+            bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
             with pytest.raises(RuntimeError, match="Height"):
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_leader_votes_with_diff_leader(self, block_builder_factory, tx_factory, tx_version, raise_exc, leader_vote_factory, leader_votes_factory):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_leader_votes_with_diff_leader(self, block_builder_factory, raise_exc, leader_vote_factory, leader_votes_factory):
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         leader_complain_ratio = conf.LEADER_COMPLAIN_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        old_leader = current_block_builder.peer_id
-        new_leader = reps[-1]
-        round_ = 0
-
-        leader_votes = leader_votes_factory(reps=reps, old_leader=old_leader, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=round_)
+        leader_votes = leader_votes_factory(reps=self.REPS, old_leader=self.OLD_LEADER, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=self.ROUND)
         portion = int(leader_complain_ratio * 100)
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=round_, old_leader=old_leader, new_leader=new_leader)
+            signer = self.SIGNERS[vote_num]
+            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=self.ROUND, old_leader=self.OLD_LEADER, new_leader=self.NEW_LEADER)
             leader_votes.add_vote(leader_vote)
 
         current_block_builder.leader_votes = leader_votes.votes
@@ -718,40 +802,29 @@ class TestBlockVerifier_v0_3:
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         if raise_exc:
             with pytest.raises(RuntimeError, match="Leader"):
-                bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+                bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+            bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
             with pytest.raises(RuntimeError, match="Leader"):
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_leader_votes_passes_but_failed_in_votes_verify(self, block_builder_factory, tx_factory, tx_version, raise_exc, leader_vote_factory, leader_votes_factory, mocker):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_leader_votes_passes_but_failed_in_votes_verify(self, block_builder_factory, raise_exc, mocker, leader_vote_factory, leader_votes_factory):
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         leader_complain_ratio = conf.LEADER_COMPLAIN_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        old_leader = current_block_builder.peer_id
-        round_ = 0
-
-        leader_votes = leader_votes_factory(reps=reps, old_leader=old_leader, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=round_)
+        leader_votes = leader_votes_factory(reps=self.REPS, old_leader=self.OLD_LEADER, voting_ratio=leader_complain_ratio, block_height=current_block_builder.height, round_=self.ROUND)
         portion = int(leader_complain_ratio * 100)
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=round_, old_leader=old_leader, new_leader=ExternalAddress.empty())
+            signer = self.SIGNERS[vote_num]
+            leader_vote = leader_vote_factory(signer=signer, block_height=current_block_builder.height, round_=self.ROUND, old_leader=self.OLD_LEADER, new_leader=ExternalAddress.empty())
             leader_votes.add_vote(leader_vote)
 
         current_block_builder.leader_votes = leader_votes.votes
@@ -767,27 +840,22 @@ class TestBlockVerifier_v0_3:
 
         if raise_exc:
             with pytest.raises(ValueError, match="test!"):
-                bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+                bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+            bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
             with pytest.raises(ValueError, match="test!"):
                 raise bv.exceptions[0]
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    @pytest.mark.parametrize("tx_version", tx_versions)
-    def test_verify_leader_votes_with_prep_not_changed_but_leader_diffs_between_prev_and_curr_blocks(self, block_builder_factory, tx_factory, tx_version, raise_exc, leader_vote_factory, leader_votes_factory):
-        prev_tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_leader_votes_with_prep_not_changed_but_leader_diffs_between_prev_and_curr_blocks(self, block_builder_factory, raise_exc):
         prev_block_builder: BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        prev_block_builder.transactions[prev_tx.hash] = prev_tx
         prev_block_builder.next_reps_hash = Hash32.empty()
         prev_block: Block = prev_block_builder.build()
 
-        curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
-        current_block_builder.transactions[curr_tx.hash] = curr_tx
 
         assert not current_block_builder.leader_votes
         assert prev_block.header.next_leader != current_block_builder.peer_id
@@ -799,10 +867,10 @@ class TestBlockVerifier_v0_3:
 
         if raise_exc:
             with pytest.raises(RuntimeError, match="LeaderVotes"):
-                bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+                bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_leader_votes(current_block, prev_block, reps=pytest.REPS)
+            bv.verify_leader_votes(current_block, prev_block, reps=self.REPS)
             with pytest.raises(RuntimeError, match="LeaderVotes"):
                 raise bv.exceptions[0]
 
@@ -815,22 +883,18 @@ class TestBlockVerifier_v0_3:
 
         curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
         current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         voting_ratio = conf.VOTING_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        round_ = 0
 
-        block_votes = block_votes_factory(reps, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=round_)
+        block_votes = block_votes_factory(self.REPS, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=self.ROUND)
         portion = int(voting_ratio * 100)
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=round_)
+            signer = self.SIGNERS[vote_num]
+            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=self.ROUND)
             block_votes.add_vote(block_vote)
 
         current_block_builder.prev_votes = block_votes.votes
@@ -839,7 +903,7 @@ class TestBlockVerifier_v0_3:
         current_block: Block = current_block_builder.build()
 
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner)
-        bv.verify_prev_votes(current_block, prev_reps=reps)
+        bv.verify_prev_votes(current_block, prev_reps=self.REPS)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
     @pytest.mark.parametrize("tx_version", tx_versions)
@@ -851,22 +915,17 @@ class TestBlockVerifier_v0_3:
 
         curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
         current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         voting_ratio = conf.VOTING_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        round_ = 0
-
-        block_votes = block_votes_factory(reps, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=round_)
+        block_votes = block_votes_factory(self.REPS, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=self.ROUND)
         portion = int(voting_ratio * 100) - 1
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=round_ )
+            signer = self.SIGNERS[vote_num]
+            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=self.ROUND)
             block_votes.add_vote(block_vote)
 
         assert block_votes.get_result() is not True
@@ -879,10 +938,10 @@ class TestBlockVerifier_v0_3:
         bv: v0_3.BlockVerifier = BlockVerifier.new(version=self.BLOCK_VERSION, tx_versioner=tx_versioner, raise_exceptions=raise_exc)
         if raise_exc:
             with pytest.raises(RuntimeError, match="PrevVotes"):
-                bv.verify_prev_votes(current_block, prev_reps=reps)
+                bv.verify_prev_votes(current_block, prev_reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_prev_votes(current_block, prev_reps=reps)
+            bv.verify_prev_votes(current_block, prev_reps=self.REPS)
             with pytest.raises(RuntimeError, match="PrevVotes"):
                 raise bv.exceptions[0]
 
@@ -896,22 +955,17 @@ class TestBlockVerifier_v0_3:
 
         curr_tx: Transaction = tx_factory(tx_version=tx_version)
         current_block_builder: v0_3.BlockBuilder = block_builder_factory(block_version=self.BLOCK_VERSION)
-        current_block_builder.peer_id = pytest.REPS[0]
+        current_block_builder.peer_id = self.REPS[0]
         current_block_builder.height = prev_block.header.height + 1
         current_block_builder.prev_hash = prev_block.header.hash
         current_block_builder.transactions[curr_tx.hash] = curr_tx
 
-        from loopchain import configure as conf
         voting_ratio = conf.VOTING_RATIO
-        signers = pytest.SIGNERS
-        reps = pytest.REPS
-        round_ = 0
-
-        block_votes = block_votes_factory(reps, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=round_)
+        block_votes = block_votes_factory(self.REPS, block_hash=prev_block.header.hash, ratio=voting_ratio, block_height=prev_block.header.height, round_=self.ROUND)
         portion = int(voting_ratio * 100)
         for vote_num in range(portion):
-            signer = signers[vote_num]
-            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=round_ )
+            signer = self.SIGNERS[vote_num]
+            block_vote = block_vote_factory(signer, block_hash=prev_block.header.hash, block_height=prev_block.header.height, round_=self.ROUND)
             block_votes.add_vote(block_vote)
 
         assert block_votes.get_result() is True
@@ -927,10 +981,10 @@ class TestBlockVerifier_v0_3:
         mocker.patch.object(BlockVotes, "verify", side_effect=ValueError("test!"))
         if raise_exc:
             with pytest.raises(ValueError, match="test!"):
-                bv.verify_prev_votes(current_block, prev_reps=reps)
+                bv.verify_prev_votes(current_block, prev_reps=self.REPS)
         else:
             assert not bv.exceptions
-            bv.verify_prev_votes(current_block, prev_reps=reps)
+            bv.verify_prev_votes(current_block, prev_reps=self.REPS)
             with pytest.raises(ValueError, match="test!"):
                 raise bv.exceptions[0]
 
