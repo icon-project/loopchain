@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Optional
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -54,7 +53,8 @@ class ConsensusSiever(ConsensusBase):
             timer_service,
             self.consensus,
             self.__lock,
-            self._loop
+            self._loop,
+            call_instantly=not conf.ALLOW_MAKE_EMPTY_BLOCK
         )
         self.__block_generation_timer.start(is_run_at_start=conf.ALLOW_MAKE_EMPTY_BLOCK is False)
 
@@ -224,24 +224,12 @@ class ConsensusSiever(ConsensusBase):
                 except NotEnoughVotes:
                     return
 
-            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
-                    and not candidate_block.header.prep_changed:
-                util.logger.spam(
-                    f"-------------------turn_to_peer "
-                    f"next_leader({self._block_manager.epoch.leader_id}) "
-                    f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
-            else:
-                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) \
-                        and not candidate_block.header.prep_changed:
-                    # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
-                    # next unconfirmed block height is 10
+            if not candidate_block.header.prep_changed:
+                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) or \
+                        self._block_manager.epoch.leader_id != ChannelProperty().peer_id:
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
 
-                if not conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    self.__block_generation_timer.call_instantly()
-                else:
-                    self.__block_generation_timer.call()
+            self.__block_generation_timer.call()
 
     async def _wait_for_voting(self, block: 'Block'):
         """Waiting validator's vote for the candidate_block.

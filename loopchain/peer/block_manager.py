@@ -255,17 +255,6 @@ class BlockManager:
                 else:
                     break
 
-    def _reset_leader(self, unconfirmed_block: Block):
-        if unconfirmed_block.header.prep_changed:
-            next_leader = self.blockchain.find_preps_addresses_by_roothash(
-                unconfirmed_block.header.next_reps_hash)[0].hex_hx()
-        else:
-            next_leader = unconfirmed_block.header.next_leader.hex_hx()
-
-        util.logger.debug(f"next_leader({next_leader})")
-        complained = unconfirmed_block.header.complained and self.epoch.complained_result
-        self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
-
     def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
             raise InvalidUnconfirmedBlock("The unconfirmed block has height already added.")
@@ -981,7 +970,6 @@ class BlockManager:
         else:
             self.candidate_blocks.add_block(
                 unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
-            self._reset_leader(unconfirmed_block)
         finally:
             is_validated = exc is None
             vote = self.vote_unconfirmed_block(unconfirmed_block, round_, is_validated)
