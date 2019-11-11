@@ -33,16 +33,10 @@ class PeerLoader:
 
     @staticmethod
     def load(peer_manager: 'PeerManager'):
-        if not peer_manager.peer_list:
-            if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
-                PeerLoader._load_peers_from_file(peer_manager)
-            else:
-                PeerLoader._load_peers_from_rest_call(peer_manager)
-
-            utils.logger.debug(f"show_peers ({ChannelProperty().name}): ")
-            for peer_id in list(peer_manager.peer_list):
-                peer = peer_manager.peer_list[peer_id]
-                utils.logger.debug(f"peer_target: {peer.order}:{peer.target}")
+        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+            PeerLoader._load_peers_from_file(peer_manager)
+        else:
+            PeerLoader._load_peers_from_rest_call(peer_manager)
 
     @staticmethod
     def _load_peers_from_file(peer_manager: 'PeerManager'):
