@@ -100,12 +100,6 @@ class PeerService:
     def p2p_server_stop(self):
         self.p2p_outer_server.stop(None)
 
-    def _get_channel_infos(self):
-        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
-            return utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
-        else:
-            return conf.CHANNEL_OPTION
-
     def _init_port(self, port):
         # service 초기화 작업
         target_ip = utils.get_private_ip()
@@ -198,7 +192,7 @@ class PeerService:
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
-        self._load_channel_infos()
+        self._channel_infos = conf.CHANNEL_OPTION
 
         self._run_rest_services(port)
         self.run_p2p_server()
@@ -280,5 +274,3 @@ class PeerService:
 
             await StubCollection().create_icon_score_stub(channel_name)
 
-    def _load_channel_infos(self):
-        self._channel_infos = self._get_channel_infos()

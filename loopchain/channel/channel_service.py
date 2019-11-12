@@ -417,14 +417,18 @@ class ChannelService:
                 else:
                     logging.warning(f"Waiting for next subscribe request...")
 
-        subscribe_event = asyncio.Event()
         utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
-
+        subscribe_event = asyncio.Event()
         # try websocket connection, and handle exception in callback
-        asyncio.ensure_future(self.__node_subscriber.start(
-            block_height=self.__block_manager.blockchain.block_height,
-            event=subscribe_event,
-        ), loop=MessageQueueService.loop).add_done_callback(_handle_exception)
+        task = asyncio.ensure_future(
+            self.__node_subscriber.start(
+                block_height=self.__block_manager.blockchain.block_height,
+                event=subscribe_event
+            ),
+            loop=MessageQueueService.loop
+        )
+        task.add_done_callback(_handle_exception)
+
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
@@ -497,7 +501,8 @@ class ChannelService:
         blockchain = self.__block_manager.blockchain
         prep_targets = blockchain.find_preps_targets_by_roothash(self.__block_manager.epoch.reps_hash)
         if ChannelProperty().peer_id not in prep_targets:
-            utils.logger.debug(f"This peer needs to switch to citizen.")
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                utils.logger.warning(f"This peer needs to switch to citizen.")
             return
 
         leader_peer_target = prep_targets.get(new_leader_id, None)
