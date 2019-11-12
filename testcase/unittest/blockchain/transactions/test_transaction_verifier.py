@@ -1,12 +1,13 @@
+import os
+
 import pytest
 
-import os
+from loopchain.blockchain.blockchain import BlockChain
 from loopchain.blockchain.exception import TransactionDuplicatedHashError, TransactionInvalidHashError
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionVersioner, TransactionBuilder
-from loopchain.blockchain.transactions import genesis, v2, v3, v3_issue
-from loopchain.blockchain.blockchain import BlockChain
+from loopchain.blockchain.transactions import genesis, v2, v3
 from loopchain.blockchain.types import Hash32
-
+from testcase.unittest.blockchain.conftest import TxFactory, TxBuilderFactory
 
 tx_versioner = TransactionVersioner()
 
@@ -17,8 +18,8 @@ class TestTransactionVerifierBase:
     def auto_fixture_for_test_abc_verifier(self, mocker):
         mocker.patch.object(TransactionVerifier, "__abstractmethods__", new_callable=set)
 
-    def test_verifier_version_check(self, tx_version, tx_factory):
-        tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verifier_version_check(self, tx_version, tx_factory: TxFactory):
+        tx: Transaction = tx_factory(tx_version)
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         if tx_version == genesis.version:
@@ -28,8 +29,8 @@ class TestTransactionVerifierBase:
         elif tx_version == v3.version:
             assert isinstance(tv, v3.TransactionVerifier)
 
-    def test_verify_tx_hash_unique(self, tx_version, tx_factory, mocker):
-        tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_tx_hash_unique(self, tx_version, tx_factory: TxFactory, mocker):
+        tx: Transaction = tx_factory(tx_version)
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         mock_blockchain: BlockChain = mocker.MagicMock(spec=BlockChain)
@@ -38,8 +39,8 @@ class TestTransactionVerifierBase:
         tv.verify_tx_hash_unique(tx, mock_blockchain)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    def test_verify_tx_hash_unique_but_duplicated_tx(self, tx_version, tx_factory, mocker, raise_exc):
-        tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_tx_hash_unique_but_duplicated_tx(self, tx_version, tx_factory: TxFactory, mocker, raise_exc):
+        tx: Transaction = tx_factory(tx_version)
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner, raise_exceptions=raise_exc)
 
         mock_blockchain: BlockChain = mocker.MagicMock(spec=BlockChain)
@@ -55,8 +56,8 @@ class TestTransactionVerifierBase:
             with pytest.raises(TransactionDuplicatedHashError):
                 raise tv.exceptions[0]
 
-    def test_verify_signature(self, tx_version, tx_factory):
-        tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_signature(self, tx_version, tx_factory: TxFactory):
+        tx: Transaction = tx_factory(tx_version)
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         if tx_version != genesis.version:
@@ -70,8 +71,8 @@ class TestTransactionVerifierBase:
 class TestTransactionVerifierHash_genesis:
     tx_version = genesis.version
 
-    def test_verify_hash(self, tx_builder_factory):
-        tx_builder: TransactionBuilder = tx_builder_factory(tx_version=self.tx_version)
+    def test_verify_hash(self, tx_builder_factory: TxBuilderFactory):
+        tx_builder: TransactionBuilder = tx_builder_factory(self.tx_version)
         tx: Transaction = tx_builder.build(is_signing=False)
 
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
@@ -79,8 +80,8 @@ class TestTransactionVerifierHash_genesis:
         tv.verify_hash(tx)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    def test_verify_hash_with_invalid_hash(self, tx_builder_factory, raise_exc):
-        tx_builder: TransactionBuilder = tx_builder_factory(tx_version=self.tx_version)
+    def test_verify_hash_with_invalid_hash(self, tx_builder_factory: TxBuilderFactory, raise_exc):
+        tx_builder: TransactionBuilder = tx_builder_factory(self.tx_version)
         tx: Transaction = tx_builder.build(is_signing=False)
         object.__setattr__(tx, "hash", Hash32(os.urandom(Hash32.size)))
 
@@ -100,15 +101,15 @@ class TestTransactionVerifierHash_genesis:
 @pytest.mark.xfail(reason="This test is branched because the raw_data of genesis tx has signature")
 @pytest.mark.parametrize("tx_version", [v2.version, v3.version])
 class TestTransactionVerifierHash_vv:
-    def test_verify_hash(self, tx_version, tx_factory):
-        tx: Transaction = tx_factory(tx_version=tx_version)
+    def test_verify_hash(self, tx_version, tx_factory: TxFactory):
+        tx: Transaction = tx_factory(tx_version)
         tv = TransactionVerifier.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         tv.verify_hash(tx)
 
     @pytest.mark.parametrize("raise_exc", [True, False])
-    def test_verify_hash_with_invalid_hash(self, tx_version, tx_builder_factory, raise_exc):
-        tx_builder: TransactionBuilder = tx_builder_factory(tx_version=tx_version)
+    def test_verify_hash_with_invalid_hash(self, tx_version, tx_builder_factory: TxBuilderFactory, raise_exc):
+        tx_builder: TransactionBuilder = tx_builder_factory(tx_version)
         tx: Transaction = tx_builder.build()
         object.__setattr__(tx, "hash", Hash32(os.urandom(Hash32.size)))
 
