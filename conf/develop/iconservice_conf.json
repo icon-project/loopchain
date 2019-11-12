@@ -20,8 +20,11 @@
     "scorePackageValidator": false
   },
   "mainPRepCount": 4,
-  "mainAndSubPRepCount": 4,
+  "mainAndSubPRepCount": 8,
   "decentralizeTrigger": 0,
   "iissCalculatePeriod": 30,
-  "termPeriod": 30
+  "termPeriod": 30,
+  "penaltyGracePeriod": 30,
+  "blockValidationPenaltyThreshold": 10,
+  "lowProductivityPenaltyThreshold": 0
 }

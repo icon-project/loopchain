@@ -23,14 +23,15 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+from pkg_resources import parse_version
+
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
-from loopchain.baseservice.score_code import PrepChangedReason
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader
-from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, v0_3
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_3
+from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
@@ -131,13 +132,28 @@ class BlockChain:
         if block.header.height == 0:
             return
 
-        if self.__last_block.header.peer_id != block.header.peer_id or self.__last_block.header.prep_changed:
+        if (self.__last_block.header.peer_id != block.header.peer_id or
+                self.__last_block.header.prep_changed_reason is NextRepsChangeReason.TermEnd):
             self.__made_block_counter[block.header.peer_id] = 1
         else:
             self.__made_block_counter[block.header.peer_id] += 1
 
-    def reset_leader_made_block_count(self):
-        self.__made_block_counter.clear()
+    def _keep_order_in_penalty(self) -> bool:
+        keep_order = (self.last_block and
+                      self.last_block.header.prep_changed_reason is NextRepsChangeReason.Penalty and
+                      self.last_block.header.peer_id == self.last_block.header.next_leader)
+
+        utils.logger.debug(f"_keep_order_in_penalty() : keep_order = {keep_order}")
+        return keep_order
+
+    def reset_leader_made_block_count(self, is_switched_role: bool = False):
+        """Clear all made_block_counter
+
+        :return:
+        """
+        utils.logger.debug(f"reset_leader_made_block_count() : made_block_count = {self.__made_block_counter}")
+        if not self._keep_order_in_penalty() or is_switched_role:
+            self.__made_block_counter.clear()
 
     def get_first_leader_of_next_reps(self, block: Block) -> str:
         utils.logger.spam(
@@ -155,14 +171,15 @@ class BlockChain:
             utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
-    def get_expected_generator(self, peer_id: ExternalAddress) -> Optional[ExternalAddress]:
+    def get_expected_generator(self, new_block: Block) -> Optional[ExternalAddress]:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
         """
 
+        peer_id = new_block.header.peer_id
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            utils.logger.spam(
+            utils.logger.debug(
                 f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
             reps: Sequence[ExternalAddress] = \
                 self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
@@ -311,6 +328,8 @@ class BlockChain:
         prev_block = None
         if prev_hash in candidate_blocks.blocks.keys():
             prev_block = candidate_blocks.blocks[prev_hash].block
+            utils.logger.spam(
+                f"prev_block is None.({prev_block is None}) in candidate_blocks by prev_hash({prev_hash})")
 
         if not prev_block:
             prev_block = self.find_block_by_hash(prev_hash) or self.last_block
@@ -515,7 +534,7 @@ class BlockChain:
                 channel_service.inner_service.notify_new_block()
                 channel_service.reset_leader(new_leader_id=self.__block_manager.epoch.leader_id)
 
-            if channel_service.state_machine.state != 'BlockSync':
+            if block.header.prep_changed and channel_service.state_machine.state != 'BlockSync':
                 # reset_network_by_block_height is called in critical section by self.__add_block_lock.
                 # Other Blocks must not be added until reset_network_by_block_height function finishes.
                 channel_service.switch_role()
@@ -902,8 +921,8 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if (current_block.header.complained and self.__block_manager.epoch.complained_result)\
-                            or self.last_block.header.prep_changed is not None:
+                    if ((current_block.header.complained and self.__block_manager.epoch.complained_result)
+                            or self.last_block.header.prep_changed):
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
                     return None
@@ -1064,7 +1083,7 @@ class BlockChain:
         else:
             return self.score_invoke
 
-    def genesis_invoke(self, block: Block, prev_block_ = None) -> ('Block', dict):
+    def genesis_invoke(self, block: Block, prev_block_=None) -> Tuple[Block, dict]:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
@@ -1115,11 +1134,68 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
+    def _process_next_prep_legacy(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
+        next_leader = _block.header.next_leader
+
+        if next_prep:
+            # P-Rep list has been changed
+            utils.logger.debug(f"_process_next_prep_legacy() current_height({_block.header.height})"
+                               f" next_prep({next_prep})")
+
+            change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
+            if change_reason == NextRepsChangeReason.TermEnd:
+                next_leader = ExternalAddress.empty()
+
+            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
+        else:
+            # P-Rep list has no changes
+            next_leader = _block.header.next_leader
+            next_preps_hash = Hash32.empty()
+
+        block_builder.next_leader = next_leader
+        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+        block_builder.next_reps_hash = next_preps_hash
+
+    def _process_next_prep(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
+        reps = self.find_preps_addresses_by_header(_block.header)
+
+        if next_prep:
+            # P-Rep list has been changed
+            utils.logger.debug(f"_process_next_prep() current_height({_block.header.height}),"
+                               f" next_prep({next_prep})")
+
+            change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
+
+            next_leader = None  # to rebuild next_leader
+            block_builder.next_reps_change_reason = change_reason
+            block_builder.is_max_made_block_count = self.made_block_count_reached_max(_block)
+            utils.logger.debug(f"_process_next_prep() change_reason = {block_builder.next_reps_change_reason},"
+                               f" is_max_mbc = {block_builder.is_max_made_block_count}")
+
+            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
+            next_preps_hash = None  # to rebuild next_reps_hash
+
+            ObjectManager().channel_service.peer_manager.reset_all_peers(
+                next_prep["rootHash"], next_prep['preps'], update_now=False)
+        else:
+            # P-Rep list has no changes
+            next_leader = _block.header.next_leader
+            next_preps = reps
+            next_preps_hash = Hash32.empty()
+
+        block_builder.next_leader = next_leader
+        block_builder.reps = reps
+        block_builder.next_reps = next_preps
+        block_builder.next_reps_hash = next_preps_hash
+
     def score_invoke(self,
                      _block: Block,
                      prev_block: Block,
                      is_block_editable: bool = False,
-                     is_unrecorded_block: bool = False) -> dict or None:
+                     is_unrecorded_block: bool = False) -> Tuple[Block, dict]:
         method = "icx_sendTransaction"
         transactions = []
 
@@ -1184,31 +1260,22 @@ class BlockChain:
         else:
             tx_receipts = tx_receipts_origin
 
-        next_leader = _block.header.next_leader
-        next_prep = response.get("prep")
-        if next_prep:
-            # P-Rep list has been changed
-            utils.logger.debug(f"in score invoke current_height({_block.header.height}) next_prep({next_prep})")
-
-            if next_prep["state"] == PrepChangedReason.TERM_END:
-                next_leader = ExternalAddress.empty()
-            elif next_prep["state"] == PrepChangedReason.PENALTY:
-                pass
-
-            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
-
-            # PREPs of unconfirmed block have to write to db in advance for the reset leader.
-            if not self.find_preps_addresses_by_roothash(next_preps_hash):
-                self.write_preps(next_preps_hash, next_prep['preps'])
-        else:
-            # P-Rep list has no changes
-            next_preps_hash = Hash32.empty()
-
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
+
+        next_prep = response.get("prep")
+
+        if is_unrecorded_block:
+            block_builder.next_leader = ExternalAddress.empty()
+            block_builder.reps = []
+            block_builder.next_reps_hash = Hash32.empty()
+        else:
+            if parse_version(block_builder.version) >= parse_version('0.4'):
+                self._process_next_prep(_block, block_builder, next_prep)
+            else:
+                # TODO : need check that legacy useless after upgrade to block v0.4
+                self._process_next_prep_legacy(_block, block_builder, next_prep)
 
         added_transactions = response.get("addedTransactions")
         if added_transactions:
@@ -1230,20 +1297,19 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        if is_unrecorded_block:
-            block_builder.next_leader = ExternalAddress.empty()
-            block_builder.reps = []
-            block_builder.next_reps_hash = Hash32.empty()
-        else:
-            block_builder.next_leader = next_leader
-            block_builder.reps = self.find_preps_addresses_by_header(_block.header)
-            block_builder.next_reps_hash = next_preps_hash
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
             block_builder.signature = _block.header.signature
         new_block = block_builder.build()
+
+        # next_reps_hash can be referenced after build block
+        if next_prep:
+            # PREPs of unconfirmed block have to write to db in advance for the reset leader.
+            if not self.find_preps_addresses_by_roothash(new_block.header.next_reps_hash):
+                self.write_preps(new_block.header.next_reps_hash, next_prep['preps'])
+
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
         for tx_receipt in tx_receipts.values():

@@ -23,7 +23,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
-from loopchain.peer import status_code, ChannelProperty
+from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 from loopchain.utils import loggers

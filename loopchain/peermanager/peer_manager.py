@@ -21,6 +21,8 @@ from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.configure_default import NodeType
 from loopchain.peermanager import Peer, PeerLoader, PeerListData
 
 
@@ -117,7 +119,10 @@ class PeerManager:
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
             self.add_peer(peer)
 
-        blockchain.reset_leader_made_block_count()
+        new_reps = blockchain.find_preps_addresses_by_roothash(Hash32.fromhex(reps_hash, ignore_prefix=True))
+        new_node_type = NodeType.CommunityNode if ChannelProperty().peer_address in new_reps else NodeType.CitizenNode
+        is_switched_role = new_node_type != ChannelProperty().node_type
+        blockchain.reset_leader_made_block_count(is_switched_role)
 
     def update_all_peers(self):
         if self._reps_reset_data:

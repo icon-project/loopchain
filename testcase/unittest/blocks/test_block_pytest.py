@@ -2,9 +2,9 @@ import os
 
 import pytest
 
-from loopchain.baseservice.score_code import PrepChangedReason
 from loopchain.blockchain.blocks.v0_1a.block import BlockHeader as BlockHeader_v0_1a
 from loopchain.blockchain.blocks.v0_3.block import BlockHeader as BlockHeader_v0_3
+from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.types import Address, Signature, Hash32, ExternalAddress, BloomFilter
 
 
@@ -80,11 +80,13 @@ class TestBlockHeader_v0_3:
                                 reps_hash=Hash32(os.urandom(Hash32.size)),
                                 next_reps_hash=Hash32(os.urandom(Hash32.size)))
 
-        assert header.prep_changed == PrepChangedReason.TERM_END
+        assert header.prep_changed
+        assert header.prep_changed_reason is NextRepsChangeReason.TermEnd
 
     def test_prep_changed_by_penalty_if_exists_next_reps_hash_and_next_leader(self, header_factory):
         header = header_factory(next_leader=ExternalAddress(os.urandom(ExternalAddress.size)),
                                 reps_hash=Hash32(os.urandom(Hash32.size)),
                                 next_reps_hash=Hash32(os.urandom(Hash32.size)))
 
-        assert header.prep_changed == PrepChangedReason.PENALTY
+        assert header.prep_changed
+        assert header.prep_changed_reason == NextRepsChangeReason.TermEnd

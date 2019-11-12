@@ -40,7 +40,13 @@ class BlockHeader(BaseBlockHeader):
         return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
 
     @property
-    def prep_changed(self) -> None:
+    def prep_changed(self) -> bool:
+        """If the block version doesn't support this, it should return False.
+        """
+        return False
+
+    @property
+    def prep_changed_reason(self) -> None:
         """If the block version doesn't support this, it should return None.
         """
         return None

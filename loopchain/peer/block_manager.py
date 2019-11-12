@@ -27,11 +27,12 @@ from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
-from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader
+from loopchain.blockchain.blocks.block import NextRepsChangeReason
+from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
+                                            TransactionOutOfTimeBound, NotInReps,
+                                            NotReadyToConfirmInfo,UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -289,7 +290,7 @@ class BlockManager:
             if expected_leader != block_header.peer_id.hex_hx():
                 raise UnexpectedLeader(
                     f"The unconfirmed block is made by an unexpected leader. "
-                    f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
+                    f"Expected({expected_leader}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
 
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
@@ -674,7 +675,7 @@ class BlockManager:
 
         block = self.blockchain.last_block
 
-        if block.header.prep_changed:
+        if block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
             reps_hash = (block.header.revealed_next_reps_hash
@@ -882,7 +883,7 @@ class BlockManager:
                                                                       reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
-        logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
+        logging.debug(f"vote_unconfirmed_block() ({self.channel_name}/{is_validated})")
 
         vote = BlockVote.new(
             signer=ChannelProperty().peer_auth,
@@ -933,6 +934,7 @@ class BlockManager:
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
+        util.logger.spam(f"prev_block: {prev_block.header.hash if prev_block else None}")
         if not prev_block:
             raise NotReadyToConfirmInfo(
                 "There is no prev block or not ready to confirm block (Maybe node is starting)")
@@ -959,7 +961,7 @@ class BlockManager:
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
                                   self.blockchain,
-                                  self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
+                                  generator=self.blockchain.get_expected_generator(unconfirmed_block),
                                   reps_getter=reps_getter)
         except NotInReps as e:
             util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
