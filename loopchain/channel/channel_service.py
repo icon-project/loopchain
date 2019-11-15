@@ -51,6 +51,7 @@ class ChannelService:
         self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__rest_target = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -181,7 +182,7 @@ class ChannelService:
         loggers.get_preset().update_logger()
 
         ChannelProperty().peer_target = kwargs.get('peer_target')
-        ChannelProperty().rest_target = kwargs.get('rest_target')
+        self.__rest_target = kwargs.get('rest_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
         ChannelProperty().node_type = conf.NodeType.CitizenNode
@@ -298,7 +299,7 @@ class ChannelService:
 
         radiostations = utils.convert_local_ip_to_private_ip(radiostations)
         try:
-            radiostations.remove(ChannelProperty().rest_target)
+            radiostations.remove(self.__rest_target)
         except ValueError:
             pass
 
@@ -396,8 +397,9 @@ class ChannelService:
                 else:
                     logging.warning(f"Waiting for next subscribe request...")
 
-        utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
+        utils.logger.spam(f"try subscribe_call_by_citizen target({self.__rest_target})")
         subscribe_event = asyncio.Event()
+
         # try websocket connection, and handle exception in callback
         task = asyncio.ensure_future(
             self.__node_subscriber.start(
