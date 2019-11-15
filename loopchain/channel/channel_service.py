@@ -62,7 +62,6 @@ class ChannelService:
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
 
         ChannelProperty().name = channel_name
-        ChannelProperty().amqp_target = amqp_target
         ChannelProperty().crep_root_hash = Hash32.fromhex(conf.CHANNEL_OPTION[channel_name].get('crep_root_hash'))
 
         StubCollection().amqp_key = amqp_key
