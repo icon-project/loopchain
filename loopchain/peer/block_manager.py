@@ -52,7 +52,6 @@ class BlockManager:
     def __init__(self, channel_service, peer_id, channel_name, store_identity):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
-        self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
@@ -124,19 +123,6 @@ class BlockManager:
         :return: 블럭체인안의 transaction total count
         """
         return self.blockchain.total_tx
-
-    def pre_validate(self, tx: Transaction):
-        return self.__pre_validate_strategy(tx)
-
-    def __pre_validate(self, tx: Transaction):
-        if tx.hash.hex() in self.__txQueue:
-            raise TransactionDuplicatedHashError(tx)
-
-        if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
-            raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
-
-    def __pre_validate_pass(self, tx: Transaction):
-        pass
 
     def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps
