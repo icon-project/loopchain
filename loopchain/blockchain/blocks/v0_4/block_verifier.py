@@ -29,12 +29,6 @@ if TYPE_CHECKING:
 class BlockVerifier(BaseBlockVerifier):
     version = BlockHeader.version
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
-        super().verify(block, prev_block, blockchain, **kwargs)
-
-    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
-        super().verify_loosely(block, prev_block, blockchain, **kwargs)
-
     # noinspection PyMethodOverriding
     def _verify_common(self, block: 'Block', prev_block: 'Block', *,
                        reps_getter: Callable[[Sequence[ExternalAddress]], Hash32],
