@@ -1114,7 +1114,6 @@ class BlockChain:
 
         self.__add_genesis_block(tx_info, reps)
         self.put_nid(nid)
-        ChannelProperty().nid = nid
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 

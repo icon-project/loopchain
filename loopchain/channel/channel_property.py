@@ -29,5 +29,4 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.peer_address: Optional[ExternalAddress] = None
         self.peer_auth = None
         self.node_type = None
-        self.nid = None
         self.crep_root_hash = None

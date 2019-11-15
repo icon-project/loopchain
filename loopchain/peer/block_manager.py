@@ -353,8 +353,6 @@ class BlockManager:
         if nid is None:
             genesis_block = self.blockchain.find_block_by_height(0)
             self.__rebuild_nid(genesis_block)
-        else:
-            ChannelProperty().nid = nid
 
     def __rebuild_nid(self, block: Block):
         nid = NID.unknown.value
@@ -372,7 +370,6 @@ class BlockManager:
             nid = hex(nid)
 
         self.blockchain.put_nid(nid)
-        ChannelProperty().nid = nid
 
     def block_height_sync(self):
         def _print_exception(fut):
