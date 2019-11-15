@@ -111,6 +111,10 @@ class ChannelService:
     def node_subscriber(self):
         return self.__node_subscriber
 
+    @property
+    def rs_target(self):
+        return self.__rs_target
+
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -186,7 +190,7 @@ class ChannelService:
         ChannelProperty().peer_id = kwargs.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
         ChannelProperty().node_type = conf.NodeType.CitizenNode
-        ChannelProperty().rs_target = None
+        self.__rs_target = None
 
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
@@ -211,7 +215,7 @@ class ChannelService:
             await self.set_peer_type_in_channel()
         else:
             await self._init_rs_target()
-            if ChannelProperty().rs_target is None:
+            if self.__rs_target is None:
                 return
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
@@ -317,8 +321,8 @@ class ChannelService:
             except StopIteration:
                 return await self._init_rs_target(refresh_all=True)
 
-        ChannelProperty().rs_target = self.__rs_client.target
-        self.__inner_service.update_sub_services_properties(relay_target=ChannelProperty().rs_target)
+        self.__rs_target = self.__rs_client.target
+        self.__inner_service.update_sub_services_properties(relay_target=self.__rs_target)
 
     async def _init_rs_client(self):
         self.__rs_client = RestClient(channel=ChannelProperty().name)
@@ -342,7 +346,7 @@ class ChannelService:
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(
             channel=ChannelProperty().name,
-            rs_target=ChannelProperty().rs_target
+            rs_target=self.__rs_target
         )
 
     async def __run_score_container(self):
@@ -465,7 +469,7 @@ class ChannelService:
             if self._is_genesis_node():
                 self.generate_genesis_block()
 
-        if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
+        if not self.is_support_node_function(conf.NodeFunction.Vote) and not self.__rs_target:
             utils.exit_and_msg(f"There's no radiostation target to sync block.")
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):

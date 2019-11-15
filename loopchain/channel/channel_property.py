@@ -24,7 +24,6 @@ class ChannelProperty(metaclass=SingletonMetaClass):
     def __init__(self):
         self.name = None
         self.peer_target = None
-        self.rs_target = None
         self.peer_id = None
         self.peer_address: Optional[ExternalAddress] = None
         self.peer_auth = None
