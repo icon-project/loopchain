@@ -180,7 +180,6 @@ class ChannelService:
         loggers.get_preset().peer_id = kwargs.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = kwargs.get('peer_port')
         ChannelProperty().peer_target = kwargs.get('peer_target')
         ChannelProperty().rest_target = kwargs.get('rest_target')
         ChannelProperty().peer_id = kwargs.get('peer_id')

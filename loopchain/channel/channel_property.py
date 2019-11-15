@@ -26,7 +26,6 @@ class ChannelProperty(metaclass=SingletonMetaClass):
         self.peer_target = None
         self.rest_target = None
         self.rs_target = None
-        self.peer_port = None
         self.peer_id = None
         self.peer_address: Optional[ExternalAddress] = None
         self.peer_auth = None
