@@ -20,6 +20,7 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
+from pkg_resources import parse_version
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -523,6 +524,11 @@ class BlockManager:
                 pass
             else:
                 raise exc
+
+        if parse_version(block_.header.version) >= parse_version("0.3"):
+            reps = reps_getter(block_.header.reps_hash)
+            votes = BlockVotes(reps, conf.VOTING_RATIO, block_.header.height, confirm_info[0].round_, block_.header.hash, confirm_info)
+            votes.verify()
 
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
