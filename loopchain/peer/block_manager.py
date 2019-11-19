@@ -19,7 +19,7 @@ import threading
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List
 from pkg_resources import parse_version
 
 import loopchain.utils as util
@@ -291,7 +291,7 @@ class BlockManager:
 
             if expected_leader != block_header.peer_id.hex_hx():
                 raise UnexpectedLeader(
-                    f"The unconfirmed block is made by an unexpected leader. "
+                    f"The unconfirmed block({block_header.hash}) is made by an unexpected leader. "
                     f"Expected({expected_leader}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
 
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
@@ -433,6 +433,9 @@ class BlockManager:
             RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
         last_block = rs_client.call(RestMethod.GetLastBlock)
+        if not last_block:
+            raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
+
         max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
@@ -550,7 +553,6 @@ class BlockManager:
         :param max_height:
         :return: my_height, max_height
         """
-        peer_stubs_len = len(peer_stubs)
         peer_index = 0
         retry_number = 0
 
@@ -558,11 +560,13 @@ class BlockManager:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_target, peer_stub = peer_stubs[peer_index]
-            logging.info(f"Block Height Sync Target : {peer_target}")
+            peer_target, peer_stub, target_peer_id = peer_stubs[peer_index]
+            logging.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
                     self.__block_request(peer_stub, my_height + 1)
+                if block.header.peer_id == target_peer_id and block.header.height > 1:
+                    raise exception.InvalidBlockSyncTarget(f"Cannot sync block({block.header.hash}) from its generator")
             except Exception as e:
                 logging.warning("There is a bad peer, I hate you: " + str(e))
                 traceback.print_exc()
@@ -610,7 +614,7 @@ class BlockManager:
                     self.__block_height_sync_bad_targets[peer_target] = max_block_height
                     break
                 finally:
-                    peer_index = (peer_index + 1) % peer_stubs_len
+                    peer_index = (peer_index + 1) % len(peer_stubs)
                     if result:
                         my_height += 1
                         retry_number = 0
@@ -623,12 +627,9 @@ class BlockManager:
                                               f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
                                               f"Peer will be down.")
             else:
-                logging.warning(f"Not responding peer({peer_stub}) is removed from the peer stubs target.")
-                if peer_stubs_len == 1:
+                if len(peer_stubs) == 1:
                     raise ConnectionError
-                del peer_stubs[peer_index]
-                peer_stubs_len -= 1
-                peer_index %= peer_stubs_len  # If peer_index is last index, go to first
+                peer_index = (peer_index + 1) % len(peer_stubs)
 
         return my_height, max_height
 
@@ -716,12 +717,13 @@ class BlockManager:
         else:
             return block.header.next_leader.hex_hx()
 
-    def __get_peer_stub_list(self):
+    def __get_peer_stub_list(self) -> Tuple[int, int, List[Tuple]]:
         """It updates peer list for block manager refer to peer list on the loopchain network.
         This peer list is not same to the peer list of the loopchain network.
 
         :return max_height: a height of current blockchain
-        :return peer_stubs: current peer list on the loopchain network
+        :return unconfirmed_block_height: unconfirmed_block_height on the network
+        :return peer_stubs: current peer list on the network (target, peer_stub, ExternalAddress)
         """
         max_height = -1      # current max height
         unconfirmed_block_height = -1
@@ -729,13 +731,10 @@ class BlockManager:
 
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rs_client = ObjectManager().channel_service.rs_client
-            peer_stubs.append((rs_client.target, rs_client))
-            last_block = rs_client.call(RestMethod.GetLastBlock)
-            try:
-                max_height = self.blockchain.block_versioner.get_height(last_block)
-            except Exception as e:
-                util.exit_and_msg(f"The server is not ready! Please try again after a while.")
-
+            status_response = rs_client.call(RestMethod.Status)
+            max_height = status_response['block_height']
+            rs_target_id = status_response['peer_id']
+            peer_stubs.append((rs_client.target, rs_client, rs_target_id))
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
@@ -743,6 +742,7 @@ class BlockManager:
                                                 if v > self.blockchain.block_height}
         logging.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
         peer_target = ChannelProperty().peer_target
+        my_height = self.blockchain.block_height
 
         if self.blockchain.last_block:
             reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
@@ -763,14 +763,13 @@ class BlockManager:
                     request="block_sync",
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
+                target_peer_id = response.peer_id
+                target_block_height = max(response.block_height, response.unconfirmed_block_height)
 
-                latest_block_height = max(response.block_height, response.unconfirmed_block_height)
-
-                if latest_block_height > max_height:
-                    # Add peer as higher than this
-                    max_height = latest_block_height
-                    unconfirmed_block_height = response.unconfirmed_block_height
-                    peer_stubs.append((target, stub))
+                if target_block_height > my_height:
+                    peer_stubs.append((target, stub, ExternalAddress.fromhex(target_peer_id)))
+                    max_height = max(max_height, target_block_height)
+                    unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
 
             except Exception as e:
                 logging.warning(f"This peer has already been removed from the block height target node. {e}")
