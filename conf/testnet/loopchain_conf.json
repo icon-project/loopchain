@@ -2,7 +2,8 @@
   "CHANNEL_OPTION" : {
     "icon_dex": {
       "block_versions": {
-        "0.1a": 0
+        "0.1a": 0,
+        "0.3": 2698900
       },
       "hash_versions": {
         "genesis": 1,
