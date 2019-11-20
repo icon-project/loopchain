@@ -34,6 +34,11 @@ class BlockError(Exception):
     pass
 
 
+class InvalidBlockSyncTarget(Exception):
+    """Raises when the target is invalid to block sync"""
+    pass
+
+
 class BlockchainError(Exception):
     """블럭체인상에서 문제가 발생했을때 발생하는 에러
     """
