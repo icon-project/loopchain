@@ -764,7 +764,7 @@ class ChannelInnerTask:
             return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
-        if 0 < block.header.height == self._blockchain.block_height:
+        if 0 < block.header.height <= self._blockchain.block_height:
             confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
             if not confirm_info:
                 response_code = message_code.Response.fail_no_confirm_info
