@@ -562,13 +562,11 @@ class BlockManager:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_target, peer_stub, target_peer_id = peer_stubs[peer_index]
+            peer_target, peer_stub = peer_stubs[peer_index]
             logging.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
                     self.__block_request(peer_stub, my_height + 1)
-                if block.header.peer_id == target_peer_id and block.header.height > 1:
-                    raise exception.InvalidBlockSyncTarget(f"Cannot sync block({block.header.hash}) from its generator")
             except NoConfirmInfo as e:
                 util.logger.warning(f"{e}")
                 response_code = message_code.Response.fail_no_confirm_info
@@ -729,7 +727,7 @@ class BlockManager:
 
         :return max_height: a height of current blockchain
         :return unconfirmed_block_height: unconfirmed_block_height on the network
-        :return peer_stubs: current peer list on the network (target, peer_stub, ExternalAddress)
+        :return peer_stubs: current peer list on the network (target, peer_stub)
         """
         max_height = -1      # current max height
         unconfirmed_block_height = -1
@@ -739,8 +737,7 @@ class BlockManager:
             rs_client = ObjectManager().channel_service.rs_client
             status_response = rs_client.call(RestMethod.Status)
             max_height = status_response['block_height']
-            rs_target_id = status_response['peer_id']
-            peer_stubs.append((rs_client.target, rs_client, rs_target_id))
+            peer_stubs.append((rs_client.target, rs_client))
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
@@ -769,11 +766,10 @@ class BlockManager:
                     request="block_sync",
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
-                target_peer_id = response.peer_id
                 target_block_height = max(response.block_height, response.unconfirmed_block_height)
 
                 if target_block_height > my_height:
-                    peer_stubs.append((target, stub, ExternalAddress.fromhex(target_peer_id)))
+                    peer_stubs.append((target, stub))
                     max_height = max(max_height, target_block_height)
                     unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
 
