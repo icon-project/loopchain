@@ -179,7 +179,7 @@ class Epoch:
                      complain_votes: LeaderVotes,
                      prev_votes,
                      new_term: bool = False,
-                     is_unrecorded: bool = False):
+                     skip_add_tx: bool = False):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -192,8 +192,8 @@ class Epoch:
         if new_term:
             block_builder.next_leader = None
             block_builder.reps = None
-        elif is_unrecorded:
-            utils.logger.debug(f"unrecorded block for height({self.height})")
+        elif skip_add_tx:
+            utils.logger.debug(f"skip_add_tx for block height({self.height})")
         else:
             self.__add_tx_to_block(block_builder)
 
