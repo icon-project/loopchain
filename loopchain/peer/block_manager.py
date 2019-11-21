@@ -20,18 +20,19 @@ import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List
+
 from pkg_resources import parse_version
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
+from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception, NoConfirmInfo
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
                                             TransactionOutOfTimeBound, NotInReps,
-                                            NotReadyToConfirmInfo,UnrecordedBlock, UnexpectedLeader)
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
@@ -408,23 +409,24 @@ class BlockManager:
             block_height=block_height,
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
-        try:
-            block = self.blockchain.block_loads(response.block)
-        except Exception as e:
-            traceback.print_exc()
-            raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
-        votes_dumped: bytes = response.confirm_info
-        try:
-            votes_serialized = json.loads(votes_dumped)
-            votes = BlockVotes.deserialize_votes(votes_serialized)
-        except json.JSONDecodeError:
-            votes = votes_dumped
+        if response.response_code == message_code.Response.fail_no_confirm_info:
+            raise NoConfirmInfo(f"The peer has not confirm_info of the block by height({block_height}).")
+        else:
+            try:
+                block = self.blockchain.block_loads(response.block)
+            except Exception as e:
+                traceback.print_exc()
+                raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
-        return (
-            block, response.max_block_height, response.unconfirmed_block_height,
-            votes, response.response_code
-        )
+            votes_dumped: bytes = response.confirm_info
+            try:
+                votes_serialized = json.loads(votes_dumped)
+                votes = BlockVotes.deserialize_votes(votes_serialized)
+            except json.JSONDecodeError:
+                votes = votes_dumped
+
+        return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
     def __block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
@@ -567,6 +569,9 @@ class BlockManager:
                     self.__block_request(peer_stub, my_height + 1)
                 if block.header.peer_id == target_peer_id and block.header.height > 1:
                     raise exception.InvalidBlockSyncTarget(f"Cannot sync block({block.header.hash}) from its generator")
+            except NoConfirmInfo as e:
+                util.logger.warning(f"{e}")
+                response_code = message_code.Response.fail_no_confirm_info
             except Exception as e:
                 logging.warning("There is a bad peer, I hate you: " + str(e))
                 traceback.print_exc()
@@ -629,6 +634,7 @@ class BlockManager:
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
+
                 peer_index = (peer_index + 1) % len(peer_stubs)
 
         return my_height, max_height
