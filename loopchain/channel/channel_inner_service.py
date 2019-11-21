@@ -493,10 +493,6 @@ class ChannelInnerTask:
         return 'channel_hello'
 
     @message_queue_task
-    async def get_rs_target(self):
-        return ChannelProperty().rs_target
-
-    @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):
         while True:
             my_block_height = self._blockchain.block_height
