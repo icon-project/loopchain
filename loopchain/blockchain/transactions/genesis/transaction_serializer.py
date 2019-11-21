@@ -7,16 +7,16 @@ class TransactionSerializer(BaseTransactionSerializer):
     _hash_salt = HASH_SALT
 
     def to_origin_data(self, tx: 'Transaction'):
-        return tx.raw_data
+        return dict(tx.raw_data)
 
     def to_raw_data(self, tx: 'Transaction'):
-        return tx.raw_data
+        return dict(tx.raw_data)
 
     def to_full_data(self, tx: 'Transaction'):
-        return tx.raw_data
+        return dict(tx.raw_data)
 
     def to_db_data(self, tx: 'Transaction'):
-        return tx.raw_data
+        return dict(tx.raw_data)
 
     def from_(self, tx_data: dict) -> 'Transaction':
         hash_ = self._hash_generator.generate_hash(tx_data)
