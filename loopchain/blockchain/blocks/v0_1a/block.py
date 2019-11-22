@@ -37,6 +37,7 @@ class BlockHeader(BaseBlockHeader):
     @property
     def complained(self) -> bool:
         # tx == 0 and peer_id == next_leader >> complained = True
+        # this condition is only valid when conf.ALLOW_MAKE_EMPTY_BLOCK = false
         return self.peer_id == self.next_leader and self.merkle_tree_root_hash == Hash32(bytes(32))
 
     @property
