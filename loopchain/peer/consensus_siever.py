@@ -168,8 +168,9 @@ class ConsensusSiever(ConsensusBase):
             else:
                 is_unrecorded_block = False
 
+            skip_add_tx = is_unrecorded_block or complained_result
             block_builder = self._block_manager.epoch.makeup_block(
-                complain_votes, last_block_vote_list, new_term, is_unrecorded_block)
+                complain_votes, last_block_vote_list, new_term, skip_add_tx)
             need_next_call = False
             try:
                 if complained_result or new_term:
