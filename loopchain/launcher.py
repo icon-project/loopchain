@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import time
-from urllib.parse import urlparse, ParseResult
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -27,6 +26,7 @@ from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.tools.grpc_helper import grpc_patcher
 from loopchain.utils import loggers, command_arguments, async_
+from loopchain.tools.config_gen.config_gen import start_as_configure
 
 
 def parse_args_include_unknowns(parser, args=None, namespace=None):
@@ -95,6 +95,8 @@ def main(argv):
         start_as_tool(args, quick_command)
     elif args.service_type == "admin":
         start_as_admin(args, quick_command)
+    elif args.service_type == "init":
+        start_as_configure(args)
     else:
         print(f"not supported service type {args.service_type}\ncheck loopchain help.\n")
         os.system("python3 ./loopchain.py -h")

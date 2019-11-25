@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from argparse import Namespace
-from enum import IntEnum
+from enum import IntEnum, auto
 from typing import Dict
 
 
@@ -29,6 +29,11 @@ class Type(IntEnum):
     Channel = 8
     AMQPTarget = 9
     AMQPKey = 10
+    TotalRepsCount = auto()
+    ChannelNames = auto()
+    MainRepsCount = auto()
+    ConfigOutput = auto()
+    PassWord = auto()
 
 
 class Attribute:
@@ -60,7 +65,12 @@ types_by_names = {
     "seed": Type.Seed,
     "channel": Type.Channel,
     "amqp_target": Type.AMQPTarget,
-    "amqp_key": Type.AMQPKey
+    "amqp_key": Type.AMQPKey,
+    "total_reps": Type.TotalRepsCount,
+    "main_reps": Type.MainRepsCount,
+    "channel_names": Type.ChannelNames,
+    "config_output": Type.ConfigOutput,
+    "password": Type.PassWord,
 }
 
 attributes = {
@@ -111,8 +121,29 @@ attributes = {
 
     Type.AMQPKey:
         Attribute("--amqp_key",
-                  help="key sharing peer group using queue name. use it if one more peers connect one MQ")
+                  help="key sharing peer group using queue name. use it if one more peers connect one MQ"),
 
+    # options for config generator
+    Type.TotalRepsCount:
+        Attribute("--total-reps", type=int, default=8,
+                  help="Config Gen) Number of total reps in network. [default=8]"),
+
+    Type.MainRepsCount:
+        Attribute("--main-reps", type=int, default=4,
+                  help="Config Gen) Number of main peers.\n"
+                       "First n reps from [--peer-count] will be main reps. [default=4]"),
+
+    Type.ChannelNames:
+        Attribute("--channel-names", nargs="+", default=["icon_dex"],
+                  help="Config Gen) Channel names of each peer. [default='icon_dex']"),
+
+    Type.PassWord:
+        Attribute("--password", type=str, default="password",
+                  help="Config Gen) Password of all peers. [default='password']"),
+
+    Type.ConfigOutput:
+        Attribute("--config-output", type=str, default="~/.loopchain",
+                  help="Config Gen) Set config root folder [default='$HOME/.loopchain']"),
 }
 
 command_values: Dict[Type, str] = {}
@@ -123,7 +154,7 @@ def set_raw_commands(args: Namespace):
 
     for arg_name, arg_value in args._get_kwargs():
         if arg_value:
-            arg_type = types_by_names[arg_name]
+            arg_type = types_by_names.get(arg_name)
             command_values[arg_type] = arg_value
 
 
