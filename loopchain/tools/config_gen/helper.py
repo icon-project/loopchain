@@ -5,11 +5,8 @@ from typing import List, Union
 
 from loopchain.blockchain.merkle import MerkleTree
 from loopchain.blockchain.types import ExternalAddress
+from loopchain.tools.config_gen.const import *
 from loopchain.tools.config_gen.types import Key, Keys, Config
-
-PORT_PEER = 7100
-PORT_PEER_FOR_REST = 9000
-PORT_DIFF_BETWEEN_PEERS = 100
 
 
 # ----- Genesis Data
@@ -118,7 +115,6 @@ def make_channel_manage_data(channel_names: list, keys: Keys) -> Config:
     channel_manage_data = {}
     for channel_name in channel_names:
         channel_manage_data[channel_name] = {
-            "score_package": "score/icx",  # TODO: Not needed?
             "peers": _make_peers_in_channel_manage_data(keys=keys)
         }
 

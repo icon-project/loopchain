@@ -1,20 +1,20 @@
 import copy
 from pathlib import Path
-from typing import List, Iterable
+from typing import List
 
 from loopchain.tools.config_gen.helper import (
     check_param_exist, dict_write, make_port_by_order, make_radiostations_for_local,
     make_crep_root_hash, make_genesis_data, make_channel_config, make_peer_config, make_channel_manage_data
 )
 from loopchain.tools.config_gen.types import Key, Keys, Config
+from loopchain.tools.config_gen.const import *
 
 
 class ConfigGenerator:
-    def __init__(self, config_root: Path, channel_names: List[str], total_reps_count: int,
-                 main_reps_count: int = None,
-                 key_password: str = None, key_root: Path = None):
+    def __init__(self, config_root: Path, channel_names: List[str],
+                 total_reps_count: int, main_reps_count: int = None, key_password: str = None):
         # Required Inputs
-        self._config_root: Path = config_root.expanduser().resolve()
+        self._config_root = config_root.expanduser().resolve()
         self._total_reps_count: int = total_reps_count
         self._channel_names: List[str] = channel_names
 
@@ -27,8 +27,7 @@ class ConfigGenerator:
 
         # Optional
         self.main_reps_count: int = main_reps_count or total_reps_count
-        self.key_root: Path = key_root or self._config_root / "keys"
-        self.key_password: str = key_password or "password"
+        self.key_password: str = key_password or DEFAULT_KEY_PASSWORD
 
     def build(self):
         self.build_keys()
@@ -45,7 +44,7 @@ class ConfigGenerator:
 
         keys = []
         for i in range(self._total_reps_count):
-            key_path = self.key_root / f"my_keystore_{i}.json"
+            key_path = self._config_root / f"Node{i}" / DEFAULT_KEY_NAME
             key = Key(path=key_path, password=self.key_password)
             keys.append(key)
 
@@ -99,7 +98,7 @@ class ConfigGenerator:
 
         channels_config: Config = peer_config["CHANNEL_OPTION"]
         for channel_name in channels_config.keys():
-            channels_config[channel_name]["genesis_data_path"] = str(self._config_root / "init_genesis_data.json")
+            channels_config[channel_name]["genesis_data_path"] = str(self._config_root / DEFAULT_GENESIS_FILE_NAME)
 
         return peer_config
 
@@ -111,6 +110,8 @@ class ConfigGenerator:
         return self.channel_manage_data
 
     def write(self):
+        self._config_root.mkdir(parents=True)
+
         self.write_keys()
         self.write_genesis_data()
         self.write_peer_configs()
@@ -118,30 +119,32 @@ class ConfigGenerator:
         self.write_monitoring_list()
 
     @check_param_exist("keys")
-    def write_keys(self) -> Iterable[Path]:
-        self._config_root.mkdir(exist_ok=True)
-        self.key_root.mkdir(parents=True)
+    def write_keys(self) -> List[Path]:
         for key in self.keys:
+            key.path.parent.mkdir(parents=True)
             key.write()
 
-        return (key.path for key in self.keys)
+        return [key.path for key in self.keys]
 
     @check_param_exist("genesis_data")
     def write_genesis_data(self) -> Path:
         self._config_root.mkdir(exist_ok=True)
 
-        genesis_data_path = self._config_root / "init_genesis_data.json"
+        genesis_data_path = self._config_root / DEFAULT_GENESIS_FILE_NAME
         dict_write(path=genesis_data_path, dict_obj=self.genesis_data)
 
         return genesis_data_path
 
     @check_param_exist("peer_configs")
-    def write_peer_configs(self) -> Iterable[Path]:
+    def write_peer_configs(self) -> List[Path]:
         self._config_root.mkdir(exist_ok=True)
 
         paths = []
         for idx, peer_config in enumerate(self.peer_configs):
-            config_path = self._config_root / f"test_{idx}_conf.json"
+            node_root = self._config_root / f"Node{idx}"
+            node_root.mkdir(exist_ok=True)
+
+            config_path = node_root / f"peer_config.json"
             paths.append(config_path)
             dict_write(config_path, peer_config)
 
@@ -151,7 +154,7 @@ class ConfigGenerator:
     def write_channel_manage_data(self) -> Path:
         self._config_root.mkdir(exist_ok=True)
 
-        channel_manage_data_path = self._config_root / "channel_manage_data.json"
+        channel_manage_data_path = self._config_root / DEFAULT_CHANNEL_MANAGE_DATA_FILE_NAME
         channel_manage_data = copy.deepcopy(self.channel_manage_data)
 
         for channel_name in channel_manage_data.keys():
@@ -166,7 +169,7 @@ class ConfigGenerator:
     def write_monitoring_list(self) -> Path:
         self._config_root.mkdir(exist_ok=True)
 
-        monitoring_list_path = self._config_root / "monitoring_list.json"
+        monitoring_list_path = self._config_root / DEFAULT_MONITORING_LIST_FILE_NAME
         dict_write(monitoring_list_path, self.channel_manage_data)
 
         return monitoring_list_path
@@ -179,18 +182,15 @@ def start_as_configure(args):
     password: str = args.password
     config_root: Path = Path(args.config_output).expanduser().resolve()
 
-    # TODO: if args.interactive:
-    #   ...
+    if config_root.exists():
+        print(f"Config directory is not empty: {config_root}")
 
-    try:
-        config_gen = ConfigGenerator(
-            config_root=config_root,
-            total_reps_count=total_reps_count,
-            main_reps_count=main_reps_count,
-            channel_names=channel_names,
-            key_password=password,
-        )
-        config_gen.build()
-        config_gen.write()
-    except Exception as e:
-        print(f"{e.__class__.__name__}: {e}")
+    config_gen = ConfigGenerator(
+        config_root=config_root,
+        total_reps_count=total_reps_count,
+        main_reps_count=main_reps_count,
+        channel_names=channel_names,
+        key_password=password,
+    )
+    config_gen.build()
+    config_gen.write()

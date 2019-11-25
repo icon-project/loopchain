@@ -71,9 +71,9 @@ class TestConfigGeneratorKeys:
         for key in config_gen.keys:
             assert not key.path.exists()
 
-        config_gen.write_keys()
-        for key in config_gen.keys:
-            assert key.path.exists()
+        key_paths = config_gen.write_keys()
+        for key_path in key_paths:
+            assert key_path.exists()
 
 
 class TestConfigGeneratorGenesisData:

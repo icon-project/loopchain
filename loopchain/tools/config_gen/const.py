@@ -1,0 +1,13 @@
+PORT_PEER = 7100
+PORT_PEER_FOR_REST = 9000
+PORT_DIFF_BETWEEN_PEERS = 100
+
+
+DEFAULT_KEY_NAME = "my_keystore.json"
+DEFAULT_KEY_PASSWORD = "password"
+
+DEFAULT_GENESIS_FILE_NAME = "init_genesis_data.json"
+DEFAULT_CHANNEL_MANAGE_DATA_FILE_NAME = "channel_manage_data.json"
+DEFAULT_MONITORING_LIST_FILE_NAME = "monitoring_list.json"
+
+
