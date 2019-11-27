@@ -206,7 +206,8 @@ class ChannelStateMachine(object):
     def _blockgenerate_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = True
         loggers.get_preset().update_logger()
-        self.__channel_service.inner_service.notify_unregister()
+        if conf.SAFE_BLOCK_BROADCAST:
+            self.__channel_service.inner_service.notify_unregister()
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self, *args, **kwargs):

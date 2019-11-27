@@ -530,7 +530,7 @@ class BlockChain:
                     'block_height': self.__last_block.header.height
                 }})
 
-            if channel_service.state_machine.state != 'BlockGenerate':
+            if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
                 channel_service.reset_leader(new_leader_id=self.__block_manager.epoch.leader_id)
 
