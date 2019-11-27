@@ -375,7 +375,7 @@ class BlockChain:
         try:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
-            utils.logger.spam(f"There is no confirm info by block hash: {block_hash}")
+            utils.logger.debug(f"There is no confirm info by block hash: {block_hash}")
             block = self.find_block_by_hash(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
@@ -627,6 +627,8 @@ class BlockChain:
                 BlockChain.CONFIRM_INFO_KEY + block_hash_encoded,
                 confirm_info
             )
+        else:
+            utils.logger.debug(f"This block({block.header.hash}) is trying to add without confirm_info.")
 
         if block.header.prev_hash:
             prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
@@ -889,7 +891,7 @@ class BlockChain:
         :param nid: Network ID
         :return:
         """
-        utils.logger.spam(f"blockchain:put_nid ({self.__channel_name}), nid ({nid})")
+        utils.logger.spam(f"put_nid ({self.__channel_name}), nid ({nid})")
         if nid is None:
             return
 

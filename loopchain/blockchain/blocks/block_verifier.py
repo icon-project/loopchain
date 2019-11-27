@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Callable
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.blockchain.exception import BlockVersionNotMatch, TransactionOutOfTimeBound
+from loopchain.blockchain.exception import BlockVersionNotMatch, BlockHeightMismatch, TransactionOutOfTimeBound
 from loopchain.blockchain.transactions import TransactionVerifier
 from loopchain.crypto.signature import SignVerifier
 
@@ -100,9 +100,11 @@ class BlockVerifier(ABC):
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.height != prev_block.header.height + 1:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                     f"Height({block.header.height}), "
-                                     f"Expected({prev_block.header.height + 1}).")
+            exception = BlockHeightMismatch(
+                f"Block({block.header.height}, {block.header.hash.hex()}, "
+                f"Height({block.header.height}), "
+                f"Expected({prev_block.header.height + 1})."
+            )
             self._handle_exception(exception)
 
         if block.header.prev_hash != prev_block.header.hash:

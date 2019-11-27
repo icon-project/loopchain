@@ -141,6 +141,12 @@ class BlockVersionNotMatch(Exception):
         return ' '.join(results)
 
 
+class BlockHeightMismatch(Exception):
+    """
+    """
+    pass
+
+
 class ScoreInvokeError(Exception):
     """Error While Invoke Score
     """
