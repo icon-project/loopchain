@@ -18,11 +18,11 @@
 
 import timeit
 import unittest
+from functools import lru_cache
 from functools import partial
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
-from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
@@ -43,7 +43,7 @@ class TestLruCache(unittest.TestCase):
             ret.append(i ** i)
         return ret
 
-    @lru_cache(maxsize=4, valued_returns_only=True)
+    @lru_cache(maxsize=4)
     def get_big_list_with_cache(self, size):
         ret = []
         for i in range(size):
@@ -79,6 +79,25 @@ class TestLruCache(unittest.TestCase):
         util.logger.debug(f"returns_origin({returns_origin}), returns({returns}), returns2({returns2})")
         self.assertNotEqual(returns, returns2)
         self.assertEqual(returns2, returns_origin)
+
+    def test_cache_clear(self):
+        from unittest.mock import MagicMock
+        call_check_mock = MagicMock()
+
+        @lru_cache(maxsize=4)
+        def target_func():
+            call_check_mock()
+
+        target_func()
+        self.assertEqual(call_check_mock.call_count, 1)
+        target_func()
+        self.assertEqual(call_check_mock.call_count, 1)
+
+
+        # WHEN
+        target_func.cache_clear()
+        target_func()
+        self.assertEqual(call_check_mock.call_count, 2)
 
 
 if __name__ == '__main__':
