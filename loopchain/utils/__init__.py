@@ -133,29 +133,16 @@ def get_stub_to_server(target, stub_class, time_out_seconds=None, is_check_statu
 
     :return: stub to server
     """
-    if time_out_seconds is None:
-        time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
+
     stub = None
     channel = None
-    start_time = timeit.default_timer()
-    duration = timeit.default_timer() - start_time
 
-    while stub is None and duration < time_out_seconds:
-        try:
-            logging.debug("(util) get stub to server target: " + str(target))
-            channel = GRPCHelper().create_client_channel(target, ssl_auth_type, conf.GRPC_SSL_KEY_LOAD_TYPE)
-            stub = stub_class(channel)
-            if is_check_status:
-                stub.Request(loopchain_pb2.Message(code=message_code.Request.status), conf.GRPC_TIMEOUT)
-        except Exception as e:
-            logging.warning("Connect to Server Error(get_stub_to_server): " + str(e))
-            logging.debug("duration(" + str(duration)
-                          + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                          + ") timeout(" + str(time_out_seconds) + ")")
-            # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
-            time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-            duration = timeit.default_timer() - start_time
-            stub = None
+    try:
+        logging.debug("(util) get stub to server target: " + str(target))
+        channel = GRPCHelper().create_client_channel(target, ssl_auth_type, conf.GRPC_SSL_KEY_LOAD_TYPE)
+        stub = stub_class(channel)
+    except Exception as e:
+        logging.warning("Connect to Server Error(get_stub_to_server): " + str(e))
 
     return stub, channel
 

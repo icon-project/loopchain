@@ -204,10 +204,8 @@ class _Broadcaster:
     def __add_audience(self, audience_target):
         util.logger.debug(f"audience_target({audience_target})")
         if audience_target not in self.__audience:
-            stub_manager = StubManager.get_stub_manager_to_server(
+            stub_manager = StubManager(
                 audience_target, loopchain_pb2_grpc.PeerServiceStub,
-                time_out_seconds=conf.CONNECTION_RETRY_TIMEOUT_WHEN_INITIAL,
-                is_allow_null_stub=True,
                 ssl_auth_type=conf.GRPC_SSL_TYPE
             )
             self.__audience[audience_target] = stub_manager
