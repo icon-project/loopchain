@@ -3,7 +3,7 @@ from typing import List
 
 import pytest
 
-from loopchain.baseservice import StubManager, ObjectManager, BroadcastCommand
+from loopchain.baseservice import ObjectManager, BroadcastCommand
 from loopchain.baseservice.broadcast_scheduler import BroadcastScheduler, BroadcastSchedulerFactory
 from loopchain.baseservice.broadcast_scheduler import _Broadcaster, _BroadcastSchedulerMp, _BroadcastSchedulerThread
 
@@ -74,7 +74,7 @@ class TestBroadcaster:
 
     def test_handler_update_audience(self, bc, mocker):
         # Mock stubmanager to avoid actual grpc stub initialized.
-        mocker.patch.object(StubManager, "get_stub_manager_to_server")
+        mocker.patch("loopchain.baseservice.StubManager")
 
         audience_targets = [f"endpoint:{i}" for i in range(5)]
 
@@ -86,7 +86,7 @@ class TestBroadcaster:
 
     def test_handler_update_audience_twice_and_updated_with_new_audiences(self, bc, mocker):
         # Mock stubmanager to avoid actual grpc stub initialized.
-        mocker.patch.object(StubManager, "get_stub_manager_to_server")
+        mocker.patch("loopchain.baseservice.StubManager")
 
         expected_audience_count = 5
         new_audience_start_at = 2

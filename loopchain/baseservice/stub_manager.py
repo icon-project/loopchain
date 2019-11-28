@@ -46,7 +46,7 @@ class StubManager:
             util.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
 
             self.__stub, self.__channel = util.get_stub_to_server(
-                self.__target, self.__stub_type, is_check_status=False, ssl_auth_type=self.__ssl_auth_type)
+                self.__target, self.__stub_type, ssl_auth_type=self.__ssl_auth_type)
             self.__stub_update_time = datetime.datetime.now()
             if self.__stub:
                 self.__update_last_succeed_time()

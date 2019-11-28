@@ -78,17 +78,14 @@ def run_peer_server_as_process_and_stub(
         except Exception as e:
             logging.warning(f"Exception in loop : {e}")
 
-    stub, channel = util.get_stub_to_server(target='localhost:' + str(port),
-                                            stub_class=loopchain_pb2_grpc.PeerServiceStub,
-                                            time_out_seconds=timeout)
+    stub, channel = util.get_stub_to_server(f"localhost:{port}", stub_class=loopchain_pb2_grpc.PeerServiceStub)
     return process, stub
 
 
 def run_peer_server_as_process_and_stub_manager(
         port, radiostation_port=conf.PORT_RADIOSTATION, group_id=None, score=None, timeout=None):
     process = run_peer_server_as_process(port, radiostation_port, group_id, score)
-    stub_manager = StubManager(
-        'localhost:' + str(port), loopchain_pb2_grpc.PeerServiceStub, ssl_auth_type=conf.GRPC_SSL_TYPE)
+    stub_manager = StubManager(f"localhost:{port}", loopchain_pb2_grpc.PeerServiceStub, ssl_auth_type=conf.GRPC_SSL_TYPE)
     return process, stub_manager
 
 
@@ -100,20 +97,21 @@ def run_radio_station_as_process(port):
 
 def run_radio_station_as_process_and_stub_manager(port, timeout=None):
     process = run_radio_station_as_process(port)
-    stub_manager = StubManager('localhost:' + str(port),
+    stub_manager = StubManager(f"localhost:{port}",
                                loopchain_pb2_grpc.RadioStationStub,
                                conf.GRPC_SSL_TYPE)
     util.request_server_in_time(stub_manager.stub.GetStatus, loopchain_pb2.StatusRequest(request=""))
     return process, stub_manager
 
 
-def run_radio_station_as_process_and_stub(port, timeout=None):
-    if timeout is None:
-        timeout = conf.TIMEOUT_FOR_RS_INIT
+def run_radio_station_as_process_and_stub(port):
     process = run_radio_station_as_process(port)
-    stub, channel = util.get_stub_to_server(target='localhost:' + str(port),
-                                            stub_class=loopchain_pb2_grpc.RadioStationStub,
-                                            time_out_seconds=timeout)
+
+    stub, channel = util.get_stub_to_server(
+        target=f"localhost:{port}",
+        stub_class=loopchain_pb2_grpc.RadioStationStub
+    )
+
     return process, stub
 
 

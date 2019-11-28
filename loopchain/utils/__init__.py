@@ -127,8 +127,7 @@ def load_user_score(path):
     return _load_user_score_module(path, "UserScore")
 
 
-def get_stub_to_server(target, stub_class, time_out_seconds=None, is_check_status=True,
-                       ssl_auth_type: conf.SSLAuthType=conf.SSLAuthType.none):
+def get_stub_to_server(target, stub_class, ssl_auth_type: conf.SSLAuthType = conf.SSLAuthType.none):
     """gRPC connection to server
 
     :return: stub to server
@@ -138,11 +137,11 @@ def get_stub_to_server(target, stub_class, time_out_seconds=None, is_check_statu
     channel = None
 
     try:
-        logging.debug("(util) get stub to server target: " + str(target))
+        logging.debug(f"(util) get stub to server target: {target}")
         channel = GRPCHelper().create_client_channel(target, ssl_auth_type, conf.GRPC_SSL_KEY_LOAD_TYPE)
         stub = stub_class(channel)
     except Exception as e:
-        logging.warning("Connect to Server Error(get_stub_to_server): " + str(e))
+        logging.warning(f"Connect to Server Error(get_stub_to_server): {e}")
 
     return stub, channel
 
