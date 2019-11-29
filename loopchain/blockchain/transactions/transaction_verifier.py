@@ -26,15 +26,16 @@ class TransactionVerifier(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def verify(self, tx: 'Transaction', blockchain=None):
+    def verify(self, tx: 'Transaction', blockchain=None, db_tx=None):
         raise NotImplementedError
 
     @abstractmethod
-    def verify_loosely(self, tx: 'Transaction', blockchain=None):
+    def verify_loosely(self, tx: 'Transaction', blockchain=None, db_tx=None):
         raise NotImplementedError
 
-    def verify_tx_hash_unique(self, tx: 'Transaction', blockchain):
-        if blockchain.find_tx_by_key(tx.hash.hex()):
+    def verify_tx_hash_unique(self, tx: 'Transaction', blockchain, db_tx=None):
+        # if blockchain.find_tx_by_key(tx.hash.hex()):
+        if db_tx:
             exception = TransactionDuplicatedHashError(tx)
             self._handle_exceptions(exception)
 

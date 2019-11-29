@@ -17,11 +17,11 @@ class TransactionVerifier(BaseTransactionVerifier):
     def pre_verify(self, tx: 'Transaction', **kwargs):
         self.verify(tx, None)
 
-    def verify(self, tx: 'Transaction', blockchain=None):
-        self.verify_loosely(tx, blockchain)
+    def verify(self, tx: 'Transaction', blockchain=None, db_tx=None):
+        self.verify_loosely(tx, blockchain, db_tx=db_tx)
 
-    def verify_loosely(self, tx: 'Transaction', blockchain=None):
+    def verify_loosely(self, tx: 'Transaction', blockchain=None, db_tx=None):
         self.verify_hash(tx)
         self.verify_signature(tx)
         if blockchain:
-            self.verify_tx_hash_unique(tx, blockchain)
+            self.verify_tx_hash_unique(tx, blockchain, db_tx=db_tx)

@@ -13,7 +13,7 @@ class TransactionVerifier(BaseTransactionVerifier):
     def pre_verify(self, tx: 'Transaction', **kwargs):
         self.verify(tx, None)
 
-    def verify(self, tx: 'Transaction', blockchain=None):
+    def verify(self, tx: 'Transaction', blockchain=None, db_tx=None):
         if isinstance(tx.from_address, MalformedStr):
             exception = RuntimeError(f"Tx({tx})\n"
                                      f"To Address({tx.from_address} is malformed.")
@@ -46,7 +46,7 @@ class TransactionVerifier(BaseTransactionVerifier):
 
         self.verify_loosely(tx, blockchain)
 
-    def verify_loosely(self, tx: 'Transaction', blockchain=None):
+    def verify_loosely(self, tx: 'Transaction', blockchain=None, db_tx=None):
         self.verify_hash(tx)
         self.verify_signature(tx)
         if blockchain:

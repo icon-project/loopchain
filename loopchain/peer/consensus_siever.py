@@ -103,7 +103,7 @@ class ConsensusSiever(ConsensusBase):
             MessageQueueService.loop
         )
         result = future.result()
-        util.logger.warning(f"__add_block() : result = {result}")
+        util.logger.debug(f"__add_block() : result = {result}")
 
         self._block_manager.candidate_blocks.remove_block(block.header.hash)
         self._blockchain.last_unconfirmed_block = None
@@ -153,7 +153,14 @@ class ConsensusSiever(ConsensusBase):
             last_block = self._blockchain.last_unconfirmed_block or self._blockchain.last_block
             last_block_votes = self.get_votes(last_block.header.hash)
 
-            block_builder = self._block_manager.epoch.makeup_block(complain_votes, last_block_votes)
+            # FIXME : !!!!!
+            from earlgrey import MessageQueueService
+            future = asyncio.run_coroutine_threadsafe(
+                self._block_manager.epoch.makeup_block(complain_votes, last_block_votes),
+                MessageQueueService.loop
+            )
+            block_builder = future.result()
+
             vote_result = None
             last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             next_leader = ExternalAddress.fromhex(ChannelProperty().peer_id)
@@ -173,7 +180,6 @@ class ConsensusSiever(ConsensusBase):
                     self._blockchain.last_unconfirmed_block = None
 
                     # FIXME : !!!!!
-                    from earlgrey import MessageQueueService
                     future = asyncio.run_coroutine_threadsafe(
                         self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash),
                         MessageQueueService.loop
@@ -185,7 +191,11 @@ class ConsensusSiever(ConsensusBase):
                     else:
                         votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
-                    block_builder = self._block_manager.epoch.makeup_block(complain_votes, votes)
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._block_manager.epoch.makeup_block(complain_votes, last_block_votes),
+                        MessageQueueService.loop
+                    )
+                    block_builder = future.result()
                     self._made_block_count += 1
                 elif self.made_block_count >= (conf.MAX_MADE_BLOCK_COUNT - 1):
                     if last_unconfirmed_block:
@@ -217,7 +227,7 @@ class ConsensusSiever(ConsensusBase):
             candidate_block, invoke_results = ObjectManager().channel_service.score_invoke(candidate_block)
             self._block_manager.set_invoke_results(candidate_block.header.hash.hex(), invoke_results)
 
-            util.logger.warning(f"candidate block : {candidate_block.header}")
+            util.logger.debug(f"candidate block : {candidate_block.header}")
 
             self._blockchain.last_unconfirmed_block = candidate_block
             self._block_manager.epoch = Epoch.new_epoch(next_leader.hex_hx())

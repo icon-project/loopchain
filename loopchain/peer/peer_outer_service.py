@@ -405,7 +405,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
-        utils.logger.spam(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
+        utils.logger.debug(f"peer_outer_service:AddTxList try validate_dumped_tx_message")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
         StubCollection().channel_tx_receiver_stubs[channel_name].sync_task().add_tx_list(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")

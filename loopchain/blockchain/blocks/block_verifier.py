@@ -38,12 +38,14 @@ class BlockVerifier(ABC):
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
     def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
-        self.verify_transactions(block, blockchain)
+        tx_dict = kwargs.get('tx_dict', {})
+        self.verify_transactions(block, blockchain, tx_dict=tx_dict)
         return self.verify_common(block, prev_block, generator, **kwargs)
 
     def verify_loosely(self, block: 'Block', prev_block: 'Block',
                        blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
-        self.verify_transactions_loosely(block, blockchain)
+        tx_dict = kwargs.get('tx_dict', {})
+        self.verify_transactions_loosely(block, blockchain, tx_dict=tx_dict)
         return self.verify_common(block, prev_block, generator, **kwargs)
 
     def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
@@ -78,17 +80,17 @@ class BlockVerifier(ABC):
     def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
         raise NotImplementedError
 
-    def verify_transactions(self, block: 'Block', blockchain=None):
+    def verify_transactions(self, block: 'Block', blockchain=None, tx_dict=None):
         for tx in block.body.transactions.values():
             tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
-            tv.verify(tx, blockchain)
+            tv.verify(tx, blockchain, db_tx=tx_dict.get(tx.hash.hex(), None))
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)
 
-    def verify_transactions_loosely(self, block: 'Block', blockchain=None):
+    def verify_transactions_loosely(self, block: 'Block', blockchain=None, tx_dict=None):
         for tx in block.body.transactions.values():
             tv = TransactionVerifier.new(tx.version, tx.type(), self._tx_versioner, self._raise_exceptions)
-            tv.verify_loosely(tx, blockchain)
+            tv.verify_loosely(tx, blockchain, db_tx=tx_dict.get(tx.hash.hex(), None))
             if not self._raise_exceptions:
                 self.exceptions.extend(tv.exceptions)
 

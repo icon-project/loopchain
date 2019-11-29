@@ -231,6 +231,7 @@ class ChannelTxReceiverInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def add_tx_list(self, request) -> tuple:
+        logging.debug("add_tx_list() start")
         if self.__nid is None:
             response_code = message_code.Response.fail
             message = "Node initialization is not completed."
@@ -261,6 +262,7 @@ class ChannelTxReceiverInnerTask:
             response_code = message_code.Response.success
             message = f"success ({len(tx_list)})/({len(request.tx_list)})"
 
+        logging.debug("add_tx_list() end")
         return response_code, message
 
 
@@ -365,7 +367,8 @@ class _ChannelTxReceiverProcess(ModuleProcess):
                 tx_list = tx_queue.get()
                 if not self.__is_running or tx_list is None:
                     break
-                asyncio.run_coroutine_threadsafe(_add_tx_list(tx_list), loop)
+                # asyncio.run_coroutine_threadsafe(_add_tx_list(tx_list), loop)
+                add_tx_list_callback(tx_list)
 
             while not tx_queue.empty():
                 tx_queue.get()
@@ -466,6 +469,7 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
+        util.logger.debug(f"__add_tx_list() tx_list = {tx_list}")
         block_manager = self._channel_service.block_manager
         blockchain = block_manager.get_blockchain()
 
@@ -473,7 +477,9 @@ class ChannelInnerTask:
             if tx.hash.hex() in block_manager.get_tx_queue():
                 util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
                 continue
-            if blockchain.find_tx_by_key(tx.hash.hex()):
+
+            util.logger.debug(f"__add_tx_list() find_tx_by_key start : {tx.hash.hex()}")
+            if blockchain.find_tx_by_key_threadsafe(tx.hash.hex()):
                 util.logger.warning(f"hash {tx.hash.hex()} already exists in blockchain. tx({tx})")
                 continue
 
@@ -487,6 +493,8 @@ class ChannelInnerTask:
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
+
+        util.logger.debug(f"__add_tx_list() end")
 
     @message_queue_task
     async def hello(self):
@@ -662,11 +670,11 @@ class ChannelInnerTask:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
 
     @message_queue_task
-    def get_tx(self, tx_hash):
-        return self._channel_service.block_manager.get_tx(tx_hash)
+    async def get_tx(self, tx_hash):
+        return await self._channel_service.block_manager.get_tx(tx_hash)
 
     @message_queue_task
-    def get_tx_info(self, tx_hash):
+    async def get_tx_info(self, tx_hash):
         tx = self._channel_service.block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
             blockchain = self._channel_service.block_manager.get_blockchain()
@@ -682,7 +690,8 @@ class ChannelInnerTask:
             return message_code.Response.success, tx_info
         else:
             try:
-                return message_code.Response.success, self._channel_service.block_manager.get_tx_info(tx_hash)
+                _tx_info = await self._channel_service.block_manager.get_tx_info(tx_hash)
+                return message_code.Response.success, _tx_info
             except KeyError as e:
                 logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
                 response_code = message_code.Response.fail_invalid_key_error
@@ -818,9 +827,9 @@ class ChannelInnerTask:
         block_manager.add_complain(vote)
 
     @message_queue_task
-    def get_invoke_result(self, tx_hash):
+    async def get_invoke_result(self, tx_hash):
         try:
-            invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
+            invoke_result = await self._channel_service.block_manager.get_invoke_result(tx_hash)
             invoke_result_str = json.dumps(invoke_result)
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
@@ -882,7 +891,7 @@ class ChannelInnerTask:
             version = tx_versioner.get_version(tx)
             tx_hash = tss[version].get_hash(tx)
 
-            invoke_result = self._channel_service.block_manager.get_invoke_result(tx_hash)
+            invoke_result = await self._channel_service.block_manager.get_invoke_result(tx_hash)
 
             if 'failure' in invoke_result:
                 continue

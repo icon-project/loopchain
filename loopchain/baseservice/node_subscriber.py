@@ -137,10 +137,15 @@ class NodeSubscriber:
             block_verifier.invoke_func = ObjectManager().channel_service.score_invoke
             reps = ObjectManager().channel_service.get_rep_ids()
             try:
+                get_tx_coroutines = (blockchain.find_tx_by_key(tx.hash.hex())
+                                     for tx in confirmed_block.body.transactions.values())
+                tx_dict = {tx_key: tx for tx_key, tx in await asyncio.gather(*get_tx_coroutines)}
+
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
                                       blockchain.last_block.header.next_leader,
+                                      tx_dict=tx_dict,
                                       reps=reps)
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")

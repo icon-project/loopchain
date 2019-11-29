@@ -387,7 +387,7 @@ class BlockChain:
             futures.append(self._blockchain_store.delete(prev_block_confirm_info_key))
 
         result = await asyncio.gather(*futures, loop=self._loop)
-        logging.warning(f"__write_block_data() result = {result}")
+        logging.debug(f"__write_block_data() result = {result}")
 
         return next_total_tx
 
@@ -568,7 +568,7 @@ class BlockChain:
 
         return True
 
-    def find_tx_by_key(self, tx_hash_key):
+    async def find_tx_by_key(self, tx_hash_key):
         """find tx by hash
 
         :param tx_hash_key: tx hash
@@ -576,14 +576,38 @@ class BlockChain:
         """
 
         try:
-            tx_info_json = self.find_tx_info(tx_hash_key)
+            tx_info_json = await self.find_tx_info(tx_hash_key)
+        except KeyError as e:
+            # This case is not an error.
+            # Client send wrong tx_hash..
+            # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
+            return tx_hash_key, None
+
+        if tx_info_json is None:
+            logging.debug(f"tx not found. tx_hash ({tx_hash_key})")
+            return tx_hash_key, None
+
+        tx_data = tx_info_json["transaction"]
+        tx_version, tx_type = self.tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
+        return tx_hash_key, tx_serializer.from_(tx_data)
+
+    def find_tx_by_key_threadsafe(self, tx_hash_key):
+        """find tx by hash
+
+        :param tx_hash_key: tx hash
+        :return None: There is no tx by hash or transaction object.
+        """
+
+        try:
+            tx_info_json = self.find_tx_info_threadsafe(tx_hash_key)
         except KeyError as e:
             # This case is not an error.
             # Client send wrong tx_hash..
             # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
-            logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
+            logging.debug(f"tx not found. tx_hash ({tx_hash_key})")
             return None
 
         tx_data = tx_info_json["transaction"]
@@ -591,7 +615,7 @@ class BlockChain:
         tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         return tx_serializer.from_(tx_data)
 
-    def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
+    async def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay
 
         :param tx_hash: tx_hash
@@ -600,7 +624,7 @@ class BlockChain:
         if isinstance(tx_hash, Hash32):
             tx_hash = tx_hash.hex()
         try:
-            tx_info = self.find_tx_info(tx_hash)
+            tx_info = await self.find_tx_info(tx_hash)
         except KeyError as e:
             block_manager = ObjectManager().channel_service.block_manager
             if tx_hash in block_manager.get_tx_queue():
@@ -614,7 +638,28 @@ class BlockChain:
 
         return tx_info['result']
 
-    def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
+    async def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
+        if isinstance(tx_hash_key, Hash32):
+            tx_hash_key = tx_hash_key.hex()
+
+        try:
+            tx_info = await self._blockchain_store.get(tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
+            logging.debug(f"find_tx_info() tx_info = {tx_info}")
+            tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
+        except UnicodeDecodeError as e:
+            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
+            return None
+        except KeyError as e:
+            # logging.warning("find_tx_info() KeyError: " + str(e))
+            return None
+
+        # except KeyError as e:
+        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
+        #     return None
+
+        return tx_info_json
+
+    def find_tx_info_threadsafe(self, tx_hash_key: Union[str, Hash32]):
         if isinstance(tx_hash_key, Hash32):
             tx_hash_key = tx_hash_key.hex()
 
@@ -623,11 +668,17 @@ class BlockChain:
                 self._blockchain_store.get(tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING)),
                 self._loop
             )
+            logging.debug(f"find_tx_info() future = {future}")
             tx_info = future.result()
+
+            logging.debug(f"find_tx_info() tx_info = {tx_info}")
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
             logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
+            return None
+        except KeyError as e:
+            # logging.debug("find_tx_info() KeyError: " + str(e))
             return None
         # except KeyError as e:
         #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
@@ -730,12 +781,10 @@ class BlockChain:
         candidate_blocks = block_manager.candidate_blocks
         with self.__confirmed_block_lock:
             logging.debug(f"BlockChain:confirm_block channel({self.__channel_name})")
-            logging.warning(f"last_block.header({self.last_block.header})\n"
+            logging.debug(f"confirm_prev_block() last_block.header({self.last_block.header})\n"
                             f"current_block.header({current_block.header})")
 
             try:
-                for k, v in candidate_blocks.blocks.items():
-                    logging.warning(f"candidate_blocks : {k.hex_0x()} = {v}")
                 unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
                 logging.debug("confirmed_block_hash: " + current_block.header.prev_hash.hex())
                 if unconfirmed_block:
@@ -766,7 +815,7 @@ class BlockChain:
             #                    f"height({unconfirmed_block.header.height})")
             confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
             task = self._loop.create_task(self.add_block(unconfirmed_block, confirm_info))
-            logging.warning(f"confirm_prev_block() : add_block task = {task}")
+            logging.debug(f"confirm_prev_block() : add_block task = {task}")
 
             def add_block_callback(f):
                 logging.debug(f"confirm_prev_block() : add_block done = {f}")
@@ -860,7 +909,7 @@ class BlockChain:
 
     async def get_transaction_proof(self, tx_hash: Hash32):
         try:
-            tx_info = self.find_tx_info(tx_hash.hex())
+            tx_info = await self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
 
@@ -875,7 +924,7 @@ class BlockChain:
 
     async def prove_transaction(self, tx_hash: Hash32, proof: list):
         try:
-            tx_info = self.find_tx_info(tx_hash.hex())
+            tx_info = await self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
 
@@ -890,7 +939,7 @@ class BlockChain:
 
     async def get_receipt_proof(self, tx_hash: Hash32):
         try:
-            tx_info = self.find_tx_info(tx_hash.hex())
+            tx_info = await self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
         tx_result = tx_info["result"]
@@ -901,14 +950,15 @@ class BlockChain:
         if block.header.version == "0.1a":
             raise RuntimeError(f"Block version({block.header.version}) of the Tx does not support proof.")
 
-        tx_results = (self.find_tx_info(tx_hash)["result"] for tx_hash in block.body.transactions)
+        tx_info_coros = (self.find_tx_info(tx_hash) for tx_hash in block.body.transactions)
+        tx_results = [tx_info["result"] for tx_info in await asyncio.gather(*tx_info_coros)]
         block_prover = BlockProver.new(block.header.version, tx_results, BlockProverType.Receipt)
         receipts_hash = block_prover.to_hash32(tx_result)
         return block_prover.get_proof(receipts_hash)
 
     async def prove_receipt(self, tx_hash: Hash32, proof: list):
         try:
-            tx_info = self.find_tx_info(tx_hash.hex())
+            tx_info = await self.find_tx_info(tx_hash.hex())
         except KeyError:
             raise RuntimeError(f"Tx does not exist.")
         tx_result = tx_info["result"]

@@ -156,7 +156,7 @@ class Epoch:
                 utils.logger.debug(f"last_unconfirmed_block({blockchain.last_unconfirmed_block.header.hash}), "
                                   f"vote result({vote_result})")
 
-    def __add_tx_to_block(self, block_builder):
+    async def __add_tx_to_block(self, block_builder):
         tx_queue = self.__block_manager.get_tx_queue()
 
         block_tx_size = 0
@@ -184,7 +184,8 @@ class Epoch:
             tv = TransactionVerifier.new(tx.version, tx.type(), tx_versioner)
 
             try:
-                tv.verify(tx, self.__blockchain)
+                _, db_tx = await self.__blockchain.find_tx_by_key(tx.hash.hex())
+                tv.verify(tx, self.__blockchain, db_tx=db_tx)
             except Exception as e:
                 logging.warning(f"tx hash invalid.\n"
                                 f"tx: {tx}\n"
@@ -194,7 +195,7 @@ class Epoch:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)
 
-    def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
+    async def makeup_block(self, complain_votes: LeaderVotes, prev_votes):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -203,6 +204,6 @@ class Epoch:
         if complain_votes and complain_votes.get_result():
             block_builder.leader_votes = complain_votes.votes
         else:
-            self.__add_tx_to_block(block_builder)
+            await self.__add_tx_to_block(block_builder)
 
         return block_builder

@@ -195,29 +195,30 @@ class BlockManager:
         """
         self.__txQueue[tx.hash.hex()] = tx
 
-    def get_tx(self, tx_hash) -> Transaction:
+    async def get_tx(self, tx_hash) -> Transaction:
         """Get transaction from block_db by tx_hash
 
         :param tx_hash: tx hash
         :return: tx object or None
         """
-        return self.__blockchain.find_tx_by_key(tx_hash)
+        _, tx = await self.__blockchain.find_tx_by_key(tx_hash)
+        return tx
 
-    def get_tx_info(self, tx_hash) -> dict:
+    async def get_tx_info(self, tx_hash) -> dict:
         """Get transaction info from block_db by tx_hash
 
         :param tx_hash: tx hash
         :return: {'block_hash': "", 'block_height': "", "transaction": "", "result": {"code": ""}}
         """
-        return self.__blockchain.find_tx_info(tx_hash)
+        return await self.__blockchain.find_tx_info(tx_hash)
 
-    def get_invoke_result(self, tx_hash):
+    async def get_invoke_result(self, tx_hash):
         """ get invoke result by tx
 
         :param tx_hash:
         :return:
         """
-        return self.__blockchain.find_invoke_result_by_tx_hash(tx_hash)
+        return await self.__blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     def get_tx_queue(self):
         if conf.CONSENSUS_ALGORITHM == conf.ConsensusAlgorithm.lft:
@@ -494,9 +495,30 @@ class BlockManager:
             block_verifier.invoke_func = self.__channel_service.score_invoke
 
         reps = self.__channel_service.get_rep_ids()
+
+        """
+        get_tx_coroutines = (self.__blockchain.find_tx_by_key(tx.hash.hex())
+                             for tx in block_.body.transactions.values())
+        future = asyncio.run_coroutine_threadsafe(
+            asyncio.gather(*get_tx_coroutines),
+            self._loop
+        )
+        """
+        tx_dict = {}
+        for tx in block_.body.transactions.values():
+            future = asyncio.run_coroutine_threadsafe(
+                self.__blockchain.find_tx_by_key(tx.hash.hex()),
+                self._loop
+            )
+            tx_key, tx_info = future.result()
+            tx_dict[tx_key] = tx_info
+
+        # FIXME : logging level
+        logging.debug(f"__add_block_by_sync() : tx_dict = {tx_dict}")
         invoke_results = block_verifier.verify_loosely(block_,
                                                        self.__blockchain.last_block,
                                                        self.__blockchain,
+                                                       tx_dict=tx_dict,
                                                        reps=reps)
         need_to_write_tx_info, need_to_score_invoke = True, True
         for exc in block_verifier.exceptions:
@@ -863,10 +885,16 @@ class BlockManager:
             block_verifier.invoke_func = self.__channel_service.score_invoke
             reps = self.__channel_service.get_rep_ids()
             logging.debug(f"unconfirmed_block.header({unconfirmed_block.header})")
+
+            get_tx_coroutines = (self.__blockchain.find_tx_by_key(tx.hash.hex())
+                                 for tx in unconfirmed_block.body.transactions.values())
+            tx_dict = {tx_key: tx for tx_key, tx in await asyncio.gather(*get_tx_coroutines)}
+
             invoke_results = block_verifier.verify(unconfirmed_block,
                                                    self.__blockchain.last_block,
                                                    self.__blockchain,
                                                    self.__blockchain.last_block.header.next_leader,
+                                                   tx_dict=tx_dict,
                                                    reps=reps)
         except Exception as e:
             exc = e

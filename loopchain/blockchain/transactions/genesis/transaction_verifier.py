@@ -14,10 +14,10 @@ class TransactionVerifier(BaseTransactionVerifier):
     def pre_verify(self, tx: 'Transaction', **kwargs):
         raise RuntimeError("Genesis Tx pre verify cannot be called.")
 
-    def verify(self, tx: 'Transaction', blockchain=None):
+    def verify(self, tx: 'Transaction', blockchain=None, tx_tx=None):
         self.verify_loosely(tx, blockchain)
 
-    def verify_loosely(self, tx: 'Transaction', blockchain=None):
+    def verify_loosely(self, tx: 'Transaction', blockchain=None, db_tx=None):
         self.verify_hash(tx)
         self.verify_signature(tx)
         self.verify_accounts(tx)
