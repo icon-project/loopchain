@@ -278,13 +278,14 @@ class BlockManager:
     def __validate_epoch_of_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
         current_state = self.__channel_service.state_machine.state
         block_header = unconfirmed_block.header
+        last_u_block = self.blockchain.last_unconfirmed_block
 
         if self.epoch.height == block_header.height and self.epoch.round < round_:
             raise InvalidUnconfirmedBlock(
                 f"The unconfirmed block has invalid round. Expected({self.epoch.round}), Unconfirmed_block({round_})")
 
         if not self.epoch.complained_result:
-            if self.blockchain.last_unconfirmed_block and self.blockchain.last_unconfirmed_block.header.prep_changed:
+            if last_u_block and (last_u_block.header.hash == block_header.hash or last_u_block.header.prep_changed):
                 # TODO do not validate epoch in this case.
                 expected_leader = block_header.peer_id.hex_hx()
             else:
