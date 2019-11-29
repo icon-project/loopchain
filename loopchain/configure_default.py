@@ -129,12 +129,6 @@ GRPC_SSL_DEFAULT_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 GRPC_SSL_DEFAULT_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 
 
-##########
-# TEST ###
-##########
-TEST_FAIL_VOTE_SIGN = "test_fail_vote_sign"
-
-
 ###################
 # BLOCK MANAGER ###
 ###################
@@ -191,6 +185,7 @@ TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 INVOKE_RESULT_AGING_SECONDS = 60 * 60
 READ_CACHED_TX_COUNT = True
+SAFE_BLOCK_BROADCAST = True
 
 
 class SendTxType(IntEnum):
@@ -217,7 +212,6 @@ DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 REST_TIMEOUT = 5
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
-DISABLE_V1_API = True
 
 
 class ApiVersion(IntEnum):
@@ -238,7 +232,7 @@ CONNECTION_RETRY_TIMEOUT_TO_RS = 60 * 5  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS_TEST = 30  # seconds for testcase
 CONNECTION_RETRY_TIMES = 3  # times
 BROADCAST_RETRY_TIMES = 1  # times
-RELAY_RETRY_TIMES = 3 # times
+RELAY_RETRY_TIMES = 3  # times
 REQUEST_BLOCK_GENERATOR_TIMEOUT = 10  # seconds
 BLOCK_GENERATOR_BROADCAST_TIMEOUT = 5  # seconds
 WAIT_GRPC_SERVICE_START = 5  # seconds
@@ -314,20 +308,14 @@ AMQP_KEY_DEFAULT = "amqp_key"
 AMQP_KEY = AMQP_KEY_DEFAULT
 
 
-####################
-# Authentication ###
-####################
-TOKEN_TYPE_TOKEN = "00"
-TOKEN_TYPE_CERT = "01"
-TOKEN_TYPE_SIGN = "02"
-
 ###############
 # Signature ###
 ###############
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
         "block_versions": {
-            "0.1a": 0
+            "0.1a": 0,
+            "0.3": 1
         },
         "hash_versions": {
             "genesis": 1,
@@ -342,7 +330,8 @@ CHANNEL_OPTION = {
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
-            "0.1a": 0
+            "0.1a": 0,
+            "0.3": 1
         },
         "hash_versions": {
             "genesis": 1,

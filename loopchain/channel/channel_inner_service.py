@@ -524,18 +524,17 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def register_citizen(self, peer_id, target, connected_time):
-        if (len(self._citizens) >= conf.SUBSCRIBE_LIMIT
-                or self._channel_service.state_machine.state == 'BlockGenerate'):
-            return False
-        elif peer_id in self._citizens:
-            logging.warning(f"Already registered citizen({peer_id})")
-            return False
-        else:
+        register_condition = (len(self._citizens) < conf.SUBSCRIBE_LIMIT
+                              and (peer_id not in self._citizens)
+                              and not (conf.SAFE_BLOCK_BROADCAST and
+                                       self._channel_service.state_machine.state == 'BlockGenerate'))
+        if register_condition:
             new_citizen = self._CitizenInfo(peer_id, target, connected_time)
             self._citizens[peer_id] = new_citizen
             logging.info(f"register new citizen: {new_citizen}")
             logging.debug(f"remaining all citizens: {self._citizens}")
-            return True
+
+        return register_condition
 
     @message_queue_task
     async def unregister_citizen(self, peer_id):
