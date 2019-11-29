@@ -563,7 +563,7 @@ class ChannelInnerTask:
         status_data["made_block_count"] = self._blockchain.my_made_block_count
         status_data["leader_made_block_count"] = self._blockchain.leader_made_block_count
 
-        block_height = 0
+        block_height = -1
         unconfirmed_block_height = None
         peer_count = -1
         last_block = self._blockchain.last_block

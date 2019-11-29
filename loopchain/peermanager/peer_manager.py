@@ -17,6 +17,7 @@ import threading
 from typing import Optional, Union
 
 import loopchain.utils as util
+from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
@@ -59,8 +60,16 @@ class PeerManager:
                 for peer_id, peer in self._peer_list_data.peer_list.items()]
 
     def load_peers(self) -> None:
-        PeerLoader.load(peer_manager=self)
         blockchain = ObjectManager().channel_service.block_manager.blockchain
+        last_block = blockchain.last_block
+        rep_root_hash = (last_block.header.reps_hash if last_block else
+                         Hash32.fromhex(conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')))
+
+        reps: list = blockchain.find_preps_by_roothash(rep_root_hash) or PeerLoader.load()
+        util.logger.debug(f"reps from load_peers: {reps}")
+        for order, rep_info in enumerate(reps, 1):
+            peer = Peer(rep_info['id'], rep_info['p2pEndpoint'], order=order)
+            self.add_peer(peer)
 
         reps_hash = self.reps_hash()
         reps_in_db = blockchain.find_preps_by_roothash(reps_hash)

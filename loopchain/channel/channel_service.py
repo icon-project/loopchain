@@ -202,14 +202,13 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-    async def __init_network(self):
+    async def evaluate_network(self):
+        self._rebuild_block()
         await self._init_rs_client()
+
         self.__peer_manager.load_peers()
         await self._select_node_type()
 
-    async def evaluate_network(self):
-        await self.__init_network()
-        self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -229,7 +228,7 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.turn_on_leader_complain_timer()
 
-    def update_sub_services_properties(self):
+    def update_nid(self):
         nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
@@ -260,6 +259,10 @@ class ChannelService:
             utils.logger.info(f"Role switching to new node type: {new_node_type.name}")
             ChannelProperty().node_type = new_node_type
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
+
+    def check_genesis_node(self):
+        if self._is_genesis_node():
+            self.generate_genesis_block()
 
     def switch_role(self):
         self.peer_manager.update_all_peers()
@@ -463,20 +466,15 @@ class ChannelService:
         self.__block_manager.set_peer_type(peer_type)
 
     def _is_genesis_node(self):
-        return ('genesis_data_path' in self.get_channel_option()
-                and self.is_support_node_function(conf.NodeFunction.Vote))
+        return ('genesis_data_path' in self.get_channel_option() and
+                self.is_support_node_function(conf.NodeFunction.Vote) and
+                self.block_manager.blockchain.block_height < 0)
 
-    def __ready_to_height_sync(self):
+    def _rebuild_block(self):
         self.block_manager.blockchain.init_blockchain()
 
         if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
-        else:
-            if self._is_genesis_node():
-                self.generate_genesis_block()
-
-        if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
-            utils.exit_and_msg(f"There's no radiostation target to sync block.")
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """

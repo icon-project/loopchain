@@ -1065,7 +1065,7 @@ class BlockChain:
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
 
-        logging.debug(f"ENGINE-303 init_blockchain: {self.block_height}")
+        logging.debug(f"init_blockchain: height({self.block_height})")
 
     def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None

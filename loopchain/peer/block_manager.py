@@ -683,6 +683,7 @@ class BlockManager:
             self.__start_block_height_sync_timer()
         else:
             util.logger.debug(f"block_height_sync is complete.")
+            self.__channel_service.check_genesis_node()
             self.__channel_service.state_machine.complete_sync()
 
     def get_next_leader(self) -> Optional[str]:
