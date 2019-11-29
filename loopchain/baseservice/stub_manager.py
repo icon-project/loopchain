@@ -46,7 +46,7 @@ class StubManager:
             util.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
 
             self.__stub, self.__channel = util.get_stub_to_server(
-                self.__target, self.__stub_type, is_check_status=False, ssl_auth_type=self.__ssl_auth_type)
+                self.__target, self.__stub_type, ssl_auth_type=self.__ssl_auth_type)
             self.__stub_update_time = datetime.datetime.now()
             if self.__stub:
                 self.__update_last_succeed_time()
@@ -188,37 +188,3 @@ class StubManager:
         except Exception as e:
             logging.warning(f"stub_manager:check_status is Fail reason({e})")
             return False
-
-    @staticmethod
-    def get_stub_manager_to_server(target, stub_class, time_out_seconds=None,
-                                   is_allow_null_stub=False, ssl_auth_type=conf.SSLAuthType.none):
-        """gRPC connection to server
-
-        :return: stub manager to server
-        """
-
-        if time_out_seconds is None:
-            time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
-        stub_manager = StubManager(target, stub_class, ssl_auth_type)
-        start_time = timeit.default_timer()
-        duration = timeit.default_timer() - start_time
-
-        while duration < time_out_seconds:
-            try:
-                logging.debug("(stub_manager) get stub to server target: " + str(target))
-                stub_manager.stub.Request(loopchain_pb2.Message(
-                    code=message_code.Request.status,
-                    message="get_stub_manager_to_server"), conf.GRPC_TIMEOUT)
-                return stub_manager
-            except Exception as e:
-                if is_allow_null_stub:
-                    return stub_manager
-                logging.warning("Connect to Server Error(get_stub_manager_to_server): " + str(e))
-                logging.debug("duration(" + str(duration)
-                              + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                              + ") timeout(" + str(time_out_seconds) + ")")
-                # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
-                time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-                duration = timeit.default_timer() - start_time
-
-        return None
