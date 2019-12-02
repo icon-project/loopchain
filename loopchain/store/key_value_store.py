@@ -141,6 +141,7 @@ class KeyValueStore(abc.ABC):
     STORE_TYPE_PLYVEL = 'plyvel'
     STORE_TYPE_LEVELDB = 'leveldb'
     STORE_TYPE_DICT = 'dict'
+    STORE_TYPE_REDIS = 'redis'
 
     @staticmethod
     def new(uri: str, store_type: str = None, **kwargs) -> 'KeyValueStore':
@@ -149,11 +150,7 @@ class KeyValueStore(abc.ABC):
 
         utils.logger.info(f"New KeyValueStore. store_type={store_type}, uri={uri}")
 
-        if store_type == KeyValueStore.STORE_TYPE_REDIS:
-            utils.logger.debug(f"New KeyValueStoreRedis.")
-            from loopchain.store.store_redis import KeyValueStoreRedis
-            return KeyValueStoreRedis(uri, **kwargs)
-        elif store_type == KeyValueStore.STORE_TYPE_PLYVEL:
+        if store_type == KeyValueStore.STORE_TYPE_PLYVEL:
             utils.logger.debug(f"New KeyValueStorePlyvel.")
             from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
             return KeyValueStorePlyvel(uri, **kwargs)
@@ -166,6 +163,10 @@ class KeyValueStore(abc.ABC):
             # if you want to use keyValueStoreDict for develop, uncomment below lines
             # from loopchain.store.key_value_store_dict import KeyValueStoreDict
             # return KeyValueStoreDict(**kwargs)
+        elif store_type == KeyValueStore.STORE_TYPE_REDIS:
+            utils.logger.debug(f"New KeyValueStoreRedis.")
+            from loopchain.store.store_redis import KeyValueStoreRedis
+            return KeyValueStoreRedis(uri, **kwargs)
         else:
             raise ValueError(f"store_name is invalid. store_type={store_type}")
 

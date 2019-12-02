@@ -476,6 +476,7 @@ def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
     store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
+    port = conf.PORT_PEER - 2000
     logger.spam(f"utils:init_default_key_value_store ({store_identity})")
 
     retry_count = 0
@@ -483,7 +484,8 @@ def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
     while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
             uri = f"file://{store_path}"
-            store = KeyValueStore.new(uri, create_if_missing=True)
+            store = KeyValueStore.new(uri, KeyValueStore.STORE_TYPE_REDIS, port=port, create_if_missing=True)
+            # store = KeyValueStore.new(uri, create_if_missing=True)
         except KeyValueStoreError as e:
             logging.error(f"KeyValueStoreError: {e}")
             logger.debug(f"retry_count: {retry_count}, uri: {uri}")

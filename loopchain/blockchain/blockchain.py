@@ -119,7 +119,6 @@ class BlockChain:
         return self._blockchain_store
 
     def close_blockchain_store(self):
-        print(f"close blockchain_store = {self._blockchain_store}")
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
@@ -594,9 +593,6 @@ class BlockChain:
         except UnicodeDecodeError as e:
             logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
             return None
-        # except KeyError as e:
-        #     logging.debug("blockchain::find_tx_info: not found tx: " + str(e))
-        #     return None
 
         return tx_info_json
 
