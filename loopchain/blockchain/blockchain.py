@@ -672,7 +672,10 @@ class BlockChain:
                     self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
                 self._write_tx(invoke_block, receipts)
-                ObjectManager().channel_service.score_write_precommit_state(invoke_block)
+                try:
+                    ObjectManager().channel_service.score_write_precommit_state(invoke_block)
+                except Exception as e:
+                    utils.exit_and_msg(f"Fail to write precommit in the score.: {e}")
 
             return True
 
