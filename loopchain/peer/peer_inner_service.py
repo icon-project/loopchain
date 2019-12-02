@@ -1,16 +1,4 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""peer inner service"""
 
 from typing import TYPE_CHECKING
 
@@ -67,16 +55,6 @@ class PeerInnerTask:
         import warnings
         warnings.warn("start_outer is not support", DeprecationWarning)
         return "start outer"
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def update_status(self, channel, status: dict):
-        for item in status:
-            # util.logger.spam(f"peer_inner_service:update_status "
-            #                  f"{item}:{status[item]}")
-            try:
-                self._peer_service.status_cache[channel][item] = status[item]
-            except KeyError:
-                logging.debug(f"peer_inner_service:not init channel({channel})")
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def stop(self, message):

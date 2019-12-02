@@ -1,25 +1,10 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """All loopchain configure value can set by system environment.
 But before set by system environment, loopchain use this default values.
 
 configure 의 default 값으로 지정하여 사용한다.
 이곳에서 직접 대입하거나 export 로 값을 지정할 수 있다.
 configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
-configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)
-
-"""
+configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)"""
 
 import os
 import sys
@@ -278,8 +263,6 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 # How many non-response will allow if node is leader. After this count RS. will select new leader in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
-# If the cache is not updated within this time, the channel is considered dead.
-STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
