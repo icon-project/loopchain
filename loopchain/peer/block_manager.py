@@ -749,7 +749,7 @@ class BlockManager:
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
                 response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                    request="block_sync",
+                    request='block_sync',
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
                 target_block_height = max(response.block_height, response.unconfirmed_block_height)

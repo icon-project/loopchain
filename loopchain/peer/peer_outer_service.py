@@ -30,6 +30,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             message_code.Request.get_total_supply: self.__handler_get_total_supply
         }
 
+        self.__status_cache = None
+
     @property
     def peer_service(self):
         return ObjectManager().peer_service
@@ -149,16 +151,27 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         status['leader'] = status_cache['leader']
         return status
 
-    @lru_cache(maxsize=4, valued_returns_only=True)
+    def __set_status_cache(self, future):
+        self.__status_cache = future.result()
+
+    @lru_cache(maxsize=1, valued_returns_only=True)
     def __get_status_cache(self, channel_name, time_in_seconds):
-        utils.logger.debug(f"__get_status_cache in seconds({time_in_seconds})")
+        utils.logger.spam(f"__get_status_cache in seconds({time_in_seconds})")
 
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
             raise ChannelStatusError(f"Invalid channel({channel_name})")
 
-        return channel_stub.sync_task().get_status()
+        if self.__status_cache is None:
+            self.__status_cache = channel_stub.sync_task().get_status()
+        else:
+            future = asyncio.run_coroutine_threadsafe(
+                channel_stub.async_task().get_status(),
+                self.peer_service.inner_service.loop)
+            future.add_done_callback(self.__set_status_cache)
+
+        return self.__status_cache
 
     def GetStatus(self, request, context):
         """Peer 의 현재 상태를 요청한다.
@@ -168,7 +181,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug("Peer GetStatus : %s", request)
 
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
