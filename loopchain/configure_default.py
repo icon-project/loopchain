@@ -346,7 +346,7 @@ CHANNEL_OPTION = {
     }
 }
 
-PRIVATE_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der')
+PRIVATE_PATH = ""
 PRIVATE_PASSWORD = None
 
 # KMS
