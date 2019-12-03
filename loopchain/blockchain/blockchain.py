@@ -543,7 +543,9 @@ class BlockChain:
         """
 
         try:
+            utils.logger.warning(f"tx_by_key: {tx_hash_key}")
             tx_info_json = self.find_tx_info(tx_hash_key)
+            utils.logger.warning(f"tx_by_key end: {tx_info_json}")
         except KeyError as e:
             return None
         if tx_info_json is None:
@@ -558,6 +560,7 @@ class BlockChain:
     def find_txs_by_keys(self, tx_hash_keys):
         keys = (tx_hash.encode(encoding=conf.HASH_KEY_ENCODING) for tx_hash in tx_hash_keys)
         txs_info = self._blockchain_store.mget(keys)
+        utils.logger.warning(f"TX infos: {txs_info}")
 
         for tx_info in txs_info:
             if not tx_info:

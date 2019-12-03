@@ -27,6 +27,7 @@ class KeyValueStoreRedis(KeyValueStore):
         return result
 
     def mget(self, keys: List[bytes]) -> List[Optional[bytes]]:
+        print("mget keys: ", keys)
         return self._db.mget(keys)
 
     def put(self, key: bytes, value: bytes, *, sync=True, **kwargs):

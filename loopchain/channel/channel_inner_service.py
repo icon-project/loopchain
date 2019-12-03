@@ -466,12 +466,16 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
+        util.logger.warning(f"__add tx list...: {len(tx_list)}")
         store = self._channel_service.block_manager.get_key_value_store()
         if hasattr(store, "mget"):
+            util.logger.warning("mget...")
             self.__add_tx_list_batch(tx_list)
         else:
+            util.logger.warning("not mget...")
             self.__add_tx_list_single(tx_list)
 
+        util.logger.warning("__add_tx_list END")
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
 
@@ -491,10 +495,13 @@ class ChannelInnerTask:
 
         tx_exist_result = blockchain.find_txs_by_keys(tx_hashes)
         for is_tx_exist, tx in zip(tx_exist_result, tx_list):
+            util.logger.warning(f"batch, try to add tx.. {tx.hash} \n"
+                                f"result?: {is_tx_exist}")
             if not is_tx_exist:
                 self.__add_tx_obj(tx)
 
     def __add_tx_obj(self, tx):
+        util.logger.warning(f"__add_tx_obj: {tx.hash}")
         block_manager = self._channel_service.block_manager
         block_manager.add_tx_obj(tx)
 
@@ -507,21 +514,27 @@ class ChannelInnerTask:
 
     def __is_tx_already_in_aging_cache(self, tx) -> bool:
         block_manager = self._channel_service.block_manager
+        util.logger.warning(f"Query tx in aging_cache: {tx.hash.hex()}")
 
         if tx.hash.hex() in block_manager.get_tx_queue():
             util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
+            util.logger.warning(f"already in aging cache returns: True")
             return True
         else:
+            util.logger.warning(f"already in aging cache returns: False")
             return False
 
     def __is_tx_already_in_db(self, tx):
         tx_hash_hex = tx.hash.hex()
+        util.logger.warning(f"Query tx in db: {tx_hash_hex}")
 
         blockchain = self._channel_service.block_manager.get_blockchain()
         if blockchain.find_tx_by_key(tx_hash_hex):
             util.logger.warning(f"hash {tx_hash_hex} already exists in blockchain. tx({tx})")
+            util.logger.warning(f"already in db returns: True")
             return True
         else:
+            util.logger.warning(f"already in db returns: False")
             return False
 
     @message_queue_task
