@@ -939,11 +939,24 @@ class BlockChain:
                     raise BlockchainError(except_msg)
 
             if unconfirmed_block.header.hash != current_block.header.prev_hash:
-                logging.warning("It's not possible to add block while check block hash is fail-")
-                raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
+                raise BlockchainError(
+                    f"It couldn't be confirmed by the new block. "
+                    f"Hash of last_unconfirmed_block({unconfirmed_block.header.hash})\n"
+                    f"prev_hash of the new unconfirmed_block({current_block.header.prev_hash})"
+                )
 
-            confirm_info = (current_block.body.prev_votes
-                            if (parse_version(current_block.header.version) >= parse_version("0.3")) else None)
+            has_prev_votes = parse_version(current_block.header.version) >= parse_version("0.3")
+            confirm_info = current_block.body.prev_votes if has_prev_votes else None
+            if has_prev_votes:
+                round_ = next(vote for vote in confirm_info if vote).round_
+
+                if round_ != self.__block_manager.epoch.round:
+                    raise RoundMismatch(
+                        f"It doesn't match the round of the current epoch.\n"
+                        f"current({self.__block_manager.epoch.round}) / "
+                        f"unconfirmed_block({unconfirmed_block.header.round})"
+                    )
+
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
