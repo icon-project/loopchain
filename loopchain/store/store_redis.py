@@ -1,4 +1,5 @@
 import urllib
+from typing import List, Optional
 
 import aioredis
 import redis
@@ -24,6 +25,9 @@ class KeyValueStoreRedis(KeyValueStore):
         if result is None:
             raise KeyError(f"Has no value of key({key})")
         return result
+
+    def mget(self, keys: List[bytes]) -> List[Optional[bytes]]:
+        return self._db.mget(keys)
 
     def put(self, key: bytes, value: bytes, *, sync=True, **kwargs):
         self._db.set(key, value, **kwargs)

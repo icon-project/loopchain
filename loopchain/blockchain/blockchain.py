@@ -545,9 +545,6 @@ class BlockChain:
         try:
             tx_info_json = self.find_tx_info(tx_hash_key)
         except KeyError as e:
-            # This case is not an error.
-            # Client send wrong tx_hash..
-            # logging.warning(f"[blockchain::find_tx_by_key] Transaction is pending. tx_hash ({tx_hash_key})")
             return None
         if tx_info_json is None:
             logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
@@ -557,6 +554,22 @@ class BlockChain:
         tx_version, tx_type = self.tx_versioner.get_version(tx_data)
         tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
         return tx_serializer.from_(tx_data)
+
+    def find_txs_by_keys(self, tx_hash_keys):
+        keys = (tx_hash.encode(encoding=conf.HASH_KEY_ENCODING) for tx_hash in tx_hash_keys)
+        txs_info = self._blockchain_store.mget(keys)
+
+        for tx_info in txs_info:
+            if not tx_info:
+                yield None
+            else:
+                tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
+
+                tx_data = tx_info_json["transaction"]
+                tx_version, tx_type = self.tx_versioner.get_version(tx_data)
+                tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.tx_versioner)
+
+                yield tx_serializer.from_(tx_data)
 
     def find_invoke_result_by_tx_hash(self, tx_hash: Union[str, Hash32]):
         """find invoke result matching tx_hash and return result if not in blockchain return code delay

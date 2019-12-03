@@ -466,27 +466,63 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
-        block_manager = self._channel_service.block_manager
-        blockchain = block_manager.get_blockchain()
-
-        for tx in tx_list:
-            if tx.hash.hex() in block_manager.get_tx_queue():
-                util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
-                continue
-            if blockchain.find_tx_by_key(tx.hash.hex()):
-                util.logger.warning(f"hash {tx.hash.hex()} already exists in blockchain. tx({tx})")
-                continue
-
-            block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'tx_hash': tx.hash.hex()}})
+        store = self._channel_service.block_manager.get_key_value_store()
+        if hasattr(store, "mget"):
+            self.__add_tx_list_batch(tx_list)
+        else:
+            self.__add_tx_list_single(tx_list)
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
+
+    def __add_tx_list_single(self, tx_list):
+        for tx in tx_list:
+            if self.__is_tx_already_in_aging_cache(tx):
+                continue
+            if self.__is_tx_already_in_db(tx):
+                continue
+
+            self.__add_tx_obj(tx)
+
+    def __add_tx_list_batch(self, tx_list):
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        tx_hashes = (tx.hash.hex() for tx in tx_list
+                     if not self.__is_tx_already_in_aging_cache(tx))
+
+        tx_exist_result = blockchain.find_txs_by_keys(tx_hashes)
+        for is_tx_exist, tx in zip(tx_exist_result, tx_list):
+            if not is_tx_exist:
+                self.__add_tx_obj(tx)
+
+    def __add_tx_obj(self, tx):
+        block_manager = self._channel_service.block_manager
+        block_manager.add_tx_obj(tx)
+
+        util.apm_event(ChannelProperty().peer_id, {
+            'event_type': 'AddTx',
+            'peer_id': ChannelProperty().peer_id,
+            'peer_name': conf.PEER_NAME,
+            'channel_name': ChannelProperty().name,
+            'data': {'tx_hash': tx.hash.hex()}})
+
+    def __is_tx_already_in_aging_cache(self, tx) -> bool:
+        block_manager = self._channel_service.block_manager
+
+        if tx.hash.hex() in block_manager.get_tx_queue():
+            util.logger.warning(f"hash {tx.hash.hex()} already exists in transaction queue. tx({tx})")
+            return True
+        else:
+            return False
+
+    def __is_tx_already_in_db(self, tx):
+        tx_hash_hex = tx.hash.hex()
+
+        blockchain = self._channel_service.block_manager.get_blockchain()
+        if blockchain.find_tx_by_key(tx_hash_hex):
+            util.logger.warning(f"hash {tx_hash_hex} already exists in blockchain. tx({tx})")
+            return True
+        else:
+            return False
 
     @message_queue_task
     async def hello(self):
