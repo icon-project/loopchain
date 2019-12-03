@@ -1,16 +1,4 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""Channel Inner Service."""
 
 import json
 import multiprocessing as mp
@@ -25,7 +13,8 @@ from pkg_resources import parse_version
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
+from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
+                                   ScoreResponse)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *
@@ -35,7 +24,7 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
-from loopchain.protos import loopchain_pb2, message_code
+from loopchain.protos import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils.message_queue import StubCollection
 
@@ -929,26 +918,6 @@ class ChannelInnerTask:
         tx_list, next_index = self._blockchain.get_tx_list_by_address(address=address, index=index)
 
         return tx_list, next_index
-
-    @message_queue_task
-    def get_score_status(self):
-        score_status = ""
-        try:
-            score_status_response = self._channel_service.score_stub.call(
-                "Request",
-                loopchain_pb2.Message(code=message_code.Request.status)
-            )
-
-            logging.debug("Get Score Status : " + str(score_status_response))
-
-        except Exception as e:
-            logging.debug("Score Service Already stop by other reason. %s", e)
-
-        else:
-            if score_status_response.code == message_code.Response.success:
-                score_status = score_status_response.meta
-
-        return score_status
 
     @message_queue_task
     async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:
