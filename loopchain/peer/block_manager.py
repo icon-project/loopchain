@@ -1,16 +1,3 @@
-# Copyright 2019 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """A management class for blockchain."""
 
 import json
@@ -98,9 +85,6 @@ class BlockManager:
 
     def update_service_status(self, status):
         self.__service_status = status
-        StubCollection().peer_stub.sync_task().update_status(
-            self.__channel_name,
-            {"status": self.service_status})
 
     @property
     def peer_type(self):
@@ -765,7 +749,7 @@ class BlockManager:
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
                 response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                    request="block_sync",
+                    request='block_sync',
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
                 target_block_height = max(response.block_height, response.unconfirmed_block_height)

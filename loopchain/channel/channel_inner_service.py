@@ -587,6 +587,7 @@ class ChannelInnerTask:
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
+        status_data["nid"] = ChannelProperty().nid
         status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
         status_data["service_available"]: bool = \

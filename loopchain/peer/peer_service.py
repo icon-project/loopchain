@@ -49,9 +49,6 @@ class PeerService:
         self.p2p_outer_server: grpc.Server = None
         self._channel_infos = None
 
-        # peer status cache for channel
-        self.status_cache = {}  # {channel:status}
-
         self._peer_target = None
         self._rest_target = None
         self._peer_port = 0
