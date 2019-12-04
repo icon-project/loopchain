@@ -23,7 +23,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __init__(self):
         self.__handler_map = {
-            message_code.Request.status: self.__handler_status,
             message_code.Request.get_tx_result: self.__handler_get_tx_result,
             message_code.Request.get_balance: self.__handler_get_balance,
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
@@ -35,30 +34,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     @property
     def peer_service(self):
         return ObjectManager().peer_service
-
-    def __handler_status(self, request, context):
-        utils.logger.debug(f"peer_outer_service:handler_status ({request.message})")
-
-        if request.message == "get_stub_manager_to_server":
-            # this case is check only gRPC available
-            return loopchain_pb2.Message(code=message_code.Response.success)
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        status_cache = self.__get_status_cache(channel_name,
-                                               time_in_seconds=math.trunc(time.time()))
-        if status_cache is None:
-            return loopchain_pb2.Message(code=message_code.Response.fail)
-
-        status = self.__get_status_peer_type_data(status_cache)
-
-        meta = json.loads(request.meta) if request.meta else {}
-        if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
-            utils.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
-
-        status_json = json.dumps(status)
-
-        return loopchain_pb2.Message(code=message_code.Response.success, meta=status_json)
 
     def __handler_get_tx_result(self, request, context):
         """Get Transaction Result for json-rpc request
@@ -141,15 +116,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             return self.__handler_map[request.code](request, context)
 
         return loopchain_pb2.Message(code=message_code.Response.not_treat_message_code)
-
-    def __get_status_peer_type_data(self, status_cache):
-        status = dict()
-        status['state'] = status_cache['state']
-        status['peer_type'] = status_cache['peer_type']
-        status['block_height'] = status_cache['block_height']
-        status['peer_count'] = status_cache['peer_count']
-        status['leader'] = status_cache['leader']
-        return status
 
     def __set_status_cache(self, future):
         self.__status_cache = future.result()
@@ -240,24 +206,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             unconfirmed_block_height=status_data["unconfirmed_block_height"],
             is_leader_complaining=status_data['leader_complaint'],
             peer_id=status_data['peer_id'])
-
-    def GetScoreStatus(self, request, context):
-        """Score Service 의 현재 상태를 요청 한다
-
-        :param request:
-        :param context:
-        :return:
-        """
-        logging.debug("Peer GetScoreStatus request : %s", request)
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        score_status = channel_stub.sync_task().get_score_status()
-
-        return loopchain_pb2.StatusReply(
-            status=score_status,
-            block_height=0,
-            total_tx=0)
 
     def Stop(self, request, context):
         """Peer를 중지시킨다

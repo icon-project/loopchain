@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """stub wrapper for gRPC stub.
 This object has own channel information and support re-generation of gRPC stub."""
 
@@ -24,7 +11,6 @@ from grpc._channel import _Rendezvous
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.protos import loopchain_pb2, message_code
 
 
 class StubManager:
@@ -180,11 +166,3 @@ class StubManager:
             retry_times -= 1
 
         return None
-
-    def check_status(self):
-        try:
-            self.__stub.Request(loopchain_pb2.Message(code=message_code.Request.status), conf.GRPC_TIMEOUT)
-            return True
-        except Exception as e:
-            logging.warning(f"stub_manager:check_status is Fail reason({e})")
-            return False
