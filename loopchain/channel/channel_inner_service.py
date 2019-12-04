@@ -470,7 +470,7 @@ class ChannelInnerTask:
         store = self._channel_service.block_manager.get_key_value_store()
         if hasattr(store, "mget"):
             util.logger.warning("mget...")
-            self.__add_tx_list_batch(tx_list)
+            self.__add_tx_list_batch_test(tx_list)
         else:
             util.logger.warning("not mget...")
             self.__add_tx_list_single(tx_list)
@@ -498,6 +498,11 @@ class ChannelInnerTask:
             util.logger.warning(f"batch, try to add tx.. {tx.hash} \n"
                                 f"result?: {is_tx_exist}")
             if not is_tx_exist:
+                self.__add_tx_obj(tx)
+
+    def __add_tx_list_batch_test(self, tx_list):
+        for tx in tx_list:
+            if not self.__is_tx_already_in_aging_cache(tx):
                 self.__add_tx_obj(tx)
 
     def __add_tx_obj(self, tx):
