@@ -446,7 +446,8 @@ class BlockManager:
                 Timer(
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
-                    callback=self.block_height_sync
+                    callback=self.block_height_sync,
+                    is_repeat=True
                 )
             )
 
