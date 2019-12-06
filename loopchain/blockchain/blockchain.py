@@ -19,6 +19,7 @@ import threading
 import zlib
 from collections import Counter
 from enum import Enum
+from functools import lru_cache
 from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
@@ -29,7 +30,6 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
@@ -393,20 +393,25 @@ class BlockChain:
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
-    @lru_cache(maxsize=4, valued_returns_only=True)
+    @lru_cache(maxsize=4)
     def find_preps_ids_by_roothash(self, roothash: Hash32) -> Tuple[str, ...]:
         preps = self.find_preps_by_roothash(roothash)
         return tuple([prep["id"] for prep in preps])
 
-    @lru_cache(maxsize=4, valued_returns_only=True)
+    @lru_cache(maxsize=4)
     def find_preps_addresses_by_roothash(self, roothash: Hash32) -> Tuple[ExternalAddress, ...]:
         preps_ids = self.find_preps_ids_by_roothash(roothash)
         return tuple([ExternalAddress.fromhex(prep_id) for prep_id in preps_ids])
 
-    @lru_cache(maxsize=4, valued_returns_only=True)
+    @lru_cache(maxsize=4)
     def find_preps_targets_by_roothash(self, roothash: Hash32) -> Mapping[str, str]:
         preps = self.find_preps_by_roothash(roothash)
         return MappingProxyType({prep["id"]: prep["p2pEndpoint"] for prep in preps})
+
+    def __cache_clear_roothash(self):
+        self.find_preps_ids_by_roothash.cache_clear()
+        self.find_preps_addresses_by_roothash.cache_clear()
+        self.find_preps_targets_by_roothash.cache_clear()
 
     @staticmethod
     def get_reps_hash_by_header(header: BlockHeader) -> Hash32:
@@ -1326,10 +1331,7 @@ class BlockChain:
 
         # next_reps_hash can be referenced after build block
         if next_prep:
-            # PREPs of unconfirmed block have to write to db in advance for the reset leader.
-            if not self.find_preps_addresses_by_roothash(new_block.header.next_reps_hash):
-                self.write_preps(new_block.header.next_reps_hash, next_prep['preps'])
-
+            self.__write_preps(preps=next_prep["preps"], next_reps_hash=new_block.header.next_reps_hash)
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
         for tx_receipt in tx_receipts.values():
@@ -1337,3 +1339,9 @@ class BlockChain:
 
         self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
         return new_block, tx_receipts
+
+    def __write_preps(self, preps: list, next_reps_hash):
+        """Write prep data to DB."""
+        self.write_preps(roothash=next_reps_hash, preps=preps)
+        self.__cache_clear_roothash()
+        ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()

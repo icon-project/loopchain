@@ -328,6 +328,9 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
     def _put_command(self, command, params, block=False, block_timeout=None):
         raise NotImplementedError("_put_command function is interface method")
 
+    def reset_audience_reps_hash(self):
+        self.__audience_reps_hash = None
+
     def add_schedule_listener(self, callback, commands: tuple):
         if not commands:
             raise ValueError("commands parameter is required")
