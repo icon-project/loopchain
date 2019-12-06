@@ -30,7 +30,7 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_3
+from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.score_base import *
@@ -381,14 +381,14 @@ class BlockChain:
 
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
         block = self.find_block_by_hash(block_hash)
-        if block and isinstance(block.body, v0_3.BlockBody):
+        if block and not isinstance(block.body, v0_1a.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
 
     def find_prev_confirm_info_by_height(self, height: int) -> bytes:
         block = self.find_block_by_height(height)
-        if block and isinstance(block.body, v0_3.BlockBody):
+        if block and not isinstance(block.body, v0_1a.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
         return bytes()
@@ -939,7 +939,8 @@ class BlockChain:
                 logging.warning("It's not possible to add block while check block hash is fail-")
                 raise BlockchainError('확인하는 블럭 해쉬 값이 다릅니다.')
 
-            confirm_info = current_block.body.prev_votes if current_block.header.version == "0.3" else None
+            confirm_info = (current_block.body.prev_votes
+                            if (parse_version(current_block.header.version) >= parse_version("0.3")) else None)
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
