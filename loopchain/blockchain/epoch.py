@@ -20,6 +20,8 @@ import time
 import traceback
 from typing import Dict, Optional, TYPE_CHECKING
 
+from pkg_resources import parse_version
+
 from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockBuilder
@@ -79,8 +81,15 @@ class Epoch:
         self.reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
                          ObjectManager().channel_service.peer_manager.prepared_reps_hash
         self.reps = self.__blockchain.find_preps_addresses_by_roothash(self.reps_hash)
+
+        # TODO After the v0.4 update, remove this version parsing.
+        if parse_version(self.__blockchain.last_block.header.version) >= parse_version("0.4"):
+            ratio = conf.VOTING_RATIO
+        else:
+            ratio = conf.LEADER_COMPLAIN_RATIO
+
         leader_votes = LeaderVotes(self.reps,
-                                   conf.LEADER_COMPLAIN_RATIO,
+                                   ratio,
                                    self.height,
                                    self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
