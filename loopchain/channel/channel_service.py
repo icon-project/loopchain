@@ -25,7 +25,7 @@ from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand,
                                    ObjectManager, CommonSubprocess, RestClient,
                                    NodeSubscriber, UnregisteredException, TimerService)
-from loopchain.blockchain.exception import AnnounceNewBlockError
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -553,7 +553,9 @@ class ChannelService:
         request = convert_params(request, ParamType.write_precommit_state)
 
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        stub.sync_task().write_precommit_state(request)
+        precommit_result: dict = stub.sync_task().write_precommit_state(request)
+        if "error" in precommit_result:
+            raise WritePrecommitStateError(precommit_result['error'])
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
         return True

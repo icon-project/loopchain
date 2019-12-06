@@ -159,6 +159,12 @@ class ScoreInvokeResultError(ScoreInvokeError):
     message_code = message_code.Response.fail_score_invoke_result
 
 
+class WritePrecommitStateError(Exception):
+    """Write Precommit State Error
+    """
+    pass
+
+
 class ChannelStatusError(Exception):
     """Channel is Dead
     """
