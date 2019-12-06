@@ -951,8 +951,8 @@ class BlockChain:
                 )
 
             has_prev_votes = parse_version(current_block.header.version) >= parse_version("0.3")
-            confirm_info = current_block.body.prev_votes if has_prev_votes else None
             if has_prev_votes:
+                confirm_info = current_block.body.prev_votes
                 round_ = next(vote for vote in confirm_info if vote).round_
 
                 if round_ != self.__block_manager.epoch.round:
@@ -961,6 +961,8 @@ class BlockChain:
                         f"current({self.__block_manager.epoch.round}) / "
                         f"unconfirmed_block({unconfirmed_block.header.round})"
                     )
+            else:
+                confirm_info = None
 
             self.add_block(unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
