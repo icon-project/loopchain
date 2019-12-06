@@ -1330,7 +1330,8 @@ class BlockChain:
         new_block = block_builder.build()
 
         # next_reps_hash can be referenced after build block
-        self.__write_preps_if_changed(next_prep=next_prep, next_reps_hash=new_block.header.next_reps_hash)
+        if next_prep:
+            self.__write_preps(preps=next_prep["preps"], next_reps_hash=new_block.header.next_reps_hash)
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
         for tx_receipt in tx_receipts.values():
@@ -1339,9 +1340,8 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
         return new_block, tx_receipts
 
-    def __write_preps_if_changed(self, next_prep: dict, next_reps_hash):
+    def __write_preps(self, preps: list, next_reps_hash):
         """Write prep data to DB."""
-        if next_prep:
-            ObjectManager().channel_service.broadcast_scheduler.audience_reps_hash = None
-            self.__cache_clear_roothash()
-            self.write_preps(next_reps_hash, next_prep["preps"])
+        self.write_preps(roothash=next_reps_hash, preps=preps)
+        self.__cache_clear_roothash()
+        ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
