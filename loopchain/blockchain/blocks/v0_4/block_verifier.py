@@ -155,7 +155,7 @@ class BlockVerifier(BaseBlockVerifier):
         if body.leader_votes:
             any_vote = next(vote for vote in body.leader_votes if vote)
             leader_votes = LeaderVotes(
-                reps, conf.LEADER_COMPLAIN_RATIO,
+                reps, conf.VOTING_RATIO,
                 block.header.height, any_vote.round_, any_vote.old_leader, body.leader_votes)
             if leader_votes.get_result() == ExternalAddress.empty():
                 if leader_votes.block_height != block.header.height:

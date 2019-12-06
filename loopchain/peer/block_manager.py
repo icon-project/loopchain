@@ -294,10 +294,17 @@ class BlockManager:
         self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
+
+        # TODO After the v0.4 update, remove this version parsing.
+        if parse_version(unconfirmed_block.header.version) >= parse_version("0.4"):
+            ratio = conf.VOTING_RATIO
+        else:
+            ratio = conf.LEADER_COMPLAIN_RATIO
+
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
             leader_votes = LeaderVotes(
-                reps, conf.LEADER_COMPLAIN_RATIO, unconfirmed_block.header.height,
+                reps, ratio, unconfirmed_block.header.height,
                 None, unconfirmed_block.body.leader_votes)
             need_to_confirm = leader_votes.get_result() is None
         elif unconfirmed_block.body.confirm_prev_block:
