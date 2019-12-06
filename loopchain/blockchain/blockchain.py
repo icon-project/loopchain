@@ -950,8 +950,7 @@ class BlockChain:
                     f"prev_hash of the new unconfirmed_block({current_block.header.prev_hash})"
                 )
 
-            has_prev_votes = parse_version(current_block.header.version) >= parse_version("0.3")
-            if has_prev_votes:
+            if parse_version(current_block.header.version) >= parse_version("0.3"):
                 confirm_info = current_block.body.prev_votes
                 round_ = next(vote for vote in confirm_info if vote).round_
 
