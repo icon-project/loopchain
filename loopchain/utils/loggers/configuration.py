@@ -114,7 +114,7 @@ class LogConfiguration:
 
         coloredlogs.install(logger=logger,
                             fmt=self._log_format,
-                            datefmt="%m%d %H:%M:%S",
+                            datefmt="%Y-%m-%d %H:%M:%S",
                             level=self._log_level)
 
     def _update_log_file_path(self):
@@ -168,7 +168,7 @@ class LogConfiguration:
 
             logging.basicConfig(handlers=handlers,
                                 format=self._log_format,
-                                datefmt="%m%d %H:%M:%S",
+                                datefmt="%Y-%m-%d %H:%M:%S",
                                 level=self._log_level)
         finally:
             logging._releaseLock()
