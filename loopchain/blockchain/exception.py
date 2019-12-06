@@ -125,6 +125,12 @@ class AnnounceNewBlockError(Exception):
     message_code = message_code.Response.fail_announce_block
 
 
+class RoundMismatch(Exception):
+    """
+    """
+    pass
+
+
 class BlockVersionNotMatch(Exception):
     def __init__(self, block_version: str, target_version: str, msg: str):
         super().__init__(msg)

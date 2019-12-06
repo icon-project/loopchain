@@ -14,7 +14,7 @@ from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception, NoConfirmInfo,
-                                  BlockHeightMismatch)
+                                  BlockHeightMismatch, RoundMismatch)
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
@@ -1011,6 +1011,9 @@ class BlockManager:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
+            util.logger.warning(e)
+        except RoundMismatch as e:
+            self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
             util.logger.warning(e)
         except UnrecordedBlock as e:
             util.logger.info(e)
