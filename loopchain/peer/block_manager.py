@@ -753,6 +753,9 @@ class BlockManager:
         if self.epoch.height == vote.block_height:
             if self.epoch.round == vote.round_:
                 self.epoch.add_complain(vote)
+                elected_leader = self.epoch.complain_result()
+                if elected_leader:
+                    self.__channel_service.reset_leader(elected_leader, complained=True)
             elif self.epoch.round > vote.round_:
                 if vote.new_leader != ExternalAddress.empty():
                     self.__send_fail_leader_vote(vote)
@@ -761,15 +764,6 @@ class BlockManager:
             else:
                 # TODO: do round sync
                 return
-
-            elected_leader = self.epoch.complain_result()
-            if elected_leader:
-                if elected_leader == ExternalAddress.empty().hex_xx() and vote.round_ == self.epoch.round:
-                    util.logger.warning(f"Fail to elect the next leader on {self.epoch.round} round.")
-                    elected_leader = self.blockchain.get_next_rep_in_reps(
-                        ExternalAddress.fromhex(self.epoch.leader_id), self.epoch.reps).hex_hx()
-                if self.epoch.round == vote.round_:
-                    self.__channel_service.reset_leader(elected_leader, complained=True)
         elif self.epoch.height < vote.block_height:
             self.__channel_service.state_machine.block_sync()
 
@@ -783,7 +777,6 @@ class BlockManager:
             timestamp=util.get_time_stamp()
         )
 
-        util.logger.info(f"FailLeaderVote : to {leader_vote.old_leader}, round({leader_vote.round_})")
         fail_vote_dumped = json.dumps(fail_vote.serialize())
         request = loopchain_pb2.ComplainLeaderRequest(
             complain_vote=fail_vote_dumped,

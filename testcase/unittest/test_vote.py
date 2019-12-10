@@ -269,13 +269,12 @@ class TestVote(unittest.TestCase):
     def test_leader_votes_completed_with_out_of_round(self):
         ratio = 0.51
         old_leader = self.reps[0]
-        new_leaders = self.reps[1]
+        next_leader = self.reps[1]
         by_higher_rounder = ExternalAddress.empty()
 
         leader_votes = LeaderVotes(self.reps, ratio, 0, 0, old_leader)
         for i, (rep, signer) in enumerate(zip(self.reps[:26], self.signers[:26])):
-            new_leader = new_leaders
-            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, next_leader)
             leader_votes.add_vote(leader_vote)
 
         leader_votes.get_summary()
@@ -285,15 +284,14 @@ class TestVote(unittest.TestCase):
         self.assertEqual(leader_votes.get_result(), None)
 
         for i, (rep, signer) in enumerate(zip(self.reps[26:55], self.signers[26:55])):
-            new_leader = by_higher_rounder
-            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, new_leader)
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, by_higher_rounder)
             leader_votes.add_vote(leader_vote)
 
         leader_votes.get_summary()
         print(f"leader_votes.is_completed(): {leader_votes.is_completed()}")
         print(f"leader_votes.get_result(): {leader_votes.get_result()}")
         self.assertEqual(leader_votes.is_completed(), True)
-        self.assertEqual(leader_votes.get_result(), new_leaders)
+        self.assertEqual(leader_votes.get_result(), next_leader)
 
     def test_leader_invalid_vote(self):
         ratio = 0.67
