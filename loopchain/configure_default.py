@@ -64,8 +64,6 @@ class SSLAuthType(IntEnum):
 
 class KeyLoadType(IntEnum):
     FILE_LOAD = 0
-    KMS_LOAD = 1
-    RANDOM_TABLE_DERIVATION = 2
 
 
 IP_LOCAL = '127.0.0.1'
@@ -323,11 +321,6 @@ CHANNEL_OPTION = {
 
 PRIVATE_PATH = ""
 PRIVATE_PASSWORD = None
-
-# KMS
-KMS_AGENT_PASSWORD = ""
-KMS_TLS_KEY_ID = ""
-KMS_SECRET_KEY_LABEL = "KEY_ENCRYPTION"
 
 
 ####################

@@ -134,39 +134,18 @@ class PeerService:
 
         logging.info(f"run peer_id : {self._peer_id}")
 
-    @staticmethod
-    def _get_use_kms():
-        if conf.GRPC_SSL_KEY_LOAD_TYPE == conf.KeyLoadType.KMS_LOAD:
-            return True
-        for value in conf.CHANNEL_OPTION.values():
-            if value["key_load_type"] == conf.KeyLoadType.KMS_LOAD:
-                return True
-        return False
-
-    def _init_kms_helper(self, agent_pin):
-        if self._get_use_kms():
-            from loopchain.tools.kms_helper import KmsHelper
-            KmsHelper().set_agent_pin(agent_pin)
-
-    def _close_kms_helper(self):
-        if self._get_use_kms():
-            from loopchain.tools.kms_helper import KmsHelper
-            KmsHelper().remove_agent_pin()
-
     def run_p2p_server(self):
         self.p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
         loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self.p2p_outer_server)
 
     def serve(self,
               port,
-              agent_pin: str=None,
               amqp_target: str=None,
               amqp_key: str=None,
               event_for_init: multiprocessing.Event=None):
         """start func of Peer Service ===================================================================
 
         :param port:
-        :param agent_pin: kms agent pin
         :param amqp_target: rabbitmq host target
         :param amqp_key: sharing queue key
         :param event_for_init: set when peer initiates
@@ -177,7 +156,6 @@ class PeerService:
 
         stopwatch_start = timeit.default_timer()
 
-        self._init_kms_helper(agent_pin)
         self._init_port(port)
         self._init_node_key()
 
@@ -193,8 +171,6 @@ class PeerService:
 
         self._run_rest_services(port)
         self.run_p2p_server()
-
-        self._close_kms_helper()
 
         stopwatch_duration = timeit.default_timer() - stopwatch_start
         logging.info(f"Start Peer Service at port: {port} start duration({stopwatch_duration})")
