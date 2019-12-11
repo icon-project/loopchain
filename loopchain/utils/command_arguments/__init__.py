@@ -50,6 +50,10 @@ class Attribute:
 
         return [self.names[0], str(value)]
 
+    @property
+    def help(self):
+        return self.kwargs.get("help")
+
 
 types_by_names = {
     "service_type": Type.ServiceType,
@@ -94,7 +98,11 @@ attributes = {
 
     Type.AgentPin:
         Attribute("-a", "--agent_pin",
-                  help="kms agent pin for kms load"),
+                  help="\n"
+                       "******************************************************************************\n"
+                       "*   Option `-a` is deprecated and no more valid.                             *\n"
+                       "*   `agent_pin` will be removed very soon.                                   *\n"
+                       "******************************************************************************\n"),
 
     # options for radiostation
     Type.Cert:
@@ -103,7 +111,11 @@ attributes = {
 
     Type.Seed:
         Attribute("-s", "--seed",
-                  help="create random table seed for KMS"),
+                  help="\n"
+                       "******************************************************************************\n"
+                       "*   Option `-s` is deprecated and no more valid.                             *\n"
+                       "*   `seed` will be removed very soon.                                        *\n"
+                       "******************************************************************************\n"),
 
     # options for score service
     Type.Channel:

@@ -220,11 +220,15 @@ def start_as_peer(args):
             amqp_key = f"{utils.get_private_ip()}:{port}"
             command_arguments.add_raw_command(command_arguments.Type.AMQPKey, amqp_key)
 
+    if args.agent_pin:
+        logging.warning(f"Deprecated: {command_arguments.attributes[command_arguments.Type.AgentPin].help}")
+    if args.seed:
+        logging.warning(f"Deprecated: {command_arguments.attributes[command_arguments.Type.Seed].help}")
+
     check_port_available(int(port))
 
     PeerService().serve(
         port=port,
-        agent_pin=args.agent_pin,
         amqp_target=amqp_target,
         amqp_key=amqp_key
     )
