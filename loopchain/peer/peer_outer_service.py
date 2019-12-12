@@ -6,11 +6,11 @@ import json
 import logging
 import math
 import time
+from functools import lru_cache
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager
-from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain import ChannelStatusError
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
@@ -120,7 +120,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __set_status_cache(self, future):
         self.__status_cache = future.result()
 
-    @lru_cache(maxsize=1, valued_returns_only=True)
+    @lru_cache(maxsize=1)
     def __get_status_cache(self, channel_name, time_in_seconds):
         """Cache status data.
 
