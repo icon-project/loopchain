@@ -234,9 +234,6 @@ class ChannelService:
         nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
 
-    def __get_role_switch_block_height(self):
-        return self.get_channel_option().get('role_switch_block_height', -1)
-
     def _get_node_type_by_peer_list(self):
         epoch = self.block_manager.epoch
         if epoch:
@@ -251,13 +248,6 @@ class ChannelService:
         return conf.NodeType.CitizenNode
 
     def _is_role_switched(self) -> bool:
-        current_height = self.__block_manager.blockchain.block_height
-        switch_block_height = self.__get_role_switch_block_height()
-        if switch_block_height != -1 and current_height < switch_block_height:
-            utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
-                               f"current_height({current_height})")
-            return False
-
         new_node_type = self._get_node_type_by_peer_list()
         if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
@@ -642,3 +632,6 @@ class ChannelService:
 
     def stop_block_monitoring_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+
+    def stop_ws_heartbeat_timer(self):
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_WS_HEARTBEAT)
