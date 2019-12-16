@@ -177,6 +177,7 @@ class ChannelStateMachine(object):
         self.__channel_service.start_block_monitoring_timer()
 
     def _watch_on_exit(self, *args, **kwargs):
+        self.__channel_service.stop_ws_heartbeat_timer()
         self.__channel_service.stop_block_monitoring_timer()
         self._run_coroutine_threadsafe(self.__channel_service.node_subscriber.close())
 

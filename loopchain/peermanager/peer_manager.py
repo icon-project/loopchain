@@ -109,7 +109,7 @@ class PeerManager:
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         if reps_hash == self.reps_hash().hex():
-            util.logger.debug(f"There is no change in load_peers_from_iiss.")
+            util.logger.debug(f"There is no change in reps.")
             return
 
         self._peer_list_data.peer_list.clear()

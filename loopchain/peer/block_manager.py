@@ -548,7 +548,6 @@ class BlockManager:
         :return: my_height, max_height
         """
         peer_index = 0
-        retry_number = 0
 
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
@@ -563,7 +562,7 @@ class BlockManager:
                 util.logger.warning(f"{e}")
                 response_code = message_code.Response.fail_no_confirm_info
             except Exception as e:
-                util.logger.warning("There is a bad peer, I hate you: " + str(e))
+                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
                 traceback.print_exc()
                 response_code = message_code.Response.fail
 
@@ -578,50 +577,33 @@ class BlockManager:
                         unconfirmed_block_height = current_unconfirmed_block_height
 
                 try:
-                    result = True
-                    if max_height == unconfirmed_block_height == block.header.height \
-                            and max_height > 0 and not confirm_info:
+                    if (max_height == unconfirmed_block_height == block.header.height and
+                            max_height > 0 and not confirm_info):
                         self.candidate_blocks.add_block(
                             block, self.blockchain.find_preps_addresses_by_header(block.header))
                         self.blockchain.last_unconfirmed_block = block
-                        result = True
                     else:
-                        result = self.__add_block_by_sync(block, confirm_info)
+                        self.__add_block_by_sync(block, confirm_info)
 
-                    if result:
-                        if block.header.height == 0:
-                            self.__rebuild_nid(block)
-                        elif self.blockchain.find_nid() is None:
-                            genesis_block = self.blockchain.find_block_by_height(0)
-                            self.__rebuild_nid(genesis_block)
+                    if block.header.height == 0:
+                        self.__rebuild_nid(block)
+                    elif self.blockchain.find_nid() is None:
+                        genesis_block = self.blockchain.find_block_by_height(0)
+                        self.__rebuild_nid(genesis_block)
 
                 except KeyError as e:
-                    result = False
-                    util.logger.error("fail block height sync: " + str(e))
-                    break
+                    util.logger.error(f"{type(e)} during block height sync: {e, e.__traceback__}")
+                    raise
                 except exception.BlockError:
                     util.exit_and_msg("Block Error Clear all block and restart peer.")
-                    break
+                    raise
                 except Exception as e:
-                    result = False
-                    util.logger.warning("fail block height sync: " + str(e))
-
+                    util.logger.warning(f"fail block height sync: {type(e), e}")
                     self.__block_height_sync_bad_targets[peer_target] = max_block_height
-                    break
-                finally:
+                    raise
+                else:
                     peer_index = (peer_index + 1) % len(peer_stubs)
-                    if result:
-                        my_height += 1
-                        retry_number = 0
-                    else:
-                        retry_number += 1
-                        util.logger.warning(
-                            f"Block height({my_height}) synchronization is fail. "
-                            f"{retry_number}/{conf.BLOCK_SYNC_RETRY_NUMBER}")
-                        if retry_number >= conf.BLOCK_SYNC_RETRY_NUMBER:
-                            util.exit_and_msg(f"This peer already tried to synchronize {my_height} block "
-                                              f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
-                                              f"Peer will be down.")
+                    my_height += 1
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
@@ -631,54 +613,31 @@ class BlockManager:
         return my_height, max_height
 
     def __block_height_sync(self):
-        def _handle_exception(e):
-            util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
-            traceback.print_exc()
-            self.__start_block_height_sync_timer()
-
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
-        except ConnectionError as exc:
-            _handle_exception(exc)
-            return False
 
-        if self.blockchain.last_unconfirmed_block is not None:
-            self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
-        self.blockchain.last_unconfirmed_block = None
+            if self.blockchain.last_unconfirmed_block is not None:
+                self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
+            self.blockchain.last_unconfirmed_block = None
 
-        my_height = self.__current_block_height()
-        util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
+            my_height = self.__current_block_height()
+            util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
-        # prevent_next_block_mismatch until last_block_height in block DB.
-        # (excludes last_unconfirmed_block_height)
-        self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
-
-        try:
-            if peer_stubs:
-                my_height, max_height = self.__block_request_to_peers_in_sync(peer_stubs,
-                                                                              my_height,
-                                                                              unconfirmed_block_height,
-                                                                              max_height)
-        except Exception as exc:
-            _handle_exception(exc)
-            return False
-
-        curr_state = self.__channel_service.state_machine.state
-        if curr_state != 'BlockSync':
-            util.logger.info(f"Current state{curr_state} is not BlockSync")
-            return True
-
-        if my_height >= max_height:
-            util.logger.debug(f"block_manager:block_height_sync is complete.")
-            self.__channel_service.state_machine.complete_sync()
+            # prevent_next_block_mismatch until last_block_height in block DB.
+            # (excludes last_unconfirmed_block_height)
+            self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
+            self.__block_request_to_peers_in_sync(peer_stubs,
+                                                  my_height,
+                                                  unconfirmed_block_height,
+                                                  max_height)
+        except Exception as e:
+            util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
+            traceback.print_exc()
+            self.__start_block_height_sync_timer()
         else:
-            util.logger.warning(
-                f"it's not completed block height synchronization in once ...\n"
-                f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
-            self.__channel_service.state_machine.block_sync()
-
-        return True
+            util.logger.debug(f"block_height_sync is complete.")
+            self.__channel_service.state_machine.complete_sync()
 
     def get_next_leader(self) -> Optional[str]:
         """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
