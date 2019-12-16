@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from collections import Counter
 from typing import Iterable, List, Dict
 
 from loopchain.blockchain.types import Hash32, ExternalAddress
@@ -108,32 +108,36 @@ class LeaderVotes(BaseVotes[LeaderVote]):
     def is_completed(self):
         majority_pair = self.get_majority()
         if majority_pair:
-            majority_value = majority_pair[0][0]
             majority_count = majority_pair[0][1]
-            if majority_count >= self.quorum or self.is_failed(majority_value, majority_count):
+            out_of_round_count = self.get_out_of_round()
+            if majority_count + out_of_round_count >= self.quorum:
                 return True
 
             empty_count = self.votes.count(None)
-            if majority_count + empty_count < self.quorum:
+            if majority_count + out_of_round_count + empty_count < self.quorum:
                 # It determines the majority of this votes cannot reach the quorum
                 return True
         return False
 
-    def is_failed(self, value: ExternalAddress, count: int) -> bool:
-        return value == ExternalAddress.empty() and count >= len(self.reps) - self.quorum + 1
-
     def get_result(self):
-        majority_pairs = self.get_majority(2)
+        majority_pairs = self.get_majority()
         if majority_pairs:
-            rank_1_value, rank_1_count = majority_pairs[0]
-            if rank_1_count >= self.quorum or self.is_failed(rank_1_value, rank_1_count):
-                return rank_1_value
+            majority_value, majority_count = majority_pairs[0]
+            out_of_round_count = self.get_out_of_round()
+            if majority_count + out_of_round_count >= self.quorum:
+                return majority_value
 
-            if len(majority_pairs) > 1:
-                rank_2_value, rank_2_count = majority_pairs[1]
-                if self.is_failed(rank_2_value, rank_2_count):
-                    return rank_2_value
         return None
+
+    def get_majority(self):
+        counter = Counter(vote.result() for vote in self.votes if (vote and vote.result() != ExternalAddress.empty()))
+        majorities = counter.most_common()
+        return majorities
+
+    def get_out_of_round(self):
+        counter = Counter(vote.result() for vote in self.votes if vote)
+        out_of_round = counter[ExternalAddress.empty()]
+        return out_of_round
 
     def get_summary(self):
         msg = super().get_summary()
