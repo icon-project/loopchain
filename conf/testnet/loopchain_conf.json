@@ -3,7 +3,8 @@
     "icon_dex": {
       "block_versions": {
         "0.1a": 0,
-        "0.3": 2698900
+        "0.3": 2698900,
+        "0.4": 5055452
       },
       "hash_versions": {
         "genesis": 1,
