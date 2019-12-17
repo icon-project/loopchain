@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from collections import Counter
-from typing import Iterable, List, Dict
+from typing import Iterable, List, Dict, Tuple
 
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes import Votes as BaseVotes
@@ -129,7 +129,7 @@ class LeaderVotes(BaseVotes[LeaderVote]):
 
         return None
 
-    def get_majority(self):
+    def get_majority(self) -> List[Tuple[int, int]]:
         counter = Counter(vote.result() for vote in self.votes if (vote and vote.result() != ExternalAddress.empty()))
         majorities = counter.most_common()
         return majorities

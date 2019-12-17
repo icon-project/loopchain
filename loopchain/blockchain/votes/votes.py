@@ -15,7 +15,7 @@
 import math
 from abc import ABC, abstractmethod
 from collections import Counter
-from typing import Iterable, List, Generic, TypeVar, Optional
+from typing import Iterable, List, Generic, TypeVar, Optional, Tuple
 
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.votes import Vote
@@ -111,7 +111,7 @@ class Votes(ABC, Generic[TVote]):
     def get_result(self):
         raise NotImplementedError
 
-    def get_majority(self):
+    def get_majority(self) -> List[Tuple[int, int]]:
         counter = Counter(vote.result() for vote in self.votes if vote)
         majorities = counter.most_common()
         return majorities
