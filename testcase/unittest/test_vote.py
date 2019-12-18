@@ -278,8 +278,6 @@ class TestVote(unittest.TestCase):
             leader_votes.add_vote(leader_vote)
 
         leader_votes.get_summary()
-        print(f"leader_votes.is_completed(): {leader_votes.is_completed()}")
-        print(f"leader_votes.get_result(): {leader_votes.get_result()}")
         self.assertEqual(leader_votes.is_completed(), False)
         self.assertEqual(leader_votes.get_result(), None)
 
@@ -288,8 +286,6 @@ class TestVote(unittest.TestCase):
             leader_votes.add_vote(leader_vote)
 
         leader_votes.get_summary()
-        print(f"leader_votes.is_completed(): {leader_votes.is_completed()}")
-        print(f"leader_votes.get_result(): {leader_votes.get_result()}")
         self.assertEqual(leader_votes.is_completed(), True)
         self.assertEqual(leader_votes.get_result(), next_leader)
 

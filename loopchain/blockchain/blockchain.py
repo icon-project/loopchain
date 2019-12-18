@@ -835,7 +835,7 @@ class BlockChain:
             self.__nid = nid.decode(conf.HASH_KEY_ENCODING)
             return self.__nid
         except KeyError as e:
-            logging.debug(f"blockchain:get_nid::There is no NID.")
+            logging.debug(f"There is no NID.")
             return None
 
     def add_tx_to_list_by_address(self, address, tx_hash, batch=None):

@@ -59,16 +59,16 @@ class RestClient:
             self._set_target(min_latency_target)
 
     def init_next_target(self):
-        logging.debug(f"switching target from: {self._target}")
+        utils.logger.debug(f"switching target from: {self._target}")
         if not self._latest_targets:
             return
         next_target = next(self._latest_targets)['target']
-        logging.debug(f"switching target to: {next_target}")
+        utils.logger.debug(f"switching target to: {next_target}")
         self._set_target(next_target)
 
     def _set_target(self, target):
         self._target = self._normalize_target(target)
-        logging.info(f"RestClient init target({self._target})")
+        utils.logger.info(f"RestClient init target({self._target})")
 
     @staticmethod
     def _normalize_target(min_latency_target):
@@ -102,7 +102,7 @@ class RestClient:
         results = [result for result in results if isinstance(result, dict)]  # to filter exceptions
 
         if not results:
-            logging.warning(f"no alive node among endpoints({endpoints})")
+            utils.logger.warning(f"no alive node among endpoints({endpoints})")
             return None
 
         # sort results by min elapsed_time with max block height
@@ -118,7 +118,7 @@ class RestClient:
             else:
                 response = self._call_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            utils.logger.warning(f"REST call fail method_name({method.value.name}), caused by : {type(e)}, {e}")
             raise
         else:
             utils.logger.spam(f"REST call complete method_name({method.value.name})")
@@ -133,7 +133,7 @@ class RestClient:
             else:
                 response = await self._call_async_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            utils.logger.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
             raise
         else:
             utils.logger.spam(f"REST call async complete method_name({method.value.name})")

@@ -755,7 +755,8 @@ class BlockManager:
                 continue
             if target in self.__block_height_sync_bad_targets:
                 continue
-            util.logger.debug(f"try to target({target})")
+
+            util.logger.info(f"try to connect to {target}.")
             channel = GRPCHelper().create_client_channel(target)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:

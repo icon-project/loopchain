@@ -512,6 +512,16 @@ class ChannelInnerTask:
             return json.dumps(bs.serialize(new_block)), confirm_info
 
     @message_queue_task
+    def try_block_sync(self, subscriber_block_height: int):
+        node_type = ChannelProperty().node_type.value
+        state_machine = self._channel_service.state_machine
+        if node_type == conf.NodeType.CommunityNode:
+            if state_machine.state == 'LeaderComplain':
+                state_machine.reset_network()
+            elif subscriber_block_height > self._blockchain.block_height + 2:
+                state_machine.block_sync()
+
+    @message_queue_task
     async def register_citizen(self, peer_id, target, connected_time):
         register_condition = (len(self._citizens) < conf.SUBSCRIBE_LIMIT
                               and (peer_id not in self._citizens)
