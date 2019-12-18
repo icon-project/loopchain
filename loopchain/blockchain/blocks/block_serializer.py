@@ -49,6 +49,10 @@ class BlockSerializer(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockSerializer':
+        from . import v0_4
+        if version == v0_4.version:
+            return v0_4.BlockSerializer(tx_versioner)
+
         from . import v0_3
         if version == v0_3.version:
             return v0_3.BlockSerializer(tx_versioner)

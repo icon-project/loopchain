@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from loopchain.baseservice import PrepChangedReason
-from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
+from loopchain.blockchain.blocks import (BlockHeader as BaseBlockHeader,
+                                         BlockBody as BaseBlockBody, NextRepsChangeReason)
 from loopchain.blockchain.types import Hash32, ExternalAddress, BloomFilter
 from loopchain.blockchain.votes.v0_3 import BlockVote, LeaderVote
 from loopchain.crypto.hashing import build_hash_generator
@@ -28,18 +28,24 @@ class BlockHeader(BaseBlockHeader):
         return self.leader_votes_hash != Hash32.empty()
 
     @property
-    def prep_changed(self) -> Optional[PrepChangedReason]:
+    def prep_changed(self) -> bool:
         """Return reason for prep changed
 
-        :return: None means there is no change.
+        :return: False means there is no change.
         """
-        if self.next_reps_hash == Hash32.empty():
-            return None
+        return self.next_reps_hash != Hash32.empty()
 
-        if self.next_leader == ExternalAddress.empty():
-            return PrepChangedReason.TERM_END
+    @property
+    def prep_changed_reason(self) -> Optional[NextRepsChangeReason]:
+        """Return prep changed reason
 
-        return PrepChangedReason.PENALTY
+        :return: NextRepsChangeReason : NoChange, TermEnd, Penalty
+        """
+        if not self.prep_changed and not self.is_unrecorded:
+            return NextRepsChangeReason.NoChange
+
+        # block v0.3 work as TermEnd when Penalty
+        return NextRepsChangeReason.TermEnd
 
     @property
     def is_unrecorded(self) -> bool:

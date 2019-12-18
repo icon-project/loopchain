@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Optional
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
-from loopchain.blockchain import Epoch
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -30,6 +29,7 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
 if TYPE_CHECKING:
+    from loopchain.blockchain import BlockBuilder
     from loopchain.peer import BlockManager
 
 
@@ -54,7 +54,8 @@ class ConsensusSiever(ConsensusBase):
             timer_service,
             self.consensus,
             self.__lock,
-            self._loop
+            self._loop,
+            call_instantly=not conf.ALLOW_MAKE_EMPTY_BLOCK
         )
         self.__block_generation_timer.start(is_run_at_start=conf.ALLOW_MAKE_EMPTY_BLOCK is False)
 
@@ -82,7 +83,7 @@ class ConsensusSiever(ConsensusBase):
         util.logger.debug("Cannot vote before starting consensus.")
         # raise RuntimeError("Cannot vote before starting consensus.")
 
-    def __build_candidate_block(self, block_builder):
+    def __build_candidate_block(self, block_builder: 'BlockBuilder'):
         last_block = self._blockchain.last_block
         block_builder.height = last_block.header.height + 1
         block_builder.prev_hash = last_block.header.hash
@@ -92,6 +93,13 @@ class ConsensusSiever(ConsensusBase):
         if block_builder.version == '0.1a' or (not block_builder.next_leader and not block_builder.reps):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = self._block_manager.epoch.reps
+
+        try:
+            if block_builder.next_reps is None:
+                # to build temporary block (version >= 0.4)
+                block_builder.next_reps = []
+        except AttributeError as e:
+            util.logger.info(f"block_version = {block_builder.version} : {e}")
 
         return block_builder.build()
 
@@ -160,8 +168,9 @@ class ConsensusSiever(ConsensusBase):
             else:
                 is_unrecorded_block = False
 
+            skip_add_tx = is_unrecorded_block or complained_result
             block_builder = self._block_manager.epoch.makeup_block(
-                complain_votes, last_block_vote_list, new_term, is_unrecorded_block)
+                complain_votes, last_block_vote_list, new_term, skip_add_tx)
             need_next_call = False
             try:
                 if complained_result or new_term:
@@ -224,24 +233,12 @@ class ConsensusSiever(ConsensusBase):
                 except NotEnoughVotes:
                     return
 
-            if self._block_manager.epoch.leader_id != ChannelProperty().peer_id \
-                    and not candidate_block.header.prep_changed:
-                util.logger.spam(
-                    f"-------------------turn_to_peer "
-                    f"next_leader({self._block_manager.epoch.leader_id}) "
-                    f"peer_id({ChannelProperty().peer_id})")
-                ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
-            else:
-                if self._blockchain.made_block_count_reached_max(self._blockchain.last_block) \
-                        and not candidate_block.header.prep_changed:
-                    # (conf.MAX_MADE_BLOCK_COUNT - 1) means if made_block_count is 9,
-                    # next unconfirmed block height is 10
+            if not candidate_block.header.prep_changed:
+                if (self._blockchain.made_block_count_reached_max(self._blockchain.last_block) or
+                        self._block_manager.epoch.leader_id != ChannelProperty().peer_id):
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
 
-                if not conf.ALLOW_MAKE_EMPTY_BLOCK:
-                    self.__block_generation_timer.call_instantly()
-                else:
-                    self.__block_generation_timer.call()
+            self.__block_generation_timer.call()
 
     async def _wait_for_voting(self, block: 'Block'):
         """Waiting validator's vote for the candidate_block.

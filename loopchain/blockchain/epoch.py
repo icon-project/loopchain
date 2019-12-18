@@ -20,6 +20,8 @@ import time
 import traceback
 from typing import Dict, Optional, TYPE_CHECKING
 
+from pkg_resources import parse_version
+
 from loopchain import utils, configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockBuilder
@@ -79,8 +81,15 @@ class Epoch:
         self.reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
                          ObjectManager().channel_service.peer_manager.prepared_reps_hash
         self.reps = self.__blockchain.find_preps_addresses_by_roothash(self.reps_hash)
+
+        # TODO After the v0.4 update, remove this version parsing.
+        if parse_version(self.__blockchain.last_block.header.version) >= parse_version("0.4"):
+            ratio = conf.VOTING_RATIO
+        else:
+            ratio = conf.LEADER_COMPLAIN_RATIO
+
         leader_votes = LeaderVotes(self.reps,
-                                   conf.LEADER_COMPLAIN_RATIO,
+                                   ratio,
                                    self.height,
                                    self.round,
                                    ExternalAddress.fromhex_address(self.leader_id))
@@ -179,7 +188,7 @@ class Epoch:
                      complain_votes: LeaderVotes,
                      prev_votes,
                      new_term: bool = False,
-                     is_unrecorded: bool = False):
+                     skip_add_tx: bool = False):
         last_block = self.__blockchain.last_unconfirmed_block or self.__blockchain.last_block
         block_height = last_block.header.height + 1
         block_version = self.__blockchain.block_versioner.get_version(block_height)
@@ -192,8 +201,8 @@ class Epoch:
         if new_term:
             block_builder.next_leader = None
             block_builder.reps = None
-        elif is_unrecorded:
-            utils.logger.debug(f"unrecorded block for height({self.height})")
+        elif skip_add_tx:
+            utils.logger.debug(f"skip_add_tx for block height({self.height})")
         else:
             self.__add_tx_to_block(block_builder)
 

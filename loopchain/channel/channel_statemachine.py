@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """State Machine for Channel Service"""
 
 import asyncio
@@ -23,7 +10,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
-from loopchain.peer import status_code, ChannelProperty
+from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
 from loopchain.utils import loggers
@@ -206,7 +193,8 @@ class ChannelStateMachine(object):
     def _blockgenerate_on_enter(self, *args, **kwargs):
         loggers.get_preset().is_leader = True
         loggers.get_preset().update_logger()
-        self.__channel_service.inner_service.notify_unregister()
+        if conf.SAFE_BLOCK_BROADCAST:
+            self.__channel_service.inner_service.notify_unregister()
         self.__channel_service.block_manager.start_block_generate_timer()
 
     def _blockgenerate_on_exit(self, *args, **kwargs):

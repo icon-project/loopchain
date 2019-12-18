@@ -1,29 +1,16 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """gRPC service for Peer Outer Service"""
 
 import asyncio
 import copy
-import datetime
 import json
 import logging
-from functools import partial
-from typing import cast
+import math
+import time
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager
+from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain import ChannelStatusError
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
@@ -36,64 +23,17 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def __init__(self):
         self.__handler_map = {
-            message_code.Request.status: self.__handler_status,
             message_code.Request.get_tx_result: self.__handler_get_tx_result,
             message_code.Request.get_balance: self.__handler_get_balance,
             message_code.Request.get_tx_by_address: self.__handler_get_tx_by_address,
-            message_code.Request.get_total_supply: self.__handler_get_total_supply,
-            message_code.Request.peer_peer_list: self.__handler_peer_list
+            message_code.Request.get_total_supply: self.__handler_get_total_supply
         }
 
-        self.__status_cache_update_time = {}
+        self.__status_cache = None
 
     @property
     def peer_service(self):
         return ObjectManager().peer_service
-
-    def __handler_status(self, request, context):
-        utils.logger.debug(f"peer_outer_service:handler_status ({request.message})")
-
-        if request.message == "get_stub_manager_to_server":
-            # this case is check only gRPC available
-            return loopchain_pb2.Message(code=message_code.Response.success)
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        callback = partial(self.__status_update, request.channel)
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_status(),
-            self.peer_service.inner_service.loop
-        )
-        future.add_done_callback(callback)
-
-        status = self.__get_status_peer_type_data(request.channel)
-        if status is None:
-            return loopchain_pb2.Message(code=message_code.Response.fail)
-
-        meta = json.loads(request.meta) if request.meta else {}
-        if meta.get("highest_block_height", None) and meta["highest_block_height"] > status["block_height"]:
-            utils.logger.spam(f"(peer_outer_service.py:__handler_status) there is difference of height !")
-
-        status_json = json.dumps(status)
-
-        return loopchain_pb2.Message(code=message_code.Response.success, meta=status_json)
-
-    def __handler_peer_list(self, request, context):
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_peer_list(),
-            self.peer_service.inner_service.loop
-        )
-        all_group_peer_list_str, peer_list_str = future.result()
-
-        message = "All Group Peers count: " + all_group_peer_list_str
-
-        return loopchain_pb2.Message(
-            code=message_code.Response.success,
-            message=message,
-            meta=peer_list_str)
 
     def __handler_get_tx_result(self, request, context):
         """Get Transaction Result for json-rpc request
@@ -177,44 +117,27 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.Message(code=message_code.Response.not_treat_message_code)
 
-    def __set_status_cache(self, channel, status):
-        self.__status_cache_update_time[channel] = datetime.datetime.now()
-        self.peer_service.status_cache[channel] = status
+    def __set_status_cache(self, future):
+        self.__status_cache = future.result()
 
-    def __status_update(self, channel, future):
-        # update peer outer status cache by channel
-        # utils.logger.spam(f"status_update channel({channel}) result({future.result()})")
-        self.__set_status_cache(channel, future.result())
+    @lru_cache(maxsize=1, valued_returns_only=True)
+    def __get_status_cache(self, channel_name, time_in_seconds):
+        utils.logger.spam(f"__get_status_cache in seconds({time_in_seconds})")
 
-    def __get_status_data(self, channel: str):
-        return self.__get_status_from_cache(channel)
+        try:
+            channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            raise ChannelStatusError(f"Invalid channel({channel_name})")
 
-    def __get_status_peer_type_data(self, channel: str):
-        status_cache = self.__get_status_from_cache(channel)
-        status = dict()
-        status['state'] = status_cache['state']
-        status['peer_type'] = status_cache['peer_type']
-        status['block_height'] = status_cache['block_height']
-        status['peer_count'] = status_cache['peer_count']
-        status['leader'] = status_cache['leader']
-        return status
-
-    def __get_status_from_cache(self, channel: str):
-        if channel in self.peer_service.status_cache:
-            if channel in self.__status_cache_update_time:
-                update_time = self.__status_cache_update_time[channel]
-                if utils.datetime_diff_in_mins(update_time) > conf.STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
-                    return None
-            status_data = self.peer_service.status_cache[channel]
+        if self.__status_cache is None:
+            self.__status_cache = channel_stub.sync_task().get_status()
         else:
-            channel_stub = StubCollection().channel_stubs[channel]
-            status_data = asyncio.run_coroutine_threadsafe(
+            future = asyncio.run_coroutine_threadsafe(
                 channel_stub.async_task().get_status(),
-                self.peer_service.inner_service.loop
-            ).result()
-            self.peer_service.status_cache[channel] = status_data
+                self.peer_service.inner_service.loop)
+            future.add_done_callback(self.__set_status_cache)
 
-        return status_data
+        return self.__status_cache
 
     def GetStatus(self, request, context):
         """Peer 의 현재 상태를 요청한다.
@@ -224,7 +147,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug("Peer GetStatus : %s", request)
 
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
@@ -238,20 +160,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
                 logging.debug(f"Got status for block_sync. status_data={status_data}")
             except BaseException as e:
                 logging.error(f"Peer GetStatus(block_sync) Exception : {e}")
-            else:
-                if status_data is not None:
-                    self.__set_status_cache(channel_name, status_data)
         else:
-            try:
-                callback = partial(self.__status_update, channel_name)
-                future = asyncio.run_coroutine_threadsafe(
-                    channel_stub.async_task().get_status(),
-                    self.peer_service.inner_service.loop)
-                future.add_done_callback(callback)
-            except BaseException as e:
-                logging.error(f"Peer GetStatus Exception : {e}")
-
-            status_data = self.__get_status_data(channel_name)
+            status_data = self.__get_status_cache(channel_name,
+                                                  time_in_seconds=math.trunc(time.time()))
 
         if status_data is None:
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
@@ -295,24 +206,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             unconfirmed_block_height=status_data["unconfirmed_block_height"],
             is_leader_complaining=status_data['leader_complaint'],
             peer_id=status_data['peer_id'])
-
-    def GetScoreStatus(self, request, context):
-        """Score Service 의 현재 상태를 요청 한다
-
-        :param request:
-        :param context:
-        :return:
-        """
-        logging.debug("Peer GetScoreStatus request : %s", request)
-
-        channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        score_status = channel_stub.sync_task().get_score_status()
-
-        return loopchain_pb2.StatusReply(
-            status=score_status,
-            block_height=0,
-            total_tx=0)
 
     def Stop(self, request, context):
         """Peer를 중지시킨다

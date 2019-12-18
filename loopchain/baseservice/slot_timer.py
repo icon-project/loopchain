@@ -22,7 +22,14 @@ from loopchain.baseservice import TimerService, Timer
 class SlotTimer:
     """Slot Timer"""
 
-    def __init__(self, timer_key, duration, timer_service: TimerService, callback, callback_lock: asyncio.Lock, loop):
+    def __init__(self,
+                 timer_key,
+                 duration,
+                 timer_service: TimerService,
+                 callback,
+                 callback_lock: asyncio.Lock,
+                 loop,
+                 call_instantly: bool):
         self.__slot = 0
         self.__delayed = True
         self.__timer_key = timer_key
@@ -32,6 +39,11 @@ class SlotTimer:
         self.__callback_lock = callback_lock
         self.__loop = loop
         self.is_running = False
+
+        if call_instantly:
+            self.call = self.call_instantly
+        else:
+            self.call = self.call_in_slot
 
     def start(self, is_run_at_start=True):
         self.is_running = True
@@ -63,7 +75,7 @@ class SlotTimer:
             return
         self.__loop.create_task(self.__callback())
 
-    def call(self):
+    def call_in_slot(self):
         util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")
 
         if self.__slot > 0:

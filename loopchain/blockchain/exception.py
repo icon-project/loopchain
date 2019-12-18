@@ -34,6 +34,11 @@ class BlockError(Exception):
     pass
 
 
+class InvalidBlockSyncTarget(Exception):
+    """Raises when the target is invalid to block sync"""
+    pass
+
+
 class BlockchainError(Exception):
     """블럭체인상에서 문제가 발생했을때 발생하는 에러
     """
@@ -106,8 +111,24 @@ class ThereIsNoCandidateBlock(Exception):
     pass
 
 
+class NoConfirmInfo(Exception):
+    """
+    """
+    pass
+
+
 class AnnounceNewBlockError(Exception):
+    """When AnnounceNewBlockError is raised during Watch state,
+    this node would transit the state to BlockSync.
+
+    """
     message_code = message_code.Response.fail_announce_block
+
+
+class RoundMismatch(Exception):
+    """
+    """
+    pass
 
 
 class BlockVersionNotMatch(Exception):
@@ -126,6 +147,12 @@ class BlockVersionNotMatch(Exception):
         return ' '.join(results)
 
 
+class BlockHeightMismatch(Exception):
+    """
+    """
+    pass
+
+
 class ScoreInvokeError(Exception):
     """Error While Invoke Score
     """
@@ -136,6 +163,12 @@ class ScoreInvokeResultError(ScoreInvokeError):
     """Score Invoke Result Error
     """
     message_code = message_code.Response.fail_score_invoke_result
+
+
+class WritePrecommitStateError(Exception):
+    """Write Precommit State Error
+    """
+    pass
 
 
 class ChannelStatusError(Exception):

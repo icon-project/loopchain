@@ -25,7 +25,7 @@ from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand,
                                    ObjectManager, CommonSubprocess, RestClient,
                                    NodeSubscriber, UnregisteredException, TimerService)
-from loopchain.blockchain.exception import AnnounceNewBlockError
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -272,9 +272,9 @@ class ChannelService:
             ChannelProperty().node_type = new_node_type
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
-    def switch_role(self, force: bool=False):
+    def switch_role(self):
         self.peer_manager.update_all_peers()
-        if force or self._is_role_switched():
+        if self._is_role_switched():
             self.__state_machine.switch_role()
 
     async def reset_network(self):
@@ -308,11 +308,7 @@ class ChannelService:
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
                                                   self_target=ChannelProperty().peer_target)
         scheduler.start()
-
         self.__broadcast_scheduler = scheduler
-
-        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, ChannelProperty().peer_target,
-                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
 
     def _get_radiostations(self):
         radiostations: list = self.get_channel_option().get('radiostations')
@@ -421,14 +417,18 @@ class ChannelService:
                 else:
                     logging.warning(f"Waiting for next subscribe request...")
 
-        subscribe_event = asyncio.Event()
         utils.logger.spam(f"try subscribe_call_by_citizen target({ChannelProperty().rest_target})")
-
+        subscribe_event = asyncio.Event()
         # try websocket connection, and handle exception in callback
-        asyncio.ensure_future(self.__node_subscriber.start(
-            block_height=self.__block_manager.blockchain.block_height,
-            event=subscribe_event,
-        ), loop=MessageQueueService.loop).add_done_callback(_handle_exception)
+        task = asyncio.ensure_future(
+            self.__node_subscriber.start(
+                block_height=self.__block_manager.blockchain.block_height,
+                event=subscribe_event
+            ),
+            loop=MessageQueueService.loop
+        )
+        task.add_done_callback(_handle_exception)
+
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
@@ -501,7 +501,8 @@ class ChannelService:
         blockchain = self.__block_manager.blockchain
         prep_targets = blockchain.find_preps_targets_by_roothash(self.__block_manager.epoch.reps_hash)
         if ChannelProperty().peer_id not in prep_targets:
-            utils.logger.warning(f"This peer needs to switch to citizen.")
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                utils.logger.warning(f"This peer needs to switch to citizen.")
             return
 
         leader_peer_target = prep_targets.get(new_leader_id, None)
@@ -552,7 +553,9 @@ class ChannelService:
         request = convert_params(request, ParamType.write_precommit_state)
 
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-        stub.sync_task().write_precommit_state(request)
+        precommit_result: dict = stub.sync_task().write_precommit_state(request)
+        if "error" in precommit_result:
+            raise WritePrecommitStateError(precommit_result['error'])
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
         return True

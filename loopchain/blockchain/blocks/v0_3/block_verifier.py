@@ -16,8 +16,8 @@
 from typing import TYPE_CHECKING, Callable, Sequence
 
 from loopchain import configure as conf
-from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier, BlockBuilder
-from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
+from loopchain.blockchain.blocks import BlockVerifier as BaseBlockVerifier
+from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody, BlockBuilder
 from loopchain.blockchain.exception import NotInReps
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
@@ -30,8 +30,9 @@ class BlockVerifier(BaseBlockVerifier):
     version = BlockHeader.version
 
     # noinspection PyMethodOverriding
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, *,
-                       reps_getter: Callable[[Sequence[ExternalAddress]], Hash32]):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', *,
+                       reps_getter: Callable[[Sequence[ExternalAddress]], Hash32],
+                       **kwargs):
         header: BlockHeader = block.header
         body: BlockBody = block.body
 
@@ -69,7 +70,7 @@ class BlockVerifier(BaseBlockVerifier):
 
         invoke_result = None
         if self.invoke_func:
-            self.verify_invoke(builder, block, prev_block)
+            invoke_result = self.verify_invoke(builder, block, prev_block)
 
         builder.build_transactions_hash()
         if header.transactions_hash != builder.transactions_hash:
@@ -101,15 +102,17 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"builder({builder.build_block_header_data()}).")
             self._handle_exception(exception)
 
+        generator: 'ExternalAddress' = kwargs.get('generator')
         if generator:
             self.verify_generator(block, generator)
 
         return invoke_result
 
-    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
+    def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block') -> dict:
         new_block, invoke_result = self.invoke_func(block, prev_block)
         header: BlockHeader = block.header
         new_header: BlockHeader = new_block.header
+
         if header.state_hash != new_header.state_hash:
             exception = RuntimeError(f"Block({header.height}, {header.hash.hex()}, "
                                      f"StateRootHash({header.state_hash}), "
@@ -146,6 +149,8 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Expected({builder.logs_bloom.hex()}).")
             self._handle_exception(exception)
 
+        return invoke_result
+
     def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
         if not block.header.complained and block.header.peer_id != generator:
             exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
@@ -153,7 +158,7 @@ class BlockVerifier(BaseBlockVerifier):
                                      f"Expected({generator.hex_xx()}).")
             self._handle_exception(exception)
 
-    def verify_leader_votes(self, block: 'Block', prev_block: 'Block',  reps: Sequence[ExternalAddress]):
+    def verify_leader_votes(self, block: 'Block', prev_block: 'Block', reps: Sequence[ExternalAddress]):
         body: BlockBody = block.body
         if body.leader_votes:
             any_vote = next(vote for vote in body.leader_votes if vote)

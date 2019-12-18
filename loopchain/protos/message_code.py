@@ -1,25 +1,10 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """ A massage class for the loopchain """
 
 
 class Request:
-    status = 1
     is_alive = 2
     stop = -9
 
-    peer_peer_list = 600
     peer_get_leader = 601  # get leader peer object
     peer_complain_leader = 602  # complain leader peer is no response
     peer_reconnect_to_rs = 603  # reconnect to rs when rs restart detected.
@@ -68,6 +53,7 @@ class Response:
     fail_no_permission = -18
     fail_out_of_tps_limit = -19
     fail_connection_closed = -20
+    fail_no_confirm_info = -21
     fail_tx_invalid_unknown = -100
     fail_tx_invalid_hash_format = -101
     fail_tx_invalid_hash_generation = -102

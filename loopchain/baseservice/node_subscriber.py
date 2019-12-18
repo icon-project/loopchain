@@ -46,6 +46,10 @@ CONNECTION_FAIL_CONDITIONS = {
 
 
 class UnregisteredException(Exception):
+    """When UnregisteredException is raised during Watch state,
+    this node would transit the state to SubscribeNetwork and init next radiostation target.
+
+    """
     pass
 
 
@@ -58,12 +62,12 @@ def convert_response_to_dict(response: bytes) -> dict:
 
 def _check_error_in_response(response_dict: dict) -> dict:
     params = response_dict.get('params')
-    if params and params.get('code') in CONNECTION_FAIL_CONDITIONS:
+    if params and 'error' in params:
         error_msg = params.get('error') or f"Error sent from rs target: {params}"
-        raise UnregisteredException(error_msg)
-
-    if "error" in response_dict:
-        return ObjectManager().channel_service.shutdown_peer(message=response_dict.get('error'))
+        if params['code'] in CONNECTION_FAIL_CONDITIONS:
+            raise UnregisteredException(error_msg)
+        else:
+            raise AnnounceNewBlockError(error_msg)
 
     return response_dict
 
@@ -178,7 +182,7 @@ class NodeSubscriber:
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
-                                      blockchain.get_expected_generator(confirmed_block.header.peer_id),
+                                      generator=blockchain.get_expected_generator(confirmed_block),
                                       reps_getter=reps_getter)
             except Exception as e:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")

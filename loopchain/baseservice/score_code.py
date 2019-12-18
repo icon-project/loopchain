@@ -24,8 +24,3 @@ class ScoreResponse(IntEnum):
     NOT_INVOKED = 2  # means pending
     NOT_EXIST = 3  # considered fail
     SCORE_CONTAINER_EXCEPTION = 9100
-
-
-class PrepChangedReason:
-    TERM_END = "0x0"  # Term ends and reset P-Rep list
-    PENALTY = "0x1"  # Updated within term (Penalty)

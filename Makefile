@@ -19,7 +19,7 @@ else ifeq ($(UNAME), Linux)
 endif
 
 CLEAN_TARGETS := clean-process clean-mq clean-pyc clean-db clean-log clean-test
-TEST_CMD := python -m pytest -vv
+TEST_CMD := python -m pytest -rsxX
 
 help:
 	@awk '/^#/{c=substr($$0,3);next}c&&/^[[:alpha:]][-_[:alnum:]]+:/{print substr($$1,1,index($$1,":")),c}1{c=0}'\
@@ -40,9 +40,9 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice==1.5.15
+	$(PIP_INSTALL) iconservice==1.5.20
 	$(PIP_INSTALL) iconcommons==1.1.2
-	$(PIP_INSTALL) iconrpcserver==1.4.4
+	$(PIP_INSTALL) iconrpcserver==1.4.9
 	$(PIP_INSTALL) tbears
 
 ## pip install packages

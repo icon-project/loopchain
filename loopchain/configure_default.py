@@ -1,25 +1,10 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """All loopchain configure value can set by system environment.
 But before set by system environment, loopchain use this default values.
 
 configure 의 default 값으로 지정하여 사용한다.
 이곳에서 직접 대입하거나 export 로 값을 지정할 수 있다.
 configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
-configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)
-
-"""
+configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)"""
 
 import os
 import sys
@@ -129,12 +114,6 @@ GRPC_SSL_DEFAULT_KEY_PATH = 'resources/ssl_test_cert/ssl.key'
 GRPC_SSL_DEFAULT_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 
 
-##########
-# TEST ###
-##########
-TEST_FAIL_VOTE_SIGN = "test_fail_vote_sign"
-
-
 ###################
 # BLOCK MANAGER ###
 ###################
@@ -191,6 +170,7 @@ TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 INVOKE_RESULT_AGING_SECONDS = 60 * 60
 READ_CACHED_TX_COUNT = True
+SAFE_BLOCK_BROADCAST = True
 
 
 class SendTxType(IntEnum):
@@ -217,7 +197,6 @@ DEFAULT_SSL_TRUST_CERT_PATH = 'resources/ssl_test_cert/root_ca.crt'
 REST_TIMEOUT = 5
 REST_ADDITIONAL_TIMEOUT = 30  # seconds
 GUNICORN_WORKER_COUNT = int(os.cpu_count() * 0.5) or 1
-DISABLE_V1_API = True
 
 
 class ApiVersion(IntEnum):
@@ -238,7 +217,7 @@ CONNECTION_RETRY_TIMEOUT_TO_RS = 60 * 5  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS_TEST = 30  # seconds for testcase
 CONNECTION_RETRY_TIMES = 3  # times
 BROADCAST_RETRY_TIMES = 1  # times
-RELAY_RETRY_TIMES = 3 # times
+RELAY_RETRY_TIMES = 3  # times
 REQUEST_BLOCK_GENERATOR_TIMEOUT = 10  # seconds
 BLOCK_GENERATOR_BROADCAST_TIMEOUT = 5  # seconds
 WAIT_GRPC_SERVICE_START = 5  # seconds
@@ -284,8 +263,6 @@ NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT = 5
 # How many non-response will allow if node is leader. After this count RS. will select new leader in network.
 NO_RESPONSE_COUNT_ALLOW_BY_HEARTBEAT_LEADER = 1
 CONNECTION_RETRY_TIMER = SLEEP_SECONDS_IN_RADIOSTATION_HEARTBEAT * 2 + 2  # The duration of the ConnectPeer timer by peer.
-# If the cache is not updated within this time, the channel is considered dead.
-STATUS_CACHE_LAST_UPDATE_IN_MINUTES = 10
 # If disconnected state of the peer is maintained, That peer will removed from peer list after this minutes.
 RADIO_STATION_NAME = "RadioStation"
 LOOPCHAIN_DEFAULT_CHANNEL = "icon_dex"  # Default Channel Name
@@ -314,20 +291,14 @@ AMQP_KEY_DEFAULT = "amqp_key"
 AMQP_KEY = AMQP_KEY_DEFAULT
 
 
-####################
-# Authentication ###
-####################
-TOKEN_TYPE_TOKEN = "00"
-TOKEN_TYPE_CERT = "01"
-TOKEN_TYPE_SIGN = "02"
-
 ###############
 # Signature ###
 ###############
 CHANNEL_OPTION = {
     LOOPCHAIN_DEFAULT_CHANNEL: {
         "block_versions": {
-            "0.1a": 0
+            "0.1a": 0,
+            "0.3": 1
         },
         "hash_versions": {
             "genesis": 1,
@@ -342,7 +313,8 @@ CHANNEL_OPTION = {
     },
     LOOPCHAIN_TEST_CHANNEL: {
         "block_versions": {
-            "0.1a": 0
+            "0.1a": 0,
+            "0.3": 1
         },
         "hash_versions": {
             "genesis": 1,
@@ -357,7 +329,7 @@ CHANNEL_OPTION = {
     }
 }
 
-PRIVATE_PATH = os.path.join(LOOPCHAIN_ROOT_PATH, 'resources/default_pki/private.der')
+PRIVATE_PATH = ""
 PRIVATE_PASSWORD = None
 
 # KMS
@@ -415,7 +387,8 @@ ICON_VERSIONS = {
     'iconservice': '0.0.0',
     'iconrpcserver': '0.0.0',
     'iconcommons': '0.0.0',
-    'earlgrey': '0.0.0'
+    'earlgrey': '0.0.0',
+    'icon_rc': '0.0.0'
 }
 
 ####################

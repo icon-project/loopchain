@@ -52,15 +52,10 @@ class TestConfigure(unittest.TestCase):
         logging.debug(f"conf.LEVEL_DB_KEY_FOR_PEER_LIST: {conf.LEVEL_DB_KEY_FOR_PEER_LIST}")
         self.assertEqual(conf.LEVEL_DB_KEY_FOR_PEER_LIST, conf_default.LEVEL_DB_KEY_FOR_PEER_LIST)
 
-        logging.debug(f"conf.TOKEN_TYPE_TOKEN: {conf.TOKEN_TYPE_TOKEN}")
-        self.assertTrue(isinstance(conf.TOKEN_TYPE_TOKEN, str))
-
     def test_load_configure_json(self):
         # GIVEN
         ip_local_before_load_json = conf.IP_LOCAL
-        token_type_token_before_load_json = conf_default.TOKEN_TYPE_TOKEN
-        logging.debug(f"before json file load, conf.IP_LOCAL({ip_local_before_load_json})"
-                      f", conf.TOKEN_TYPE_TOKEN({token_type_token_before_load_json})")
+        logging.debug(f"before json file load, conf.IP_LOCAL({ip_local_before_load_json})")
 
         test_configure_json_path = "configure_json_for_test.json"
         configure_json_file = Path(test_configure_json_path)
@@ -69,16 +64,13 @@ class TestConfigure(unittest.TestCase):
 
         # WHEN
         conf.Configure().load_configure_json(test_configure_json_path)
-        logging.debug(f"after json file load, conf.IP_LOCAL({conf.IP_LOCAL})"
-                      f", conf.TOKEN_TYPE_TOKEN({conf.TOKEN_TYPE_TOKEN})")
+        logging.debug(f"after json file load, conf.IP_LOCAL({conf.IP_LOCAL})")
 
         # THEN
         self.assertNotEqual(ip_local_before_load_json, conf.IP_LOCAL)
-        self.assertNotEqual(token_type_token_before_load_json, conf.TOKEN_TYPE_TOKEN)
 
         # BACK
         conf.IP_LOCAL = ip_local_before_load_json
-        conf.TOKEN_TYPE_TOKEN = token_type_token_before_load_json
 
     def test_is_support_node_function(self):
         # GIVEN

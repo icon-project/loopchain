@@ -1,37 +1,27 @@
-# Copyright 2019 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """A management class for blockchain."""
 
 import json
-import logging
 import threading
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List
+
+from pkg_resources import parse_version
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception
+from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception, NoConfirmInfo,
+                                  BlockHeightMismatch, RoundMismatch)
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
-from loopchain.blockchain.exception import ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, \
-    TransactionOutOfTimeBound, NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader
+from loopchain.blockchain.blocks.block import NextRepsChangeReason
+from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
+                                            TransactionOutOfTimeBound, NotInReps,
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -67,6 +57,7 @@ class BlockManager:
         self.__peer_type = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
+        self.__block_height_sync_bad_targets = {}
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
@@ -94,9 +85,6 @@ class BlockManager:
 
     def update_service_status(self, status):
         self.__service_status = status
-        StubCollection().peer_stub.sync_task().update_status(
-            self.__channel_name,
-            {"status": self.service_status})
 
     @property
     def peer_type(self):
@@ -255,17 +243,6 @@ class BlockManager:
                 else:
                     break
 
-    def _reset_leader(self, unconfirmed_block: Block):
-        if unconfirmed_block.header.prep_changed:
-            next_leader = self.blockchain.find_preps_addresses_by_roothash(
-                unconfirmed_block.header.next_reps_hash)[0].hex_hx()
-        else:
-            next_leader = unconfirmed_block.header.next_leader.hex_hx()
-
-        util.logger.debug(f"next_leader({next_leader})")
-        complained = unconfirmed_block.header.complained and self.epoch.complained_result
-        self.__channel_service.reset_leader(new_leader_id=next_leader, complained=complained)
-
     def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
             raise InvalidUnconfirmedBlock("The unconfirmed block has height already added.")
@@ -285,13 +262,14 @@ class BlockManager:
     def __validate_epoch_of_unconfirmed_block(self, unconfirmed_block: Block, round_: int):
         current_state = self.__channel_service.state_machine.state
         block_header = unconfirmed_block.header
+        last_u_block = self.blockchain.last_unconfirmed_block
 
         if self.epoch.height == block_header.height and self.epoch.round < round_:
             raise InvalidUnconfirmedBlock(
                 f"The unconfirmed block has invalid round. Expected({self.epoch.round}), Unconfirmed_block({round_})")
 
         if not self.epoch.complained_result:
-            if self.blockchain.last_unconfirmed_block and self.blockchain.last_unconfirmed_block.header.prep_changed:
+            if last_u_block and (last_u_block.header.hash == block_header.hash or last_u_block.header.prep_changed):
                 # TODO do not validate epoch in this case.
                 expected_leader = block_header.peer_id.hex_hx()
             else:
@@ -299,8 +277,8 @@ class BlockManager:
 
             if expected_leader != block_header.peer_id.hex_hx():
                 raise UnexpectedLeader(
-                    f"The unconfirmed block is made by an unexpected leader. "
-                    f"Expected({self.epoch.leader_id}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
+                    f"The unconfirmed block({block_header.hash}) is made by an unexpected leader. "
+                    f"Expected({expected_leader}), Unconfirmed_block({block_header.peer_id.hex_hx()})")
 
         if current_state == 'LeaderComplain' and self.epoch.leader_id == block_header.peer_id.hex_hx():
             raise InvalidUnconfirmedBlock(f"The unconfirmed block is made by complained leader.\n{block_header})")
@@ -316,10 +294,17 @@ class BlockManager:
         self.__validate_duplication_of_unconfirmed_block(unconfirmed_block)
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
+
+        # TODO After the v0.4 update, remove this version parsing.
+        if parse_version(unconfirmed_block.header.version) >= parse_version("0.4"):
+            ratio = conf.VOTING_RATIO
+        else:
+            ratio = conf.LEADER_COMPLAIN_RATIO
+
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
             leader_votes = LeaderVotes(
-                reps, conf.LEADER_COMPLAIN_RATIO, unconfirmed_block.header.height,
+                reps, ratio, unconfirmed_block.header.height,
                 None, unconfirmed_block.body.leader_votes)
             need_to_confirm = leader_votes.get_result() is None
         elif unconfirmed_block.body.confirm_prev_block:
@@ -339,7 +324,7 @@ class BlockManager:
 
                 self.blockchain.last_unconfirmed_block = unconfirmed_block
         except BlockchainError as e:
-            logging.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
+            util.logger.warning(f"BlockchainError while confirm_block({e}), retry block_height_sync")
             self.__channel_service.state_machine.block_sync()
             raise InvalidUnconfirmedBlock(e)
 
@@ -394,7 +379,7 @@ class BlockManager:
                 self.__block_height_future = self.__block_height_thread_pool.submit(self.__block_height_sync)
                 self.__block_height_future.add_done_callback(_print_exception)
             else:
-                logging.warning('Tried block_height_sync. But failed. The thread is already running')
+                util.logger.warning('Tried block_height_sync. But failed. The thread is already running')
 
             return need_to_sync, self.__block_height_future
 
@@ -416,23 +401,24 @@ class BlockManager:
             block_height=block_height,
             channel=self.__channel_name
         ), conf.GRPC_TIMEOUT)
-        try:
-            block = self.blockchain.block_loads(response.block)
-        except Exception as e:
-            traceback.print_exc()
-            raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
-        votes_dumped: bytes = response.confirm_info
-        try:
-            votes_serialized = json.loads(votes_dumped)
-            votes = BlockVotes.deserialize_votes(votes_serialized)
-        except json.JSONDecodeError:
-            votes = votes_dumped
+        if response.response_code == message_code.Response.fail_no_confirm_info:
+            raise NoConfirmInfo(f"The peer has not confirm_info of the block by height({block_height}).")
+        else:
+            try:
+                block = self.blockchain.block_loads(response.block)
+            except Exception as e:
+                traceback.print_exc()
+                raise exception.BlockError(f"Received block is invalid: original exception={e}")
 
-        return (
-            block, response.max_block_height, response.unconfirmed_block_height,
-            votes, response.response_code
-        )
+            votes_dumped: bytes = response.confirm_info
+            try:
+                votes_serialized = json.loads(votes_dumped)
+                votes = BlockVotes.deserialize_votes(votes_serialized)
+            except json.JSONDecodeError:
+                votes = votes_dumped
+
+        return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
     def __block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
@@ -441,6 +427,9 @@ class BlockManager:
             RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
         last_block = rs_client.call(RestMethod.GetLastBlock)
+        if not last_block:
+            raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
+
         max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
@@ -464,7 +453,8 @@ class BlockManager:
                 Timer(
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
-                    callback=self.block_height_sync
+                    callback=self.block_height_sync,
+                    is_repeat=True
                 )
             )
 
@@ -497,8 +487,7 @@ class BlockManager:
             return self.blockchain.block_height
 
     def __add_block_by_sync(self, block_, confirm_info=None):
-        logging.debug(f"block_manager.py >> block_height_sync :: "
-                      f"height({block_.header.height}) hash({block_.header.hash})")
+        util.logger.debug(f"__add_block_by_sync :: height({block_.header.height}) hash({block_.header.hash})")
 
         block_version = self.blockchain.block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner, raise_exceptions=False)
@@ -524,13 +513,18 @@ class BlockManager:
             else:
                 raise exc
 
+        if parse_version(block_.header.version) >= parse_version("0.3"):
+            reps = reps_getter(block_.header.reps_hash)
+            round_ = next(vote for vote in confirm_info if vote).round_
+            votes = BlockVotes(reps, conf.VOTING_RATIO, block_.header.height, round_, block_.header.hash, confirm_info)
+            votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __confirm_prev_block_by_sync(self, block_):
         prev_block = self.blockchain.last_unconfirmed_block
         confirm_info = block_.body.confirm_prev_block
 
-        logging.debug(f"block_manager.py >> block_height_sync :: height({prev_block.header.height})")
+        util.logger.debug(f"confirm_prev_block_by_sync :: height({prev_block.header.height})")
 
         block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
         block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
@@ -553,7 +547,6 @@ class BlockManager:
         :param max_height:
         :return: my_height, max_height
         """
-        peer_stubs_len = len(peer_stubs)
         peer_index = 0
         retry_number = 0
 
@@ -561,17 +554,21 @@ class BlockManager:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_stub = peer_stubs[peer_index]
+            peer_target, peer_stub = peer_stubs[peer_index]
+            util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
                     self.__block_request(peer_stub, my_height + 1)
+            except NoConfirmInfo as e:
+                util.logger.warning(f"{e}")
+                response_code = message_code.Response.fail_no_confirm_info
             except Exception as e:
-                logging.warning("There is a bad peer, I hate you: " + str(e))
+                util.logger.warning("There is a bad peer, I hate you: " + str(e))
                 traceback.print_exc()
                 response_code = message_code.Response.fail
 
             if response_code == message_code.Response.success:
-                logging.debug(f"try add block height: {block.header.height}")
+                util.logger.debug(f"try add block height: {block.header.height}")
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
                 if max_block_height > max_height:
@@ -600,37 +597,42 @@ class BlockManager:
 
                 except KeyError as e:
                     result = False
-                    logging.error("fail block height sync: " + str(e))
+                    util.logger.error("fail block height sync: " + str(e))
                     break
                 except exception.BlockError:
                     util.exit_and_msg("Block Error Clear all block and restart peer.")
                     break
+                except Exception as e:
+                    result = False
+                    util.logger.warning("fail block height sync: " + str(e))
+
+                    self.__block_height_sync_bad_targets[peer_target] = max_block_height
+                    break
                 finally:
-                    peer_index = (peer_index + 1) % peer_stubs_len
+                    peer_index = (peer_index + 1) % len(peer_stubs)
                     if result:
                         my_height += 1
                         retry_number = 0
                     else:
                         retry_number += 1
-                        logging.warning(f"Block height({my_height}) synchronization is fail. "
-                                        f"{retry_number}/{conf.BLOCK_SYNC_RETRY_NUMBER}")
+                        util.logger.warning(
+                            f"Block height({my_height}) synchronization is fail. "
+                            f"{retry_number}/{conf.BLOCK_SYNC_RETRY_NUMBER}")
                         if retry_number >= conf.BLOCK_SYNC_RETRY_NUMBER:
                             util.exit_and_msg(f"This peer already tried to synchronize {my_height} block "
                                               f"for max retry number({conf.BLOCK_SYNC_RETRY_NUMBER}). "
                                               f"Peer will be down.")
             else:
-                logging.warning(f"Not responding peer({peer_stub}) is removed from the peer stubs target.")
-                if peer_stubs_len == 1:
+                if len(peer_stubs) == 1:
                     raise ConnectionError
-                del peer_stubs[peer_index]
-                peer_stubs_len -= 1
-                peer_index %= peer_stubs_len  # If peer_index is last index, go to first
+
+                peer_index = (peer_index + 1) % len(peer_stubs)
 
         return my_height, max_height
 
     def __block_height_sync(self):
         def _handle_exception(e):
-            logging.warning(f"exception during block_height_sync :: {type(e)}, {e}")
+            util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
             traceback.print_exc()
             self.__start_block_height_sync_timer()
 
@@ -671,8 +673,9 @@ class BlockManager:
             util.logger.debug(f"block_manager:block_height_sync is complete.")
             self.__channel_service.state_machine.complete_sync()
         else:
-            logging.warning(f"it's not completed block height synchronization in once ...\n"
-                            f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
+            util.logger.warning(
+                f"it's not completed block height synchronization in once ...\n"
+                f"try block_height_sync again... my_height({my_height}) in channel({self.__channel_name})")
             self.__channel_service.state_machine.block_sync()
 
         return True
@@ -685,7 +688,7 @@ class BlockManager:
 
         block = self.blockchain.last_block
 
-        if block.header.prep_changed:
+        if block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
             reps_hash = (block.header.revealed_next_reps_hash
@@ -712,12 +715,13 @@ class BlockManager:
         else:
             return block.header.next_leader.hex_hx()
 
-    def __get_peer_stub_list(self):
+    def __get_peer_stub_list(self) -> Tuple[int, int, List[Tuple]]:
         """It updates peer list for block manager refer to peer list on the loopchain network.
         This peer list is not same to the peer list of the loopchain network.
 
         :return max_height: a height of current blockchain
-        :return peer_stubs: current peer list on the loopchain network
+        :return unconfirmed_block_height: unconfirmed_block_height on the network
+        :return peer_stubs: current peer list on the network (target, peer_stub)
         """
         max_height = -1      # current max height
         unconfirmed_block_height = -1
@@ -725,17 +729,17 @@ class BlockManager:
 
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
             rs_client = ObjectManager().channel_service.rs_client
-            peer_stubs.append(rs_client)
-            last_block = rs_client.call(RestMethod.GetLastBlock)
-            try:
-                max_height = self.blockchain.block_versioner.get_height(last_block)
-            except Exception as e:
-                util.exit_and_msg(f"The server is not ready! Please try again after a while.")
-
+            status_response = rs_client.call(RestMethod.Status)
+            max_height = status_response['block_height']
+            peer_stubs.append((rs_client.target, rs_client))
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
+        self.__block_height_sync_bad_targets = {k: v for k, v in self.__block_height_sync_bad_targets.items()
+                                                if v > self.blockchain.block_height}
+        util.logger.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
         peer_target = ChannelProperty().peer_target
+        my_height = self.blockchain.block_height
 
         if self.blockchain.last_block:
             reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
@@ -743,35 +747,35 @@ class BlockManager:
             reps_hash = self.__channel_service.peer_manager.prepared_reps_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
         target_list = list(rep_targets.values())
-
         for target in target_list:
-            if target != peer_target:
-                logging.debug(f"try to target({target})")
-                channel = GRPCHelper().create_client_channel(target)
-                stub = loopchain_pb2_grpc.PeerServiceStub(channel)
-                try:
-                    response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                        request="block_sync",
-                        channel=self.__channel_name,
-                    ), conf.GRPC_TIMEOUT_SHORT)
+            if target == peer_target:
+                continue
+            if target in self.__block_height_sync_bad_targets:
+                continue
+            util.logger.debug(f"try to target({target})")
+            channel = GRPCHelper().create_client_channel(target)
+            stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+            try:
+                response = stub.GetStatus(loopchain_pb2.StatusRequest(
+                    request='block_sync',
+                    channel=self.__channel_name,
+                ), conf.GRPC_TIMEOUT_SHORT)
+                target_block_height = max(response.block_height, response.unconfirmed_block_height)
 
-                    latest_block_height = max(response.block_height, response.unconfirmed_block_height)
+                if target_block_height > my_height:
+                    peer_stubs.append((target, stub))
+                    max_height = max(max_height, target_block_height)
+                    unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
 
-                    if latest_block_height > max_height:
-                        # Add peer as higher than this
-                        max_height = latest_block_height
-                        unconfirmed_block_height = response.unconfirmed_block_height
-                        peer_stubs.append(stub)
-
-                except Exception as e:
-                    logging.warning(f"This peer has already been removed from the block height target node. {e}")
+            except Exception as e:
+                util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
-        logging.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
+        util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
     def stop(self):
         # for reuse key value store when restart channel.
@@ -820,7 +824,7 @@ class BlockManager:
             timestamp=util.get_time_stamp()
         )
 
-        logging.info(f"FailLeaderVote : to {leader_vote.old_leader}, round({leader_vote.round_})")
+        util.logger.info(f"FailLeaderVote : to {leader_vote.old_leader}, round({leader_vote.round_})")
         fail_vote_dumped = json.dumps(fail_vote.serialize())
         request = loopchain_pb2.ComplainLeaderRequest(
             complain_vote=fail_vote_dumped,
@@ -871,7 +875,7 @@ class BlockManager:
             new_leader=ExternalAddress.fromhex_address(new_leader_id),
             timestamp=util.get_time_stamp()
         )
-        logging.info(
+        util.logger.info(
             f"LeaderVote : old_leader({complained_leader_id}), new_leader({new_leader_id}), round({self.epoch.round})")
         self.add_complain(leader_vote)
 
@@ -893,7 +897,7 @@ class BlockManager:
                                                                       reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
-        logging.debug(f"block_manager:vote_unconfirmed_block ({self.channel_name}/{is_validated})")
+        util.logger.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
 
         vote = BlockVote.new(
             signer=ChannelProperty().peer_auth,
@@ -944,6 +948,7 @@ class BlockManager:
         prev_block = self.blockchain.get_prev_block(unconfirmed_block)
         reps_getter = self.blockchain.find_preps_addresses_by_roothash
 
+        util.logger.spam(f"prev_block: {prev_block.header.hash if prev_block else None}")
         if not prev_block:
             raise NotReadyToConfirmInfo(
                 "There is no prev block or not ready to confirm block (Maybe node is starting)")
@@ -953,7 +958,7 @@ class BlockManager:
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:
-            logging.warning(e)
+            util.logger.warning(e)
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
@@ -970,19 +975,24 @@ class BlockManager:
             block_verifier.verify(unconfirmed_block,
                                   self.blockchain.last_block,
                                   self.blockchain,
-                                  self.blockchain.get_expected_generator(unconfirmed_block.header.peer_id),
+                                  generator=self.blockchain.get_expected_generator(unconfirmed_block),
                                   reps_getter=reps_getter)
         except NotInReps as e:
             util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
+        except BlockHeightMismatch as e:
+            exc = e
+            util.logger.warning(f"Don't vote to the block of unexpected height.\n{e}")
         except Exception as e:
             exc = e
-            logging.error(e)
+            util.logger.error(e)
             traceback.print_exc()
         else:
             self.candidate_blocks.add_block(
                 unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
-            self._reset_leader(unconfirmed_block)
         finally:
+            if isinstance(exc, BlockHeightMismatch):
+                return
+
             is_validated = exc is None
             vote = self.vote_unconfirmed_block(unconfirmed_block, round_, is_validated)
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
@@ -1001,6 +1011,9 @@ class BlockManager:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
+            util.logger.warning(e)
+        except RoundMismatch as e:
+            self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
             util.logger.warning(e)
         except UnrecordedBlock as e:
             util.logger.info(e)

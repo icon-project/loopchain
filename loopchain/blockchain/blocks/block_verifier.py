@@ -17,13 +17,12 @@ from typing import TYPE_CHECKING, Callable
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.blockchain.exception import BlockVersionNotMatch, TransactionOutOfTimeBound
+from loopchain.blockchain.exception import BlockVersionNotMatch, BlockHeightMismatch, TransactionOutOfTimeBound
 from loopchain.blockchain.transactions import TransactionVerifier
-from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import SignVerifier
 
 if TYPE_CHECKING:
-    from loopchain.blockchain.blocks import Block, BlockHeader
+    from loopchain.blockchain.blocks import Block, BlockHeader, BlockBuilder
     from loopchain.blockchain.transactions import TransactionVersioner
 
 
@@ -37,16 +36,15 @@ class BlockVerifier(ABC):
         self.exceptions = []
         self.invoke_func: Callable[['Block'], ('Block', dict)] = None
 
-    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
+    def verify(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
         self.verify_transactions(block, blockchain)
-        return self.verify_common(block, prev_block, generator, **kwargs)
+        return self.verify_common(block, prev_block, **kwargs)
 
-    def verify_loosely(self, block: 'Block', prev_block: 'Block',
-                       blockchain=None, generator: 'ExternalAddress'=None, **kwargs):
+    def verify_loosely(self, block: 'Block', prev_block: 'Block', blockchain=None, **kwargs):
         self.verify_transactions_loosely(block, blockchain)
-        return self.verify_common(block, prev_block, generator, **kwargs)
+        return self.verify_common(block, prev_block, **kwargs)
 
-    def verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
+    def verify_common(self, block: 'Block', prev_block: 'Block', **kwargs):
         header: BlockHeader = block.header
 
         if header.timestamp is None:
@@ -65,14 +63,14 @@ class BlockVerifier(ABC):
         if prev_block:
             self.verify_prev_block(block, prev_block)
 
-        return self._verify_common(block, prev_block, generator, **kwargs)
+        return self._verify_common(block, prev_block, **kwargs)
 
     @abstractmethod
     def verify_invoke(self, builder: 'BlockBuilder', block: 'Block', prev_block: 'Block'):
         raise NotImplementedError
 
     @abstractmethod
-    def _verify_common(self, block: 'Block', prev_block: 'Block', generator: 'ExternalAddress'=None, **kwargs):
+    def _verify_common(self, block: 'Block', prev_block: 'Block', **kwargs):
         raise NotImplementedError
 
     def verify_transactions(self, block: 'Block', blockchain=None):
@@ -102,9 +100,11 @@ class BlockVerifier(ABC):
 
     def verify_prev_block(self, block: 'Block', prev_block: 'Block'):
         if block.header.height != prev_block.header.height + 1:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                     f"Height({block.header.height}), "
-                                     f"Expected({prev_block.header.height + 1}).")
+            exception = BlockHeightMismatch(
+                f"Block({block.header.height}, {block.header.hash.hex()}, "
+                f"Height({block.header.height}), "
+                f"Expected({prev_block.header.height + 1})."
+            )
             self._handle_exception(exception)
 
         if block.header.prev_hash != prev_block.header.hash:
@@ -131,13 +131,6 @@ class BlockVerifier(ABC):
                                      f"{e}")
             self._handle_exception(exception)
 
-    def verify_generator(self, block: 'Block', generator: 'ExternalAddress'):
-        if block.header.peer_id != generator:
-            exception = RuntimeError(f"Block({block.header.height}, {block.header.hash.hex()}, "
-                                     f"Generator({block.header.peer_id.hex_xx()}), "
-                                     f"Expected({generator.hex_xx()}).")
-            self._handle_exception(exception)
-
     def _handle_exception(self, exception: Exception):
         if self._raise_exceptions:
             raise exception
@@ -146,6 +139,10 @@ class BlockVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner', raise_exceptions=True) -> 'BlockVerifier':
+        from . import v0_4
+        if version == v0_4.version:
+            return v0_4.BlockVerifier(tx_versioner, raise_exceptions)
+
         from . import v0_3
         if version == v0_3.version:
             return v0_3.BlockVerifier(tx_versioner, raise_exceptions)

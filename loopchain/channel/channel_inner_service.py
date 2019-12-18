@@ -1,16 +1,4 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""Channel Inner Service."""
 
 import json
 import multiprocessing as mp
@@ -21,10 +9,12 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
+from pkg_resources import parse_version
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
+from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
+                                   ScoreResponse)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *
@@ -34,7 +24,7 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
-from loopchain.protos import loopchain_pb2, message_code
+from loopchain.protos import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils.message_queue import StubCollection
 
@@ -52,12 +42,7 @@ class ChannelTxCreatorInnerTask:
                                                   self_target=peer_target,
                                                   is_multiprocessing=True)
         scheduler.start()
-
         self.__broadcast_scheduler = scheduler
-
-        scheduler.schedule_job(BroadcastCommand.SUBSCRIBE, peer_target,
-                               block=True, block_timeout=conf.TIMEOUT_FOR_FUTURE)
-
         self.__qos_controller = QosController()
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
 
@@ -335,7 +320,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
                       crash_callback_in_join_thread=crash_callback_in_join_thread)
 
         self.__broadcast_scheduler = broadcast_scheduler
-        commands = (BroadcastCommand.SUBSCRIBE, BroadcastCommand.UNSUBSCRIBE)
+        commands = (BroadcastCommand.UPDATE_AUDIENCE,)
         broadcast_scheduler.add_schedule_listener(self.__broadcast_callback, commands=commands)
 
     def start(self, target, args=(), crash_callback_in_join_thread=None):
@@ -498,14 +483,16 @@ class ChannelInnerTask:
         return 'channel_hello'
 
     @message_queue_task
-    async def get_rs_target(self):
-        return ChannelProperty().rs_target
-
-    @message_queue_task
     async def announce_new_block(self, subscriber_block_height: int, subscriber_id: str):
         while True:
             my_block_height = self._blockchain.block_height
-            if subscriber_block_height >= my_block_height:
+            if subscriber_block_height > my_block_height:
+                logging.warning(f"subscriber's height({subscriber_block_height}) is higher "
+                                f"than this node's height({my_block_height}).")
+                self._channel_service.inner_service.notify_unregister()
+                error_msg = {"error": "Invalid block height from citizen."}
+                return json.dumps(error_msg), b''
+            elif subscriber_block_height == my_block_height:
                 async with self._citizen_condition_new_block:
                     await self._citizen_condition_new_block.wait()
 
@@ -514,7 +501,8 @@ class ChannelInnerTask:
 
             if new_block is None:
                 logging.warning(f"Cannot find block height({new_block_height})")
-                await asyncio.sleep(0.5)  # To prevent excessive occupancy of the CPU in an infinite loop
+                # To prevent excessive occupancy of the CPU in an infinite loop
+                await asyncio.sleep(2 * conf.INTERVAL_BLOCKGENERATION)
                 continue
 
             confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)
@@ -525,18 +513,17 @@ class ChannelInnerTask:
 
     @message_queue_task
     async def register_citizen(self, peer_id, target, connected_time):
-        if (len(self._citizens) >= conf.SUBSCRIBE_LIMIT
-                or self._channel_service.state_machine.state == 'BlockGenerate'):
-            return False
-        elif peer_id in self._citizens:
-            logging.warning(f"Already registered citizen({peer_id})")
-            return False
-        else:
+        register_condition = (len(self._citizens) < conf.SUBSCRIBE_LIMIT
+                              and (peer_id not in self._citizens)
+                              and not (conf.SAFE_BLOCK_BROADCAST and
+                                       self._channel_service.state_machine.state == 'BlockGenerate'))
+        if register_condition:
             new_citizen = self._CitizenInfo(peer_id, target, connected_time)
             self._citizens[peer_id] = new_citizen
             logging.info(f"register new citizen: {new_citizen}")
             logging.debug(f"remaining all citizens: {self._citizens}")
-            return True
+
+        return register_condition
 
     @message_queue_task
     async def unregister_citizen(self, peer_id):
@@ -570,11 +557,6 @@ class ChannelInnerTask:
         preps = self._blockchain.find_preps_by_roothash(new_reps_hash)
         return preps
 
-    @message_queue_task
-    def get_peer_list(self):
-        peer_manager = self._channel_service.peer_manager
-        return str(peer_manager.peer_list), str(peer_manager.peer_list)
-
     @message_queue_task(priority=255)
     async def get_status(self):
         status_data = dict()
@@ -583,15 +565,18 @@ class ChannelInnerTask:
 
         block_height = 0
         unconfirmed_block_height = None
+        peer_count = -1
         last_block = self._blockchain.last_block
         last_unconfirmed_block = self._blockchain.last_unconfirmed_block
 
         if last_block:
             block_height = last_block.header.height
+            peer_count = len(self._blockchain.find_preps_addresses_by_header(last_block.header))
 
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
+        status_data["nid"] = ChannelProperty().nid
         status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
         status_data["service_available"]: bool = \
@@ -609,7 +594,7 @@ class ChannelInnerTask:
         status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
-        status_data["peer_count"] = len(self._channel_service.peer_manager.peer_list)
+        status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["versions"] = conf.ICON_VERSIONS
@@ -749,14 +734,14 @@ class ChannelInnerTask:
 
     @message_queue_task
     def block_sync(self, block_hash, block_height):
-        response_message = None
+        response_code = None
         block: Block = None
         if block_hash != "":
             block = self._blockchain.find_block_by_hash(block_hash)
         elif block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
         else:
-            response_message = message_code.Response.fail_not_enough_data
+            response_code = message_code.Response.fail_not_enough_data
 
         if self._blockchain.last_unconfirmed_block is None:
             unconfirmed_block_height = -1
@@ -764,17 +749,19 @@ class ChannelInnerTask:
             unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
         if block is None:
-            if response_message is None:
-                response_message = message_code.Response.fail_wrong_block_hash
-            return response_message, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
+            if response_code is None:
+                response_code = message_code.Response.fail_wrong_block_hash
+            return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
-        if block.header.height <= self._blockchain.block_height:
+        if 0 < block.header.height <= self._blockchain.block_height:
             confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
+            if not confirm_info and parse_version(block.header.version) >= parse_version("0.3"):
+                response_code = message_code.Response.fail_no_confirm_info
+                return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
-        return \
-            message_code.Response.success, block.header.height, self._blockchain.block_height,\
-            unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block)
+        return (message_code.Response.success, block.header.height, self._blockchain.block_height,
+                unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block))
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def vote_unconfirmed_block(self, vote_dumped: str) -> None:
@@ -931,26 +918,6 @@ class ChannelInnerTask:
         tx_list, next_index = self._blockchain.get_tx_list_by_address(address=address, index=index)
 
         return tx_list, next_index
-
-    @message_queue_task
-    def get_score_status(self):
-        score_status = ""
-        try:
-            score_status_response = self._channel_service.score_stub.call(
-                "Request",
-                loopchain_pb2.Message(code=message_code.Request.status)
-            )
-
-            logging.debug("Get Score Status : " + str(score_status_response))
-
-        except Exception as e:
-            logging.debug("Score Service Already stop by other reason. %s", e)
-
-        else:
-            if score_status_response.code == message_code.Response.success:
-                score_status = score_status_response.meta
-
-        return score_status
 
     @message_queue_task
     async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:

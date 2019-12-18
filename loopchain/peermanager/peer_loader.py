@@ -33,16 +33,10 @@ class PeerLoader:
 
     @staticmethod
     def load(peer_manager: 'PeerManager'):
-        if not peer_manager.peer_list:
-            if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
-                PeerLoader._load_peers_from_file(peer_manager)
-            else:
-                PeerLoader._load_peers_from_rest_call(peer_manager)
-
-            utils.logger.debug(f"show_peers ({ChannelProperty().name}): ")
-            for peer_id in list(peer_manager.peer_list):
-                peer = peer_manager.peer_list[peer_id]
-                utils.logger.debug(f"peer_target: {peer.order}:{peer.target}")
+        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+            PeerLoader._load_peers_from_file(peer_manager)
+        else:
+            PeerLoader._load_peers_from_rest_call(peer_manager)
 
     @staticmethod
     def _load_peers_from_file(peer_manager: 'PeerManager'):
@@ -55,13 +49,13 @@ class PeerLoader:
     @staticmethod
     def _load_peers_from_rest_call(peer_manager: 'PeerManager'):
         rs_client = ObjectManager().channel_service.rs_client
-        is_block_version_0_3 = PeerLoader._is_block_version_0_3(rs_client)
         crep_root_hash = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
 
-        if is_block_version_0_3 and crep_root_hash:
-            return PeerLoader._get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash)
+        if not crep_root_hash:
+            logging.error(f"There's no crep_root_hash to initialize.")
+            return
 
-        return PeerLoader._get_reps_by_channel_infos_call(peer_manager, rs_client)
+        return PeerLoader._get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash)
 
     @staticmethod
     def _get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash):
@@ -73,23 +67,3 @@ class PeerLoader:
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
             peer_manager.add_peer(peer)
-
-    @staticmethod
-    def _get_reps_by_channel_infos_call(peer_manager, rs_client):
-        response = rs_client.call(RestMethod.GetChannelInfos)
-        logging.debug(f"response of GetChannelInfos: {response}")
-        reps: list = response['channel_infos'][ChannelProperty().name].get('peers')
-        if reps is None:
-            logging.error(f"There's no peer list to initialize.")
-            return
-
-        for peer_info in reps:
-            peer_manager.add_peer(peer_info)
-
-    @staticmethod
-    def _is_block_version_0_3(rs_client) -> bool:
-        version = rs_client.call(RestMethod.GetLastBlock).get('version')
-        if version is not None:
-            return version == '0.3'
-        else:
-            return False
