@@ -1,12 +1,11 @@
 """A management class for radiostation node pool"""
 
-import asyncio
+import concurrent
 import logging
-from typing import Optional, Sequence, Iterator, Dict
-from urllib.parse import urlparse
-
 import time
 from itertools import cycle
+from typing import Optional, Sequence, Iterator, Dict
+from urllib.parse import urlparse
 
 from loopchain import utils, configure as conf
 from loopchain.baseservice.rest_client import RestMethod, RestClient
@@ -19,21 +18,19 @@ class NodePool:
         self._target: Optional[str] = None
         self._nearest_targets: Optional[Iterator] = None
 
-        loop = asyncio.get_event_loop()
-        loop.create_task(self._find())
-
     @property
     def target(self):
         return self._target
 
-    async def _find(self):
-        while True:
-            endpoints = self._get_all_endpoints()
-            self._nearest_targets = await self._find_nearest_endpoints(endpoints)
-            if self._nearest_targets:
-                min_latency_target = next(self._nearest_targets)['target']  # get first target
-                self._set_target(min_latency_target)
-            await asyncio.sleep(conf.CONNECTION_RETRY_TIMEOUT)
+    def find(self):
+        endpoints = self._get_all_endpoints()
+
+        self._nearest_targets = self._find_nearest_endpoints(endpoints)
+        print("nearst: ", self._nearest_targets)
+
+        if self._nearest_targets:
+            min_latency_target = next(self._nearest_targets)['target']  # get first target
+            self._set_target(min_latency_target)
 
     def find_next(self):
         next_target = next(self._nearest_targets)['target']
@@ -50,9 +47,13 @@ class NodePool:
             raise RuntimeError(f"no configurations for radiostations.")
 
         endpoints = utils.convert_local_ip_to_private_ip(endpoints)
+
+        if self._target and len(endpoints) > 1:
+            endpoints.remove(self._target)
+
         return endpoints
 
-    async def _find_nearest_endpoints(self, endpoints: Sequence[str]) -> Optional[Iterator[Dict]]:
+    def _find_nearest_endpoints(self, endpoints: Sequence[str]) -> Optional[Iterator[Dict]]:
         """select fastest endpoint with conditions below
         1. Maximum block height (highest priority)
         2. Minimum elapsed response time
@@ -61,8 +62,10 @@ class NodePool:
         :param endpoints: list of endpoints information
         :return: the fastest endpoint target "{scheme}://{netloc}"
         """
-        results = await asyncio.gather(*[self._fetch_status(endpoint) for endpoint in endpoints],
-                                       return_exceptions=True)
+
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            results = pool.map(self._fetch_status, endpoints)
+
         results = [result for result in results if isinstance(result, dict)]  # to filter exceptions
 
         if not results:
@@ -79,9 +82,9 @@ class NodePool:
         normalized_target = utils.normalize_request_url(min_latency_target)
         return f"{urlparse(normalized_target).scheme}://{urlparse(normalized_target).netloc}"
 
-    async def _fetch_status(self, endpoint: str) -> Optional[Dict]:
+    def _fetch_status(self, endpoint: str) -> Optional[Dict]:
         start_time = time.time()
-        response = await self._rest_client.call_async(endpoint, RestMethod.Status, conf.REST_TIMEOUT)
+        response = self._rest_client.call(endpoint, RestMethod.Status, conf.REST_TIMEOUT)
         if response.get('state') not in ("Vote", "LeaderComplain", "Watch"):
             return None
 
