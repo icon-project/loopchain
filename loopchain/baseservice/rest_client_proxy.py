@@ -15,7 +15,7 @@ class RestClientProxy:
         try:
             return self.rest_client.call(uri, method, params, timeout)
         except Exception:
-            self.node_pool.find_next()
+            self.node_pool.find()
             raise
 
     async def call_async(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
@@ -23,5 +23,5 @@ class RestClientProxy:
         try:
             return await self.rest_client.call_async(uri, method, params, timeout)
         except Exception:
-            self.node_pool.find_next()
+            self.node_pool.find()
             raise

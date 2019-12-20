@@ -2,10 +2,10 @@
 
 import concurrent
 import logging
-import time
-from itertools import cycle
-from typing import Optional, Sequence, Iterator, Dict
+from typing import Optional, Sequence, Dict
 from urllib.parse import urlparse
+
+import time
 
 from loopchain import utils, configure as conf
 from loopchain.baseservice.rest_client import RestMethod, RestClient
@@ -16,7 +16,7 @@ class NodePool:
         self.channel = channel
         self._rest_client = RestClient(channel)
         self._target: Optional[str] = None
-        self._nearest_targets: Optional[Iterator] = None
+        self.find()
 
     @property
     def target(self):
@@ -24,18 +24,10 @@ class NodePool:
 
     def find(self):
         endpoints = self._get_all_endpoints()
+        nearest = self._find_nearest(endpoints)
 
-        self._nearest_targets = self._find_nearest_endpoints(endpoints)
-        print("nearst: ", self._nearest_targets)
-
-        if self._nearest_targets:
-            min_latency_target = next(self._nearest_targets)['target']  # get first target
-            self._set_target(min_latency_target)
-
-    def find_next(self):
-        next_target = next(self._nearest_targets)['target']
-        logging.debug(f"switching target from({self._target}) to({next_target})")
-        self._set_target(next_target)
+        if nearest:
+            self._set_target(nearest['target'])
 
     def _set_target(self, target):
         self._target = self._normalize_target(target)
@@ -49,11 +41,15 @@ class NodePool:
         endpoints = utils.convert_local_ip_to_private_ip(endpoints)
 
         if self._target and len(endpoints) > 1:
-            endpoints.remove(self._target)
+            try:
+                old_target = urlparse(self._target).netloc
+                endpoints.remove(old_target)
+            except ValueError:
+                pass
 
         return endpoints
 
-    def _find_nearest_endpoints(self, endpoints: Sequence[str]) -> Optional[Iterator[Dict]]:
+    def _find_nearest(self, endpoints: Sequence[str]) -> Optional[Dict]:
         """select fastest endpoint with conditions below
         1. Maximum block height (highest priority)
         2. Minimum elapsed response time
@@ -74,8 +70,8 @@ class NodePool:
 
         # sort results by min elapsed_time with max block height
         sorted_result = sorted(results, key=lambda k: (-k['height'], k['elapsed_time']))
-        utils.logger.spam(f"nearest_endpoints: {sorted_result}, len({sorted_result})")
-        return cycle(sorted_result)
+        utils.logger.spam(f"near_endpoints: {sorted_result}, len({len(sorted_result)})")
+        return sorted_result[0]
 
     @staticmethod
     def _normalize_target(min_latency_target):
@@ -84,8 +80,11 @@ class NodePool:
 
     def _fetch_status(self, endpoint: str) -> Optional[Dict]:
         start_time = time.time()
-        response = self._rest_client.call(endpoint, RestMethod.Status, conf.REST_TIMEOUT)
-        if response.get('state') not in ("Vote", "LeaderComplain", "Watch"):
+        try:
+            response = self._rest_client.call(endpoint, RestMethod.Status, conf.REST_TIMEOUT)
+            if response.get('state') not in ("Vote", "LeaderComplain", "Watch"):
+                return None
+        except Exception:
             return None
 
         return {
