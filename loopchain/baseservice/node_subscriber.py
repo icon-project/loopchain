@@ -188,7 +188,8 @@ class NodeSubscriber:
                 self._exception = AnnounceNewBlockError(f"error: {type(e)}, message: {str(e)}")
             else:
                 logging.debug(f"add_confirmed_block height({confirmed_block.header.height}), "
-                              f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped})")
+                              f"hash({confirmed_block.header.hash.hex()}), votes_dumped({votes_dumped}), "
+                              f"from({self._target_uri})")
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
             finally:

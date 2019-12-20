@@ -67,7 +67,7 @@ class BlockManager:
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.__service_status = status_code.Service.online
-        self._rest_client = RestClientProxy(self.__channel_name)
+        self._rest_client = None
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
@@ -201,6 +201,7 @@ class BlockManager:
     async def relay_all_txs(self):
         items = list(self.__txQueue.d.values())
         self.__txQueue.d.clear()
+        rest_client = RestClientProxy(ChannelProperty().name)
 
         for item in items:
             tx = item.value
@@ -219,7 +220,7 @@ class BlockManager:
             raw_data["from_"] = raw_data.pop("from")
             for i in range(conf.RELAY_RETRY_TIMES):
                 try:
-                    await self._rest_client.call_async(
+                    await rest_client.call_async(
                         method=rest_method,
                         params=rest_method.value.params(**raw_data)
                     )
@@ -384,7 +385,7 @@ class BlockManager:
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height)
+            return self.__block_request_by_citizen(block_height, peer_stub)
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -411,12 +412,12 @@ class BlockManager:
 
         return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
-    def __block_request_by_citizen(self, block_height):
-        get_block_result = self._rest_client.call(
+    def __block_request_by_citizen(self, block_height, rest_client):
+        get_block_result = rest_client.call(
             method=RestMethod.GetBlockByHeight,
             params=RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
-        last_block = self._rest_client.call(method=RestMethod.GetLastBlock)
+        last_block = rest_client.call(method=RestMethod.GetLastBlock)
         if not last_block:
             raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
 
@@ -710,9 +711,10 @@ class BlockManager:
         peer_stubs = []     # peer stub list for block height synchronization
 
         if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            status_response = self._rest_client.call(method=RestMethod.Status)
+            rest_client = RestClientProxy(ChannelProperty().name)
+            status_response = rest_client.call(method=RestMethod.Status)
             max_height = status_response['block_height']
-            peer_stubs.append((self._rest_client.node_pool.target, self._rest_client))
+            peer_stubs.append((rest_client.node_pool.target, rest_client))
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network

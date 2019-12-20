@@ -386,7 +386,7 @@ class ChannelService:
                 return
 
             if exc:
-                self.__node_pool.find_next()
+                self.__node_pool.find()
                 if (self.__state_machine.state != "SubscribeNetwork"
                         or isinstance(exc, UnregisteredException)):
                     self.__state_machine.subscribe_network()
