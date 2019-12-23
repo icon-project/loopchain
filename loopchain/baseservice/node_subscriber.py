@@ -123,7 +123,8 @@ class NodeSubscriber:
             await self.close()
             raise
         else:
-            logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
+            logging.debug(f"successfully registered as citizen, with id({ChannelProperty().peer_id})")
+            self._subscribe_event.set()
 
     async def _subscribe_request(self, block_height):
         request = Request(
@@ -197,10 +198,6 @@ class NodeSubscriber:
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
             self._exception = exception
-
-        if not self._subscribe_event.is_set():
-            # set subscribe_event to transit the state to Watch.
-            self._subscribe_event.set()
 
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
