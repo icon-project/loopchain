@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Block chain class with authorized blocks only"""
 
 import json
@@ -637,10 +624,11 @@ class BlockChain:
         else:
             utils.logger.debug(f"This block({block.header.hash}) is trying to add without confirm_info.")
 
-        if block.header.prev_hash:
-            prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
-            prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
-            batch.delete(prev_block_confirm_info_key)
+        if self.__last_block and self.__last_block.header.prev_hash:
+            # Delete confirm info to avoid data duplication.
+            block_hash_encoded = self.__last_block.header.prev_hash.hex().encode("utf-8")
+            block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + block_hash_encoded
+            batch.delete(block_confirm_info_key)
 
         batch.write()
 
