@@ -146,7 +146,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 [Reward Calculator]: https://github.com/icon-project/rewardcalculator
 [virtualenv]: https://virtualenv.pypa.io/en/stable/
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
-[install loopchain via snap]: https://snapcraft.io/loopchain
+[install loopchain via snap]: citizen/quick_start_snap.md
 
 <!--Relative links-->
 [Run Citizen Node on ICON Testnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network
