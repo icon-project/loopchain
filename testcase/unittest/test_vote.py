@@ -15,16 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Vote Object"""
-import os
-import logging
-import unittest
 import hashlib
-import testcase.unittest.test_util as test_util
+import logging
+import os
+import unittest
 
-from loopchain.crypto.signature import Signer
+import testcase.unittest.test_util as test_util
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes import vote, votes
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes, LeaderVote, LeaderVotes
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)

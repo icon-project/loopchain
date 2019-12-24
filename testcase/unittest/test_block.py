@@ -20,8 +20,9 @@ import json
 import logging
 import os
 import random
-import sys
 import unittest
+
+import sys
 
 import testcase.unittest.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet

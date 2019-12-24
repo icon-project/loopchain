@@ -15,15 +15,14 @@
 
 from collections import OrderedDict
 
-from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
+from loopchain.blockchain.blocks.v0_4 import BlockSerializer
 from loopchain.blockchain.blocks.v0_5 import BlockHeader, BlockBody
 from loopchain.blockchain.transactions import TransactionSerializer
-from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
 from loopchain.blockchain.votes import v0_1a
 from loopchain.blockchain.votes.v0_5 import BlockVotes, LeaderVotes
 
 
-class BlockSerializer(BaseBlockSerializer):
+class BlockSerializer(BlockSerializer):
     version = BlockHeader.version
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
@@ -66,66 +65,6 @@ class BlockSerializer(BaseBlockSerializer):
             "leader": header.peer_id.hex_hx(),
             "signature": header.signature.to_base64str(),
             "nextLeader": header.next_leader.hex_xx(),
-        }
-
-    def _deserialize_header_data(self, json_data: dict):
-        hash_ = Hash32.fromhex(json_data["hash"])
-
-        prev_hash = json_data.get('prevHash')
-        prev_hash = Hash32.fromhex(prev_hash) if prev_hash else None
-
-        peer_id = json_data.get('leader')
-        peer_id = ExternalAddress.fromhex(peer_id) if peer_id else None
-
-        signature = json_data.get('signature')
-        signature = Signature.from_base64str(signature) if signature else None
-
-        next_leader = json_data.get("nextLeader")
-        next_leader = ExternalAddress.fromhex(next_leader) if next_leader else None
-
-        transactions_hash = json_data["transactionsHash"]
-        transactions_hash = Hash32.fromhex(transactions_hash)
-
-        receipts_hash = json_data["receiptsHash"]
-        receipts_hash = Hash32.fromhex(receipts_hash)
-
-        state_hash = json_data["stateHash"]
-        state_hash = Hash32.fromhex(state_hash)
-
-        reps_hash = json_data["repsHash"]
-        reps_hash = Hash32.fromhex(reps_hash)
-
-        next_reps_hash = json_data["nextRepsHash"]
-        next_reps_hash = Hash32.fromhex(next_reps_hash)
-
-        leader_votes_hash = json_data["leaderVotesHash"]
-        leader_votes_hash = Hash32.fromhex(leader_votes_hash)
-
-        prev_votes_hash = json_data["prevVotesHash"]
-        prev_votes_hash = Hash32.fromhex(prev_votes_hash)
-
-        height = json_data["height"]
-        height = int(height, 16)
-
-        timestamp = json_data["timestamp"]
-        timestamp = int(timestamp, 16)
-
-        return {
-            "hash": hash_,
-            "prev_hash": prev_hash,
-            "height": height,
-            "timestamp": timestamp,
-            "peer_id": peer_id,
-            "signature": signature,
-            "next_leader": next_leader,
-            "transactions_hash": transactions_hash,
-            "receipts_hash": receipts_hash,
-            "state_hash": state_hash,
-            "reps_hash": reps_hash,
-            "next_reps_hash": next_reps_hash,
-            "leader_votes_hash": leader_votes_hash,
-            "prev_votes_hash": prev_votes_hash,
-            "logs_bloom": BloomFilter.fromhex(json_data["logsBloom"])
         }
 
     def _deserialize_body_data(self, json_data: dict):
