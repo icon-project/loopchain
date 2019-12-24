@@ -164,7 +164,8 @@ class NodeSubscriber:
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
-            vote = BlockVotes.deserialize_votes(votes_serialized)
+            votes_class = utils.get_vote_class_by_version(block_dict["version"])["BlockVotes"]
+            vote = votes_class.deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
             vote = votes_dumped
         blockchain = ObjectManager().channel_service.block_manager.blockchain

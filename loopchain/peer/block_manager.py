@@ -522,7 +522,14 @@ class BlockManager:
         if parse_version(block_.header.version) >= parse_version("0.3"):
             reps = reps_getter(block_.header.reps_hash)
             round_ = next(vote for vote in confirm_info if vote).round
-            votes = BlockVotes(reps, conf.VOTING_RATIO, block_.header.height, round_, block_.header.hash, confirm_info)
+            votes = util.get_vote_class_by_version(block_.header.version)["BlockVotes"](
+                reps,
+                conf.VOTING_RATIO,
+                block_.header.height,
+                round_,
+                block_.header.hash,
+                confirm_info
+            )
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 

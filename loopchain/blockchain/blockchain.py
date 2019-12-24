@@ -625,7 +625,8 @@ class BlockChain:
 
         if confirm_info:
             if isinstance(confirm_info, list):
-                confirm_info = json.dumps(BlockVotes.serialize_votes(confirm_info))
+                votes_class = utils.get_vote_class_by_version(block.header.version)["BlockVotes"]
+                confirm_info = json.dumps(votes_class.serialize_votes(confirm_info))
             if isinstance(confirm_info, str):
                 confirm_info = confirm_info.encode('utf-8')
             batch.put(
