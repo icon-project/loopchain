@@ -21,22 +21,22 @@ import os
 import re
 import signal
 import socket
-import sys
-import time
 import timeit
 import traceback
-from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
-from typing import Tuple, Optional, Union
+from typing import Tuple, Union, Dict
 
+import sys
+import time
 import verboselogs
+from binascii import unhexlify
 from fluent import event
 
 from loopchain import configure as conf
-from loopchain.protos import loopchain_pb2, message_code
+from loopchain.protos import message_code
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 
@@ -525,6 +525,23 @@ def create_invoke_result_specific_case(confirmed_transaction_list, invoke_result
     for tx in confirmed_transaction_list:
         invoke_results[tx.tx_hash] = invoke_result
     return invoke_results
+
+
+def get_vote_class_by_version(version: str) -> Dict:
+    from pkg_resources import parse_version
+    version = parse_version(version)
+
+    from loopchain.blockchain.votes import v0_5
+    if version >= parse_version("0.5"):
+        return {
+            "BlockVote": v0_5.BlockVote, "BlockVotes": v0_5.BlockVotes,
+            "LeaderVote": v0_5.LeaderVote, "LeaderVotes": v0_5.LeaderVotes}
+
+    from loopchain.blockchain.votes import v0_1a
+    if version >= parse_version("0.1a"):
+        return {
+            "BlockVote": v0_1a.BlockVote, "BlockVotes": v0_1a.BlockVotes,
+            "LeaderVote": v0_1a.LeaderVote, "LeaderVotes": v0_1a.LeaderVotes}
 
 
 if not conf.MONITOR_LOG:

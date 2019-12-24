@@ -234,7 +234,7 @@ message PrecommitBlockReply {
 //[Peer&BlockGenerator] for send Block, this message type shared in AnnounceUnconfirmedBlock and SendConfirmedBlock
 message BlockSend {
     required bytes block = 1;
-    required int32 round_ = 2;
+    required int32 round = 2;
     optional string channel = 3; // channel ID for multichain network
 }
 

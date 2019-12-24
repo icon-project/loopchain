@@ -122,8 +122,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     @lru_cache(maxsize=1, valued_returns_only=True)
     def __get_status_cache(self, channel_name, time_in_seconds):
-        utils.logger.spam(f"__get_status_cache in seconds({time_in_seconds})")
-
+        # utils.logger.spam(f"__get_status_cache in seconds({time_in_seconds})")
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
@@ -157,9 +156,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if request.request == 'block_sync':
             try:
                 status_data = channel_stub.sync_task().get_status()
-                logging.debug(f"Got status for block_sync. status_data={status_data}")
+                # utils.logger.debug(f"Got status for block_sync. status_data={status_data}")
             except BaseException as e:
-                logging.error(f"Peer GetStatus(block_sync) Exception : {e}")
+                utils.logger.error(f"Peer GetStatus(block_sync) Exception : {e}")
         else:
             status_data = self.__get_status_cache(channel_name,
                                                   time_in_seconds=math.trunc(time.time()))
@@ -215,7 +214,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return: 중지결과
         """
         if request is not None:
-            logging.info('Peer will stop... by: ' + request.reason)
+            utils.logger.info('Peer will stop... by: ' + request.reason)
 
         try:
             for channel_name in conf.CHANNEL_OPTION:
@@ -225,7 +224,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             self.peer_service.p2p_server_stop()
 
         except Exception as e:
-            logging.debug("Score Service Already stop by other reason. %s", e)
+            utils.logger.debug("Score Service Already stop by other reason. %s", e)
 
         return loopchain_pb2.StopReply(status="0")
 
@@ -257,7 +256,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return:
         """
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
-        logging.info(f"peer_outer_service::CreateTx request({request.data}), channel({channel_name})")
+        utils.logger.info(f"peer_outer_service::CreateTx request({request.data}), channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         result_hash = asyncio.run_coroutine_threadsafe(
@@ -366,7 +365,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :return: verify result
         """
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.debug(f"peer_outer_service:GetInvokeResult in channel({channel_name})")
+        utils.logger.debug(f"peer_outer_service:GetInvokeResult in channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         future = asyncio.run_coroutine_threadsafe(
@@ -388,7 +387,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[channel_name]
 
         try:
-            round_ = request.round_
+            round_ = request.round
         except AttributeError:
             round_ = 0
 
@@ -401,8 +400,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def BlockSync(self, request, context):
         # Peer To Peer
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        logging.info(f"BlockSync request hash({request.block_hash}) "
-                     f"request height({request.block_height}) channel({channel_name})")
+        utils.logger.info(
+            f"BlockSync request hash({request.block_hash}) "
+            f"request height({request.block_height}) channel({channel_name})")
 
         channel_stub = StubCollection().channel_stubs[channel_name]
         future = asyncio.run_coroutine_threadsafe(

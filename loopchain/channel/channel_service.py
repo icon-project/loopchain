@@ -22,11 +22,10 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand,
-                                   ObjectManager, CommonSubprocess, RestClient,
-                                   NodeSubscriber, UnregisteredException, TimerService)
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
+                                   RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty

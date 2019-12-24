@@ -1,10 +1,26 @@
+# Copyright 2018-current ICON Foundation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""block serializer for version 0.5 block"""
+
 from collections import OrderedDict
 
 from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
-from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
+from loopchain.blockchain.blocks.v0_5 import BlockHeader, BlockBody
 from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
-from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
+from loopchain.blockchain.votes import v0_1a
+from loopchain.blockchain.votes.v0_5 import BlockVotes, LeaderVotes
 
 
 class BlockSerializer(BaseBlockSerializer):
@@ -22,6 +38,14 @@ class BlockSerializer(BaseBlockSerializer):
             tx_serialized = ts.to_full_data(tx)
             transactions.append(tx_serialized)
 
+        vote_class = BlockVotes
+        leader_vote_class = LeaderVotes
+        if body.prev_votes:
+            any_vote = next(vote for vote in body.prev_votes if vote)
+            if any_vote.version is None:
+                vote_class = v0_1a.BlockVotes
+                leader_vote_class = v0_1a.LeaderVotes
+
         return {
             "version": header.version,
             "prevHash": header.prev_hash.hex_0x(),
@@ -35,8 +59,8 @@ class BlockSerializer(BaseBlockSerializer):
             "logsBloom": header.logs_bloom.hex_0x(),
             "timestamp": hex(header.timestamp),
             "transactions": transactions,
-            "leaderVotes": LeaderVotes.serialize_votes(body.leader_votes),
-            "prevVotes": BlockVotes.serialize_votes(body.prev_votes),
+            "leaderVotes": leader_vote_class.serialize_votes(body.leader_votes),
+            "prevVotes": vote_class.serialize_votes(body.prev_votes),
             "hash": header.hash.hex_0x(),
             "height": hex(header.height),
             "leader": header.peer_id.hex_hx(),
@@ -112,8 +136,16 @@ class BlockSerializer(BaseBlockSerializer):
             tx = ts.from_(tx_data)
             transactions[tx.hash] = tx
 
-        leader_votes = LeaderVotes.deserialize_votes(json_data["leaderVotes"])
-        prev_votes = BlockVotes.deserialize_votes(json_data["prevVotes"])
+        vote_class = BlockVotes
+        leader_vote_class = LeaderVotes
+        if json_data["prevVotes"]:
+            any_vote = next(vote for vote in json_data["prevVotes"] if vote)
+            if any_vote.get("round") is None:
+                vote_class = v0_1a.BlockVotes
+                leader_vote_class = v0_1a.LeaderVotes
+
+        leader_votes = leader_vote_class.deserialize_votes(json_data["leaderVotes"])
+        prev_votes = vote_class.deserialize_votes(json_data["prevVotes"])
 
         return {
             "transactions": transactions,

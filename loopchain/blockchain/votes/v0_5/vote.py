@@ -22,16 +22,12 @@ from loopchain.crypto.signature import Signer
 @dataclass(frozen=True)
 class BlockVote(BaseVote[bool]):
     block_height: int
-    round_: int
+    round: int
     block_hash: Hash32
 
     @property
     def version(self):
-        return None
-
-    @property
-    def round(self):
-        return self.round_
+        return "0.5"
 
     def result(self) -> bool:
         return self.block_hash != Hash32.empty()
@@ -40,7 +36,7 @@ class BlockVote(BaseVote[bool]):
     @classmethod
     def new(cls, signer: Signer, timestamp: int,
             block_height: int, round_: int, block_hash: Union[Hash32, None]) -> 'BlockVote':
-        return super().new(signer, timestamp, block_height=block_height, round_=round_, block_hash=block_hash)
+        return super().new(signer, timestamp, block_height=block_height, round=round_, block_hash=block_hash)
 
     # noinspection PyMethodOverriding
     @classmethod
@@ -51,39 +47,35 @@ class BlockVote(BaseVote[bool]):
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
-        data_deserialized["round_"] = data.get("round_", 0)
+        data_deserialized["round"] = data.get("round", data.get("round_"))
         data_deserialized["block_hash"] = Hash32.fromhex(data["blockHash"])
         return data_deserialized
 
     # noinspection PyMethodOverriding
     @classmethod
-    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, round_: int, block_hash: Hash32):
+    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, round: int, block_hash: Hash32):
         origin_data = super().to_origin_data(rep, timestamp)
         origin_data["blockHeight"] = hex(block_height)
-        origin_data["round_"] = round_ if round_ else 0
+        origin_data["round"] = round
         origin_data["blockHash"] = block_hash.hex_0x() if block_hash is not None else None
         return origin_data
 
     # noinspection PyMethodOverriding
     @classmethod
-    def to_hash(cls, rep: ExternalAddress, timestamp: int, block_height: int, round_: int, block_hash: Hash32):
-        return super().to_hash(rep, timestamp, block_height=block_height, round_=round_, block_hash=block_hash)
+    def to_hash(cls, rep: ExternalAddress, timestamp: int, block_height: int, round: int, block_hash: Hash32):
+        return super().to_hash(rep, timestamp, block_height=block_height, round=round, block_hash=block_hash)
 
 
 @dataclass(frozen=True)
 class LeaderVote(BaseVote[ExternalAddress]):
     block_height: int
-    round_: int
+    round: int
     old_leader: ExternalAddress
     new_leader: ExternalAddress
 
     @property
     def version(self):
-        return None
-
-    @property
-    def round(self):
-        return self.round_
+        return "0.5"
 
     def result(self) -> ExternalAddress:
         return self.new_leader
@@ -92,7 +84,7 @@ class LeaderVote(BaseVote[ExternalAddress]):
     @classmethod
     def new(cls, signer: Signer, timestamp: int, block_height: int, round_: int,
             old_leader: ExternalAddress, new_leader: ExternalAddress) -> 'LeaderVote':
-        return super().new(signer, timestamp, block_height=block_height, round_=round_,
+        return super().new(signer, timestamp, block_height=block_height, round=round_,
                            old_leader=old_leader, new_leader=new_leader)
 
     # noinspection PyMethodOverriding
@@ -104,18 +96,18 @@ class LeaderVote(BaseVote[ExternalAddress]):
     def _deserialize(cls, data: dict):
         data_deserialized = super()._deserialize(data)
         data_deserialized["block_height"] = int(data["blockHeight"], 16)
-        data_deserialized["round_"] = data.get("round_", 0)
+        data_deserialized["round"] = data.get("round", data.get("round_"))
         data_deserialized["old_leader"] = ExternalAddress.fromhex_address(data["oldLeader"])
         data_deserialized["new_leader"] = ExternalAddress.fromhex_address(data["newLeader"])
         return data_deserialized
 
     # noinspection PyMethodOverriding
     @classmethod
-    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, round_: int,
+    def to_origin_data(cls, rep: ExternalAddress, timestamp: int, block_height: int, round: int,
                        old_leader: ExternalAddress, new_leader: ExternalAddress):
         origin_data = super().to_origin_data(rep, timestamp)
         origin_data["blockHeight"] = hex(block_height)
-        origin_data["round_"] = round_ if round_ else 0
+        origin_data["round"] = round
         origin_data["oldLeader"] = old_leader.hex_hx()
         origin_data["newLeader"] = new_leader.hex_hx()
         return origin_data
@@ -123,6 +115,6 @@ class LeaderVote(BaseVote[ExternalAddress]):
     # noinspection PyMethodOverriding
     @classmethod
     def to_hash(cls, rep: ExternalAddress, timestamp: int,
-                block_height: int, round_: int, old_leader: ExternalAddress, new_leader: ExternalAddress):
-        return super().to_hash(rep, timestamp, block_height=block_height, round_=round_,
+                block_height: int, round: int, old_leader: ExternalAddress, new_leader: ExternalAddress):
+        return super().to_hash(rep, timestamp, block_height=block_height, round=round,
                                old_leader=old_leader, new_leader=new_leader)

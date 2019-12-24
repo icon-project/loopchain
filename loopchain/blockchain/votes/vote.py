@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
 from dataclasses import dataclass
+from typing import Generic, TypeVar
+
 from loopchain.blockchain.types import ExternalAddress, Signature, Hash32
 from loopchain.crypto.hashing import build_hash_generator
 from loopchain.crypto.signature import SignVerifier, Signer
@@ -28,6 +29,10 @@ class Vote(ABC, Generic[TResult]):
     rep: ExternalAddress
     timestamp: int
     signature: Signature
+
+    @property
+    def version(self):
+        raise NotImplementedError
 
     def origin_args(self):
         args = dict(self.__dict__)

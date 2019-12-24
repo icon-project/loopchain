@@ -16,7 +16,6 @@
 import json
 import pickle
 import threading
-import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -24,6 +23,7 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -952,13 +952,13 @@ class BlockChain:
 
             if parse_version(current_block.header.version) >= parse_version("0.3"):
                 confirm_info = current_block.body.prev_votes
-                round_ = next(vote for vote in confirm_info if vote).round_
+                round_ = next(vote for vote in confirm_info if vote).round
 
                 if round_ != self.__block_manager.epoch.round:
                     raise RoundMismatch(
                         f"It doesn't match the round of the current epoch.\n"
                         f"current({self.__block_manager.epoch.round}) / "
-                        f"unconfirmed_block({unconfirmed_block.header.round})"
+                        f"unconfirmed_block({round_})"
                     )
             else:
                 confirm_info = None

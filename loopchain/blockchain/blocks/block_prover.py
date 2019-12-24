@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from enum import Enum, auto
 from typing import Union, Iterable, Optional
+
 from loopchain.blockchain.types import Hash32
 
 
@@ -31,6 +32,10 @@ class BlockProver(ABC):
 
     @classmethod
     def new(cls, version: str, values: Optional[Iterable], type_: 'BlockProverType'):
+        from . import v0_5
+        if version == v0_5.version:
+            return v0_5.BlockProver(values, type_)
+
         from . import v0_4
         if version == v0_4.version:
             return v0_4.BlockProver(values, type_)

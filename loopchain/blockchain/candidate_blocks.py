@@ -13,15 +13,12 @@
 # limitations under the License.
 """Candidate Blocks"""
 
-import logging
 import threading
 from typing import Dict, List, Sequence
 
-import loopchain.utils as util
-from loopchain import configure as conf
+from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import Hash32, ExternalAddress
-from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes
 from loopchain.blockchain.votes.votes import VoteError
 
 __all__ = ("CandidateBlockSetBlock", "CandidateBlock", "CandidateBlocks")
@@ -36,9 +33,9 @@ class CandidateBlock:
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        self.votes: dict[int, BlockVotes] = {}
-        self.votes_buffer: List[BlockVote] = []
-        self.start_time = util.get_time_stamp()  # timestamp
+        self.votes: dict[int, 'BlockVotes'] = {}
+        self.votes_buffer: List['BlockVote'] = []
+        self.start_time = utils.get_time_stamp()  # timestamp
         self.hash = block_hash
         self.height = block_height
         self.__block = None
@@ -63,30 +60,32 @@ class CandidateBlock:
         if self.hash != block.header.hash:
             raise CandidateBlockSetBlock
         else:
-            logging.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
+            utils.logger.debug(f"set block({block.header.hash.hex()}) in CandidateBlock")
             self.__block = block
 
             self._reps = reps
-            self.votes[0] = BlockVotes(self._reps, conf.VOTING_RATIO, self.height, 0, self.hash)
+            votes_class = utils.get_vote_class_by_version(block.header.version)["BlockVotes"]
+            self.votes[0] = votes_class(self._reps, conf.VOTING_RATIO, self.height, 0, self.hash)
             for vote in self.votes_buffer:
                 try:
-                    if not self.votes.get(vote.round_):
-                        self.votes[vote.round_] = \
-                            BlockVotes(self._reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
-                    self.votes[vote.round_].add_vote(vote)
+                    if not self.votes.get(vote.round):
+                        self.votes[vote.round] = \
+                            votes_class(self._reps, conf.VOTING_RATIO, self.height, vote.round, self.hash)
+                    self.votes[vote.round].add_vote(vote)
                 except VoteError as e:
-                    util.logger.info(e)
+                    utils.logger.info(e)
             self.votes_buffer.clear()
 
-    def add_vote(self, vote: BlockVote):
+    def add_vote(self, vote: 'BlockVote'):
         if self.votes:
-            if not self.votes.get(vote.round_):
-                self.votes[vote.round_] = \
-                    BlockVotes(self._reps, conf.VOTING_RATIO, self.height, vote.round_, self.hash)
+            if not self.votes.get(vote.round):
+                votes_class = utils.get_vote_class_by_version(self.__block.header.version)["BlockVotes"]
+                self.votes[vote.round] = \
+                    votes_class(self._reps, conf.VOTING_RATIO, self.height, vote.round, self.hash)
             try:
-                self.votes[vote.round_].add_vote(vote)
+                self.votes[vote.round].add_vote(vote)
             except VoteError as e:
-                util.logger.info(e)
+                utils.logger.info(e)
         else:
             self.votes_buffer.append(vote)
 
@@ -97,10 +96,9 @@ class CandidateBlocks:
         self.__blocks_lock = threading.Lock()
         self._blockchain = blockchain
 
-    def add_vote(self, vote: BlockVote):
+    def add_vote(self, vote: 'BlockVote'):
         with self.__blocks_lock:
             if vote.block_hash != Hash32.empty() and vote.block_hash not in self.blocks:
-                # util.logger.debug(f"-------------block_hash({block_hash}) self.blocks({self.blocks})")
                 self.blocks[vote.block_hash] = CandidateBlock.from_hash(vote.block_hash, vote.block_height)
 
         if vote.block_hash != Hash32.empty():
@@ -116,7 +114,7 @@ class CandidateBlocks:
 
     def add_block(self, block: Block, reps: Sequence[ExternalAddress]):
         if block.header.height != self._blockchain.block_height + 1:
-            util.logger.warning(
+            utils.logger.warning(
                 f"Candidate block height must be ({self._blockchain.block_height})"
                 f"\nyou tried add block height({block.header.height})")
             return
@@ -136,5 +134,5 @@ class CandidateBlocks:
                     if self.blocks[_block_hash].block.header.prev_hash == prev_block_hash:
                         self.blocks.pop(_block_hash, None)
                         continue
-                if util.diff_in_seconds(self.blocks[_block_hash].start_time) >= conf.CANDIDATE_BLOCK_TIMEOUT:
+                if utils.diff_in_seconds(self.blocks[_block_hash].start_time) >= conf.CANDIDATE_BLOCK_TIMEOUT:
                     self.blocks.pop(_block_hash, None)

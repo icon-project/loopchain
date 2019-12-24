@@ -121,7 +121,8 @@ class ConsensusSiever(ConsensusBase):
         if block_version == '0.1a':
             votes = dumped_votes
         else:
-            votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+            vote_class = util.get_vote_class_by_version(block_version)["BlockVotes"]
+            votes = vote_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
         return self._block_manager.epoch.makeup_block(complain_votes, votes)
 
@@ -139,6 +140,7 @@ class ConsensusSiever(ConsensusBase):
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
             complain_votes = self.__get_complaint_votes()
+            util.logger.spam(f"hrkim>>>>> complain_votes: {complain_votes}")
             complained_result = self._block_manager.epoch.complained_result
             if complained_result:
                 self._blockchain.last_unconfirmed_block = None
@@ -328,7 +330,9 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"{e}")
                 prev_votes_list = []
             else:
-                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
+                version = self._blockchain.block_versioner.get_version(self._block_manager.epoch.height)
+                vote_class = util.get_vote_class_by_version(version)["BlockVotes"]
+                prev_votes_list = vote_class.deserialize_votes(prev_votes_serialized)
         return prev_votes_list
 
     @staticmethod
