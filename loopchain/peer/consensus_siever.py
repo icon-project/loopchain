@@ -140,7 +140,6 @@ class ConsensusSiever(ConsensusBase):
 
             self._vote_queue = asyncio.Queue(loop=self._loop)
             complain_votes = self.__get_complaint_votes()
-            util.logger.spam(f"hrkim>>>>> complain_votes: {complain_votes}")
             complained_result = self._block_manager.epoch.complained_result
             if complained_result:
                 self._blockchain.last_unconfirmed_block = None
