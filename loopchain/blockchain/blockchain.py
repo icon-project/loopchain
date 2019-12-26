@@ -313,14 +313,13 @@ class BlockChain:
         """
         prev_hash = block.header.prev_hash
         candidate_blocks = self.__block_manager.candidate_blocks
-        prev_block = None
-        if prev_hash in candidate_blocks.blocks.keys():
+
+        try:
             prev_block = candidate_blocks.blocks[prev_hash].block
             utils.logger.spam(
                 f"prev_block is None.({prev_block is None}) in candidate_blocks by prev_hash({prev_hash})")
-
-        if not prev_block:
-            prev_block = self.find_block_by_hash(prev_hash) or self.last_block
+        except KeyError:
+            prev_block = self.find_block_by_hash32(prev_hash) or self.last_block
 
         return prev_block
 
@@ -334,6 +333,22 @@ class BlockChain:
         if isinstance(block_hash, Hash32):
             block_hash = block_hash.hex()
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
+
+    def find_block_by_hash_str(self, block_hash: str):
+        """find block in DB by block hash.
+
+        :param block_hash: plain string,
+        :return: None or Block
+        """
+        return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
+
+    def find_block_by_hash32(self, block_hash: Hash32):
+        """find block in DB by block hash.
+
+        :param block_hash: Hash32
+        :return: None or Block
+        """
+        return self.__find_block_by_key(block_hash.hex().encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
         """find block in DB by its height
@@ -364,7 +379,7 @@ class BlockChain:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
             utils.logger.debug(f"There is no confirm info by block hash: {block_hash}")
-            block = self.find_block_by_hash(block_hash)
+            block = self.find_block_by_hash_str(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
