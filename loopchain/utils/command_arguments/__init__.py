@@ -29,6 +29,7 @@ class Type(IntEnum):
     Channel = 8
     AMQPTarget = 9
     AMQPKey = 10
+    Version = 11
 
 
 class Attribute:
@@ -60,7 +61,8 @@ types_by_names = {
     "seed": Type.Seed,
     "channel": Type.Channel,
     "amqp_target": Type.AMQPTarget,
-    "amqp_key": Type.AMQPKey
+    "amqp_key": Type.AMQPKey,
+    "version": Type.Version
 }
 
 attributes = {
@@ -111,8 +113,11 @@ attributes = {
 
     Type.AMQPKey:
         Attribute("--amqp_key",
-                  help="key sharing peer group using queue name. use it if one more peers connect one MQ")
+                  help="key sharing peer group using queue name. use it if one more peers connect one MQ"),
 
+    Type.Version:
+        Attribute("--version", action='store_true',
+                  help="show version of loopchain and it's dependencies")
 }
 
 command_values: Dict[Type, str] = {}
