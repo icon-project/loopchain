@@ -486,13 +486,6 @@ class BlockManager:
         if self.__consensus_algorithm:
             self.__consensus_algorithm.stop()
 
-    def __current_block_height(self):
-        if self.blockchain.last_unconfirmed_block and \
-                self.blockchain.last_unconfirmed_block.header.height == self.blockchain.block_height + 1:
-            return self.blockchain.block_height + 1
-        else:
-            return self.blockchain.block_height
-
     def __add_block_by_sync(self, block_, confirm_info=None):
         util.logger.debug(f"__add_block_by_sync :: height({block_.header.height}) hash({block_.header.hash})")
 
@@ -635,7 +628,7 @@ class BlockManager:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
             self.blockchain.last_unconfirmed_block = None
 
-            my_height = self.__current_block_height()
+            my_height = self.blockchain.block_height
             util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
 
             # prevent_next_block_mismatch until last_block_height in block DB.
