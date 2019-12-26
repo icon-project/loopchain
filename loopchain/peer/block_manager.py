@@ -660,11 +660,9 @@ class BlockManager:
             reps_hash = (block.header.revealed_next_reps_hash
                          or ObjectManager().channel_service.peer_manager.prepared_reps_hash)
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
-            next_leader = self.blockchain.get_next_rep_in_reps(block.header.peer_id, reps)
+            next_leader = self.blockchain.get_next_rep_string_in_reps(block.header.peer_id, reps)
 
-            if next_leader:
-                next_leader = next_leader.hex_hx()
-            else:
+            if next_leader is None:
                 next_leader = self.__get_next_leader_by_block(block)
         else:
             next_leader = self.__get_next_leader_by_block(block)
