@@ -224,8 +224,55 @@ class BlockChain:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
 
+    def check_rollback_possible(self, target_block):
+        """Check if the target block can be reached with the prev_hash of last_block.
+
+        :param target_block:
+        :return:
+        """
+        # TODO
+        pass
+
+    def __remove_block_up_to_target(self, target_block: Block):
+        """CAUTION! This method is called recursively.
+
+        :param target_block:
+        :return:
+        """
+        block_to_be_removed: Block = self.__last_block
+
+        if block_to_be_removed == target_block:
+            return target_block
+        else:
+            with self.__add_block_lock:
+                new_last_block: Block = self.find_block_by_hash32(block_to_be_removed.header.prev_hash)
+                self.__total_tx -= (
+                        len(block_to_be_removed.body.transactions) +
+                        len(new_last_block.body.transactions)
+                )
+
+                confirm_info = self.__get_confirm_info_from_block(block_to_be_removed)
+                next_total_tx = self.__write_block_data(new_last_block,
+                                                        confirm_info,
+                                                        receipts=None,
+                                                        next_prep=None)
+
+                for index, tx in enumerate(block_to_be_removed.body.transactions.values()):
+                    tx_hash = tx.hash.hex()
+                    self._blockchain_store.delete(tx_hash.encode(encoding=conf.HASH_KEY_ENCODING))
+
+                self.__last_block = new_last_block
+                self.__total_tx = next_total_tx
+
+                logging.warning(
+                    f"REMOVE BLOCK HEIGHT : {block_to_be_removed.header.height} , "
+                    f"HASH : {block_to_be_removed.header.hash.hex()} , "
+                    f"CHANNEL : {self.__channel_name}")
+
+                return self.__remove_block_up_to_target(target_block)
+
     def roll_back(self, target_block):
-        self.__last_block = target_block
+        self.__last_block = self.__remove_block_up_to_target(target_block)
 
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
@@ -404,6 +451,9 @@ class BlockChain:
 
     def find_prev_confirm_info_by_height(self, height: int) -> bytes:
         block = self.find_block_by_height(height)
+        return self.__get_confirm_info_from_block(block)
+
+    def __get_confirm_info_from_block(self, block) -> bytes:
         if block and not isinstance(block.body, v0_1a.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
