@@ -165,7 +165,7 @@ class BlockManager:
         block_dumped = self.blockchain.block_dumps(block_)
         ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round=round_, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
 

@@ -387,7 +387,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[channel_name]
 
         try:
-            round_ = request.round
+            round_ = request.round_
         except AttributeError:
             round_ = 0
 
