@@ -224,6 +224,9 @@ class BlockChain:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
 
+    def roll_back(self, target_block):
+        self.__last_block = target_block
+
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
 
