@@ -19,7 +19,7 @@ from typing import Dict, List, Sequence
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import Hash32, ExternalAddress
-from loopchain.blockchain.votes.votes import VoteError
+from loopchain.blockchain.votes.votes import VoteError, Votes
 
 __all__ = ("CandidateBlockSetBlock", "CandidateBlock", "CandidateBlocks")
 
@@ -64,7 +64,7 @@ class CandidateBlock:
             self.__block = block
 
             self._reps = reps
-            votes_class = utils.get_vote_class_by_version(block.header.version)["BlockVotes"]
+            votes_class = Votes.get_block_votes_class(block.header.version)
             self.votes[0] = votes_class(self._reps, conf.VOTING_RATIO, self.height, 0, self.hash)
             for vote in self.votes_buffer:
                 try:
@@ -79,7 +79,7 @@ class CandidateBlock:
     def add_vote(self, vote: 'BlockVote'):
         if self.votes:
             if not self.votes.get(vote.round):
-                votes_class = utils.get_vote_class_by_version(self.__block.header.version)["BlockVotes"]
+                votes_class = Votes.get_block_votes_class(self.__block.header.version)
                 self.votes[vote.round] = \
                     votes_class(self._reps, conf.VOTING_RATIO, self.height, vote.round, self.hash)
             try:

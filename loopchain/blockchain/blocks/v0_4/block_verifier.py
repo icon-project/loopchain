@@ -201,5 +201,3 @@ class BlockVerifier(BaseBlockVerifier):
         except Exception as e:
             # FIXME : votes.verify does not verify all votes when raising an exception.
             self._handle_exception(e)
-
-

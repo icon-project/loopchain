@@ -37,6 +37,7 @@ from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
@@ -625,7 +626,7 @@ class BlockChain:
 
         if confirm_info:
             if isinstance(confirm_info, list):
-                votes_class = utils.get_vote_class_by_version(block.header.version)["BlockVotes"]
+                votes_class = Votes.get_block_votes_class(block.header.version)
                 confirm_info = json.dumps(votes_class.serialize_votes(confirm_info))
             if isinstance(confirm_info, str):
                 confirm_info = confirm_info.encode('utf-8')

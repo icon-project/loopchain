@@ -26,7 +26,7 @@ from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
-from loopchain.blockchain.votes.votes import VoteError
+from loopchain.blockchain.votes.votes import VoteError, Votes
 from loopchain.channel.channel_property import ChannelProperty
 
 if TYPE_CHECKING:
@@ -87,12 +87,13 @@ class Epoch:
             ratio = conf.LEADER_COMPLAIN_RATIO
 
         version = self.__blockchain.block_versioner.get_version(self.height)
-        leader_votes = utils.get_vote_class_by_version(version)["LeaderVotes"](
+        leader_votes = Votes.get_leader_votes_class(version)(
             self.reps,
             ratio,
             self.height,
             self.round,
-            ExternalAddress.fromhex_address(self.leader_id))
+            ExternalAddress.fromhex_address(self.leader_id)
+        )
         self.complain_votes[self.round] = leader_votes
 
     def set_epoch_leader(self, leader_id, complained=False):

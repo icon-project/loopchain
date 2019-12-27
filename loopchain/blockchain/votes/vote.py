@@ -70,6 +70,32 @@ class Vote(ABC, Generic[TResult]):
         signature = Signature(signer.sign_hash(hash_))
         return cls(rep_id, timestamp, signature, **kwargs)
 
+    @classmethod
+    def get_block_vote_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.BlockVote
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.BlockVote
+
+    @classmethod
+    def get_leader_vote_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.LeaderVote
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.LeaderVote
+
     @abstractmethod
     def empty(self, rep: ExternalAddress, **kwargs):
         raise NotImplementedError

@@ -122,7 +122,13 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     @lru_cache(maxsize=1, valued_returns_only=True)
     def __get_status_cache(self, channel_name, time_in_seconds):
-        # utils.logger.spam(f"__get_status_cache in seconds({time_in_seconds})")
+        """Cache status data.
+
+        :param channel_name:
+        :param time_in_seconds: An essential parameter for the `LRU cache` even if not used.
+
+        :return:
+        """
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
@@ -156,7 +162,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if request.request == 'block_sync':
             try:
                 status_data = channel_stub.sync_task().get_status()
-                # utils.logger.debug(f"Got status for block_sync. status_data={status_data}")
             except BaseException as e:
                 utils.logger.error(f"Peer GetStatus(block_sync) Exception : {e}")
         else:

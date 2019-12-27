@@ -25,7 +25,8 @@ from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationU
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
-from loopchain.blockchain.votes.v0_5 import LeaderVote, BlockVotes
+from loopchain.blockchain.votes import Vote, Votes
+from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
@@ -303,7 +304,7 @@ class BlockManager:
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
             version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
-            leader_votes = util.get_vote_class_by_version(version)["LeaderVotes"](
+            leader_votes = Votes.get_leader_votes_class(version)(
                 reps,
                 ratio,
                 unconfirmed_block.header.height,
@@ -419,7 +420,7 @@ class BlockManager:
             try:
                 votes_serialized = json.loads(votes_dumped)
                 version = self.blockchain.block_versioner.get_version(block_height)
-                votes = util.get_vote_class_by_version(version)["BlockVotes"].deserialize_votes(votes_serialized)
+                votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
             except json.JSONDecodeError:
                 votes = votes_dumped
 
@@ -443,7 +444,7 @@ class BlockManager:
         try:
             votes_serialized = json.loads(votes_dumped)
             version = self.blockchain.block_versioner.get_version(block_height)
-            votes = util.get_vote_class_by_version(version)["BlockVotes"].deserialize_votes(votes_serialized)
+            votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
             votes = votes_dumped
         return block, max_height, -1, votes, message_code.Response.success
@@ -522,7 +523,7 @@ class BlockManager:
         if parse_version(block_.header.version) >= parse_version("0.3"):
             reps = reps_getter(block_.header.reps_hash)
             round_ = next(vote for vote in confirm_info if vote).round
-            votes = util.get_vote_class_by_version(block_.header.version)["BlockVotes"](
+            votes = Votes.get_block_votes_class(block_.header.version)(
                 reps,
                 conf.VOTING_RATIO,
                 block_.header.height,
@@ -782,8 +783,7 @@ class BlockManager:
 
     def __send_fail_leader_vote(self, leader_vote: LeaderVote):
         version = self.blockchain.block_versioner.get_version(leader_vote.block_height)
-        vote_class = util.get_vote_class_by_version(version)["LeaderVote"]
-        fail_vote = vote_class.new(
+        fail_vote = Vote.get_leader_vote_class(version).new(
             signer=ChannelProperty().peer_auth,
             block_height=leader_vote.block_height,
             round_=leader_vote.round,
@@ -835,8 +835,7 @@ class BlockManager:
     def leader_complain(self):
         complained_leader_id, new_leader_id = self.get_leader_ids_for_complaint()
         version = self.blockchain.block_versioner.get_version(self.epoch.height)
-        vote_class = util.get_vote_class_by_version(version)["LeaderVote"]
-        leader_vote = vote_class.new(
+        leader_vote = Vote.get_leader_vote_class(version).new(
             signer=ChannelProperty().peer_auth,
             block_height=self.epoch.height,
             round_=self.epoch.round,
@@ -867,7 +866,7 @@ class BlockManager:
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
         util.logger.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
-        vote = util.get_vote_class_by_version(block.header.version)["BlockVote"].new(
+        vote = Vote.get_block_vote_class(block.header.version).new(
             signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
             round_=round_,
