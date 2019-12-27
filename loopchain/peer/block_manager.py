@@ -25,14 +25,14 @@ from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationU
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote, BlockVotes, LeaderVotes
+from loopchain.blockchain.votes import Vote, Votes
+from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.store.key_value_store import KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
-from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
@@ -303,9 +303,14 @@ class BlockManager:
 
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
-            leader_votes = LeaderVotes(
-                reps, ratio, unconfirmed_block.header.height,
-                None, unconfirmed_block.body.leader_votes)
+            version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
+            leader_votes = Votes.get_leader_votes_class(version)(
+                reps,
+                ratio,
+                unconfirmed_block.header.height,
+                None,
+                unconfirmed_block.body.leader_votes
+            )
             need_to_confirm = leader_votes.get_result() is None
         elif unconfirmed_block.body.confirm_prev_block:
             need_to_confirm = True
@@ -414,7 +419,8 @@ class BlockManager:
             votes_dumped: bytes = response.confirm_info
             try:
                 votes_serialized = json.loads(votes_dumped)
-                votes = BlockVotes.deserialize_votes(votes_serialized)
+                version = self.blockchain.block_versioner.get_version(block_height)
+                votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
             except json.JSONDecodeError:
                 votes = votes_dumped
 
@@ -437,7 +443,8 @@ class BlockManager:
         votes_dumped: str = get_block_result.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
-            votes = BlockVotes.deserialize_votes(votes_serialized)
+            version = self.blockchain.block_versioner.get_version(block_height)
+            votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
             votes = votes_dumped
         return block, max_height, -1, votes, message_code.Response.success
@@ -515,8 +522,15 @@ class BlockManager:
 
         if parse_version(block_.header.version) >= parse_version("0.3"):
             reps = reps_getter(block_.header.reps_hash)
-            round_ = next(vote for vote in confirm_info if vote).round_
-            votes = BlockVotes(reps, conf.VOTING_RATIO, block_.header.height, round_, block_.header.hash, confirm_info)
+            round_ = next(vote for vote in confirm_info if vote).round
+            votes = Votes.get_block_votes_class(block_.header.version)(
+                reps,
+                conf.VOTING_RATIO,
+                block_.header.height,
+                round_,
+                block_.header.hash,
+                confirm_info
+            )
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
@@ -751,12 +765,12 @@ class BlockManager:
             return
 
         if self.epoch.height == vote.block_height:
-            if self.epoch.round == vote.round_:
+            if self.epoch.round == vote.round:
                 self.epoch.add_complain(vote)
                 elected_leader = self.epoch.complain_result()
                 if elected_leader:
                     self.__channel_service.reset_leader(elected_leader, complained=True)
-            elif self.epoch.round > vote.round_:
+            elif self.epoch.round > vote.round:
                 if vote.new_leader != ExternalAddress.empty():
                     self.__send_fail_leader_vote(vote)
                 else:
@@ -768,10 +782,11 @@ class BlockManager:
             self.__channel_service.state_machine.block_sync()
 
     def __send_fail_leader_vote(self, leader_vote: LeaderVote):
-        fail_vote = LeaderVote.new(
+        version = self.blockchain.block_versioner.get_version(leader_vote.block_height)
+        fail_vote = Vote.get_leader_vote_class(version).new(
             signer=ChannelProperty().peer_auth,
             block_height=leader_vote.block_height,
-            round_=leader_vote.round_,
+            round_=leader_vote.round,
             old_leader=leader_vote.old_leader,
             new_leader=ExternalAddress.empty(),
             timestamp=util.get_time_stamp()
@@ -792,7 +807,7 @@ class BlockManager:
             f"fail leader complain "
             f"complained_leader_id({leader_vote.old_leader}), "
             f"new_leader_id({ExternalAddress.empty()}),"
-            f"round({leader_vote.round_}),"
+            f"round({leader_vote.round}),"
             f"target({target})")
 
         self.__channel_service.broadcast_scheduler.schedule_send_failed_leader_complain(
@@ -819,7 +834,8 @@ class BlockManager:
 
     def leader_complain(self):
         complained_leader_id, new_leader_id = self.get_leader_ids_for_complaint()
-        leader_vote = LeaderVote.new(
+        version = self.blockchain.block_versioner.get_version(self.epoch.height)
+        leader_vote = Vote.get_leader_vote_class(version).new(
             signer=ChannelProperty().peer_auth,
             block_height=self.epoch.height,
             round_=self.epoch.round,
@@ -850,8 +866,7 @@ class BlockManager:
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
         util.logger.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
-
-        vote = BlockVote.new(
+        vote = Vote.get_block_vote_class(block.header.version).new(
             signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
             round_=round_,

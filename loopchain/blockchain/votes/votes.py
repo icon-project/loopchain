@@ -77,6 +77,32 @@ class Votes(ABC, Generic[TVote]):
             else:
                 raise VoteDuplicateError(f"Duplicate voting. {self.votes[index]}, {vote}")
 
+    @classmethod
+    def get_block_votes_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.BlockVotes
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.BlockVotes
+
+    @classmethod
+    def get_leader_votes_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.LeaderVotes
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.LeaderVotes
+
     @abstractmethod
     def is_completed(self):
         raise NotImplementedError

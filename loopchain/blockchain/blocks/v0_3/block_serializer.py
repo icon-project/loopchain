@@ -1,9 +1,9 @@
 from collections import OrderedDict
 
-from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
-from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.blocks import Block, BlockSerializer as BaseBlockSerializer
 from loopchain.blockchain.blocks.v0_3 import BlockHeader, BlockBody
+from loopchain.blockchain.transactions import TransactionSerializer
+from loopchain.blockchain.types import Hash32, ExternalAddress, Signature, BloomFilter
 from loopchain.blockchain.votes.v0_3 import BlockVotes, LeaderVotes
 
 

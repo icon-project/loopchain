@@ -16,7 +16,6 @@
 import json
 import pickle
 import threading
-import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -24,6 +23,7 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -37,6 +37,7 @@ from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
@@ -625,7 +626,8 @@ class BlockChain:
 
         if confirm_info:
             if isinstance(confirm_info, list):
-                confirm_info = json.dumps(BlockVotes.serialize_votes(confirm_info))
+                votes_class = Votes.get_block_votes_class(block.header.version)
+                confirm_info = json.dumps(votes_class.serialize_votes(confirm_info))
             if isinstance(confirm_info, str):
                 confirm_info = confirm_info.encode('utf-8')
             batch.put(
@@ -952,13 +954,13 @@ class BlockChain:
 
             if parse_version(current_block.header.version) >= parse_version("0.3"):
                 confirm_info = current_block.body.prev_votes
-                round_ = next(vote for vote in confirm_info if vote).round_
+                round_ = next(vote for vote in confirm_info if vote).round
 
                 if round_ != self.__block_manager.epoch.round:
                     raise RoundMismatch(
                         f"It doesn't match the round of the current epoch.\n"
                         f"current({self.__block_manager.epoch.round}) / "
-                        f"unconfirmed_block({unconfirmed_block.header.round})"
+                        f"unconfirmed_block({round_})"
                     )
             else:
                 confirm_info = None

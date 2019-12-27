@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
+
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import BlockVersionNotMatch
 
@@ -49,6 +50,10 @@ class BlockSerializer(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner') -> 'BlockSerializer':
+        from . import v0_5
+        if version == v0_5.version:
+            return v0_5.BlockSerializer(tx_versioner)
+
         from . import v0_4
         if version == v0_4.version:
             return v0_4.BlockSerializer(tx_versioner)

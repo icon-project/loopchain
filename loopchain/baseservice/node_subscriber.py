@@ -31,7 +31,7 @@ from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
-from loopchain.blockchain.votes.v0_1a import BlockVotes
+from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
@@ -164,7 +164,7 @@ class NodeSubscriber:
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
-            vote = BlockVotes.deserialize_votes(votes_serialized)
+            vote = Votes.get_block_votes_class(block_dict["version"]).deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
             vote = votes_dumped
         blockchain = ObjectManager().channel_service.block_manager.blockchain

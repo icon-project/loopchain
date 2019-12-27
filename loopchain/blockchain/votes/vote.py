@@ -13,8 +13,9 @@
 # limitations under the License.
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
 from dataclasses import dataclass
+from typing import Generic, TypeVar
+
 from loopchain.blockchain.types import ExternalAddress, Signature, Hash32
 from loopchain.crypto.hashing import build_hash_generator
 from loopchain.crypto.signature import SignVerifier, Signer
@@ -28,6 +29,10 @@ class Vote(ABC, Generic[TResult]):
     rep: ExternalAddress
     timestamp: int
     signature: Signature
+
+    @property
+    def version(self):
+        raise NotImplementedError
 
     def origin_args(self):
         args = dict(self.__dict__)
@@ -64,6 +69,32 @@ class Vote(ABC, Generic[TResult]):
         hash_ = cls.to_hash(rep_id, timestamp, **kwargs)
         signature = Signature(signer.sign_hash(hash_))
         return cls(rep_id, timestamp, signature, **kwargs)
+
+    @classmethod
+    def get_block_vote_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.BlockVote
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.BlockVote
+
+    @classmethod
+    def get_leader_vote_class(cls, version: str):
+        from pkg_resources import parse_version
+        version = parse_version(version)
+
+        from loopchain.blockchain.votes import v0_5
+        if version >= parse_version("0.5"):
+            return v0_5.LeaderVote
+
+        from loopchain.blockchain.votes import v0_1a
+        if version >= parse_version("0.1a"):
+            return v0_1a.LeaderVote
 
     @abstractmethod
     def empty(self, rep: ExternalAddress, **kwargs):
