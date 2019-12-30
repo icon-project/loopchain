@@ -224,14 +224,25 @@ class BlockChain:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
 
-    def check_rollback_possible(self, target_block):
+    def check_rollback_possible(self, target_block, start_block=None):
         """Check if the target block can be reached with the prev_hash of last_block.
+        CAUTION! This method is called recursively.
 
         :param target_block:
+        :param start_block:
         :return:
         """
-        # TODO
-        pass
+        if not start_block:
+            start_block = self.__last_block
+
+        if target_block == start_block:
+            return True
+        else:
+            prev_block = self.find_block_by_hash32(start_block.header.prev_hash)
+            if not prev_block:
+                return False
+
+            return self.check_rollback_possible(target_block, prev_block)
 
     def __remove_block_up_to_target(self, target_block: Block):
         """CAUTION! This method is called recursively.
@@ -272,7 +283,7 @@ class BlockChain:
                 return self.__remove_block_up_to_target(target_block)
 
     def roll_back(self, target_block):
-        self.__last_block = self.__remove_block_up_to_target(target_block)
+        self.__remove_block_up_to_target(target_block)
 
     def rebuild_made_block_count(self):
         """rebuild leader's made block count

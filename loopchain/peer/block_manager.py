@@ -630,7 +630,9 @@ class BlockManager:
 
     def __request_roll_back(self):
         target_block = self.blockchain.find_block_by_hash32(self.blockchain.last_block.header.prev_hash)
-        self.blockchain.check_rollback_possible(target_block)
+        if not self.blockchain.check_rollback_possible(target_block):
+            util.logger.warning(f"The request cannot be rolled back to the target block({target_block}).")
+            return
 
         request_origin = {
             'blockHeight': target_block.header.height,
