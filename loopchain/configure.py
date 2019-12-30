@@ -143,16 +143,20 @@ class Configure(metaclass=SingletonMetaClass):
                 self.__change_enum_to_int(value)
 
     def _set_package_version(self):
-        installed_pkg = [package.project_name for package in pkg_resources.working_set]
-        filtered_pkg = [pkg for pkg in installed_pkg if pkg in globals()['ICON_VERSIONS'].keys()]
-        for package in filtered_pkg:
-            version = pkg_resources.get_distribution(package).version
-            globals()['ICON_VERSIONS'][package] = version
+        icon_versions: dict = globals()['ICON_VERSIONS']
+        for pkg_name in icon_versions.keys() - {'icon_rc'}:
+            try:
+                version = pkg_resources.get_distribution(pkg_name).version
+                icon_versions[pkg_name] = version
+            except pkg_resources.DistributionNotFound as e:
+                logging.warning(f"get '{pkg_name}' version error : {e}")
+                continue
+
         command_result = os.popen('icon_rc -version').read()
         match_result = re.match(r'([a-z_]+)\s([\da-zA-Z-_\.]+)', command_result)  # ('icon_rc', 'vX.X.X')
         if match_result:
             icon_rc_version = match_result.group(2)
-            globals()['ICON_VERSIONS']['icon_rc'] = icon_rc_version
+            icon_versions['icon_rc'] = icon_rc_version
 
 
 def get_configuration(configure_name):

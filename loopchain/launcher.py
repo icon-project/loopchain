@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import time
-from urllib.parse import urlparse, ParseResult
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -57,6 +56,10 @@ def main(argv):
 
     args, unknowns = parse_args_include_unknowns(parser, argv)
     quick_command = get_quick_command(unknowns)
+
+    if args.version:
+        print(json.dumps(conf.ICON_VERSIONS, indent=2))
+        parser.exit()
 
     command_arguments.set_raw_commands(args)
 
@@ -97,7 +100,7 @@ def main(argv):
         start_as_admin(args, quick_command)
     else:
         print(f"not supported service type {args.service_type}\ncheck loopchain help.\n")
-        os.system("python3 ./loopchain.py -h")
+        parser.print_help()
 
 
 def check_port_available(port):
