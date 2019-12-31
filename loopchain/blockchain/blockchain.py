@@ -318,17 +318,14 @@ class BlockChain:
             # rebuild blocks to Genesis block.
             logging.info("re-build transaction count from DB....")
 
-            if conf.READ_CACHED_TX_COUNT:
-                try:
-                    self.__total_tx = self._rebuild_transaction_count_from_cached()
-                except Exception as e:
-                    if isinstance(e, KeyError):
-                        logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
-                    else:
-                        logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
-                                        f"Exception : {type(e)}, {e}")
-                    self.__total_tx = self._rebuild_transaction_count_from_blocks()
-            else:
+            try:
+                self.__total_tx = self._rebuild_transaction_count_from_cached()
+            except Exception as e:
+                if isinstance(e, KeyError):
+                    logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
+                else:
+                    logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
+                                    f"Exception : {type(e)}, {e}")
                 self.__total_tx = self._rebuild_transaction_count_from_blocks()
 
             logging.info(f"rebuilt blocks, total_tx: {self.__total_tx}")
