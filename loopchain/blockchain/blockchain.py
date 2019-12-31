@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Block chain class with authorized blocks only"""
 
 import json
@@ -172,6 +159,16 @@ class BlockChain:
             utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
+    @staticmethod
+    def get_next_rep_string_in_reps(rep, reps: Sequence[ExternalAddress]) -> Optional[str]:
+        try:
+            return reps[reps.index(rep) + 1].hex_hx()
+        except IndexError:
+            return reps[0].hex_hx()
+        except ValueError:
+            utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
+            return None
+
     def get_expected_generator(self, new_block: Block) -> Optional[ExternalAddress]:
         """get expected generator to vote unconfirmed block
 
@@ -227,6 +224,67 @@ class BlockChain:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
 
+    def check_rollback_possible(self, target_block, start_block=None):
+        """Check if the target block can be reached with the prev_hash of last_block.
+        CAUTION! This method is called recursively.
+
+        :param target_block:
+        :param start_block:
+        :return:
+        """
+        if not start_block:
+            start_block = self.__last_block
+
+        if target_block == start_block:
+            return True
+        else:
+            prev_block = self.find_block_by_hash32(start_block.header.prev_hash)
+            if not prev_block:
+                return False
+
+            return self.check_rollback_possible(target_block, prev_block)
+
+    def __remove_block_up_to_target(self, target_block: Block):
+        """CAUTION! This method is called recursively.
+
+        :param target_block:
+        :return:
+        """
+        block_to_be_removed: Block = self.__last_block
+
+        if block_to_be_removed == target_block:
+            return target_block
+        else:
+            with self.__add_block_lock:
+                new_last_block: Block = self.find_block_by_hash32(block_to_be_removed.header.prev_hash)
+                self.__total_tx -= (
+                        len(block_to_be_removed.body.transactions) +
+                        len(new_last_block.body.transactions)
+                )
+
+                confirm_info = self.__get_confirm_info_from_block(block_to_be_removed)
+                next_total_tx = self.__write_block_data(new_last_block,
+                                                        confirm_info,
+                                                        receipts=None,
+                                                        next_prep=None)
+
+                for index, tx in enumerate(block_to_be_removed.body.transactions.values()):
+                    tx_hash = tx.hash.hex()
+                    self._blockchain_store.delete(tx_hash.encode(encoding=conf.HASH_KEY_ENCODING))
+
+                self.__last_block = new_last_block
+                self.__total_tx = next_total_tx
+
+                logging.warning(
+                    f"REMOVE BLOCK HEIGHT : {block_to_be_removed.header.height} , "
+                    f"HASH : {block_to_be_removed.header.hash.hex()} , "
+                    f"CHANNEL : {self.__channel_name}")
+
+                return self.__remove_block_up_to_target(target_block)
+
+    def roll_back(self, target_block):
+        self.__remove_block_up_to_target(target_block)
+
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
 
@@ -260,17 +318,14 @@ class BlockChain:
             # rebuild blocks to Genesis block.
             logging.info("re-build transaction count from DB....")
 
-            if conf.READ_CACHED_TX_COUNT:
-                try:
-                    self.__total_tx = self._rebuild_transaction_count_from_cached()
-                except Exception as e:
-                    if isinstance(e, KeyError):
-                        logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
-                    else:
-                        logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
-                                        f"Exception : {type(e)}, {e}")
-                    self.__total_tx = self._rebuild_transaction_count_from_blocks()
-            else:
+            try:
+                self.__total_tx = self._rebuild_transaction_count_from_cached()
+            except Exception as e:
+                if isinstance(e, KeyError):
+                    logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
+                else:
+                    logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
+                                    f"Exception : {type(e)}, {e}")
                 self.__total_tx = self._rebuild_transaction_count_from_blocks()
 
             logging.info(f"rebuilt blocks, total_tx: {self.__total_tx}")
@@ -326,14 +381,13 @@ class BlockChain:
         """
         prev_hash = block.header.prev_hash
         candidate_blocks = self.__block_manager.candidate_blocks
-        prev_block = None
-        if prev_hash in candidate_blocks.blocks.keys():
+
+        try:
             prev_block = candidate_blocks.blocks[prev_hash].block
             utils.logger.spam(
                 f"prev_block is None.({prev_block is None}) in candidate_blocks by prev_hash({prev_hash})")
-
-        if not prev_block:
-            prev_block = self.find_block_by_hash(prev_hash) or self.last_block
+        except KeyError:
+            prev_block = self.find_block_by_hash32(prev_hash) or self.last_block
 
         return prev_block
 
@@ -347,6 +401,22 @@ class BlockChain:
         if isinstance(block_hash, Hash32):
             block_hash = block_hash.hex()
         return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
+
+    def find_block_by_hash_str(self, block_hash: str):
+        """find block in DB by block hash.
+
+        :param block_hash: plain string,
+        :return: None or Block
+        """
+        return self.__find_block_by_key(block_hash.encode(encoding='UTF-8'))
+
+    def find_block_by_hash32(self, block_hash: Hash32):
+        """find block in DB by block hash.
+
+        :param block_hash: Hash32
+        :return: None or Block
+        """
+        return self.__find_block_by_key(block_hash.hex().encode(encoding='UTF-8'))
 
     def find_block_by_height(self, block_height):
         """find block in DB by its height
@@ -377,7 +447,7 @@ class BlockChain:
             return self._blockchain_store.get(BlockChain.CONFIRM_INFO_KEY + hash_encoded)
         except KeyError:
             utils.logger.debug(f"There is no confirm info by block hash: {block_hash}")
-            block = self.find_block_by_hash(block_hash)
+            block = self.find_block_by_hash_str(block_hash)
             return self.find_prev_confirm_info_by_height(block.header.height + 1) if block else bytes()
 
     def find_prev_confirm_info_by_hash(self, block_hash: Union[str, Hash32]) -> bytes:
@@ -389,6 +459,9 @@ class BlockChain:
 
     def find_prev_confirm_info_by_height(self, height: int) -> bytes:
         block = self.find_block_by_height(height)
+        return self.__get_confirm_info_from_block(block)
+
+    def __get_confirm_info_from_block(self, block) -> bytes:
         if block and not isinstance(block.body, v0_1a.BlockBody):
             votes_serialized = BlockVotes.serialize_votes(block.body.prev_votes)
             return json.dumps(votes_serialized).encode(encoding='UTF-8')
@@ -637,10 +710,11 @@ class BlockChain:
         else:
             utils.logger.debug(f"This block({block.header.hash}) is trying to add without confirm_info.")
 
-        if block.header.prev_hash:
-            prev_block_hash_encoded = block.header.prev_hash.hex().encode("utf-8")
-            prev_block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + prev_block_hash_encoded
-            batch.delete(prev_block_confirm_info_key)
+        if self.__last_block and self.__last_block.header.prev_hash:
+            # Delete confirm info to avoid data duplication.
+            block_hash_encoded = self.__last_block.header.prev_hash.hex().encode("utf-8")
+            block_confirm_info_key = BlockChain.CONFIRM_INFO_KEY + block_hash_encoded
+            batch.delete(block_confirm_info_key)
 
         batch.write()
 

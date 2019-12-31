@@ -187,6 +187,7 @@ servertool.py
 *_profile_.txt
 test_performance_result.txt
 *.icls
+icon-service/
 # tmux_splitter_*.py
 
 # *.pem
