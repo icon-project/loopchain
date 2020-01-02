@@ -30,10 +30,13 @@ class PeerLoader:
     def load():
         peers = PeerLoader._load_peers_from_db()
         if peers:
+            utils.logger.info("Reps data loaded from DB")
             return peers
         elif os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+            utils.logger.info(f"Try to load reps data from {conf.CHANNEL_MANAGE_DATA_PATH}")
             return PeerLoader._load_peers_from_file()
         else:
+            utils.logger.info("Try to load reps data from other reps")
             return PeerLoader._load_peers_from_rest_call()
 
     @staticmethod

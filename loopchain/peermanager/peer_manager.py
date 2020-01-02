@@ -60,7 +60,7 @@ class PeerManager:
 
     def load_peers(self) -> None:
         reps = PeerLoader.load()
-        util.logger.debug(f"reps from load_peers: {reps}")
+        util.logger.info(f"Initial Loaded Reps: {reps}")
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info['id'], rep_info['p2pEndpoint'], order=order)
             self.add_peer(peer)
