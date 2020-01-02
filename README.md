@@ -1,5 +1,5 @@
 # Loopchain
-
+[![loopchain](https://img.shields.io/badge/ICON-Consensus-blue?logoColor=white&logo=icon&labelColor=31B8BB)](https://shields.io)
 [![loopchain](https://snapcraft.io/loopchain/badge.svg)](https://snapcraft.io/loopchain)
 
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
