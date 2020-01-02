@@ -18,6 +18,7 @@ import os
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, RestMethod
+from loopchain.blockchain.types import Hash32
 from loopchain.channel.channel_property import ChannelProperty
 
 
@@ -27,10 +28,22 @@ class PeerLoader:
 
     @staticmethod
     def load():
-        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+        peers = PeerLoader._load_peers_from_db()
+        if peers:
+            return peers
+        elif os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
             return PeerLoader._load_peers_from_file()
         else:
             return PeerLoader._load_peers_from_rest_call()
+
+    @staticmethod
+    def _load_peers_from_db() -> list:
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+        last_block = blockchain.last_block
+        rep_root_hash = (last_block.header.reps_hash if last_block else
+                         Hash32.fromhex(conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')))
+
+        return blockchain.find_preps_by_roothash(rep_root_hash)
 
     @staticmethod
     def _load_peers_from_file():
