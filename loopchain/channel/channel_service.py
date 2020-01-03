@@ -408,7 +408,7 @@ class ChannelService:
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
-        logging.debug(f"channel_service:shutdown_peer")
+        logging.debug(f"shutdown_peer")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):

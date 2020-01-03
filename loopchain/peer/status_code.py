@@ -15,7 +15,7 @@
 
 from enum import IntEnum
 
-import loopchain_pb2
+from loopchain.protos import loopchain_pb2
 
 
 class Service(IntEnum):
