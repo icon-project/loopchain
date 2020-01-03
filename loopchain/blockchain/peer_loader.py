@@ -4,7 +4,7 @@ import os
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import ObjectManager, RestMethod
+from loopchain.baseservice import ObjectManager, RestClientProxy, RestMethod
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -50,10 +50,10 @@ class PeerLoader:
 
     @staticmethod
     def _load_peers_from_rest_call():
-        rs_client = ObjectManager().channel_service.rs_client
+        rest_client = RestClientProxy(ChannelProperty().name)
         crep_root_hash = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
-        reps = rs_client.call(
-            RestMethod.GetReps,
-            RestMethod.GetReps.value.params(crep_root_hash)
+        reps = rest_client.call(
+            method=RestMethod.GetReps,
+            params=RestMethod.GetReps.value.params(crep_root_hash)
         )
         return [{"id": rep["address"], "p2pEndpoint": rep["p2pEndpoint"]} for rep in reps]
