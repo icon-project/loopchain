@@ -27,4 +27,5 @@ from .slot_timer import *
 from .broadcast_scheduler import *
 from .rest_service import *
 from .node_pool import *
+from .rest_client_proxy import *
 
