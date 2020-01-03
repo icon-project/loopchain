@@ -8,7 +8,7 @@ from loopchain.blockchain.transactions import Transaction, TransactionBuilder, T
 from loopchain.blockchain.transactions import genesis, v2, v3
 from loopchain.blockchain.types import ExternalAddress, Address, Hash32
 from loopchain.blockchain.votes import Vote, Votes
-from loopchain.blockchain.blocks import v0_1a
+from loopchain.blockchain.blocks import v0_1a, v0_5
 from loopchain.crypto.signature import Signer
 
 # ----- Type Hints
@@ -114,12 +114,17 @@ def block_vote_factory() -> VoteFactory:
         block_hash = kwargs.get("block_hash", Hash32(os.urandom(Hash32.size)))
         timestamp = kwargs.get("timestamp", 0)
         block_height = kwargs.get("block_height", 0)
-        round_ = kwargs.get("round_", 0)
 
+        round_: int = 0
         if block_version == v0_1a.version:
-            from loopchain.blockchain.votes.v0_1a import BlockVote
-            return BlockVote.new(signer=signer, timestamp=timestamp, block_height=block_height,
-                                 round_=round_, block_hash=block_hash)
+            round_ = kwargs.get("round_", 0)
+        elif block_version == v0_5.version:
+            round_ = kwargs.get("round", 0)
+
+        block_vote = Vote.get_block_vote_class(version=block_version)
+
+        return block_vote.new(signer=signer, timestamp=timestamp, block_height=block_height,
+                              round_=round_, block_hash=block_hash)
 
     return _block_vote_factory
 
@@ -129,12 +134,16 @@ def leader_vote_factory() -> VoteFactory:
     def _leader_vote_factory(block_version, signer, old_leader, new_leader, **kwargs):
         timestamp = kwargs.get("timestamp", 0)
         block_height = kwargs.get("block_height", 0)
-        round_ = kwargs.get("round_", 0)
 
+        round_: int = 0
         if block_version == v0_1a.version:
-            from loopchain.blockchain.votes.v0_1a import LeaderVote
-            return LeaderVote.new(signer=signer, timestamp=timestamp, block_height=block_height, round_=round_,
-                                  old_leader=old_leader, new_leader=new_leader)
+            round_ = kwargs.get("round_", 0)
+        elif block_version == v0_5.version:
+            round_ = kwargs.get("round", 0)
+
+        leader_vote = Vote.get_leader_vote_class(version=block_version)
+        return leader_vote.new(signer=signer, timestamp=timestamp, block_height=block_height, round_=round_,
+                               old_leader=old_leader, new_leader=new_leader)
 
     return _leader_vote_factory
 
@@ -144,13 +153,18 @@ def block_votes_factory() -> VotesFactory:
     def _block_votes_factory(block_version, reps, block_hash, **kwargs) -> Votes:
         ratio = kwargs.get("ratio", 0.67)
         block_height = kwargs.get("block_height", 0)
-        round_ = kwargs.get("round_", 0)
         votes = kwargs.get("votes")
 
+        round_: int = 0
         if block_version == v0_1a.version:
-            from loopchain.blockchain.votes.v0_1a import BlockVotes
-            return BlockVotes(reps=reps, voting_ratio=ratio, block_height=block_height, round_=round_,
-                              block_hash=block_hash, votes=votes)
+            round_ = kwargs.get("round_", 0)
+        elif block_version == v0_5.version:
+            round_ = kwargs.get("round", 0)
+
+        block_votes = Votes.get_block_votes_class(version=block_version)
+
+        return block_votes(reps=reps, voting_ratio=ratio, block_height=block_height, round_=round_,
+                           block_hash=block_hash, votes=votes)
 
     return _block_votes_factory
 
@@ -160,12 +174,16 @@ def leader_votes_factory() -> VotesFactory:
     def _leader_votes_factory(block_version, reps, old_leader, **kwargs):
         voting_ratio = kwargs.get("voting_ratio", 0.51)
         block_height = kwargs.get("block_height", 0)
-        round_ = kwargs.get("round_", 0)
         votes = kwargs.get("votes")
 
+        round_: int = 0
         if block_version == v0_1a.version:
-            from loopchain.blockchain.votes.v0_1a import LeaderVotes
-            return LeaderVotes(reps=reps, voting_ratio=voting_ratio, block_height=block_height, round_=round_,
-                               old_leader=old_leader, votes=votes)
+            round_ = kwargs.get("round_", 0)
+        elif block_version == v0_5.version:
+            round_ = kwargs.get("round", 0)
+
+        leader_votes = Votes.get_leader_votes_class(version=block_version)
+        return leader_votes(reps=reps, voting_ratio=voting_ratio, block_height=block_height, round_=round_,
+                            old_leader=old_leader, votes=votes)
 
     return _leader_votes_factory
