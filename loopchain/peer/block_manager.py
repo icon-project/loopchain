@@ -1,5 +1,5 @@
 """A management class for blockchain."""
-
+import asyncio
 import json
 import threading
 import traceback
@@ -22,8 +22,7 @@ from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInval
                                             TransactionOutOfTimeBound, NotInReps,
                                             NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -392,7 +391,7 @@ class BlockManager:
 
             return need_to_sync, self.__block_height_future
 
-    def __block_request(self, peer_stub, block_height):
+    async def __block_request(self, peer_stub, block_height):
         """request block by gRPC or REST
 
         :param peer_stub:
@@ -403,7 +402,7 @@ class BlockManager:
             return self.__block_request_by_voter(block_height, peer_stub)
         else:
             # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height)
+            return await self.__block_request_by_citizen(block_height)
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -430,14 +429,16 @@ class BlockManager:
 
         return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
-    def __block_request_by_citizen(self, block_height):
+    async def __block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = rs_client.call(
             RestMethod.GetBlockByHeight,
             RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
         last_block = rs_client.call(RestMethod.GetLastBlock)
+
         if not last_block:
+            await self.__channel_service.init_rs_target()
             raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
 
         max_height = self.blockchain.block_versioner.get_height(last_block)
@@ -445,6 +446,7 @@ class BlockManager:
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
         votes_dumped: str = get_block_result.get('confirm_info', '')
+
         try:
             votes_serialized = json.loads(votes_dumped)
             version = self.blockchain.block_versioner.get_version(block_height)
@@ -549,7 +551,7 @@ class BlockManager:
                                       reps_getter=reps_getter)
         return self.blockchain.add_block(prev_block, confirm_info)
 
-    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
+    async def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
 
@@ -569,7 +571,7 @@ class BlockManager:
             util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
             try:
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    self.__block_request(peer_stub, my_height + 1)
+                    await self.__block_request(peer_stub, my_height + 1)
             except NoConfirmInfo as e:
                 util.logger.warning(f"{e}")
                 response_code = message_code.Response.fail_no_confirm_info
@@ -669,10 +671,9 @@ class BlockManager:
             # prevent_next_block_mismatch until last_block_height in block DB.
             # (excludes last_unconfirmed_block_height)
             self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
-            self.__block_request_to_peers_in_sync(peer_stubs,
-                                                  my_height,
-                                                  unconfirmed_block_height,
-                                                  max_height)
+            asyncio.run(
+                self.__block_request_to_peers_in_sync(peer_stubs, my_height, unconfirmed_block_height, max_height)
+            )
         except exception.PreviousBlockMismatch as e:
             util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
             self.__request_roll_back()

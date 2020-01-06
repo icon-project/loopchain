@@ -218,7 +218,7 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             await self.set_peer_type_in_channel()
         else:
-            await self._init_rs_target()
+            await self.init_rs_target()
             if ChannelProperty().rs_target is None:
                 return
             self.__init_node_subscriber()
@@ -313,7 +313,7 @@ class ChannelService:
 
         return radiostations
 
-    async def _init_rs_target(self, refresh_all: bool = False):
+    async def init_rs_target(self, refresh_all: bool = False):
         if refresh_all:
             radiostations = self._get_radiostations()
             if radiostations is None:
@@ -323,14 +323,14 @@ class ChannelService:
             try:
                 self.__rs_client.init_next_target()
             except StopIteration:
-                return await self._init_rs_target(refresh_all=True)
+                return await self.init_rs_target(refresh_all=True)
 
         ChannelProperty().rs_target = self.__rs_client.target
         self.__inner_service.update_sub_services_properties(relay_target=ChannelProperty().rs_target)
 
     async def _init_rs_client(self):
         self.__rs_client = RestClient(channel=ChannelProperty().name)
-        await self._init_rs_target(refresh_all=True)
+        await self.init_rs_target(refresh_all=True)
 
     async def __init_score_container(self):
         """create score container and save score_info and score_stub
