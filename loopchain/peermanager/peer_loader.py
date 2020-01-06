@@ -13,18 +13,13 @@
 # limitations under the License.
 """PeerListData Loader for PeerManager"""
 
-import logging
 import os
-from typing import TYPE_CHECKING
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, RestMethod
+from loopchain.blockchain.types import Hash32
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.peermanager import Peer
-
-if TYPE_CHECKING:
-    from loopchain.peermanager import PeerManager
 
 
 class PeerLoader:
@@ -32,38 +27,39 @@ class PeerLoader:
         pass
 
     @staticmethod
-    def load(peer_manager: 'PeerManager'):
-        if os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
-            PeerLoader._load_peers_from_file(peer_manager)
+    def load():
+        peers = PeerLoader._load_peers_from_db()
+        if peers:
+            utils.logger.info("Reps data loaded from DB")
+            return peers
+        elif os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
+            utils.logger.info(f"Try to load reps data from {conf.CHANNEL_MANAGE_DATA_PATH}")
+            return PeerLoader._load_peers_from_file()
         else:
-            PeerLoader._load_peers_from_rest_call(peer_manager)
+            utils.logger.info("Try to load reps data from other reps")
+            return PeerLoader._load_peers_from_rest_call()
 
     @staticmethod
-    def _load_peers_from_file(peer_manager: 'PeerManager'):
-        utils.logger.debug(f"load_peers_from_file")
+    def _load_peers_from_db() -> list:
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+        last_block = blockchain.last_block
+        rep_root_hash = (last_block.header.reps_hash if last_block else
+                         Hash32.fromhex(conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')))
+
+        return blockchain.find_preps_by_roothash(rep_root_hash)
+
+    @staticmethod
+    def _load_peers_from_file():
         channel_info = utils.load_json_data(conf.CHANNEL_MANAGE_DATA_PATH)
         reps: list = channel_info[ChannelProperty().name].get("peers")
-        for peer in reps:
-            peer_manager.add_peer(peer)
+        return [{"id": rep["id"], "p2pEndpoint": rep["peer_target"]} for rep in reps]
 
     @staticmethod
-    def _load_peers_from_rest_call(peer_manager: 'PeerManager'):
+    def _load_peers_from_rest_call():
         rs_client = ObjectManager().channel_service.rs_client
         crep_root_hash = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
-
-        if not crep_root_hash:
-            logging.error(f"There's no crep_root_hash to initialize.")
-            return
-
-        return PeerLoader._get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash)
-
-    @staticmethod
-    def _get_reps_by_root_hash_call(peer_manager, rs_client, crep_root_hash):
         reps = rs_client.call(
             RestMethod.GetReps,
             RestMethod.GetReps.value.params(crep_root_hash)
         )
-        logging.debug(f"reps by c-rep root hash: {reps}")
-        for order, rep_info in enumerate(reps, 1):
-            peer = Peer(rep_info["address"], rep_info["p2pEndpoint"], order=order)
-            peer_manager.add_peer(peer)
+        return [{"id": rep["address"], "p2pEndpoint": rep["p2pEndpoint"]} for rep in reps]

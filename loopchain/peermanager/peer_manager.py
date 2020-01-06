@@ -49,7 +49,11 @@ class PeerManager:
     def load_peers(self) -> None:
         blockchain = ObjectManager().channel_service.block_manager.blockchain
         if not blockchain.is_roothash_exist_in_db(self._crep_root_hash):
-            PeerLoader.load(peer_manager=self)
+            reps = PeerLoader.load()
+            util.logger.info(f"Initial Loaded Reps: {reps}")
+            for order, rep_info in enumerate(reps, 1):
+                peer = Peer(rep_info['id'], rep_info['p2pEndpoint'], order=order)
+                self.add_peer(peer)
             reps_hash = self.reps_hash()
             if not blockchain.is_roothash_exist_in_db(reps_hash):
                 preps = self.serialize_as_preps()
