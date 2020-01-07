@@ -240,7 +240,7 @@ class ChannelService:
                 epoch.reps_hash)
         else:
             reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
-                self.__peer_manager.prepared_reps_hash)
+                self.__peer_manager.crep_root_hash)
 
         if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
@@ -383,7 +383,7 @@ class ChannelService:
             return
 
         reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
-            self.peer_manager.prepared_reps_hash)
+            self.peer_manager.crep_root_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):

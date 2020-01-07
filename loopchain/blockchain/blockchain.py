@@ -496,7 +496,7 @@ class BlockChain:
                 raise AttributeError
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
         return roothash
 
     @staticmethod
@@ -507,7 +507,7 @@ class BlockChain:
                 raise AttributeError
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.prepared_reps_hash
+            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
         return roothash
 
     def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
@@ -1223,7 +1223,7 @@ class BlockChain:
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.find_preps_addresses_by_roothash(
-            ObjectManager().channel_service.peer_manager.prepared_reps_hash)
+            ObjectManager().channel_service.peer_manager.crep_root_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:

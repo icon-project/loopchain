@@ -77,7 +77,7 @@ class Epoch:
 
     def new_votes(self):
         self.reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
-                         ObjectManager().channel_service.peer_manager.prepared_reps_hash
+                         ObjectManager().channel_service.peer_manager.crep_root_hash
         self.reps = self.__blockchain.find_preps_addresses_by_roothash(self.reps_hash)
 
         # TODO After the v0.4 update, remove this version parsing.

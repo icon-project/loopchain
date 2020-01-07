@@ -1,22 +1,10 @@
-# Copyright 2019 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """A module for managing peer list"""
 
 import threading
 from typing import Optional, Union
 
 import loopchain.utils as util
+from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
@@ -38,11 +26,11 @@ class PeerManager:
         # reps_hash, reps for reset_all_peers
         self._reps_reset_data: Optional[tuple] = None
 
-        self._prepared_reps_hash = None
+        self._crep_root_hash = Hash32.fromhex(conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash'))
 
     @property
-    def prepared_reps_hash(self):
-        return self._prepared_reps_hash
+    def crep_root_hash(self):
+        return self._crep_root_hash
 
     def reps_hash(self) -> Hash32:
         """return reps root hash.
@@ -91,7 +79,6 @@ class PeerManager:
                 return None
 
             self._peer_list_data.peer_list[peer.peer_id] = peer
-            self._prepared_reps_hash = self.reps_hash()
 
         return peer.order
 
@@ -113,7 +100,6 @@ class PeerManager:
             return
 
         self._peer_list_data.peer_list.clear()
-        self._prepared_reps_hash = None
 
         for order, rep_info in enumerate(reps, 1):
             peer = Peer(rep_info["id"], rep_info["p2pEndpoint"], order=order)
