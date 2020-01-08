@@ -657,7 +657,13 @@ class BlockManager:
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
-            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+            max_height = -1
+            while max_height == -1:
+                max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+                import time
+                time.sleep(conf.GRPC_TIMEOUT_SHORT)
+                if self.__channel_service._is_genesis_node():
+                    break
 
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
@@ -764,6 +770,8 @@ class BlockManager:
                     channel=self.__channel_name,
                 ), conf.GRPC_TIMEOUT_SHORT)
                 target_block_height = max(response.block_height, response.unconfirmed_block_height)
+                util.logger.warning(f"target_block_height: {target_block_height}")
+                util.logger.warning(f"my_height: {my_height}")
 
                 if target_block_height > my_height:
                     peer_stubs.append((target, stub))
