@@ -261,6 +261,10 @@ class ChannelService:
             ChannelProperty().node_type = new_node_type
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
+    def check_genesis_node(self):
+        if self._is_genesis_node():
+            self.generate_genesis_block()
+
     def switch_role(self):
         self.peer_manager.update_all_peers()
         if self._is_role_switched():
