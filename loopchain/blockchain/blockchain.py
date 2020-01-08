@@ -3,6 +3,7 @@
 import json
 import pickle
 import threading
+import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -10,13 +11,13 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
-import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.baseservice.lru_cache import lru_cache as valued_only_lru_cache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
@@ -97,6 +98,8 @@ class BlockChain:
         self.__tx_versioner = TransactionVersioner()
         for tx_version, tx_hash_version in channel_option.get("hash_versions", {}).items():
             self.__tx_versioner.hash_generator_versions[tx_version] = tx_hash_version
+
+        self._init_blockchain()
 
     @property
     def leader_made_block_count(self) -> int:
@@ -523,6 +526,15 @@ class BlockChain:
             return []
         else:
             return json.loads(preps_dumped)
+
+    @valued_only_lru_cache(maxsize=4, valued_returns_only=True)
+    def is_roothash_exist_in_db(self, roothash: Hash32) -> Optional[bool]:
+        try:
+            self._blockchain_store.get(BlockChain.PREPS_KEY + roothash)
+        except (KeyError, TypeError):
+            return None
+        else:
+            return True
 
     def write_preps(self, roothash: Hash32, preps: list, batch: KeyValueStoreWriteBatch = None):
         write_target = batch or self._blockchain_store
@@ -1046,7 +1058,7 @@ class BlockChain:
 
             return unconfirmed_block
 
-    def init_blockchain(self):
+    def _init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
         try:
             last_block_key = self._blockchain_store.get(BlockChain.LAST_BLOCK_KEY, verify_checksums=True)
@@ -1065,8 +1077,6 @@ class BlockChain:
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
-
-        logging.debug(f"ENGINE-303 init_blockchain: {self.block_height}")
 
     def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None

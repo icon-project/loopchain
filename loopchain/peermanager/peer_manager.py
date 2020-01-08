@@ -47,16 +47,14 @@ class PeerManager:
                 for peer_id, peer in self._peer_list_data.peer_list.items()]
 
     def load_peers(self) -> None:
-        PeerLoader.load(peer_manager=self)
         blockchain = ObjectManager().channel_service.block_manager.blockchain
-
-        reps_hash = self.reps_hash()
-        reps_in_db = blockchain.find_preps_by_roothash(reps_hash)
-
-        if not reps_in_db:
-            preps = self.serialize_as_preps()
-            util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
-            blockchain.write_preps(reps_hash, preps)
+        if not blockchain.is_roothash_exist_in_db(self._crep_root_hash):
+            PeerLoader.load(peer_manager=self)
+            reps_hash = self.reps_hash()
+            if not blockchain.is_roothash_exist_in_db(reps_hash):
+                preps = self.serialize_as_preps()
+                util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
+                blockchain.write_preps(reps_hash, preps)
 
     def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager
