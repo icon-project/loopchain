@@ -209,7 +209,7 @@ class ChannelService:
 
     async def evaluate_network(self):
         await self.__init_network()
-        self.__ready_to_height_sync()
+        self._rebuild_block()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -470,7 +470,7 @@ class ChannelService:
         return ('genesis_data_path' in self.get_channel_option()
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
-    def __ready_to_height_sync(self):
+    def _rebuild_block(self):
         self.block_manager.blockchain.init_blockchain()
 
         if self.block_manager.blockchain.block_height >= 0:
