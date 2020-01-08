@@ -202,14 +202,13 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-    async def __init_network(self):
+    async def evaluate_network(self):
+        self._rebuild_block()
         await self._init_rs_client()
+
         self.__peer_manager.load_peers()
         await self._select_node_type()
 
-    async def evaluate_network(self):
-        await self.__init_network()
-        self._rebuild_block()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -478,9 +477,6 @@ class ChannelService:
         else:
             if self._is_genesis_node():
                 self.generate_genesis_block()
-
-        if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
-            utils.exit_and_msg(f"There's no radiostation target to sync block.")
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
