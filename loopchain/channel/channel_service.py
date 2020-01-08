@@ -209,6 +209,7 @@ class ChannelService:
         self.__peer_manager.load_peers()
         await self._select_node_type()
 
+        self.check_genesis_node()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -466,17 +467,15 @@ class ChannelService:
         self.__block_manager.set_peer_type(peer_type)
 
     def _is_genesis_node(self):
-        return ('genesis_data_path' in self.get_channel_option()
-                and self.is_support_node_function(conf.NodeFunction.Vote))
+        return ('genesis_data_path' in self.get_channel_option() and
+                self.is_support_node_function(conf.NodeFunction.Vote) and
+                self.block_manager.blockchain.block_height < 0)
 
     def _rebuild_block(self):
         self.block_manager.blockchain.init_blockchain()
 
         if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
-        else:
-            if self._is_genesis_node():
-                self.generate_genesis_block()
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
