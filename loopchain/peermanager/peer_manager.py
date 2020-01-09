@@ -42,19 +42,16 @@ class PeerManager:
                                    BlockProverType.Rep)
         return block_prover.get_proof_root()
 
-    def serialize_as_preps(self) -> list:
-        return [{'id': peer_id, 'p2pEndpoint': peer.target}
-                for peer_id, peer in self._peer_list_data.peer_list.items()]
-
     def load_peers(self) -> None:
         blockchain = ObjectManager().channel_service.block_manager.blockchain
         if not blockchain.is_roothash_exist_in_db(self._crep_root_hash):
-            PeerLoader.load(peer_manager=self)
-            reps_hash = self.reps_hash()
+            reps_hash, reps = PeerLoader.load()
+            util.logger.info(f"Initial Loaded Reps: {reps}")
+            for order, rep_info in enumerate(reps, 1):
+                peer = Peer(rep_info['id'], rep_info['p2pEndpoint'], order=order)
+                self.add_peer(peer)  # add_peer still needed for now, but It will be removed.
             if not blockchain.is_roothash_exist_in_db(reps_hash):
-                preps = self.serialize_as_preps()
-                util.logger.spam(f"in _load_peers serialize_as_preps({preps})")
-                blockchain.write_preps(reps_hash, preps)
+                blockchain.write_preps(reps_hash, reps)
 
     def add_peer(self, peer: Union[Peer, dict]):
         """add_peer to peer_manager

@@ -78,7 +78,7 @@ class MockChannelService:
     async def subscribe_network(self):
         pass
 
-    def update_sub_services_properties(self):
+    def update_nid(self):
         pass
 
     def start_subscribe_timer(self):
