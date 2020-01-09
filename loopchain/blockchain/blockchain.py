@@ -384,9 +384,10 @@ class BlockChain:
 
         try:
             prev_block = candidate_blocks.blocks[prev_hash].block
-            utils.logger.spam(
-                f"prev_block is None.({prev_block is None}) in candidate_blocks by prev_hash({prev_hash})")
-        except KeyError:
+            if not prev_block:
+                raise BlockNotExist
+        except (BlockNotExist, KeyError):
+            utils.logger.spam(f"prev_block is not in candidate_blocks by prev_hash({prev_hash})")
             prev_block = self.find_block_by_hash32(prev_hash) or self.last_block
 
         return prev_block
