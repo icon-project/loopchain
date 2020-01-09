@@ -202,13 +202,10 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-    async def __init_network(self):
+    async def evaluate_network(self):
         await self._init_rs_client()
         self.__peer_manager.load_peers()
         await self._select_node_type()
-
-    async def evaluate_network(self):
-        await self.__init_network()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
@@ -240,7 +237,7 @@ class ChannelService:
                 epoch.reps_hash)
         else:
             reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
-                self.__peer_manager.prepared_reps_hash)
+                self.__peer_manager.crep_root_hash)
 
         if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
@@ -383,7 +380,7 @@ class ChannelService:
             return
 
         reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
-            self.peer_manager.prepared_reps_hash)
+            self.peer_manager.crep_root_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):
@@ -467,8 +464,6 @@ class ChannelService:
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
     def __ready_to_height_sync(self):
-        self.block_manager.blockchain.init_blockchain()
-
         if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
         else:
