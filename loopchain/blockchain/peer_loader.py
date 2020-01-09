@@ -27,11 +27,18 @@ class PeerLoader:
             utils.logger.info("Try to load reps data from other reps")
             peers = PeerLoader._load_peers_from_rest_call()
 
-        block_prover = BlockProver((ExternalAddress.fromhex_address(peer['id']).extend() for peer in peers),
-                                   BlockProverType.Rep)
-        peer_root_hash = block_prover.get_proof_root()
+        peer_root_hash = PeerLoader._get_peer_root_hash(peers)
 
         return peer_root_hash, peers
+
+    @staticmethod
+    def _get_peer_root_hash(peers: list):
+        block_prover = BlockProver(
+            (ExternalAddress.fromhex_address(peer['id']).extend() for peer in peers),
+            BlockProverType.Rep
+        )
+
+        return block_prover.get_proof_root()
 
     @staticmethod
     def _load_peers_from_db() -> list:
