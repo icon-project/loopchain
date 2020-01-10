@@ -259,7 +259,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.peer_manager.update_all_peers()
+        self.__block_manager.blockchain.reset_leader_made_block_count(need_check_switched_role=True)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 

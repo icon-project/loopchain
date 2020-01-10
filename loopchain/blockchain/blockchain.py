@@ -28,6 +28,7 @@ from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatu
 from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.configure_default import NodeType
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -137,11 +138,22 @@ class BlockChain:
         utils.logger.debug(f"_keep_order_in_penalty() : keep_order = {keep_order}")
         return keep_order
 
-    def reset_leader_made_block_count(self, is_switched_role: bool = False):
+    def reset_leader_made_block_count(self, need_check_switched_role: bool = False):
         """Clear all made_block_counter
 
         :return:
         """
+        if need_check_switched_role:
+            if self.__last_block.header.prep_changed_reason == NextRepsChangeReason.NoChange:
+                utils.logger.debug(f"There is no change in reps.")
+                return
+
+            new_reps = self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
+            new_node_type = NodeType.CommunityNode if ChannelProperty().peer_address in new_reps else NodeType.CitizenNode
+            is_switched_role = new_node_type != ChannelProperty().node_type
+        else:
+            is_switched_role = False
+
         utils.logger.debug(f"reset_leader_made_block_count() : made_block_count = {self.__made_block_counter}")
         if not self._keep_order_in_penalty() or is_switched_role:
             self.__made_block_counter.clear()
@@ -1260,9 +1272,6 @@ class BlockChain:
                 next_leader = ExternalAddress.empty()
 
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
-
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
             # P-Rep list has no changes
             next_leader = _block.header.next_leader
@@ -1290,9 +1299,6 @@ class BlockChain:
 
             next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
             next_preps_hash = None  # to rebuild next_reps_hash
-
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
             # P-Rep list has no changes
             next_leader = _block.header.next_leader
