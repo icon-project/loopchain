@@ -1,0 +1,30 @@
+{
+    "CHANNEL_OPTION": {
+        "icon_dex": {
+            "block_versions": {
+                "0.1a": 0,
+                "0.3": 10324749,
+                "0.4": 12640761
+            },
+            "hash_versions": {
+                "genesis": 0,
+                "0x2": 1,
+                "0x3": 1
+            },
+            "load_cert": false,
+            "consensus_cert_use": false,
+            "tx_cert_use": false,
+            "key_load_type": 0,
+            "radiostations": ["https://ctz.solidwallet.io"],
+            "crep_root_hash": "0xd421ad83f81a31abd7f6813bb6a3b92fa547bdb6d5abc98d2d0852c1a97bcca5"
+        }
+    },
+    "PRIVATE_PATH": "./keys/my_private.pem",
+    "PRIVATE_PASSWORD": "password",
+    "PORT_PEER": 7100,
+    "AMQP_KEY": "7100",
+    "DEFAULT_STORAGE_PATH": ".storage_main/",
+    "ALLOW_MAKE_EMPTY_BLOCK": false,
+    "LOOPCHAIN_LOG_LEVEL": "INFO",
+    "LOG_FILE_LOCATION": "./log/mainnet/icon_dex"
+}

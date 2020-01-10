@@ -1,0 +1,28 @@
+{
+    "log": {
+        "logger": "iconservice",
+        "colorLog": true,
+        "level": "warning",
+        "filePath": "./log/iconservice.log",
+        "outputType": "console|file",
+        "rotate": {
+            "type": "period|bytes",
+            "period": "daily",
+            "interval": 1,
+            "backupCount": 10,
+            "maxBytes": 50000000
+        }
+    },
+    "scoreRootPath": ".storage_main/.score_mainnet",
+    "stateDbRootPath": ".storage_main/.statedb_mainnet",
+    "channel": "icon_dex",
+    "amqpKey": "7100",
+    "amqpTarget": "127.0.0.1",
+    "builtinScoreOwner": "hx677133298ed5319607a321a38169031a8867085c",
+    "service": {
+        "fee": true,
+        "audit": true,
+        "deployerWhiteList": false,
+        "scorePackageValidator": false
+    }
+}

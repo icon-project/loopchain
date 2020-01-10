@@ -1,0 +1,24 @@
+{
+    "log": {
+        "logger": "iconrpcserver",
+        "colorLog": true,
+        "level": "warning",
+        "filePath": "./log/iconrpcserver.log",
+        "outputType": "console|file",
+        "rotate": {
+            "type": "period|bytes",
+            "period": "daily",
+            "interval": 1,
+            "backupCount": 10,
+            "maxBytes": 50000000
+        }
+    },
+    "channel": "icon_dex",
+    "port": 9000,
+    "amqpTarget": "127.0.0.1",
+    "amqpKey": "7100",
+    "gunicornConfig": {
+        "workers": 1
+    },
+    "redirectProtocol": "https"
+}
