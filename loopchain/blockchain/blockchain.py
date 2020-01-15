@@ -21,6 +21,7 @@ from loopchain.baseservice.lru_cache import lru_cache as valued_only_lru_cache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
+from loopchain.blockchain.peer_loader import PeerLoader
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
@@ -510,8 +511,7 @@ class BlockChain:
             if not roothash:
                 raise AttributeError
         except AttributeError:
-            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
+            roothash = ChannelProperty().crep_root_hash
         return roothash
 
     @staticmethod
@@ -522,7 +522,7 @@ class BlockChain:
                 raise AttributeError
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
+            roothash = ChannelProperty().crep_root_hash
         return roothash
 
     def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
@@ -1090,6 +1090,13 @@ class BlockChain:
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
 
+    def init_crep_reps(self) -> None:
+        if not self.is_roothash_exist_in_db(ChannelProperty().crep_root_hash):
+            reps_hash, reps = PeerLoader.load()
+            utils.logger.info(f"Initial Loaded Reps: {reps}")
+            if not self.is_roothash_exist_in_db(reps_hash):
+                self.write_preps(reps_hash, reps)
+
     def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None
         nid = NID.unknown.value
@@ -1244,8 +1251,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.find_preps_addresses_by_roothash(
-            ObjectManager().channel_service.peer_manager.crep_root_hash)
+        block_builder.reps = self.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
