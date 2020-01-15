@@ -22,8 +22,7 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager,
-                                   CommonSubprocess,
+from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
