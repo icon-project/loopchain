@@ -70,11 +70,8 @@ class LogConfiguration:
 
             if self.log_color:
                 self._update_log_color_set(logger)
-                for handler in logger.handlers:
-                    if isinstance(handler, logging.StreamHandler):
-                        handler.addFilter(self._root_stream_filter)
-        else:
-            logger.setLevel(self._log_level)
+
+        logger.setLevel(self._log_level)
 
         if self.log_monitor:
             sender.setup('loopchain', host=self.log_monitor_host, port=self.log_monitor_port)
@@ -112,10 +109,23 @@ class LogConfiguration:
                 'debug': {'color': 'green'},
                 'warning': {'color': 'yellow'}}
 
-        coloredlogs.install(logger=logger,
-                            fmt=self._log_format,
-                            datefmt="%Y-%m-%d %H:%M:%S",
-                            level=self._log_level)
+        self._beautify_stream_handlers(logger)
+
+    def _beautify_stream_handlers(self, logger):
+        stream_handlers = (
+            stream_handler for stream_handler in logger.handlers
+            if isinstance(stream_handler, logging.StreamHandler)
+        )
+
+        colored_fmt = coloredlogs.ColoredFormatter(fmt=self._log_format, datefmt="%Y-%m-%d %H:%M:%S")
+
+        for stream_handler in stream_handlers:
+            if stream_handler.stream == sys.stdout:
+                stream_handler.addFilter(self._root_stdout_filter)
+            elif stream_handler.stream == sys.stderr:
+                stream_handler.setLevel(logging.ERROR)
+
+            stream_handler.setFormatter(colored_fmt)
 
     def _update_log_file_path(self):
         log_file_name = self.log_file_prefix + "{SERVICE_TYPE}{CHANNEL_NAME}"
@@ -142,8 +152,11 @@ class LogConfiguration:
             handlers = []
 
             if self.log_output_type & conf.LogOutputType.console:
-                stream_handler = self._create_stream_handler()
-                handlers.append(stream_handler)
+                stdout_handler = self._create_stdout_handler()
+                handlers.append(stdout_handler)
+
+                stderr_handler = self._create_stderr_handler()
+                handlers.append(stderr_handler)
 
                 console = True
             else:
@@ -162,12 +175,36 @@ class LogConfiguration:
             sys.excepthook = partial(new_excepthook, console=console, output_file=output_file)
             traceback.print_exception = partial(new_print_exception, console=console, output_file=output_file)
 
-            logging.basicConfig(handlers=handlers,
-                                format=self._log_format,
-                                datefmt="%Y-%m-%d %H:%M:%S",
-                                level=self._log_level)
+            # Add default formatter to initial handlers.
+            formatter = logging.Formatter(fmt=self._log_format, datefmt="%Y-%m-%d %H:%M:%S")
+            for handler in handlers:
+                handler.setFormatter(formatter)
+
+            logger.handlers = handlers
+
         finally:
             logging._releaseLock()
+
+    def _create_stdout_handler(self):
+        """Create stdout log handler.
+
+        Emits log records from self._log_level (include) to logging.ERROR (exclude)
+        """
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setLevel(self._log_level)
+        stream_handler.addFilter(self._root_stdout_filter)
+
+        return stream_handler
+
+    def _create_stderr_handler(self):
+        """Create stderr log handler.
+
+        Emits log records above logging.ERROR
+        """
+        stream_error_handler = logging.StreamHandler(sys.stderr)
+        stream_error_handler.setLevel(logging.ERROR)
+
+        return stream_error_handler
 
     def _create_file_handler(self):
         if os.path.exists(self.log_file_location):
@@ -213,14 +250,9 @@ class LogConfiguration:
         file_handler.level = self._log_level
         return file_handler
 
-    def _create_stream_handler(self):
-        stream_handler = logging.StreamHandler()
-        stream_handler.level = self._log_level
-        stream_handler.addFilter(self._root_stream_filter)
-        return stream_handler
-
-    def _root_stream_filter(self, record: logging.LogRecord):
-        return record.name not in useless_streams
+    def _root_stdout_filter(self, record: logging.LogRecord) -> bool:
+        """Controls emission of LogRecord on stdout handler."""
+        return record.name not in useless_streams and record.levelno < logging.ERROR
 
 
 useless_streams = {
