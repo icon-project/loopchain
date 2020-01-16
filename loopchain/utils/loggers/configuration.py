@@ -141,18 +141,13 @@ class LogConfiguration:
 
             handlers = []
 
-            partial_new_excepthook = new_excepthook
-            partial_new_print_exception = new_print_exception
-
             if self.log_output_type & conf.LogOutputType.console:
                 stream_handler = self._create_stream_handler()
                 handlers.append(stream_handler)
 
-                partial_new_excepthook = partial(partial_new_excepthook, console=True)
-                partial_new_print_exception = partial(partial_new_print_exception, console=True)
+                console = True
             else:
-                partial_new_excepthook = partial(partial_new_excepthook, console=False)
-                partial_new_print_exception = partial(partial_new_print_exception, console=False)
+                console = False
 
             if self.log_output_type & conf.LogOutputType.file and self.log_file_location:
                 self._update_log_file_path()
@@ -160,11 +155,12 @@ class LogConfiguration:
                 file_handler = self._create_file_handler()
                 handlers.append(file_handler)
 
-                sys.excepthook = partial(partial_new_excepthook, output_file=file_handler.stream)
-                traceback.print_exception = partial(partial_new_print_exception, output_file=file_handler.stream)
+                output_file = file_handler.stream
             else:
-                sys.excepthook = partial(partial_new_excepthook, output_file=None)
-                traceback.print_exception = partial(partial_new_print_exception, output_file=None)
+                output_file = None
+
+            sys.excepthook = partial(new_excepthook, console=console, output_file=output_file)
+            traceback.print_exception = partial(new_print_exception, console=console, output_file=output_file)
 
             logging.basicConfig(handlers=handlers,
                                 format=self._log_format,
