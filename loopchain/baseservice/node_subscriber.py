@@ -111,6 +111,7 @@ class NodeSubscriber:
             max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK,
             loop=MessageQueueService.loop
         )
+        logging.debug(f"Prepare connection to: {self._websocket.remote_address}")
 
     async def _handshake(self, block_height):
         try:
@@ -127,6 +128,7 @@ class NodeSubscriber:
             self._subscribe_event.set()
 
     async def _subscribe_request(self, block_height):
+        logging.debug(f"Request subscription to parent...")
         request = Request(
             method="node_ws_Subscribe",
             height=block_height,
@@ -171,6 +173,7 @@ class NodeSubscriber:
         blockchain = ObjectManager().channel_service.block_manager.blockchain
 
         new_block_height = blockchain.block_versioner.get_height(block_dict)
+        logging.info(f"height({new_block_height}), my_height({blockchain.block_height})")
         if new_block_height > blockchain.block_height:
             block_version = blockchain.block_versioner.get_version(new_block_height)
             block_serializer = BlockSerializer.new(block_version, blockchain.tx_versioner)
@@ -180,6 +183,7 @@ class NodeSubscriber:
             block_verifier.invoke_func = blockchain.score_invoke
             reps_getter = blockchain.find_preps_addresses_by_roothash
             try:
+                logging.info(f"Try to verify new block: {confirmed_block.header.hash}")
                 block_verifier.verify(confirmed_block,
                                       blockchain.last_block,
                                       blockchain,
@@ -193,12 +197,14 @@ class NodeSubscriber:
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
             finally:
+                logging.debug("Try to reset block monitoring timer...")
                 ObjectManager().channel_service.reset_block_monitoring_timer()
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
             self._exception = exception
 
+        logging.debug("Citizen got heartbeat...")
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
