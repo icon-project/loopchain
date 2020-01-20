@@ -388,7 +388,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         if reps_hash and reps_hash != self.__audience_reps_hash:
             self._update_audience(reps_hash)
         elif not self.__audience_reps_hash:
-            self._update_audience(ObjectManager().channel_service.peer_manager.reps_hash())
+            self._update_audience(ObjectManager().channel_service.peer_manager.crep_root_hash)
 
         kwargs = {}
         if retry_times is not None:

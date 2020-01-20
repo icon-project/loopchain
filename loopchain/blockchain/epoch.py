@@ -15,11 +15,10 @@
 Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
 
-import logging
-import time
 import traceback
 from typing import Dict, Optional, TYPE_CHECKING
 
+import time
 from pkg_resources import parse_version
 
 from loopchain import utils, configure as conf
@@ -27,8 +26,7 @@ from loopchain.baseservice import ObjectManager
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
-from loopchain.blockchain.votes.v0_1a import LeaderVotes, LeaderVote
-from loopchain.blockchain.votes.votes import VoteError
+from loopchain.blockchain.votes.votes import VoteError, Votes
 from loopchain.channel.channel_property import ChannelProperty
 
 if TYPE_CHECKING:
@@ -51,7 +49,7 @@ class Epoch:
         self.__candidate_blocks = None
 
         self.round = 0
-        self.complain_votes: Dict[int, LeaderVotes] = {}
+        self.complain_votes: Dict[int, 'LeaderVotes'] = {}
         self.complained_result = None
 
         self.reps_hash = None  # init by self.new_votes()
@@ -73,13 +71,13 @@ class Epoch:
         else:
             self.round = round_
 
-        logging.debug(f"new round {round_}, {self.round}")
+        utils.logger.debug(f"new round {round_}, {self.round}")
 
         self.new_votes()
 
     def new_votes(self):
         self.reps_hash = self.__blockchain.last_block.header.revealed_next_reps_hash or \
-                         ObjectManager().channel_service.peer_manager.prepared_reps_hash
+                         ObjectManager().channel_service.peer_manager.crep_root_hash
         self.reps = self.__blockchain.find_preps_addresses_by_roothash(self.reps_hash)
 
         # TODO After the v0.4 update, remove this version parsing.
@@ -88,11 +86,14 @@ class Epoch:
         else:
             ratio = conf.LEADER_COMPLAIN_RATIO
 
-        leader_votes = LeaderVotes(self.reps,
-                                   ratio,
-                                   self.height,
-                                   self.round,
-                                   ExternalAddress.fromhex_address(self.leader_id))
+        version = self.__blockchain.block_versioner.get_version(self.height)
+        leader_votes = Votes.get_leader_votes_class(version)(
+            self.reps,
+            ratio,
+            self.height,
+            self.round,
+            ExternalAddress.fromhex_address(self.leader_id)
+        )
         self.complain_votes[self.round] = leader_votes
 
     def set_epoch_leader(self, leader_id, complained=False):
@@ -103,20 +104,20 @@ class Epoch:
         else:
             self.complained_result = None
 
-    def add_complain(self, leader_vote: LeaderVote):
+    def add_complain(self, leader_vote: 'LeaderVote'):
         utils.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
                            f"new_leader_id({leader_vote.new_leader}), "
                            f"block_height({leader_vote.block_height}), "
-                           f"round({leader_vote.round_}), "
+                           f"round({leader_vote.round}), "
                            f"peer_id({leader_vote.rep})")
         try:
-            self.complain_votes[leader_vote.round_].add_vote(leader_vote)
+            self.complain_votes[leader_vote.round].add_vote(leader_vote)
         except KeyError as e:
-            utils.logger.warning(f"{e}\nThere is no vote of {leader_vote.round_} round.")
+            utils.logger.warning(f"{e}\nThere is no vote of {leader_vote.round} round.")
         except VoteError as e:
             utils.logger.info(e)
         except RuntimeError as e:
-            logging.warning(e)
+            utils.logger.warning(e)
 
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.
@@ -137,7 +138,7 @@ class Epoch:
         tx_versioner = self.__blockchain.tx_versioner
         while tx_queue:
             if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
-                logging.warning(
+                utils.logger.warning(
                     f"consensus_base total size({block_builder.size()}) "
                     f"count({len(block_builder.transactions)}) "
                     f"_txQueue size ({len(tx_queue)})")
@@ -162,9 +163,11 @@ class Epoch:
             try:
                 tv.verify(tx, self.__blockchain)
             except Exception as e:
-                logging.warning(f"tx hash invalid.\n"
-                                f"tx: {tx}\n"
-                                f"exception: {e}")
+                utils.logger.warning(
+                    f"tx hash invalid.\n"
+                    f"tx: {tx}\n"
+                    f"exception: {e}"
+                )
                 traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
@@ -185,7 +188,7 @@ class Epoch:
             utils.logger.spam(f"There is no duplicated tx anymore.")
 
     def makeup_block(self,
-                     complain_votes: LeaderVotes,
+                     complain_votes: 'LeaderVotes',
                      prev_votes,
                      new_term: bool = False,
                      skip_add_tx: bool = False):

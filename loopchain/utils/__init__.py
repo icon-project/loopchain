@@ -21,22 +21,22 @@ import os
 import re
 import signal
 import socket
-import sys
-import time
 import timeit
 import traceback
-from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
-from typing import Tuple, Optional, Union
+from typing import Tuple, Union
 
+import sys
+import time
 import verboselogs
+from binascii import unhexlify
 from fluent import event
 
 from loopchain import configure as conf
-from loopchain.protos import loopchain_pb2, message_code
+from loopchain.protos import message_code
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 

@@ -15,16 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """Test Vote Object"""
-import os
-import logging
-import unittest
 import hashlib
-import testcase.unittest.test_util as test_util
+import logging
+import os
+import unittest
 
-from loopchain.crypto.signature import Signer
+import testcase.unittest.test_util as test_util
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes import vote, votes
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes, LeaderVote, LeaderVotes
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)
@@ -265,6 +265,33 @@ class TestVote(unittest.TestCase):
 
         self.assertEqual(leader_votes.is_completed(), True)
         self.assertEqual(leader_votes.get_result(), None)
+
+    def test_leader_votes_completed_with_out_of_round(self):
+        ratio = 0.51
+        old_leader = self.reps[0]
+        next_leader = self.reps[1]
+        by_higher_rounder = ExternalAddress.empty()
+
+        leader_votes = LeaderVotes(self.reps, ratio, 0, 0, old_leader)
+        for i, (rep, signer) in enumerate(zip(self.reps[:26], self.signers[:26])):
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, next_leader)
+            leader_votes.add_vote(leader_vote)
+
+        leader_votes.get_summary()
+        print(f"leader_votes.is_completed(): {leader_votes.is_completed()}")
+        print(f"leader_votes.get_result(): {leader_votes.get_result()}")
+        self.assertEqual(leader_votes.is_completed(), False)
+        self.assertEqual(leader_votes.get_result(), None)
+
+        for i, (rep, signer) in enumerate(zip(self.reps[26:55], self.signers[26:55])):
+            leader_vote = LeaderVote.new(signer, 0, 0, 0, old_leader, by_higher_rounder)
+            leader_votes.add_vote(leader_vote)
+
+        leader_votes.get_summary()
+        print(f"leader_votes.is_completed(): {leader_votes.is_completed()}")
+        print(f"leader_votes.get_result(): {leader_votes.get_result()}")
+        self.assertEqual(leader_votes.is_completed(), True)
+        self.assertEqual(leader_votes.get_result(), next_leader)
 
     def test_leader_invalid_vote(self):
         ratio = 0.67

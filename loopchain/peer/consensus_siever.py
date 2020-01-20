@@ -24,7 +24,7 @@ from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
-from loopchain.blockchain.votes.v0_1a import BlockVotes
+from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
 
@@ -121,7 +121,8 @@ class ConsensusSiever(ConsensusBase):
         if block_version == '0.1a':
             votes = dumped_votes
         else:
-            votes = BlockVotes.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+            votes_class = Votes.get_block_votes_class(block_version)
+            votes = votes_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
         return self._block_manager.epoch.makeup_block(complain_votes, votes)
 
@@ -288,7 +289,7 @@ class ConsensusSiever(ConsensusBase):
                 last_unconfirmed_block = self._blockchain.last_unconfirmed_block
                 if last_unconfirmed_block is None:
                     warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
-                    if self._blockchain.find_block_by_hash(block_hash):
+                    if self._blockchain.find_block_by_hash32(block_hash):
                         warning_msg += "\nBut already added block so  no longer have to wait for the vote."
                         # TODO An analysis of the cause of this situation is necessary.
                         util.logger.notice(warning_msg)
@@ -328,7 +329,8 @@ class ConsensusSiever(ConsensusBase):
                 util.logger.spam(f"{e}")
                 prev_votes_list = []
             else:
-                prev_votes_list = BlockVotes.deserialize_votes(prev_votes_serialized)
+                version = self._blockchain.block_versioner.get_version(self._block_manager.epoch.height)
+                prev_votes_list = Votes.get_block_votes_class(version).deserialize_votes(prev_votes_serialized)
         return prev_votes_list
 
     @staticmethod

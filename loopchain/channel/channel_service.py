@@ -22,11 +22,10 @@ from earlgrey import MessageQueueService
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, BroadcastCommand,
-                                   ObjectManager, CommonSubprocess, RestClient,
-                                   NodeSubscriber, UnregisteredException, TimerService)
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
+                                   RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
@@ -203,13 +202,10 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-    async def __init_network(self):
+    async def evaluate_network(self):
         await self._init_rs_client()
         self.__peer_manager.load_peers()
         await self._select_node_type()
-
-    async def evaluate_network(self):
-        await self.__init_network()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
 
@@ -230,12 +226,9 @@ class ChannelService:
         if self.is_support_node_function(conf.NodeFunction.Vote):
             self.turn_on_leader_complain_timer()
 
-    def update_sub_services_properties(self):
+    def update_nid(self):
         nid = self.__block_manager.blockchain.find_nid()
         self.__inner_service.update_sub_services_properties(nid=int(nid, 16))
-
-    def __get_role_switch_block_height(self):
-        return self.get_channel_option().get('role_switch_block_height', -1)
 
     def _get_node_type_by_peer_list(self):
         epoch = self.block_manager.epoch
@@ -244,20 +237,13 @@ class ChannelService:
                 epoch.reps_hash)
         else:
             reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
-                self.__peer_manager.prepared_reps_hash)
+                self.__peer_manager.crep_root_hash)
 
         if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
         return conf.NodeType.CitizenNode
 
     def _is_role_switched(self) -> bool:
-        current_height = self.__block_manager.blockchain.block_height
-        switch_block_height = self.__get_role_switch_block_height()
-        if switch_block_height != -1 and current_height < switch_block_height:
-            utils.logger.debug(f"Waiting for role switch block height({switch_block_height}), "
-                               f"current_height({current_height})")
-            return False
-
         new_node_type = self._get_node_type_by_peer_list()
         if new_node_type == ChannelProperty().node_type:
             utils.logger.debug(f"By peer manager, maintains the current node type({ChannelProperty().node_type})")
@@ -394,7 +380,7 @@ class ChannelService:
             return
 
         reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
-            self.peer_manager.prepared_reps_hash)
+            self.peer_manager.crep_root_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):
@@ -478,8 +464,6 @@ class ChannelService:
                 and self.is_support_node_function(conf.NodeFunction.Vote))
 
     def __ready_to_height_sync(self):
-        self.block_manager.blockchain.init_blockchain()
-
         if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
         else:
@@ -642,3 +626,6 @@ class ChannelService:
 
     def stop_block_monitoring_timer(self):
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_BLOCK_MONITOR)
+
+    def stop_ws_heartbeat_timer(self):
+        self.__timer_service.stop_timer(TimerService.TIMER_KEY_WS_HEARTBEAT)

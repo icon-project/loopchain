@@ -21,7 +21,7 @@ from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
 from loopchain.blockchain.types import Hash32
-from loopchain.blockchain.votes.v0_1a import BlockVote, LeaderVote
+from loopchain.blockchain.votes import Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
@@ -770,9 +770,11 @@ class ChannelInnerTask:
         except json.decoder.JSONDecodeError:
             util.logger.warning(f"This vote({vote_dumped}) may be from old version.")
         else:
-            vote = BlockVote.deserialize(vote_serialized)
+            version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
+            vote = Vote.get_block_vote_class(version).deserialize(vote_serialized)
             util.logger.debug(
-                f"Peer vote to : {vote.block_height}({vote.round_}) {vote.block_hash} from {vote.rep.hex_hx()}")
+                f"Peer vote to: {vote.block_height}({vote.round}) {vote.block_hash} from {vote.rep.hex_hx()}"
+            )
             self._block_manager.candidate_blocks.add_vote(vote)
 
             if self._channel_service.state_machine.state == "BlockGenerate" and \
@@ -782,7 +784,8 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
         vote_serialized = json.loads(vote_dumped)
-        vote = LeaderVote.deserialize(vote_serialized)
+        version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
+        vote = Vote.get_leader_vote_class(version).deserialize(vote_serialized)
         self._block_manager.add_complain(vote)
 
     @message_queue_task

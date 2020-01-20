@@ -55,6 +55,10 @@ class IconScoreInnerTask:
     async def change_block_hash(self, params) -> dict:
         pass
 
+    @message_queue_task
+    async def rollback(self, request: dict) -> dict:
+        pass
+
 
 class IconScoreInnerStub(MessageQueueStub[IconScoreInnerTask]):
     TaskType = IconScoreInnerTask

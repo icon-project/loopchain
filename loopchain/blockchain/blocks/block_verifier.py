@@ -139,6 +139,10 @@ class BlockVerifier(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner', raise_exceptions=True) -> 'BlockVerifier':
+        from . import v0_5
+        if version == v0_5.version:
+            return v0_5.BlockVerifier(tx_versioner, raise_exceptions)
+
         from . import v0_4
         if version == v0_4.version:
             return v0_4.BlockVerifier(tx_versioner, raise_exceptions)

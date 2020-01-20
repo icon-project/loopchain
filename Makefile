@@ -29,7 +29,7 @@ help:
 requirements:
 	@command -v automake > /dev/null || echo "Error: automake is not installed."
 	@command -v pkg-config > /dev/null || echo "Error: pkg-config is not installed."
-	@command -v libtool > /dev/null || echo "Error: libtool is not installed."
+	@command -v libtool > /dev/null || dpkg -l libtool > /dev/null || echo "Error: libtool is not installed."
 	@command -v openssl > /dev/null || echo "Error: openssl is not installed."
 	@if [ "$$(ps -e | grep '[r]abbitmq-server')" = "" ]; then\
 		echo "Rabbitmq server is not running locally.";\
@@ -40,7 +40,7 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice==1.5.20
+	$(PIP_INSTALL) iconservice==1.6.0
 	$(PIP_INSTALL) iconcommons==1.1.2
 	$(PIP_INSTALL) iconrpcserver==1.4.9
 	$(PIP_INSTALL) tbears

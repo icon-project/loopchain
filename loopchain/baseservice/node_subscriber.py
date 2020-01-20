@@ -31,7 +31,7 @@ from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
 from loopchain.blockchain import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
-from loopchain.blockchain.votes.v0_1a import BlockVotes
+from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
@@ -123,7 +123,8 @@ class NodeSubscriber:
             await self.close()
             raise
         else:
-            logging.debug(f"Websocket connection is completed, with id({id(self._websocket)})")
+            logging.debug(f"successfully registered as citizen, with id({ChannelProperty().peer_id})")
+            self._subscribe_event.set()
 
     async def _subscribe_request(self, block_height):
         request = Request(
@@ -164,7 +165,7 @@ class NodeSubscriber:
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
-            vote = BlockVotes.deserialize_votes(votes_serialized)
+            vote = Votes.get_block_votes_class(block_dict["version"]).deserialize_votes(votes_serialized)
         except json.JSONDecodeError:
             vote = votes_dumped
         blockchain = ObjectManager().channel_service.block_manager.blockchain
@@ -197,10 +198,6 @@ class NodeSubscriber:
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
             self._exception = exception
-
-        if not self._subscribe_event.is_set():
-            # set subscribe_event to transit the state to Watch.
-            self._subscribe_event.set()
 
         timer_key = TimerService.TIMER_KEY_WS_HEARTBEAT
         timer_service = ObjectManager().channel_service.timer_service

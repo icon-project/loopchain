@@ -75,6 +75,12 @@ class ConfirmInfoInvalidAddedBlock(Exception):
     pass
 
 
+class PreviousBlockMismatch(Exception):
+    """This exception may need block rollback.
+    """
+    pass
+
+
 class InvalidUnconfirmedBlock(Exception):
     """
     """
@@ -112,6 +118,12 @@ class ThereIsNoCandidateBlock(Exception):
 
 
 class NoConfirmInfo(Exception):
+    """
+    """
+    pass
+
+
+class BlockNotExist(Exception):
     """
     """
     pass
