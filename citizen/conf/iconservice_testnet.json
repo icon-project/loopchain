@@ -24,5 +24,6 @@
         "audit": true,
         "deployerWhiteList": false,
         "scorePackageValidator": false
-    }
+    },
+    "mainPRepCount": 7
 }
