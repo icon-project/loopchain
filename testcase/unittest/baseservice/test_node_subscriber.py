@@ -35,6 +35,10 @@ def mock_ws(mocker):
             self.mock_close = mocker_fixture.MagicMock()
 
         @property
+        def remote_address(self):
+            return "remote_address"
+
+        @property
         def closed(self) -> bool:
             """Fake status for websocket connection.
 
