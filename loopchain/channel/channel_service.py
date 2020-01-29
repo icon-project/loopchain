@@ -27,12 +27,12 @@ from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.types import Hash32
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.peermanager import PeerManager
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -46,7 +46,6 @@ class ChannelService:
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
         self.__peer_auth: Signer = None
-        self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__rs_client: RestClient = None
         self.__consensus = None
@@ -64,6 +63,7 @@ class ChannelService:
 
         ChannelProperty().name = channel_name
         ChannelProperty().amqp_target = amqp_target
+        ChannelProperty().crep_root_hash = Hash32.fromhex(conf.CHANNEL_OPTION[channel_name].get('crep_root_hash'))
 
         StubCollection().amqp_key = amqp_key
         StubCollection().amqp_target = amqp_target
@@ -90,10 +90,6 @@ class ChannelService:
     @property
     def rs_client(self):
         return self.__rs_client
-
-    @property
-    def peer_manager(self):
-        return self.__peer_manager
 
     @property
     def broadcast_scheduler(self):
@@ -193,7 +189,6 @@ class ChannelService:
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None
 
-        self.__peer_manager = PeerManager()
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
@@ -202,9 +197,10 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
+        self.__block_manager.blockchain.init_crep_reps()
+
     async def evaluate_network(self):
         await self._init_rs_client()
-        self.__peer_manager.load_peers()
         await self._select_node_type()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
@@ -237,7 +233,7 @@ class ChannelService:
                 epoch.reps_hash)
         else:
             reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
-                self.__peer_manager.crep_root_hash)
+                ChannelProperty().crep_root_hash)
 
         if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
@@ -259,7 +255,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.peer_manager.update_all_peers()
+        self.__block_manager.blockchain.reset_leader_made_block_count(need_check_switched_role=True)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -379,8 +375,7 @@ class ChannelService:
             logging.debug("genesis block was already generated")
             return
 
-        reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
-            self.peer_manager.crep_root_hash)
+        reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):

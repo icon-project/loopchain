@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """gRPC broadcast thread"""
 
 import abc
@@ -33,6 +20,7 @@ from loopchain.baseservice import StubManager, ObjectManager, CommonThread, Broa
     TimerService, Timer
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.baseservice.tx_item_helper import TxItem
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
 
 
@@ -388,7 +376,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         if reps_hash and reps_hash != self.__audience_reps_hash:
             self._update_audience(reps_hash)
         elif not self.__audience_reps_hash:
-            self._update_audience(ObjectManager().channel_service.peer_manager.crep_root_hash)
+            self._update_audience(ChannelProperty().crep_root_hash)
 
         kwargs = {}
         if retry_times is not None:

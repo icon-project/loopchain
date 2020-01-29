@@ -159,7 +159,7 @@ class BlockManager:
             else:
                 self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.crep_root_hash, round_)
+            self._send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
@@ -696,8 +696,7 @@ class BlockManager:
         if block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
-            reps_hash = (block.header.revealed_next_reps_hash
-                         or ObjectManager().channel_service.peer_manager.crep_root_hash)
+            reps_hash = block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
             next_leader = self.blockchain.get_next_rep_string_in_reps(block.header.peer_id, reps)
 
@@ -747,7 +746,7 @@ class BlockManager:
         if self.blockchain.last_block:
             reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
         else:
-            reps_hash = self.__channel_service.peer_manager.crep_root_hash
+            reps_hash = ChannelProperty().crep_root_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
         target_list = list(rep_targets.values())
         for target in target_list:
@@ -828,8 +827,7 @@ class BlockManager:
             channel=self.channel_name
         )
 
-        reps_hash = (self.blockchain.last_block.header.revealed_next_reps_hash or
-                     self.__channel_service.peer_manager.crep_root_hash)
+        reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
         rep_id = leader_vote.rep.hex_hx()
         target = self.blockchain.find_preps_targets_by_roothash(reps_hash)[rep_id]
 
@@ -909,9 +907,7 @@ class BlockManager:
         vote_dumped = json.dumps(vote_serialized)
         block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
 
-        target_reps_hash = block.header.reps_hash
-        if not target_reps_hash:
-            target_reps_hash = self.__channel_service.peer_manager.crep_root_hash
+        target_reps_hash = block.header.reps_hash or ChannelProperty().crep_root_hash
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "VoteUnconfirmedBlock",
