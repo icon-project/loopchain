@@ -16,7 +16,7 @@ python-pkcs11==0.5.0
 requests==2.20.0
 cryptography==2.3.1
 sanic==18.12.0
-secp256k1==0.13.2
+coincurve==13.0.0
 setproctitle==1.1.10
 transitions==0.6.8
 verboselogs==1.7
