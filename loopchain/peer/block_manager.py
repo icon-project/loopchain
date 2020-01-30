@@ -49,10 +49,9 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, name: str, channel_service, peer_id, channel_name, store_identity):
+    def __init__(self, channel_service, peer_id, channel_name, store_identity):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
-        self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
 
         self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
@@ -67,7 +66,6 @@ class BlockManager:
         self.__block_height_future: Future = None
         self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
-        self.name = name
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
@@ -106,9 +104,6 @@ class BlockManager:
     def precommit_block(self, block):
         self.__precommit_block = block
 
-    def get_key_value_store(self) -> KeyValueStore:
-        return self.blockchain.get_blockchain_store()
-
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
@@ -128,19 +123,6 @@ class BlockManager:
         :return: 블럭체인안의 transaction total count
         """
         return self.blockchain.total_tx
-
-    def pre_validate(self, tx: Transaction):
-        return self.__pre_validate_strategy(tx)
-
-    def __pre_validate(self, tx: Transaction):
-        if tx.hash.hex() in self.__txQueue:
-            raise TransactionDuplicatedHashError(tx)
-
-        if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
-            raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
-
-    def __pre_validate_pass(self, tx: Transaction):
-        pass
 
     def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps

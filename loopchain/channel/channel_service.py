@@ -48,7 +48,6 @@ class ChannelService:
         self.__peer_auth: Signer = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__rs_client: RestClient = None
-        self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
 
@@ -277,7 +276,6 @@ class ChannelService:
         logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
         try:
             self.__block_manager = BlockManager(
-                name="loopchain.peer.BlockManager",
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
@@ -433,7 +431,7 @@ class ChannelService:
 
         try:
             dump = peer_manager.dump()
-            key_value_store = self.__block_manager.get_key_value_store()
+            key_value_store = self.__block_manager.blockchain.blockchain_store
             key_value_store.put(level_db_key_name, dump)
         except AttributeError as e:
             logging.warning("Fail Save Peer_list: " + str(e))
