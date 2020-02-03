@@ -17,7 +17,8 @@ class PeerLoader:
 
     @staticmethod
     def load():
-        peers = PeerLoader._load_peers_from_db()
+        crep_root_hash: str = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
+        peers = PeerLoader._load_peers_from_db(crep_root_hash)
         if peers:
             utils.logger.info("Reps data loaded from DB")
         elif os.path.exists(conf.CHANNEL_MANAGE_DATA_PATH):
@@ -25,7 +26,7 @@ class PeerLoader:
             peers = PeerLoader._load_peers_from_file()
         else:
             utils.logger.info("Try to load reps data from other reps")
-            peers = PeerLoader._load_peers_from_rest_call()
+            peers = PeerLoader._load_peers_from_rest_call(crep_root_hash)
 
         peer_root_hash = PeerLoader._get_peer_root_hash(peers)
 
@@ -41,12 +42,10 @@ class PeerLoader:
         return block_prover.get_proof_root()
 
     @staticmethod
-    def _load_peers_from_db() -> list:
+    def _load_peers_from_db(reps_hash: str) -> list:
         blockchain = ObjectManager().channel_service.block_manager.blockchain
         last_block = blockchain.last_block
-        rep_root_hash = (last_block.header.reps_hash if last_block else
-                         Hash32.fromhex(conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')))
-
+        rep_root_hash = (last_block.header.reps_hash if last_block else Hash32.fromhex(reps_hash))
         return blockchain.find_preps_by_roothash(rep_root_hash)
 
     @staticmethod
@@ -56,9 +55,8 @@ class PeerLoader:
         return [{"id": rep["id"], "p2pEndpoint": rep["peer_target"]} for rep in reps]
 
     @staticmethod
-    def _load_peers_from_rest_call():
+    def _load_peers_from_rest_call(crep_root_hash: str):
         rs_client = ObjectManager().channel_service.rs_client
-        crep_root_hash = conf.CHANNEL_OPTION[ChannelProperty().name].get('crep_root_hash')
         reps = rs_client.call(
             RestMethod.GetReps,
             RestMethod.GetReps.value.params(crep_root_hash)
