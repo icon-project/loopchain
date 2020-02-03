@@ -196,10 +196,9 @@ class ChannelService:
         await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
         await self.__init_sub_services()
 
-        self.__block_manager.blockchain.init_crep_reps()
-
     async def evaluate_network(self):
         await self._init_rs_client()
+        self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
