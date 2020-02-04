@@ -162,6 +162,8 @@ class NodeSubscriber:
             await self.close()
 
     async def node_ws_PublishNewBlock(self, **kwargs):
+        ObjectManager().channel_service.remove_block_monitoring_timer()
+
         block_dict, votes_dumped = kwargs.get('block'), kwargs.get('confirm_info', '')
         try:
             votes_serialized = json.loads(votes_dumped)
@@ -193,7 +195,7 @@ class NodeSubscriber:
                 ObjectManager().channel_service.block_manager.add_confirmed_block(confirmed_block=confirmed_block,
                                                                                   confirm_info=vote)
             finally:
-                ObjectManager().channel_service.reset_block_monitoring_timer()
+                ObjectManager().channel_service.start_block_monitoring_timer()
 
     async def node_ws_PublishHeartbeat(self, **kwargs):
         def _callback(exception):
