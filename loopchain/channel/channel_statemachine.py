@@ -10,6 +10,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
+from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -213,6 +214,9 @@ class ChannelStateMachine(object):
         async def _run_with_handling_exception():
             try:
                 await coro
+            except ConsensusChanged as e:
+                loop.exception = e
+                loop.stop()
             except Exception:
                 traceback.print_exc()
 

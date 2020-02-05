@@ -20,7 +20,7 @@ from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
                                             TransactionOutOfTimeBound, NotInReps,
-                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader, ConsensusChanged)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -761,6 +761,19 @@ class BlockManager:
         self.epoch = Epoch(self, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
+        if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
+            last_unconfirmed_block = self.blockchain.last_unconfirmed_block or self.blockchain.last_block
+
+            dumped_votes = self.blockchain.find_confirm_info_by_hash(last_unconfirmed_block.header.hash)
+            votes_class = Votes.get_block_votes_class(last_unconfirmed_block.header.version)
+            last_unconfirmed_votes = votes_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
+
+            raise ConsensusChanged(
+                [tx_item.value for tx_item in self.__txQueue.d.values()],
+                last_unconfirmed_block,
+                last_unconfirmed_votes
+            )
+
     def stop(self):
         # for reuse key value store when restart channel.
         self.blockchain.close_blockchain_store()
@@ -997,3 +1010,11 @@ class BlockManager:
             await self._vote(unconfirmed_block, round_)
         else:
             await self._vote(unconfirmed_block, round_)
+            next_height = unconfirmed_block.header.height + 1
+            next_version = self.blockchain.block_versioner.get_version(next_height)
+            if next_version == "1.0":
+                raise ConsensusChanged(
+                    [tx_item.value for tx_item in self.__txQueue.d.values()],
+                    unconfirmed_block,
+                    None
+                )

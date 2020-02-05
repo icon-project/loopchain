@@ -25,7 +25,7 @@ from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError, ConsensusChanged
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.types import Hash32
 from loopchain.channel.channel_inner_service import ChannelInnerService
@@ -130,6 +130,10 @@ class ChannelService:
 
         try:
             loop.run_forever()
+            if hasattr(loop, "exception"):
+                raise loop.exception
+        except ConsensusChanged:
+            raise
         except Exception as e:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:

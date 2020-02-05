@@ -23,6 +23,8 @@ import time
 
 from loopchain import configure as conf
 from loopchain import utils
+from loopchain.app.app import App
+from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.tools.grpc_helper import grpc_patcher
@@ -116,7 +118,14 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    ChannelService(channel, amqp_target, amqp_key).serve()
+    try:
+        ChannelService(channel, amqp_target, amqp_key).serve()
+    except ConsensusChanged as e:
+        utils.logger.info(f"Consensus Changed")
+        utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
+        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block.header}")
+        utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
+        App()
 
 
 def start_as_rest_server(args):

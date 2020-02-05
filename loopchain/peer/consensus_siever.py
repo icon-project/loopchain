@@ -22,7 +22,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, ConsensusChanged
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
@@ -230,7 +230,7 @@ class ConsensusSiever(ConsensusBase):
                                                            True)
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
-                    await self._wait_for_voting(candidate_block)
+                    votes = await self._wait_for_voting(candidate_block)
                 except NotEnoughVotes:
                     return
 
@@ -238,6 +238,15 @@ class ConsensusSiever(ConsensusBase):
                 if (self._blockchain.made_block_count_reached_max(self._blockchain.last_block) or
                         self._block_manager.epoch.leader_id != ChannelProperty().peer_id):
                     ObjectManager().channel_service.reset_leader(self._block_manager.epoch.leader_id)
+
+            next_height = candidate_block.header.height + 1
+            next_version = self._blockchain.block_versioner.get_version(next_height)
+            if next_version == "1.0":
+                raise ConsensusChanged(
+                    [tx_item.value for tx_item in self._block_manager.get_tx_queue().d.values()],
+                    candidate_block,
+                    votes
+                )
 
             self.__block_generation_timer.call()
 
