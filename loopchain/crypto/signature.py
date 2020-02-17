@@ -110,6 +110,9 @@ class Signer(SignVerifier):
         super().__init__()
         self.private_key: PrivateKey = None
 
+    def get_private_secret(self):
+        return self.private_key.secret
+
     def sign_data(self, data):
         return self.sign(data, False)
 
