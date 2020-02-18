@@ -242,10 +242,10 @@ class TestSignature(unittest.TestCase):
                           self.signer_private_key_pem.sign_data(data))
 
     def test_signer_private_keys_equal(self):
-        self.assertEquals(self.signer_private_key_bytes.private_key.secret,
-                          self.signer_private_key_der.private_key.secret)
-        self.assertEquals(self.signer_private_key_bytes.private_key.secret,
-                          self.signer_private_key_pem.private_key.secret)
+        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+                          self.signer_private_key_der.get_private_secret())
+        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+                          self.signer_private_key_pem.get_private_secret())
 
     def test_signer_sign_verifier_addresses_equal(self):
         self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_der.address)
