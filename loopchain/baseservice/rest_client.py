@@ -23,10 +23,11 @@ from urllib.parse import urlparse
 
 import requests
 from aiohttp import ClientSession
-from jsonrpcclient import HTTPClient, Request
-from jsonrpcclient.aiohttp_client import aiohttpClient
-from loopchain import utils, configure as conf
+from jsonrpcclient.clients.aiohttp_client import AiohttpClient
+from jsonrpcclient.clients.http_client import HTTPClient
+from jsonrpcclient.requests import Request
 
+from loopchain import utils, configure as conf
 
 _RestMethod = namedtuple("_RestMethod", "version name params")
 
@@ -168,7 +169,7 @@ class RestClient:
         # 'aioHttpClient' does not support 'timeout'
         url = self._create_jsonrpc_url(target, method)
         async with ClientSession() as session:
-            http_client = aiohttpClient(session, url)
+            http_client = AiohttpClient(session, url)
             request = self._create_jsonrpc_params(method, params)
             return await http_client.send(request)
 

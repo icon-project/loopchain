@@ -21,7 +21,7 @@ from urllib import parse
 
 import websockets
 from earlgrey import MessageQueueService
-from jsonrpcclient.request import Request
+from jsonrpcclient.requests import Request
 from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
 from websockets import WebSocketClientProtocol
