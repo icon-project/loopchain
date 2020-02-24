@@ -207,5 +207,5 @@ class RestClient:
             if "from_" in params:
                 params["from"] = params.pop("from_")
 
-        return Request(method.value.name, params) if params else Request(method.value.name)
+        return Request(method.value.name, **params) if params else Request(method.value.name)
 
