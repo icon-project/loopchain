@@ -697,6 +697,15 @@ class ChannelInnerTask:
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
             return
 
+        if last_block.header.height < unconfirmed_block.header.height - 2:
+            if self._channel_service.state_machine.state == "BlockGenerate" and (
+                    self._channel_service.block_manager.consensus_algorithm and
+                    self._channel_service.block_manager.consensus_algorithm.is_running):
+
+                self._channel_service.block_manager.consensus_algorithm.stop()
+            else:
+                self._channel_service.state_machine.block_sync()
+
         self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block)
 
     @message_queue_task

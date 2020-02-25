@@ -61,6 +61,10 @@ class ConsensusSiever(ConsensusBase):
         if self._loop:
             self.__put_vote(None)
 
+    @property
+    def is_running(self):
+        return self.__block_generation_timer.is_running
+
     def vote(self, vote_block_hash, vote_code, peer_id, group_id):
         if self._loop:
             self.__put_vote((vote_block_hash, vote_code, peer_id, group_id))
