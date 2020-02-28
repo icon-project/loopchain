@@ -23,10 +23,11 @@ from urllib.parse import urlparse
 
 import requests
 from aiohttp import ClientSession
-from jsonrpcclient import HTTPClient, Request
-from jsonrpcclient.aiohttp_client import aiohttpClient
-from loopchain import utils, configure as conf
+from jsonrpcclient.clients.aiohttp_client import AiohttpClient
+from jsonrpcclient.clients.http_client import HTTPClient
+from jsonrpcclient.requests import Request
 
+from loopchain import utils, configure as conf
 
 _RestMethod = namedtuple("_RestMethod", "version name params")
 
@@ -164,11 +165,10 @@ class RestClient:
                                    timeout=timeout) as response:
                 return await response.json()
 
-    async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout):
-        # 'aioHttpClient' does not support 'timeout'
+    async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout: int):
         url = self._create_jsonrpc_url(target, method)
         async with ClientSession() as session:
-            http_client = aiohttpClient(session, url)
+            http_client = AiohttpClient(session, url, timeout=timeout)
             request = self._create_jsonrpc_params(method, params)
             return await http_client.send(request)
 
@@ -206,5 +206,5 @@ class RestClient:
             if "from_" in params:
                 params["from"] = params.pop("from_")
 
-        return Request(method.value.name, params) if params else Request(method.value.name)
+        return Request(method.value.name, **params) if params else Request(method.value.name)
 

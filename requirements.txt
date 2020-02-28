@@ -7,7 +7,7 @@ coloredlogs==10.0
 earlgrey>=0.0.4
 fluent-logger==0.9.3
 gunicorn==19.9.0
-jsonrpcclient==2.6.0
+jsonrpcclient==3.3.5
 jsonrpcserver==3.5.6
 leveldb==0.20
 plyvel>=1.0.5
