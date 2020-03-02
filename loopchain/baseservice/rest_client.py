@@ -22,8 +22,7 @@ from typing import List, Optional, NamedTuple, Sequence, Iterator, Dict
 from urllib.parse import urlparse
 
 import requests
-from aiohttp import ClientSession
-from jsonrpcclient.clients.aiohttp_client import AiohttpClient
+from jsonrpcclient.clients.aiohttp_client import AiohttpClient, ClientSession
 from jsonrpcclient.clients.http_client import HTTPClient
 from jsonrpcclient.requests import Request
 from jsonrpcclient.response import Response
