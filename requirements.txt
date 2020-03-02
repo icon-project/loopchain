@@ -1,7 +1,6 @@
 grpcio==1.25.0
 grpcio-tools==1.25.0
 protobuf==3.7.0
-aio-pika==3.0.1
 aiohttp==3.4.4
 coloredlogs==10.0
 earlgrey>=0.0.4
@@ -11,7 +10,6 @@ jsonrpcclient==3.3.5
 jsonrpcserver==3.5.6
 leveldb==0.20
 plyvel>=1.0.5
-pika==0.12.0
 python-pkcs11==0.5.0
 requests==2.20.0
 cryptography==2.3.1
