@@ -466,8 +466,8 @@ class ChannelService:
             if self._is_genesis_node():
                 self.generate_genesis_block()
 
-        if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
-            utils.exit_and_msg(f"There's no radiostation target to sync block.")
+        # if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
+        #     utils.exit_and_msg(f"There's no radiostation target to sync block.")
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """

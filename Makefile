@@ -53,6 +53,7 @@ requires-dev:
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@develop
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
+	$(PIP_INSTALL) git+https://github.com/icon-project/lft2.git@develop
 
 ## pip install packages for develop
 develop: $(INSTALL_DEVELOP_REQUIRES)

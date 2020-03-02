@@ -23,7 +23,7 @@ import time
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.app.app import App
+from loopchain.app.node import Node
 from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
@@ -125,7 +125,7 @@ def start_as_channel(args):
         utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
         utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block.header}")
         utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
-        App()
+        Node(e.node_id).start()
 
 
 def start_as_rest_server(args):
