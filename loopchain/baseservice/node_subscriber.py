@@ -109,7 +109,8 @@ class NodeSubscriber:
         self._websocket: WebSocketClientProtocol = await websockets.connect(
             uri=self._target_uri,
             max_size=4 * conf.MAX_TX_SIZE_IN_BLOCK,
-            loop=MessageQueueService.loop
+            loop=MessageQueueService.loop,
+            ping_timeout=conf.TIMEOUT_FOR_WS_PING
         )
 
     async def _handshake(self, block_height):
