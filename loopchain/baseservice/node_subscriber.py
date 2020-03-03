@@ -22,7 +22,6 @@ from urllib import parse
 import websockets
 from earlgrey import MessageQueueService
 from jsonrpcclient.requests import Request
-from jsonrpcserver import config
 from jsonrpcserver.aio import AsyncMethods
 from websockets import WebSocketClientProtocol
 
@@ -35,8 +34,6 @@ from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
-config.log_requests = False
-config.log_responses = False
 ws_methods = AsyncMethods()
 CONNECTION_FAIL_CONDITIONS = {
     message_code.Response.fail_subscribe_limit,
