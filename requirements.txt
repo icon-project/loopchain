@@ -7,7 +7,7 @@ coloredlogs==10.0
 earlgrey>=0.0.4
 fluent-logger==0.9.3
 jsonrpcclient==3.3.5
-jsonrpcserver==3.5.6
+jsonrpcserver==4.1.2
 leveldb==0.20
 plyvel>=1.0.5
 pika==0.12.0
