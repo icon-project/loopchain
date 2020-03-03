@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from jsonrpcserver.exceptions import JsonRpcServerError
+from jsonrpcserver.exceptions import ApiError
 
 
 class JsonError:
@@ -25,7 +25,7 @@ class JsonError:
     SCORE_ERROR = -32100
 
 
-class GenericJsonRpcServerError(JsonRpcServerError):
+class GenericJsonRpcServerError(ApiError):
     """Raised when the request is not a valid JSON-RPC object.
     User can change code and message properly
 
@@ -40,8 +40,5 @@ class GenericJsonRpcServerError(JsonRpcServerError):
         :param http_status: http status code
         :param data: json-rpc error data (optional)
         """
-        super().__init__(data)
-
-        self.code = code
-        self.message = message
-        self.http_status = http_status
+        # FIXME: Replace GenericJsonRpcServerError as ApiError itself
+        super().__init__(message=message, code=code, data=data)
