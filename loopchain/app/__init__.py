@@ -1,1 +1,1 @@
-from .app import App, InstantApp, RecordApp, ReplayApp
+from .app import App

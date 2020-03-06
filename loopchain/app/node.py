@@ -1,4 +1,3 @@
-import asyncio
 from typing import IO, Dict, Type, OrderedDict
 from lft.app.data import DefaultDataFactory
 from lft.app.epoch import RotateEpoch
@@ -78,9 +77,7 @@ class Node:
             self.event_system = None
 
     def start(self, blocking=True):
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        self.event_system.start(blocking, loop)
+        self.event_system.start(blocking)
 
     def start_record(self, record_io: IO, mediator_ios: Dict[Type[EventMediator], IO]=None, blocking=True):
         self.event_system.start_record(record_io, mediator_ios, blocking)

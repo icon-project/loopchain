@@ -44,6 +44,7 @@ requires:
 	$(PIP_INSTALL) iconcommons==1.1.2
 	$(PIP_INSTALL) iconrpcserver==1.4.9
 	$(PIP_INSTALL) tbears
+	$(PIP_INSTALL) git+https://github.com/icon-project/lft2.git@develop#egg=name[app]
 
 ## pip install packages
 install: $(INSTALL_REQUIRES)
@@ -53,7 +54,7 @@ requires-dev:
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@develop
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
-	$(PIP_INSTALL) git+https://github.com/icon-project/lft2.git@develop
+	$(PIP_INSTALL) git+https://github.com/icon-project/lft2.git@develop#egg=name[app]
 
 ## pip install packages for develop
 develop: $(INSTALL_DEVELOP_REQUIRES)
