@@ -22,8 +22,8 @@ from urllib import parse
 import websockets
 from earlgrey import MessageQueueService
 from jsonrpcclient.requests import Request
-from jsonrpcserver import config
-from jsonrpcserver.aio import AsyncMethods
+from jsonrpcserver import async_dispatch
+from jsonrpcserver.methods import Methods
 from websockets import WebSocketClientProtocol
 
 from loopchain import configure as conf
@@ -35,9 +35,7 @@ from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
 
-config.log_requests = False
-config.log_responses = False
-ws_methods = AsyncMethods()
+ws_methods = Methods()
 CONNECTION_FAIL_CONDITIONS = {
     message_code.Response.fail_subscribe_limit,
     message_code.Response.fail_connection_closed,
@@ -53,11 +51,12 @@ class UnregisteredException(Exception):
     pass
 
 
-def convert_response_to_dict(response: bytes) -> dict:
-    response_dict: dict = json.loads(response)
-    response_dict = _check_error_in_response(response_dict)
+def validate_response(response: str) -> str:
+    res: dict = json.loads(response)
+    res = _check_error_in_response(res)
+    res: str = json.dumps(res)
 
-    return response_dict
+    return res
 
 
 def _check_error_in_response(response_dict: dict) -> dict:
@@ -135,13 +134,13 @@ class NodeSubscriber:
         await self._websocket.send(json.dumps(request))
 
     async def _recv_until_timeout(self):
-        response: bytes = await asyncio.wait_for(
+        response: str = await asyncio.wait_for(
             fut=self._websocket.recv(),
             timeout=2 * conf.TIMEOUT_FOR_WS_HEARTBEAT
         )
-        response_dict = convert_response_to_dict(response)
+        response = validate_response(response)
 
-        await ws_methods.dispatch(response_dict)
+        await async_dispatch(response, ws_methods)
 
     async def _run(self):
         try:
