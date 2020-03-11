@@ -8,7 +8,6 @@ earlgrey>=0.0.4
 fluent-logger==0.9.3
 jsonrpcclient==3.3.5
 jsonrpcserver==4.1.2
-leveldb==0.20
 plyvel>=1.0.5
 pika==0.12.0
 python-pkcs11==0.5.0
