@@ -139,7 +139,6 @@ class KeyValueStoreCancelableWriteBatch(abc.ABC):
 
 class KeyValueStore(abc.ABC):
     STORE_TYPE_PLYVEL = 'plyvel'
-    STORE_TYPE_LEVELDB = 'leveldb'
     STORE_TYPE_DICT = 'dict'
 
     @staticmethod
@@ -153,10 +152,6 @@ class KeyValueStore(abc.ABC):
             utils.logger.debug(f"New KeyValueStorePlyvel.")
             from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
             return KeyValueStorePlyvel(uri, **kwargs)
-        elif store_type == KeyValueStore.STORE_TYPE_LEVELDB:
-            utils.logger.warning(f"New KeyValueStoreLevelDb. store_type={store_type}, uri={uri}")
-            from loopchain.store.key_value_store_leveldb import KeyValueStoreLevelDb
-            return KeyValueStoreLevelDb(uri, **kwargs)
         elif store_type == KeyValueStore.STORE_TYPE_DICT:
             raise ValueError(f"KeyValueStoreDict is just for development.")
             # if you want to use keyValueStoreDict for develop, uncomment below lines
