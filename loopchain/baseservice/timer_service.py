@@ -19,8 +19,10 @@ import time
 import traceback
 from enum import Enum
 from typing import Dict, Callable, Awaitable, Union, Optional
+from earlgrey import MessageQueueService
 
 from loopchain import utils as util
+from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.baseservice import CommonThread
 
 
@@ -103,6 +105,9 @@ class Timer:
     def try_func(self):
         try:
             self.__callback(**self.__kwargs)
+        except ConsensusChanged as e:
+            MessageQueueService.loop.exception = e
+            MessageQueueService.loop.stop()
         except Exception:
             traceback.print_exc()
 
@@ -110,6 +115,9 @@ class Timer:
         async def _try_coroutine():
             try:
                 await self.__callback(**self.__kwargs)
+            except ConsensusChanged as e:
+                MessageQueueService.loop.exception = e
+                MessageQueueService.loop.stop()
             except Exception:
                 traceback.print_exc()
 

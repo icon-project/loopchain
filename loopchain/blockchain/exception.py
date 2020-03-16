@@ -13,13 +13,15 @@
 # limitations under the License.
 """A module of exceptions for errors on block chain"""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from loopchain.protos import message_code
 
 if TYPE_CHECKING:
     from loopchain.blockchain.transactions import Transaction
     from loopchain.blockchain.types import Hash32
+    from loopchain.blockchain.blocks import Block
+    from loopchain.blockchain.votes import Votes
 
 
 class InvalidBlock(Exception):
@@ -270,3 +272,11 @@ class TransactionInvalidNidError(TransactionInvalidError):
         return \
             f"{super().__str__()}" \
             f"expected_nid: {self.expected_nid}"
+
+
+class ConsensusChanged(Exception):
+    def __init__(self, remain_txs: Iterable['Transaction'],
+                 last_unconfirmed_block: 'Block', last_unconfirmed_votes: 'Votes'):
+        self.remain_txs = remain_txs
+        self.last_unconfirmed_block = last_unconfirmed_block
+        self.last_unconfirmed_votes = last_unconfirmed_votes

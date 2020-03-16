@@ -88,6 +88,10 @@ class BlockBuilder(ABC):
 
     @classmethod
     def new(cls, version: str, tx_versioner: 'TransactionVersioner'):
+        from . import v1_0
+        if version == v1_0.version:
+            return v1_0.BlockBuilder(tx_versioner)
+
         from . import v0_5
         if version == v0_5.version:
             return v0_5.BlockBuilder(tx_versioner)
