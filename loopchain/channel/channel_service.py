@@ -112,17 +112,25 @@ class ChannelService:
 
     def serve(self):
         async def _serve():
-            await StubCollection().create_peer_stub()
-
-            results = await StubCollection().peer_stub.async_task().get_node_info_detail()
-            await self.init(**results)
-
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
             logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
         loop = MessageQueueService.loop
+        loop.run_until_complete(self.init())
+
+        blockchain = self.block_manager.blockchain
+        block_version = blockchain.block_versioner.get_version(blockchain.block_height + 1)
+
+        if block_version == "1.0":
+            raise ConsensusChanged(
+                node_id=ChannelProperty().peer_address,
+                remain_txs=[],
+                last_unconfirmed_block=None,
+                last_unconfirmed_votes=None
+            )
+
         # loop.set_debug(True)
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
@@ -173,20 +181,23 @@ class ChannelService:
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
 
-    async def init(self, **kwargs):
+    async def init(self):
         """Initialize Channel Service
 
         :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
         :return: None
         """
-        loggers.get_preset().peer_id = kwargs.get('peer_id')
+        await StubCollection().create_peer_stub()
+        results = await StubCollection().peer_stub.async_task().get_node_info_detail()
+
+        loggers.get_preset().peer_id = results.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = kwargs.get('peer_port')
-        ChannelProperty().peer_target = kwargs.get('peer_target')
-        ChannelProperty().rest_target = kwargs.get('rest_target')
-        ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_port = results.get('peer_port')
+        ChannelProperty().peer_target = results.get('peer_target')
+        ChannelProperty().rest_target = results.get('rest_target')
+        ChannelProperty().peer_id = results.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None

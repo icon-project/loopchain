@@ -13,7 +13,7 @@
 # limitations under the License.
 """A module of exceptions for errors on block chain"""
 
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from loopchain.protos import message_code
 
@@ -220,7 +220,7 @@ class TransactionInvalidError(MessageCodeError):
     def __init__(self, tx: 'Transaction', message=''):
         super().__init__(message)
         self.tx = tx
-        
+
     def __str__(self):
         return \
             f"{super().__str__()}\n" \
@@ -276,7 +276,7 @@ class TransactionInvalidNidError(TransactionInvalidError):
 
 class ConsensusChanged(Exception):
     def __init__(self, node_id: 'ExternalAddress', remain_txs: Iterable['Transaction'],
-                 last_unconfirmed_block: 'Block', last_unconfirmed_votes: 'Votes'):
+                 last_unconfirmed_block: Optional['Block'], last_unconfirmed_votes: Optional['Votes']):
         self.node_id = node_id
         self.remain_txs = remain_txs
         self.last_unconfirmed_block = last_unconfirmed_block
