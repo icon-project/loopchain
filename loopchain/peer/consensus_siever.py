@@ -243,6 +243,7 @@ class ConsensusSiever(ConsensusBase):
             next_version = self._blockchain.block_versioner.get_version(next_height)
             if next_version == "1.0":
                 raise ConsensusChanged(
+                    ChannelProperty().peer_address,
                     [tx_item.value for tx_item in self._block_manager.get_tx_queue().d.values()],
                     candidate_block,
                     votes

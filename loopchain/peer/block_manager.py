@@ -769,6 +769,7 @@ class BlockManager:
             last_unconfirmed_votes = votes_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
             raise ConsensusChanged(
+                ChannelProperty().peer_address,
                 [tx_item.value for tx_item in self.__txQueue.d.values()],
                 last_unconfirmed_block,
                 last_unconfirmed_votes
@@ -1014,6 +1015,7 @@ class BlockManager:
             next_version = self.blockchain.block_versioner.get_version(next_height)
             if next_version == "1.0":
                 raise ConsensusChanged(
+                    ChannelProperty().peer_address,
                     [tx_item.value for tx_item in self.__txQueue.d.values()],
                     unconfirmed_block,
                     None
