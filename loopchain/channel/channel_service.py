@@ -113,9 +113,7 @@ class ChannelService:
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
-
-            results = await StubCollection().peer_stub.async_task().get_node_info_detail()
-            await self.init(**results)
+            await self.init()
 
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
@@ -173,20 +171,22 @@ class ChannelService:
             self.__timer_service.wait()
             logging.info("Cleanup TimerService.")
 
-    async def init(self, **kwargs):
+    async def init(self):
         """Initialize Channel Service
 
         :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
         :return: None
         """
-        loggers.get_preset().peer_id = kwargs.get('peer_id')
+        results = await StubCollection().peer_stub.async_task().get_node_info_detail()
+
+        loggers.get_preset().peer_id = results.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = kwargs.get('peer_port')
-        ChannelProperty().peer_target = kwargs.get('peer_target')
-        ChannelProperty().rest_target = kwargs.get('rest_target')
-        ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_port = results.get('peer_port')
+        ChannelProperty().peer_target = results.get('peer_target')
+        ChannelProperty().rest_target = results.get('rest_target')
+        ChannelProperty().peer_id = results.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None
