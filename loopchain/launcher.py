@@ -124,7 +124,7 @@ def start_as_channel(args):
     except ConsensusChanged as e:
         utils.logger.info(f"Consensus Changed")
         utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
-        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block.header}")
+        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block and e.last_unconfirmed_block.header}")
         utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
         App(ExternalAddress.new()).start()
 
@@ -267,8 +267,8 @@ def print_prologue():
     print("    #       ####      ###  ########   ########   ##    ###  #######  ########   ########   ##      ")
     print("       ########       ###   ######     ######    ##    ###  ######    ######     ######    ##      ")
     print("  ## #########                                                                                     ")
-    print(" ####  #####                                                                                       ")
-    print("  ###                                                                                    loopchain3")
+    print(" ####  #####                                                                             loopchain3")
+    print("  ###                                                                                              ")
     print()
 
 
@@ -289,6 +289,6 @@ def print_epilogue():
     print("    $       $$$$      $$$  $$$$$$$$   $$$$$$$$   $$    $$$  $$$$$$$  $$$$$$$$   $$$$$$$$   $$      ")
     print("       $$$$$$$$       $$$   $$$$$$     $$$$$$    $$    $$$  $$$$$$    $$$$$$     $$$$$$    $$      ")
     print("  $$ $$$$:)$$$                                                                                     ")
-    print(" $$$$  $$$$$                                                                                       ")
-    print("  $$$                                                                                    loopchain3")
+    print(" $$$$  $$$$$                                                                             loopchain3")
+    print("  $$$                                                                                              ")
     print()
