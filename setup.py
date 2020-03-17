@@ -60,6 +60,7 @@ setup_options = {
     'version': version,
     'description': 'Blockchain consensus engine based on LFT',
     'author': 'ICON foundation',
+    'python_requires': '>=3.7,<3.8',
     'packages': find_packages(),
     'package_dir': {'': '.'},
     'license': "Apache License 2.0",
