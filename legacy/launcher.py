@@ -21,15 +21,14 @@ import logging
 import os
 import time
 
-from loopchain import configure as conf
-from loopchain import utils
-from loopchain.app.app import App
-from loopchain.blockchain.types import ExternalAddress
-from loopchain.blockchain.exception import ConsensusChanged
-from loopchain.channel.channel_service import ChannelService
-from loopchain.peer import PeerService
-from loopchain.tools.grpc_helper import grpc_patcher
-from loopchain.utils import loggers, command_arguments, async_
+from legacy import configure as conf
+from legacy import utils
+from legacy.blockchain.types import ExternalAddress
+from legacy.blockchain.exception import ConsensusChanged
+from legacy.channel.channel_service import ChannelService
+from legacy.peer import PeerService
+from legacy.tools.grpc_helper import grpc_patcher
+from legacy.utils import loggers, command_arguments, async_
 
 
 def parse_args_include_unknowns(parser, args=None, namespace=None):
@@ -53,7 +52,6 @@ def get_quick_command(unknowns):
 
 
 def main(argv):
-    utils.logger.notice(f"loopchain3.0 launch!")
     parser = argparse.ArgumentParser()
     for cmd_arg_type in command_arguments.Type:
         cmd_arg_attr = command_arguments.attributes[cmd_arg_type]
@@ -120,8 +118,7 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    # ChannelService(channel, amqp_target, amqp_key).serve()
-    App(ExternalAddress.new()).start()
+    ChannelService(channel, amqp_target, amqp_key).serve()
 
 
 def start_as_rest_server(args):
@@ -262,7 +259,7 @@ def print_prologue():
     print("    #       ####      ###  ########   ########   ##    ###  #######  ########   ########   ##      ")
     print("       ########       ###   ######     ######    ##    ###  ######    ######     ######    ##      ")
     print("  ## #########                                                                                     ")
-    print(" ####  #####                                                                             loopchain3")
+    print(" ####  #####                                                                                 legacy")
     print("  ###                                                                                              ")
     print()
 
@@ -284,6 +281,6 @@ def print_epilogue():
     print("    $       $$$$      $$$  $$$$$$$$   $$$$$$$$   $$    $$$  $$$$$$$  $$$$$$$$   $$$$$$$$   $$      ")
     print("       $$$$$$$$       $$$   $$$$$$     $$$$$$    $$    $$$  $$$$$$    $$$$$$     $$$$$$    $$      ")
     print("  $$ $$$$:)$$$                                                                                     ")
-    print(" $$$$  $$$$$                                                                             loopchain3")
+    print(" $$$$  $$$$$                                                                                 legacy")
     print("  $$$                                                                                              ")
     print()
