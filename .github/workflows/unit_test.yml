@@ -1,0 +1,47 @@
+name: Unit Test
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Variable Settings
+      run: |
+        pr_num=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+        echo "::set-env name=LOG_PATH::https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        echo "::set-env name=PR_PATH::https://github.com/${GITHUB_REPOSITORY}/pull/${pr_num}"
+
+    - name: Setup Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Install Third party libraries
+      run: |
+        python -V
+        sudo apt-get update
+        sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev automake libtool lsof figlet libsecp256k1-dev
+
+    - name: Run MQ
+      run: |
+        docker pull rabbitmq:3.7
+        sudo docker run -d -p 5672:5672 -h localhost --name rabbit rabbitmq:3.7
+
+    - name: Install Loopchain
+      run: |
+        pip install -e .[tests]
+
+    - name:
+      run: |
+        make unit-test
+
+    - name: Notify
+      uses: Ilshidur/action-slack@master
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CUSTOM_PAYLOAD: '{"text": ":scream: *Unit Test Failed* at <${{ env.PR_PATH }}|this PR>.\n See <${{ env.LOG_PATH }}|log>"}'
+      if: failure()
