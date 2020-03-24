@@ -19,6 +19,5 @@
     "amqpKey": "7100",
     "gunicornConfig": {
         "workers": 1
-    },
-    "redirectProtocol": "https"
+    }
 }
