@@ -1,0 +1,87 @@
+name: Citizen Sync
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-18.04
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Variable Settings
+      run: |
+        pr_num=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
+        echo "::set-env name=LOG_PATH::https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+        echo "::set-env name=PR_PATH::https://github.com/${GITHUB_REPOSITORY}/pull/${pr_num}"
+
+    - name: Setup Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Install Third party libraries
+      run: |
+        python -V
+        sudo apt-get update
+        sudo apt install -y make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev libncursesw5-dev xz-utils tk-dev libffi-dev liblzma-dev automake libtool lsof figlet libsecp256k1-dev jq
+
+    - name: Run MQ
+      run: |
+        docker pull rabbitmq:3.7
+        sudo docker run -d -p 5672:5672 -h localhost --name rabbit rabbitmq:3.7
+
+    - name: Install RewardCalculator
+      run: |
+        go version
+
+        git clone https://github.com/icon-project/rewardcalculator.git
+        cd rewardcalculator
+        git checkout develop -f
+        make && sudo make install
+        cd -
+        icon_rc -version
+
+    - name: Generate-key
+      run: |
+        sed "23 a\  \"PRIVATE_PASSWORD\": \"${pwd}\"," -i conf/mainnet/loopchain_conf.json
+        cat conf/mainnet/loopchain_conf.json
+
+        pip install tbears
+        tbears keystore -p ${pwd} my_keystore.json
+      env:
+        pwd: Most_safest_pw_in_the_wor1d
+
+    - name: Install Loopchain
+      run: |
+        pwd
+        make develop
+
+    - name: Sync to MainNet
+      run: |
+        figlet -f smslant "Sync To MainNet!"
+        loop -r mainnet &
+        sleep 20
+
+        curl -X POST http://localhost:9100/api/v3 -d "{ \"jsonrpc\" : \"2.0\", \"method\": \"icx_getBlock\", \"id\": 1234, \"params\": { \"height\": \"${target_height}\" } }" > response.json
+
+        echo "========RESPONSE======="
+        cat response.json
+        echo "======================="
+
+        result=$(cat response.json | jq ".result" )
+
+        if [ "${result}" == "null"  ]; then
+          exit 1
+        else
+          exit 0
+        fi
+      env:
+        target_height: "0xf"
+
+    - name: Notify
+      uses: Ilshidur/action-slack@master
+      env:
+        SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CUSTOM_PAYLOAD: '{"text": ":scream: *Citizen Sync Failed* at <${{ env.PR_PATH }}|this PR>.\n See <${{ env.LOG_PATH }}|log>"}'
+      if: failure()

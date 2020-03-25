@@ -3,6 +3,8 @@
 [![loopchain](https://img.shields.io/badge/ICON-Consensus-blue?logoColor=white&logo=icon&labelColor=31B8BB)](https://shields.io)
 [![loopchain](https://snapcraft.io/loopchain/badge.svg)](https://snapcraft.io/loopchain)
 
+![Citizen Sync](https://github.com/icon-project/loopchain/workflows/Citizen%20Sync/badge.svg)
+
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
 
  In order to run a loopchain node, you need to install [ICON Service]
