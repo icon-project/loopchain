@@ -119,14 +119,8 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    try:
-        ChannelService(channel, amqp_target, amqp_key).serve()
-    except ConsensusChanged as e:
-        utils.logger.info(f"Consensus Changed")
-        utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
-        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block and e.last_unconfirmed_block.header}")
-        utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
-        App(ExternalAddress.new()).start()
+    ChannelService(channel, amqp_target, amqp_key).serve()
+    # App(ExternalAddress.new()).start()
 
 
 def start_as_rest_server(args):

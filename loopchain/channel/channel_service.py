@@ -1,36 +1,34 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""Channel Service (The main service for single blockchain.)"""
 
 import asyncio
 import json
 import logging
 import signal
 import traceback
+from typing import TYPE_CHECKING
 
 from earlgrey import MessageQueueService
+from lft.consensus.epoch import EpochPool
+from lft.consensus.events import InitializeEvent
+from lft.event import EventSystem
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError, ConsensusChanged
+from loopchain.blockchain.blocks.v1_0 import BlockFactory
+from loopchain.blockchain.epoch3 import LoopchainEpoch
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.blockchain.invoke_result import InvokePool
+from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.votes.v1_0 import BlockVoteFactory
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
+from loopchain.consensus.runner import ConsensusRunner
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2
@@ -38,6 +36,9 @@ from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType
 from loopchain.utils.message_queue import StubCollection
+
+if TYPE_CHECKING:
+    from loopchain.blockchain.blocks import v1_0
 
 
 class ChannelService:
@@ -50,12 +51,15 @@ class ChannelService:
         self.__rs_client: RestClient = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__consensus_runner = None
+        self.__event_system = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
 
         channel_queue_name = conf.CHANNEL_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
         self.__inner_service = ChannelInnerService(
+            self.__event_system,
             amqp_target, channel_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, channel_service=self)
 
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
@@ -120,17 +124,6 @@ class ChannelService:
         loop = MessageQueueService.loop
         loop.run_until_complete(self.init())
 
-        blockchain = self.block_manager.blockchain
-        block_version = blockchain.block_versioner.get_version(blockchain.block_height + 1)
-
-        if block_version == "1.0":
-            raise ConsensusChanged(
-                node_id=ChannelProperty().peer_address,
-                remain_txs=[],
-                last_unconfirmed_block=None,
-                last_unconfirmed_votes=None
-            )
-
         # loop.set_debug(True)
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close)
@@ -140,8 +133,6 @@ class ChannelService:
             loop.run_forever()
             if hasattr(loop, "exception"):
                 raise loop.exception
-        except ConsensusChanged:
-            raise
         except Exception as e:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:
@@ -292,7 +283,8 @@ class ChannelService:
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=ChannelProperty().name,
-                store_identity=ChannelProperty().peer_target
+                store_identity=ChannelProperty().peer_target,
+                event_system=self.__event_system
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")

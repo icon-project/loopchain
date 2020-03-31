@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, Future
 from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
 
 from pkg_resources import parse_version
+from lft.consensus.events import ReceiveDataEvent
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -39,6 +40,8 @@ from loopchain.utils.icon_service import convert_params, ParamType, response_to_
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
+    from lft.event import EventSystem
+    from lft.consensus.messages.data import Data
     from loopchain.channel.channel_service import ChannelService
 
 
@@ -49,7 +52,7 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, channel_service, peer_id, channel_name, store_identity):
+    def __init__(self, channel_service, peer_id, channel_name, store_identity, event_system: 'EventSystem'):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
         self.__peer_id = peer_id
@@ -71,6 +74,7 @@ class BlockManager:
         # old_block_hashes[height][new_block_hash] = old_block_hash
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
+        self.event_system = event_system
 
     @property
     def channel_name(self):
@@ -987,36 +991,33 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-    async def vote_as_peer(self, unconfirmed_block: Block, round_: int):
-        """Vote to AnnounceUnconfirmedBlock
-        """
-        util.logger.debug(
-            f"in vote_as_peer "
-            f"height({unconfirmed_block.header.height}) "
-            f"round({round_}) "
-            f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
-
-        try:
-            self.add_unconfirmed_block(unconfirmed_block, round_)
-        except InvalidUnconfirmedBlock as e:
-            self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
-            util.logger.warning(e)
-        except RoundMismatch as e:
-            self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
-            util.logger.warning(e)
-        except UnrecordedBlock as e:
-            util.logger.info(e)
-        except DuplicationUnconfirmedBlock as e:
-            util.logger.debug(e)
-            await self._vote(unconfirmed_block, round_)
+    async def vote_as_peer(self, unconfirmed_block: 'Data', round_: int):
+        if self.event_system:
+            util.logger.notice(f"vote as peer loopchain2.x")
+            e = ReceiveDataEvent(unconfirmed_block)
+            self.event_system.simulator.raise_event(e)
         else:
-            await self._vote(unconfirmed_block, round_)
-            next_height = unconfirmed_block.header.height + 1
-            next_version = self.blockchain.block_versioner.get_version(next_height)
-            if next_version == "1.0":
-                raise ConsensusChanged(
-                    ChannelProperty().peer_address,
-                    [tx_item.value for tx_item in self.__txQueue.d.values()],
-                    unconfirmed_block,
-                    None
-                )
+            util.logger.notice(f"vote as peer loopchain3.0")
+            """Vote to AnnounceUnconfirmedBlock
+            """
+            util.logger.debug(
+                f"in vote_as_peer "
+                f"height({unconfirmed_block.header.height}) "
+                f"round({round_}) "
+                f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+
+            try:
+                self.add_unconfirmed_block(unconfirmed_block, round_)
+            except InvalidUnconfirmedBlock as e:
+                self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
+                util.logger.warning(e)
+            except RoundMismatch as e:
+                self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
+                util.logger.warning(e)
+            except UnrecordedBlock as e:
+                util.logger.info(e)
+            except DuplicationUnconfirmedBlock as e:
+                util.logger.debug(e)
+                await self._vote(unconfirmed_block, round_)
+            else:
+                await self._vote(unconfirmed_block, round_)
