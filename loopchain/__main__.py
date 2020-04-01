@@ -16,18 +16,32 @@ import sys
 
 import yappi
 
+from legacy import launcher as launcher2
+from loopchain import launcher as launcher3
+from loopchain import utils
+from loopchain.blockchain.exception import ConsensusChanged
 from . import configure as conf
-from . import launcher
+
+
+def launch(argv):
+    try:
+        launcher2.main(argv)
+    except ConsensusChanged as e:
+        utils.logger.info(f"Consensus Changed")
+        utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
+        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block and e.last_unconfirmed_block.header}")
+        utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
+        launcher3.main(argv)
 
 
 def main():
     try:
         if conf.ENABLE_PROFILING:
             yappi.start()
-            launcher.main(sys.argv[1:])
+            launch(sys.argv[1:])
             yappi.stop()
         else:
-            launcher.main(sys.argv[1:])
+            launch(sys.argv[1:])
     except KeyboardInterrupt:
         if conf.ENABLE_PROFILING:
             yappi.stop()
