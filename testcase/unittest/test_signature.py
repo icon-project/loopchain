@@ -6,13 +6,8 @@ from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from loopchain.utils import loggers
-from loopchain.crypto.cert_serializers import DerSerializer, PemSerializer
 from loopchain.crypto.signature import Signer, SignVerifier, long_to_bytes
 from testcase.unittest import test_util
-
-loggers.set_preset_type(loggers.PresetType.develop)
-loggers.update_preset()
 
 
 class TestSignature(unittest.TestCase):
@@ -247,10 +242,10 @@ class TestSignature(unittest.TestCase):
                           self.signer_private_key_pem.sign_data(data))
 
     def test_signer_private_keys_equal(self):
-        self.assertEquals(self.signer_private_key_bytes.private_key.private_key,
-                          self.signer_private_key_der.private_key.private_key)
-        self.assertEquals(self.signer_private_key_bytes.private_key.private_key,
-                          self.signer_private_key_pem.private_key.private_key)
+        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+                          self.signer_private_key_der.get_private_secret())
+        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+                          self.signer_private_key_pem.get_private_secret())
 
     def test_signer_sign_verifier_addresses_equal(self):
         self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_der.address)

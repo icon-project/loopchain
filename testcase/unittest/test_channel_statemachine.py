@@ -15,9 +15,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import unittest
+from unittest.mock import MagicMock
 
 import loopchain.utils as util
 import testcase.unittest.test_util as test_util
+from loopchain.blockchain.blockchain import BlockChain
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.protos import loopchain_pb2
 
@@ -26,6 +28,7 @@ class MockBlockManager:
     def __init__(self):
         self.timer_called = 0
         self.peer_type = loopchain_pb2.BLOCK_GENERATOR
+        self.blockchain = MagicMock(BlockChain)
 
     def start_block_generate_timer(self):
         if self.timer_called == 0:

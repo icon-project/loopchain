@@ -1,10 +1,9 @@
-#!/usr/bin/env python
 import base64
 import hashlib
 import logging
 import random
 
-from secp256k1 import PrivateKey, PublicKey
+from coincurve import PrivateKey, PublicKey
 from loopchain import utils, configure as conf
 from loopchain.blockchain.types import Hash32, VarBytes
 from loopchain.crypto.hashing import build_hash_generator
@@ -16,7 +15,7 @@ ICX_FEE = 0.01
 class IcxWallet:
     def __init__(self, private_key=None):
         self.__private_key = private_key or PrivateKey()
-        self.__address = self.create_address(self.__private_key.pubkey)
+        self.__address = self.create_address(self.__private_key.public_key)
         self.__last_tx_hash = ""
 
         tx_hash_versions = conf.CHANNEL_OPTION[conf.LOOPCHAIN_DEFAULT_CHANNEL]["hash_versions"]
@@ -96,15 +95,14 @@ class IcxWallet:
         return icx_origin if is_raw_data else params
 
     def create_address(self, public_key: PublicKey) -> str:
-        serialized_pub = public_key.serialize(compressed=False)
+        serialized_pub = public_key.format(compressed=False)
         hashed_pub = hashlib.sha3_256(serialized_pub[1:]).hexdigest()
         return f"hx{hashed_pub[-40:]}"
 
     def create_signature(self, tx_hash):
-        signature = self.__private_key.ecdsa_sign_recoverable(msg=tx_hash,
-                                                              raw=True,
-                                                              digest=hashlib.sha3_256)
-        serialized_sig = self.__private_key.ecdsa_recoverable_serialize(signature)
-        sig_message = b''.join([serialized_sig[0], bytes([serialized_sig[1]])])
+        def sha3_256(bytestr: bytes) -> bytes:
+            return hashlib.sha3_256(bytestr).digest()
+
+        sig_message = self.__private_key.sign_recoverable(message=tx_hash, hasher=sha3_256)
         signature = base64.b64encode(sig_message).decode()
         return signature

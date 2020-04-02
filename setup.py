@@ -60,6 +60,7 @@ setup_options = {
     'version': version,
     'description': 'Blockchain consensus engine based on LFT',
     'author': 'ICON foundation',
+    'python_requires': '>=3.7,<3.8',
     'packages': find_packages(),
     'package_dir': {'': '.'},
     'license': "Apache License 2.0",
@@ -76,6 +77,19 @@ setup_options = {
         ],
     },
     'tests_require': ['pytest'],
+    'data_files': [
+        ('conf', ['citizen/conf/citizen_mainnet.json',
+                  'citizen/conf/citizen_testnet.json',
+                  'citizen/conf/iconrpcserver_mainnet.json',
+                  'citizen/conf/iconrpcserver_testnet.json',
+                  'citizen/conf/iconservice_mainnet.json',
+                  'citizen/conf/iconservice_testnet.json']),
+        ('scripts', ['citizen/run_citizen_mainnet.sh',
+                     'citizen/run_citizen_testnet.sh',
+                     'citizen/stop_all.sh']),
+        ('docs', ['README.md',
+                  'citizen/quick_start_snap.md'])
+    ],
     'cmdclass': {
         'build_proto_modules': BuildPackageProtos,
         'build_py': BuildPyCommand,

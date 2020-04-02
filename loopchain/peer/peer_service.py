@@ -123,7 +123,7 @@ class PeerService:
             password = getpass.getpass(f"Input your keystore password: ")
         signer = Signer.from_prikey_file(prikey_file, password)
         self._make_peer_id(signer.address)
-        self._node_key = signer.private_key.private_key
+        self._node_key = signer.get_private_secret()
 
     def _make_peer_id(self, address):
         self._peer_id = address

@@ -1,26 +1,10 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-""" A class for icx authorization of Peer"""
-
 import binascii
 import hashlib
 import logging
 from typing import Union, Type, TypeVar
 
 import eth_keyfile
-from secp256k1 import Base, ALL_FLAGS
-from secp256k1 import PrivateKey, PublicKey
+from coincurve import PrivateKey, PublicKey
 
 from loopchain.crypto.cert_serializers import DerSerializer, PemSerializer
 
@@ -28,9 +12,6 @@ T = TypeVar('T', bound='SignVerifier')
 
 
 class SignVerifier:
-    _base = Base(None, ALL_FLAGS)
-    _pri = PrivateKey(ctx=_base.ctx)
-
     def __init__(self):
         self.address: str = None
 
@@ -48,18 +29,26 @@ class SignVerifier:
         self.verify_signature(origin_data, signature, True)
 
     def verify_signature(self, origin_data: bytes, signature: bytes, is_hash: bool):
+        """
+        1. get PublicKey from signature and message
+        2. convert PublicKey address from PublicKey
+        3. verify_address
+        """
+        hash_method = self.sha3_256 if not is_hash else None
+
         try:
-            origin_signature, recover_code = signature[:-1], signature[-1]
-            recoverable_sig = self._pri.ecdsa_recoverable_deserialize(origin_signature, recover_code)
-            pub = self._pri.ecdsa_recover(origin_data,
-                                          recover_sig=recoverable_sig,
-                                          raw=is_hash,
-                                          digest=hashlib.sha3_256)
-            extract_pub = PublicKey(pub, ctx=self._base.ctx).serialize(compressed=False)
-            return self.verify_address(extract_pub)
+            extract_pubkey = PublicKey.from_signature_and_message(signature,
+                                                                  origin_data,
+                                                                  hasher=hash_method)
+            pubkey_address = extract_pubkey.format(compressed=False)
+            return self.verify_address(pubkey_address)
         except Exception as e:
             raise RuntimeError(f"signature verification fail : {origin_data} {signature}\n"
                                f"{e}")
+
+    @classmethod
+    def sha3_256(cls, bytestr: bytes) -> bytes:
+        return hashlib.sha3_256(bytestr).digest()
 
     @classmethod
     def address_from_pubkey(cls, pubkey: bytes):
@@ -69,7 +58,7 @@ class SignVerifier:
     @classmethod
     def address_from_prikey(cls, prikey: Union[bytes, PrivateKey]):
         prikey = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey)
-        pubkey = prikey.pubkey.serialize(compressed=False)
+        pubkey = prikey.public_key.format(compressed=False)
         return cls.address_from_pubkey(pubkey)
 
     @classmethod
@@ -121,6 +110,9 @@ class Signer(SignVerifier):
         super().__init__()
         self.private_key: PrivateKey = None
 
+    def get_private_secret(self):
+        return self.private_key.secret
+
     def sign_data(self, data):
         return self.sign(data, False)
 
@@ -141,11 +133,8 @@ class Signer(SignVerifier):
             logging.error(f"data must be bytes \n")
             return None
 
-        raw_sig = self.private_key.ecdsa_sign_recoverable(msg=data,
-                                                          raw=is_hash,
-                                                          digest=hashlib.sha3_256)
-        serialized_sig, recover_id = self.private_key.ecdsa_recoverable_serialize(raw_sig)
-        return serialized_sig + bytes((recover_id, ))
+        hash_method = self.sha3_256 if not is_hash else None
+        return self.private_key.sign_recoverable(message=data, hasher=hash_method)
 
     @classmethod
     def from_address(cls: Type[T], address: str) -> T:
@@ -166,7 +155,7 @@ class Signer(SignVerifier):
     @classmethod
     def from_prikey(cls: Type[T], prikey: Union[bytes, PrivateKey]):
         signer = Signer()
-        signer.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(prikey, ctx=cls._base.ctx)
+        signer.private_key = prikey if isinstance(prikey, PrivateKey) else PrivateKey(secret=prikey)
         signer.address = cls.address_from_prikey(prikey)
         return signer
 

@@ -1,0 +1,136 @@
+name: loopchain
+type: app
+adopt-info: loopchain
+summary: loopchain citizen
+description: |
+  loopchain-citizen is software that loopchain client excluded vote function.
+confinement: strict
+base: core18
+
+parts:
+  snapcraft-preload:
+    source: https://github.com/diddledan/snapcraft-preload.git
+    source-type: git
+    source-branch: semaphore-support
+    plugin: cmake
+    build-packages:
+      - on amd64:
+        - gcc-multilib
+        - g++-multilib
+  icon-rc:
+    plugin: go
+    go-importpath: github.com/icon-project/rewardcalculator
+    source: https://github.com/icon-project/rewardcalculator.git
+    source-type: git
+    source-branch: master
+    override-pull: |
+      snapcraftctl pull
+      /bin/bash $HOME/snap_build/rc_checkout_branch.sh
+    override-build: |
+      make
+      install -m 755 -D -t $SNAPCRAFT_PART_INSTALL/bin/ $SNAPCRAFT_PART_BUILD/bin/*
+    stage:
+      - bin/icon_rc
+      - bin/rctool
+  python3:
+    after: [ snapcraft-preload ]
+    source: https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tar.xz
+    source-type: tar
+    source-checksum: md5/93df27aec0cd18d6d42173e601ffbbfd
+    plugin: autotools
+    configflags: [--prefix=/usr]
+    build-packages:
+      - libssl1.0-dev
+      - libsqlite3-dev
+      - libbz2-dev
+      - liblzma-dev
+      - libdb-dev
+      - libgdbm-dev
+      - libreadline-dev
+      - zlib1g-dev
+      - libffi-dev
+    stage-packages:
+      - lsof
+      - net-tools
+    stage:
+      - -bin/netstat
+      - -sbin/ipmaddr
+      - -sbin/iptunnel
+      - -sbin/mii-tool
+      - -sbin/nameif
+      - -sbin/plipconfig
+      - -sbin/rarp
+      - -sbin/route
+      - -sbin/slattach
+      - -usr/sbin/arp
+      - -usr/lib/python3.7/test
+  install-dependency:
+    after: [ python3 ]
+    plugin: python
+    python-version: python3
+    python-packages:
+      - idna==2.7
+    build-packages:
+      - automake
+      - pkg-config
+      - libtool
+  loopchain:
+    after: [ install-dependency ]
+    plugin: python
+    python-version: python3
+    requirements:
+      - /root/snap_build/requirements_snap.txt
+    source-type: git
+    source-branch: master
+    source: https://github.com/icon-project/loopchain.git
+    override-pull: |
+      snapcraftctl pull
+      /bin/bash $HOME/snap_build/checkout_branch.sh
+      snapcraftctl set-version $(cat VERSION)
+      snapcraftctl set-grade stable
+    override-build: |
+      # cat VERSION > $SNAPCRAFT_STAGE/version
+      snapcraftctl build
+      cat > $SNAPCRAFT_PART_INSTALL/bin/init.sh <<EOF
+      #!/bin/bash
+      TARGET_DIR=\$1
+      if [ -z \$TARGET_DIR ]; then
+        TARGET_DIR=\$SNAP_USER_COMMON
+      fi
+      echo "copy default config files to \$TARGET_DIR"
+      cp -a \$SNAP/conf \$SNAP/scripts/* \$TARGET_DIR/
+      EOF
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/init.sh
+    override-stage: |
+      snapcraftctl stage
+    stage-packages:
+      - python-six
+    stage:
+      - -usr/bin/*
+      - -usr/share/*python*
+      - -usr/lib/python3.6
+
+apps:
+  loopchain:
+    command: bin/snapcraft-preload $SNAP/bin/loopchain
+    plugs:
+      - home
+      - network
+      - network-bind
+      - removable-media
+  init:
+    command: bin/init.sh
+    plugs:
+      - home
+  iconrpcserver:
+    command: bin/snapcraft-preload $SNAP/bin/iconrpcserver
+    plugs:
+      - home
+      - network
+      - network-bind
+  iconservice:
+    command: bin/snapcraft-preload $SNAP/bin/iconservice
+    plugs:
+      - home
+      - network
+      - network-bind
