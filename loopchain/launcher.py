@@ -53,7 +53,6 @@ def get_quick_command(unknowns):
 
 
 def main(argv):
-    utils.logger.notice(f"loopchain3.0 launch!")
     parser = argparse.ArgumentParser()
     for cmd_arg_type in command_arguments.Type:
         cmd_arg_attr = command_arguments.attributes[cmd_arg_type]
@@ -120,8 +119,14 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    # ChannelService(channel, amqp_target, amqp_key).serve()
-    App(ExternalAddress.new()).start()
+    try:
+        ChannelService(channel, amqp_target, amqp_key).serve()
+    except ConsensusChanged as e:
+        utils.logger.info(f"Consensus Changed")
+        utils.logger.info(f"Remain txs. {len(e.remain_txs)}")
+        utils.logger.info(f"Last unconfirmed block {e.last_unconfirmed_block and e.last_unconfirmed_block.header}")
+        utils.logger.info(f"Last unconfirmed votes {e.last_unconfirmed_votes}")
+        App(ExternalAddress.new()).start()
 
 
 def start_as_rest_server(args):
