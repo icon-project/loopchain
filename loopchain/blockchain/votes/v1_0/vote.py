@@ -5,16 +5,13 @@ from loopchain.crypto.hashing import build_hash_generator
 
 
 class BlockVote(Vote):
-    NoneHeight = 0
-    LazyHeight = NoneHeight
     NoneVote = Hash32.empty()
     LazyVote = Hash32(bytes([255] * 32))
 
     def __init__(self, data_id: Hash32, commit_id: Hash32, voter_id: ExternalAddress, epoch_num: int, round_num: int,
-                 block_height: int, state_hash: Hash32, receipt_hash: Hash32, timestamp: int, signature: Signature):
+                 state_hash: Hash32, receipt_hash: Hash32, timestamp: int, signature: Signature):
         """Vote.
 
-        :param block_height:
         :param state_hash:
         :param receipt_hash:
         :param data_id: Block hash to vote
@@ -34,7 +31,6 @@ class BlockVote(Vote):
         self._round_num: int = round_num
 
         # Not in Interface
-        self._block_height: int = block_height
         self._state_hash: Hash32 = state_hash
         self._receipt_hash: Hash32 = receipt_hash
         self._timestamp: int = timestamp
@@ -79,10 +75,6 @@ class BlockVote(Vote):
         return self._epoch_num
 
     @property
-    def block_height(self) -> int:
-        return self._block_height
-
-    @property
     def state_hash(self) -> Hash32:
         return self._state_hash
 
@@ -110,7 +102,6 @@ class BlockVote(Vote):
         return {
             "validator": self._voter_id.hex_hx(),
             "timestamp": hex(self._timestamp),
-            "blockHeight": hex(self._block_height),
             "blockHash": self._data_id.hex_0x(),
             "commitHash": self._commit_id.hex_0x(),
             "stateHash": self._state_hash.hex_0x(),
@@ -122,7 +113,6 @@ class BlockVote(Vote):
     @classmethod
     def _deserialize(cls, **data) -> Vote:
         return cls(
-            block_height=int(data["blockHeight"], 16),
             state_hash=Hash32.fromhex(data["stateHash"]),
             receipt_hash=Hash32.fromhex(data["receiptHash"]),
             data_id=Hash32.fromhex(data["blockHash"]),

@@ -309,7 +309,6 @@ class TestInvokeRequest:
                 voter_id=validator,
                 epoch_num=1,
                 round_num=1,
-                block_height=1,
                 state_hash=Hash32.new(),
                 receipt_hash=Hash32.new(),
                 timestamp=1,

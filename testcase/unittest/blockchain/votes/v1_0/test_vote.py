@@ -30,7 +30,6 @@ class TestVote_v1_0:
         data = dumped_vote["!data"]
         assert vote.voter_id.hex_hx() == data["validator"]
         assert hex(vote._timestamp) == data["timestamp"]
-        assert hex(vote.block_height) == data["blockHeight"]
         assert vote.commit_id.hex_0x() == data["commitHash"]
         assert vote.state_hash.hex_0x() == data["stateHash"]
         assert vote.receipt_hash.hex_0x() == data["receiptHash"]
