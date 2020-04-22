@@ -468,12 +468,6 @@ class ChannelInnerTask:
                 continue
 
             self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'tx_hash': tx.hash.hex()}})
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -627,14 +621,6 @@ class ChannelInnerTask:
         except Exception as e:
             data_log = {'tx_hash': tx.tx_hash}
 
-        util.apm_event(ChannelProperty().peer_id, {
-            'event_type': 'CreateTx',
-            'peer_id': ChannelProperty().peer_id,
-            'peer_name': conf.PEER_NAME,
-            'channel_name': ChannelProperty().name,
-            'tx_hash': tx.tx_hash,
-            'data': data_log})
-
         return tx.tx_hash
 
     @message_queue_task(type_=MessageQueueType.Worker)
@@ -652,12 +638,6 @@ class ChannelInnerTask:
 
         if tx is not None:
             self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'tx_hash': tx.tx_hash}})
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -796,13 +776,6 @@ class ChannelInnerTask:
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
 
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'GetInvokeResult',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'invoke_result': invoke_result, 'tx_hash': tx_hash}})
-
             if 'code' in invoke_result:
                 if invoke_result['code'] == ScoreResponse.NOT_EXIST:
                     logging.debug(f"get invoke result NOT_EXIST tx_hash({tx_hash})")
@@ -814,15 +787,7 @@ class ChannelInnerTask:
             return response_code, invoke_result_str
         except BaseException as e:
             logging.error(f"get invoke result error : {e}")
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'Error',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {
-                    'error_type': 'InvokeResultError',
-                    'code': message_code.Response.fail,
-                    'message': f"get invoke result error : {e}"}})
+
             return message_code.Response.fail, None
 
     @message_queue_task

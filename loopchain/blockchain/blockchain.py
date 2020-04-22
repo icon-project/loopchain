@@ -578,16 +578,6 @@ class BlockChain:
                     not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            peer_id = ChannelProperty().peer_id
-            utils.apm_event(peer_id, {
-                'event_type': 'TotalTx',
-                'peer_id': peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': self.__channel_name,
-                'data': {
-                    'block_hash': block.header.hash.hex(),
-                    'total_tx': self.total_tx}})
-
             return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
@@ -625,15 +615,6 @@ class BlockChain:
                 f"HASH : {block.header.hash.hex()} , "
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
-
-            utils.apm_event(self.__peer_id, {
-                'event_type': 'AddBlock',
-                'peer_id': self.__peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': self.__channel_name,
-                'data': {
-                    'block_height': self.__last_block.header.height
-                }})
 
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
