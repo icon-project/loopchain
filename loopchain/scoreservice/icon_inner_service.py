@@ -11,6 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Union
 
 from earlgrey import message_queue_task, MessageQueueStub
 
@@ -52,7 +53,7 @@ class IconScoreInnerTask:
         pass
 
     @message_queue_task
-    async def change_block_hash(self, params) -> dict:
+    async def change_block_hash(self, request: dict) -> Union[dict, str]:
         pass
 
     @message_queue_task

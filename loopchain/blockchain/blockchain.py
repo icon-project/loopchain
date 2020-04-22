@@ -1360,6 +1360,16 @@ class BlockChain:
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
         self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
+
+        request = {
+            "blockHeight": _block.header.height,
+            "oldBlockHash": _block.header.hash.hex(),
+            "newBlockHash": new_block.header.hash.hex()
+        }
+        request = convert_params(request, ParamType.change_block_hash)
+        response: dict = cast(dict, stub.sync_task().change_block_hash(request))
+        response_to_json_query(response)
+
         return new_block, tx_receipts
 
     def __write_preps(self, preps: list, next_reps_hash):

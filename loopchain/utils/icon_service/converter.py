@@ -35,6 +35,7 @@ class ParamType(Enum):
     get_tx_result_response = 13
     send_tx_response = 14
     roll_back = 15
+    change_block_hash = 16
 
 
 class ValueType(Enum):
@@ -297,3 +298,9 @@ templates[ParamType.get_tx_by_hash_response] = {
 }
 
 templates[ParamType.send_tx_response] = ValueType.hex_0x_hash_number
+
+templates[ParamType.change_block_hash] = {
+    "blockHeight": ValueType.hex_0x_number,
+    "oldBlockHash": ValueType.hex_number,
+    "newBlockHash": ValueType.hex_number
+}

@@ -636,11 +636,9 @@ class ChannelService:
         except KeyError:
             old_block_hash = new_block_hash
 
-        logging.debug(f"Block Hash : {old_block_hash} -> {new_block_hash}")
         request = {
             "blockHeight": block.header.height,
-            "oldBlockHash": old_block_hash.hex(),
-            "newBlockHash": new_block_hash.hex()
+            "blockHash": new_block_hash.hex()
         }
         request = convert_params(request, ParamType.write_precommit_state)
 
