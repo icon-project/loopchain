@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 class LoopchainEpoch(Epoch):
-    def __init__(self, num: int, voters: Sequence[ExternalAddress], rotate_bound=conf.MAX_MADE_BLOCK_COUNT):
+    def __init__(self, num: int, voters: Sequence[ExternalAddress], rotate_bound=None):
         """Represents a set of validators.
 
         :param num: A epoch number which should be incremented when the validator set is changed.
@@ -22,7 +22,7 @@ class LoopchainEpoch(Epoch):
             If round num reaches to the rotate_bound, then the proposer will be changed.
         """
         self._num: int = num
-        self._rotate_bound: int = rotate_bound
+        self._rotate_bound: int = rotate_bound if rotate_bound else conf.MAX_MADE_BLOCK_COUNT
         self._voters: Sequence[ExternalAddress] = tuple(voters)
 
         # Cached
@@ -46,17 +46,16 @@ class LoopchainEpoch(Epoch):
         return self._voters
 
     def verify_data(self, data: Data):
-        # TODO: Not used in the library?
+        # Not used in the library.
         pass
 
     def verify_vote(self, vote: 'BlockVote', vote_index: int = -1):
-        # TODO: Not used in the library?
+        # Not used in the library.
         pass
 
     def verify_proposer(self, proposer_id: bytes, round_num: int):
         expected_proposer = self.get_proposer_id(round_num)
         if proposer_id != expected_proposer:
-            # FIXME: interface requires bool as return value, but library logic does not.
             raise InvalidProposer(proposer_id, expected_proposer)
 
     def verify_voter(self, voter: bytes, vote_index: int = -1):
@@ -71,7 +70,8 @@ class LoopchainEpoch(Epoch):
                 raise InvalidVoter(voter, expected_voter)
         else:
             if voter not in self._voters:
-                raise InvalidVoter(voter, ExternalAddress.empty())  # TODO: Say this voter is not in reps.
+                # TODO: Need for LFT to provide `VoterError` or something else.
+                raise InvalidVoter(voter, ExternalAddress.empty())
 
     def get_proposer_id(self, round_num: int) -> ExternalAddress:
         if len(self._voters) == 0:
@@ -80,7 +80,7 @@ class LoopchainEpoch(Epoch):
             return self._voters[round_num // self._rotate_bound % len(self._voters)]
 
     def get_voter_id(self, vote_index: int) -> ExternalAddress:
-        # TODO: Not used in the library?
+        # Not used in the library.
         pass
 
     def get_voters_id(self) -> Sequence[ExternalAddress]:
