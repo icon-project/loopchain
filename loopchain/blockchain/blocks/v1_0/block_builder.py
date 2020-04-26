@@ -176,8 +176,8 @@ class BlockBuilder(BaseBlockBuilder):
             self.build_prev_votes_hash()
             self.build_transactions_hash()
             self.build_prev_receipts_hash()
-            # self.build_validators_hash()
-            # self.build_next_validators_hash()
+            self.build_validators_hash()
+            self.build_next_validators_hash()
             self.build_logs_bloom()
             self.hash = self._build_hash()
 
@@ -195,8 +195,8 @@ class BlockBuilder(BaseBlockBuilder):
             self.transactions_hash,
             self.prev_state_hash,
             self.prev_receipts_hash,
-            # self.validators_hash,
-            # self.next_validators_hash,
+            self.validators_hash,
+            self.next_validators_hash,
             self.prev_logs_bloom,
             self.height,
             self._timestamp,

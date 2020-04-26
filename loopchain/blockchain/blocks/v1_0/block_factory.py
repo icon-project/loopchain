@@ -6,7 +6,7 @@ from lft.consensus.messages.data import DataFactory
 
 from loopchain import configure_default as conf
 from loopchain import utils
-from loopchain.blockchain import Hash32, TransactionStatusInQueue
+from loopchain.blockchain import Hash32, TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader
 from loopchain.blockchain.blocks.v1_0.block_builder import BlockBuilder
 from loopchain.blockchain.blocks.v1_0.block_verifier import BlockVerifier
@@ -63,8 +63,9 @@ class BlockFactory(DataFactory):
         block_builder.prev_hash = prev_id
         block_builder.signer = self._signer
 
-        block_builder.validators_hash = invoke_data.reps_hash
-        block_builder.next_validators = invoke_data.next_preps
+        block_builder.validators_hash = invoke_data.validators_hash
+        block_builder.next_validators = [ExternalAddress.fromhex(next_validator_info["id"])
+                                         for next_validator_info in invoke_data.next_validators]
 
         block_builder.epoch = epoch_num
         block_builder.round = round_num

@@ -1,11 +1,12 @@
 from typing import List
 
 import pytest
+from lft.consensus.epoch import EpochPool
 
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Hash32
 from loopchain.blockchain.blocks import v1_0
-from loopchain.blockchain.invoke_result import InvokePool
+from loopchain.blockchain.invoke_result import InvokePool, InvokeData
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.votes.v1_0 import BlockVote
 from loopchain.crypto.signature import Signer
@@ -14,14 +15,20 @@ from loopchain.store.key_value_store import KeyValueStore
 
 class TestBlockFactory:
     @pytest.fixture
-    def block_factory(self, mocker) -> v1_0.BlockFactory:
+    def block_factory(self, mocker, icon_query) -> v1_0.BlockFactory:
         # TODO: Temporary mocking...
         tx_queue: AgingCache = mocker.MagicMock(AgingCache)
         db: KeyValueStore = mocker.MagicMock(KeyValueStore)
         tx_versioner = TransactionVersioner()
+
         invoke_pool: InvokePool = mocker.MagicMock(InvokePool)
+        invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
+            epoch_num=1,
+            round_num=1,
+            query_result=icon_query
+        )
         signer: Signer = Signer.new()
-        epoch_pool = "epoch_pool"
+        epoch_pool = EpochPool()
 
         return v1_0.BlockFactory(epoch_pool, tx_queue, db, tx_versioner, invoke_pool, signer)
 
