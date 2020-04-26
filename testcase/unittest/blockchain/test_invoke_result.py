@@ -284,7 +284,7 @@ class TestInvokeRequest:
         assert invoke_request_dict == expected_request
 
     def test_vote_and_leaders(self):
-        """Tests serialization of votes and reps."""
+        """Tests serialization of votes and validators."""
         # GIVEN There're validators
         validators: List[ExternalAddress] = [
             ExternalAddress.fromhex("hx86aba2210918a9b116973f3c4b27c41a54d5dafe"),
@@ -376,10 +376,10 @@ class TestInvokeData:
         assert invoke_data.epoch_num == epoch_num
         assert invoke_data.round_num == epoch_num
         assert invoke_data.added_transactions == icon_query["addedTransactions"]
-        assert invoke_data.reps_hash.hex() == icon_query["reps_hash"]
+        assert invoke_data.validators_hash.hex() == icon_query["reps_hash"]
 
-    def test_prep_changed(self, icon_query: dict):
-        # GIVEN I queried and prep changed
+    def test_validators_changed(self, icon_query: dict):
+        # GIVEN I queried and validators changed
         assert "prep" in icon_query
 
         # WHEN I create InvokeData by using the queried data
@@ -388,17 +388,17 @@ class TestInvokeData:
             round_num=1,
             query_result=icon_query
         )
-        # THEN It should tell why reps list has been changed
+        # THEN It should tell why validators list has been changed
         reason = invoke_data.changed_reason
         assert isinstance(reason, NextRepsChangeReason)
         assert reason != NextRepsChangeReason.NoChange
 
-        # AND There are no next reps
-        assert invoke_data.next_preps == icon_query["prep"]["preps"]
-        assert invoke_data.next_reps_hash.hex() == icon_query["prep"]["rootHash"]
+        # AND next validators and theirs hash should be exist
+        assert invoke_data.next_validators == icon_query["prep"]["preps"]
+        assert invoke_data.next_validators_hash.hex() == icon_query["prep"]["rootHash"]
 
-    def test_prep_not_changed(self, icon_query: dict):
-        # GIVEN I queried and prep list has no changes
+    def test_validators_not_changed(self, icon_query: dict):
+        # GIVEN I queried and no changes in validators list
         icon_query.pop("prep")
         assert "prep" not in icon_query
 
@@ -414,9 +414,9 @@ class TestInvokeData:
         assert isinstance(reason, NextRepsChangeReason)
         assert reason == NextRepsChangeReason.NoChange
 
-        # AND There are no next reps
-        assert not invoke_data.next_preps
-        assert invoke_data.next_reps_hash == Hash32.new()
+        # AND There are no next validators
+        assert not invoke_data.next_validators
+        assert invoke_data.next_validators_hash.hex() == invoke_data.validators_hash.hex() == icon_query["reps_hash"]
 
     def test_add_invoke_result(self, icon_query: dict, icon_invoke: dict):
         # GIVEN I queried and got data

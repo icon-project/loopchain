@@ -104,35 +104,32 @@ class InvokeData(Message):
                  epoch_num: int,
                  round_num: int,
                  added_transactions: Dict[str, dict],
-                 reps_hash: Hash32,
-                 next_prep: dict = None):
+                 validators_hash: Hash32,
+                 next_validators_origin: dict = None):
         """Represents a return value of Invoke Message, received from ICON-Service.
 
         :param epoch_num: Current epoch number
         :param round_num: Current round number
         :param added_transactions: Txs added by ICON-Service
-        :param reps_hash: Current reps hash
-        :param next_prep: Information about next reps.
-
-        Additional params:
-            next_preps: A group of next preps
-            next_preps_hash: reps_hash of `next_preps`
-            changed_reason: A reason why the prep list has been changed
+        :param validators_hash: Current validators hash
+        :param next_validators_origin: Information about next validators.
         """
+
         self._id: bytes = f"{epoch_num}_{round_num}".encode()
         self._epoch_num: int = epoch_num
         self._round_num: int = round_num
         self._added_transactions: Dict[str, dict] = added_transactions
-        self._reps_hash: Hash32 = reps_hash
+        self._validators_hash: Hash32 = validators_hash
 
-        self._next_preps: Optional[list] = None
-        self._next_preps_hash: Hash32 = Hash32.new()
+        # Additional params
+        self._next_validators: Optional[list] = None
+        self._next_validators_hash: Hash32 = validators_hash
         self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
 
-        if next_prep:
-            self._next_preps = next_prep["preps"]
-            self._next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
-            self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
+        if next_validators_origin:
+            self._next_validators = next_validators_origin["preps"]
+            self._next_validators_hash = Hash32.fromhex(next_validators_origin["rootHash"], ignore_prefix=True)
+            self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_validators_origin["state"])
 
         # Added after invoke
         self.receipts: Optional[dict] = None
@@ -156,18 +153,18 @@ class InvokeData(Message):
         return self._added_transactions
 
     @property
-    def reps_hash(self) -> Hash32:
-        return self._reps_hash
+    def validators_hash(self) -> Hash32:
+        return self._validators_hash
 
     @property
-    def next_preps(self) -> Optional[List[Dict[str, str]]]:
+    def next_validators(self) -> Optional[List[Dict[str, str]]]:
         # TODO: need to be defined according to ICON-Service API
-        return self._next_preps
+        return self._next_validators
 
     @property
-    def next_reps_hash(self) -> Hash32:
+    def next_validators_hash(self) -> Hash32:
         # TODO: need to be defined according to ICON-Service API
-        return self._next_preps_hash
+        return self._next_validators_hash
 
     @property
     def changed_reason(self) -> NextRepsChangeReason:
@@ -184,15 +181,15 @@ class InvokeData(Message):
     @classmethod
     def from_dict(cls, epoch_num, round_num, query_result: dict):
         added_txs: Dict[str, dict] = query_result.get("addedTransactions")
-        reps_hash: Hash32 = Hash32.fromhex(query_result.get("reps_hash"), ignore_prefix=True)
-        next_prep: dict = query_result.get("prep")
+        validators_hash: Hash32 = Hash32.fromhex(query_result.get("reps_hash"), ignore_prefix=True)
+        next_validators_info: Optional[dict] = query_result.get("prep")
 
         return cls(
             epoch_num=epoch_num,
             round_num=round_num,
             added_transactions=added_txs,
-            reps_hash=reps_hash,
-            next_prep=next_prep
+            validators_hash=validators_hash,
+            next_validators_origin=next_validators_info
         )
 
     def add_invoke_result(self, invoke_result: dict) -> 'InvokeData':
