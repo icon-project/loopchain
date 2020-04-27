@@ -13,20 +13,11 @@
 # limitations under the License.
 """block builder for version 0.5 block"""
 
-from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_4 import BlockBuilder
-from loopchain.blockchain.blocks.v0_5 import BlockHeader, BlockBody, BlockProver
-from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.blocks.v0_5 import BlockHeader, BlockBody
 
 
 class BlockBuilder(BlockBuilder):
     version = BlockHeader.version
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
-
-    def _build_transactions_hash(self):
-        if not self.transactions:
-            return Hash32.empty()
-
-        block_prover = BlockProver(self.transactions.keys(), BlockProverType.Transaction)
-        return block_prover.get_proof_root()
