@@ -140,6 +140,56 @@ class ChannelService:
 
             self.cleanup()
 
+    async def start_lft(self):
+        self.__event_system = EventSystem()
+
+        epoch_pool = EpochPool()
+        tx_queue = self.block_manager.get_tx_queue()
+        db = self.block_manager.blockchain.blockchain_store
+        invoke_pool = InvokePool()
+        signer = ChannelProperty().peer_auth
+        block_factory = BlockFactory(
+            epoch_pool_with_app=epoch_pool,
+            tx_queue=tx_queue,
+            db=db,
+            tx_versioner=TransactionVersioner(),
+            invoke_pool=invoke_pool,
+            signer=signer
+        )
+        vote_factory = BlockVoteFactory(
+            invoke_result_pool=invoke_pool,
+            signer=signer
+        )
+        self.__consensus_runner = ConsensusRunner(
+            ChannelProperty().peer_address,
+            self.__event_system,
+            block_factory,
+            vote_factory,
+            self.__broadcast_scheduler
+        )
+
+        # last_block: Block = self.block_manager.blockchain.last_block
+
+        block: "v1_0.Block" = await block_factory.create_data(
+            data_number=0,
+            prev_id=b'',
+            epoch_num=0,
+            round_num=0,
+            prev_votes=()
+        )
+
+        # voters = self.block_manager.blockchain.find_preps_by_roothash(block.header.validators_hash)
+
+        event = InitializeEvent(
+            commit_id=b'',
+            epoch_pool=[LoopchainEpoch(num=0, voters=(ChannelProperty().peer_address,))],
+            data_pool=[block],
+            vote_pool=block.body.prev_votes
+        )
+        event.deterministic = False
+
+        self.__consensus_runner.start(event)
+
     def close(self):
         if self.__inner_service:
             self.__inner_service.cleanup()
@@ -205,7 +255,10 @@ class ChannelService:
         await self._init_rs_client()
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
-        self.__ready_to_height_sync()
+        try:
+            self.__ready_to_height_sync()
+        except RuntimeError:
+            self.__block_manager.start_lft()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):

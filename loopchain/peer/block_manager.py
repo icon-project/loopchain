@@ -760,24 +760,17 @@ class BlockManager:
 
         return max_height, unconfirmed_block_height, peer_stubs
 
+    def start_lft(self):
+        self.__channel_service.state_machine.start_lft()
+
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
-
         if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
-            last_unconfirmed_block = self.blockchain.last_unconfirmed_block or self.blockchain.last_block
-
-            dumped_votes = self.blockchain.find_confirm_info_by_hash(last_unconfirmed_block.header.hash)
-            votes_class = Votes.get_block_votes_class(last_unconfirmed_block.header.version)
-            last_unconfirmed_votes = votes_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
-
-            raise ConsensusChanged(
-                ChannelProperty().peer_address,
-                [tx_item.value for tx_item in self.__txQueue.d.values()],
-                last_unconfirmed_block,
-                last_unconfirmed_votes
-            )
+            self.start_lft()
+            # TODO remove catch exception(ConsensusChanged) code.
+            # raise ConsensusChanged
 
     def stop(self):
         # for reuse key value store when restart channel.
