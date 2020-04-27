@@ -13,9 +13,16 @@
 # limitations under the License.
 
 import functools
+import json
+import logging
 import urllib.parse
+from typing import Union
+
 import plyvel
 
+from loopchain import configure_default as conf
+from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.types import Hash32
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.store.key_value_store import KeyValueStoreWriteBatch, KeyValueStoreCancelableWriteBatch, KeyValueStore
 from loopchain.store.key_value_store import _validate_args_bytes, _validate_args_bytes_without_first
@@ -92,6 +99,8 @@ class KeyValueStorePlyvel(KeyValueStore):
         self._path = f"{(uri_obj.netloc if uri_obj.netloc else '')}{uri_obj.path}"
         self._db = self._new_db(self._path, **kwargs)
 
+        self.__tx_versioner = TransactionVersioner()
+
     @_error_convert
     def _new_db(self, path, **kwargs) -> plyvel.DB:
         return plyvel.DB(path, **kwargs)
@@ -116,6 +125,48 @@ class KeyValueStorePlyvel(KeyValueStore):
     @_error_convert
     def delete(self, key: bytes, *, sync=False, **kwargs):
         self._db.delete(key, sync=sync, **kwargs)
+
+    def find_tx_by_key(self, tx_hash_key: str):
+        """find tx by hash
+
+        :param tx_hash_key: tx hash
+        :return None: There is no tx by hash or transaction object.
+
+        FIXME: Temporary method!
+        FIXME: Originated from Blockchain.find_tx_by_key
+        """
+
+        try:
+            tx_info_json = self.find_tx_info(tx_hash_key)
+        except KeyError as e:
+            return None
+        if tx_info_json is None:
+            logging.warning(f"tx not found. tx_hash ({tx_hash_key})")
+            return None
+
+        tx_data = tx_info_json["transaction"]
+        tx_version, tx_type = self.__tx_versioner.get_version(tx_data)
+        tx_serializer = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
+        return tx_serializer.from_(tx_data)
+
+    def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
+        """
+        FIXME: Temporary method!
+        FIXME: Originated from Blockchain.find_tx_info
+        """
+        if isinstance(tx_hash_key, Hash32):
+            tx_hash_key = tx_hash_key.hex()
+
+        try:
+            tx_info = self._db.get(
+                tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
+            tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
+
+        except UnicodeDecodeError as e:
+            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
+            return None
+
+        return tx_info_json
 
     @_error_convert
     def close(self):

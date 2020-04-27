@@ -34,7 +34,7 @@ class BlockHeader(BaseBlockHeader):
 
 @dataclass(frozen=True)
 class BlockBody(BaseBlockBody):
-    prev_votes: List['BlockVote']
+    prev_votes: Sequence['BlockVote']
 
 
 class Block(Data):
@@ -56,10 +56,6 @@ class Block(Data):
     @property
     def number(self) -> int:
         return self._header.height
-
-    @property
-    def height(self) -> int:
-        return self.number
 
     @property
     def prev_id(self) -> bytes:
