@@ -2,12 +2,12 @@ from typing import TYPE_CHECKING, cast, Sequence, List, Union, Dict, OrderedDict
 
 from lft.consensus.messages.message import MessagePool, Message
 
-from legacy.channel.channel_property import ChannelProperty
-from legacy.utils.message_queue import StubCollection
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, NextRepsChangeReason
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.blockchain.votes.v1_0.vote import BlockVote
