@@ -73,6 +73,9 @@ class BlockManager:
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
 
+        self.citizen_request_dict = dict()
+        self.peer_target_for_async = dict()
+
     @property
     def channel_name(self):
         return self.__channel_name
@@ -394,35 +397,39 @@ class BlockManager:
 
             return need_to_sync, self.__block_height_future
 
-    async def __collect_info(self, my_height, max_height):
-        return await self.__block_request_by_citizen_async(my_height, max_height)
-
-    def __block_request(self, peer_stub, block_height, max_height, aysnc_mode = False):
+    async def __block_request(self, peer_stubs, block_height, max_height):
         """request block by gRPC or REST
 
         :param peer_stub:
         :param block_height:
         :return block, max_block_height, confirm_info, response_code
         """
-        result = list()
 
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            return result.append(self.__block_request_by_voter(block_height, peer_stub))
-        else:
-            if aysnc_mode:
-                # request REST(json-rpc) way to RS peer
-                async def __aysnc_request(start_height, end_height):
-                    req_sector = [self.__collect_info(i, max_height) for i in range(start_height, end_height)]
-                    result = await asyncio.gather(*req_sector)
-                    return result
+        peer_index = 0
+        while max_height > block_height:
+            self.peer_target_for_async[block_height], peer_stub = peer_stubs[peer_index]
+            try:
+                if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+                    self.citizen_request_dict[block_height] = self.__block_request_by_voter(block_height, peer_stub)
+                else:
+                    self.citizen_request_dict[block_height] = await self.__block_request_by_citizen_async(block_height, max_height)
 
-                __sector_size = 100
-                section_height = block_height + __sector_size
-                result = asyncio.run(__aysnc_request(block_height, section_height))
+                response_code = self.citizen_request_dict[block_height][-1]
+            except NoConfirmInfo as e:
+                util.logger.warning(f"{e}")
+                response_code = message_code.Response.fail_no_confirm_info
+            except Exception as e:
+                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
+                traceback.print_exc()
+                response_code = message_code.Response.fail
             else:
-                result.append(self.__block_request_by_citizen(block_height))
+                if response_code != message_code.Response.success:
+                    if len(peer_stubs) == 1:
+                        raise ConnectionError
 
-            return result
+                    peer_index = (peer_index + 1) % len(peer_stubs)
+
+                block_height += 1
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -583,7 +590,7 @@ class BlockManager:
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
+    async def __block_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
 
@@ -593,30 +600,22 @@ class BlockManager:
         :param max_height:
         :return: my_height, max_height
         """
+
         peer_index = 0
-        sector_idx = 0
-        async_mode = True
 
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_target, peer_stub = peer_stubs[peer_index]
-            util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
+            await asyncio.sleep(0.1)
+
             try:
-                if my_height > max_height - 100:
-                    async_mode = False
-
-                if sector_idx == 0:
-                    resultInfo = self.__block_request(peer_stub, my_height + 1, max_height, async_mode)
-
-                block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    resultInfo[sector_idx]
-
-                if sector_idx == len(resultInfo)-1:
-                    sector_idx = 0
+                if my_height in self.citizen_request_dict.keys():
+                    block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
+                        self.citizen_request_dict.pop(my_height)
                 else:
-                    sector_idx += 1
+                    await asyncio.sleep(0.1)
+                    continue
 
             except NoConfirmInfo as e:
                 util.logger.warning(f"{e}")
@@ -663,16 +662,50 @@ class BlockManager:
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
                     else:
-                        self.__block_height_sync_bad_targets[peer_target] = max_block_height
+                        self.__block_height_sync_bad_targets[self.peer_target_for_async[my_height]] = max_block_height
                         raise
                 else:
                     peer_index = (peer_index + 1) % len(peer_stubs)
+                    del(self.peer_target_for_async[my_height])
+
                     my_height += 1
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
 
                 peer_index = (peer_index + 1) % len(peer_stubs)
+
+        return my_height, max_height
+
+    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
+        """Extracted func from __block_height_sync.
+        It has block request loop with peer_stubs for block height sync.
+
+        :param peer_stubs:
+        :param my_height:
+        :param unconfirmed_block_height:
+        :param max_height:
+        :return: my_height, max_height
+        """
+        while max_height > my_height:
+            async def loop_run():
+                fts = list()
+                fts.append( asyncio.ensure_future(self.__block_request(peer_stubs, my_height+1, max_height)) )
+                fts.append( asyncio.ensure_future(self.__block_sync(peer_stubs, my_height+1, unconfirmed_block_height, max_height)) )
+
+                result = await asyncio.gather(*fts)
+                return result
+
+            result = asyncio.run(loop_run())
+
+            my_height = result[1][0]
+            max_height = result[1][1]
+
+            last_block_height = self.__get_block_last_height()
+
+            if last_block_height > max_height:
+                util.logger.spam(f"set max_height :{max_height} -> {last_block_height}")
+                max_height = last_block_height
 
         return my_height, max_height
 
