@@ -77,6 +77,11 @@ class BlockBuilder(BaseBlockBuilder):
         self.block = self.build_block()
         return self.block
 
+    def build_block(self) -> Block:
+        header = self.BlockHeaderClass(**self.build_block_header_data())
+        body = self.BlockBodyClass(**self.build_block_body_data())
+        return Block(header, body)
+
     def build_block_header_data(self) -> dict:
         return {
             "hash": self.hash,

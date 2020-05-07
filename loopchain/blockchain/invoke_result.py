@@ -127,7 +127,7 @@ class InvokeData(Message):
         self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
 
         if next_validators_origin:
-            self._next_validators = next_validators_origin["preps"]
+            self._next_validators = next_validators_origin["nextReps"]
             self._next_validators_hash = Hash32.fromhex(next_validators_origin["rootHash"], ignore_prefix=True)
             self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_validators_origin["state"])
 
@@ -181,7 +181,7 @@ class InvokeData(Message):
     @classmethod
     def from_dict(cls, epoch_num, round_num, query_result: dict):
         added_txs: Dict[str, dict] = query_result.get("addedTransactions")
-        validators_hash: Hash32 = Hash32.fromhex(query_result.get("reps_hash"), ignore_prefix=True)
+        validators_hash: Hash32 = Hash32.fromhex(query_result.get("currentRepsHash"), ignore_prefix=True)
         next_validators_info: Optional[dict] = query_result.get("prep")
 
         return cls(
