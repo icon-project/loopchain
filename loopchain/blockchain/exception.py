@@ -275,9 +275,4 @@ class TransactionInvalidNidError(TransactionInvalidError):
 
 
 class ConsensusChanged(Exception):
-    def __init__(self, node_id: 'ExternalAddress', remain_txs: Iterable['Transaction'],
-                 last_unconfirmed_block: Optional['Block'], last_unconfirmed_votes: Optional['Votes']):
-        self.node_id = node_id
-        self.remain_txs = remain_txs
-        self.last_unconfirmed_block = last_unconfirmed_block
-        self.last_unconfirmed_votes = last_unconfirmed_votes
+    pass

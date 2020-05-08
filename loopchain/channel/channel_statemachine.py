@@ -10,7 +10,6 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.blockchain import UnrecordedBlock, InvalidUnconfirmedBlock
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.peer import status_code
 from loopchain.protos import loopchain_pb2
 from loopchain.statemachine import statemachine
@@ -20,9 +19,6 @@ from loopchain.utils import loggers
 @statemachine.StateMachine("Channel State Machine")
 class ChannelStateMachine(object):
     states = ['InitComponents',
-              State(name='Consensus',
-                    ignore_invalid_triggers=True,
-                    on_enter='_consensus_on_enter'),
               State(name='BlockHeightSync',
                     ignore_invalid_triggers=True,
                     on_enter='_blockheightsync_on_enter'),
@@ -54,6 +50,9 @@ class ChannelStateMachine(object):
               State(name='ResetNetwork',
                     ignore_invalid_triggers=True,
                     on_enter='_do_reset_network_on_enter'),
+              State(name='Consensus',
+                    ignore_invalid_triggers=True,
+                    on_enter='_consensus_on_enter'),
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -68,12 +67,8 @@ class ChannelStateMachine(object):
             'complete_subscribe', 'SubscribeNetwork', 'Watch', conditions=['_has_no_vote_function'])
         self.machine.add_transition('complete_subscribe', 'SubscribeNetwork', 'Vote')
 
-    @statemachine.transition(source='InitComponents', dest='Consensus')
+    @statemachine.transition(source='InitComponents', dest='BlockHeightSync')
     def complete_init_components(self):
-        pass
-
-    @statemachine.transition(source='Consensus', dest='BlockHeightSync')
-    def block_height_sync(self):
         pass
 
     @statemachine.transition(source=('BlockHeightSync', 'ResetNetwork'),
@@ -120,6 +115,13 @@ class ChannelStateMachine(object):
     def switch_role(self):
         pass
 
+    @statemachine.transition(source=('EvaluateNetwork', 'BlockGenerate', 'Vote', 'Watch'), dest='Consensus')
+    def start_lft(self):
+        pass
+
+    def _consensus_on_enter(self):
+        self._run_coroutine_threadsafe(self.__channel_service.start_lft())
+
     def _is_leader(self):
         return (not self._has_no_vote_function() and
                 self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR)
@@ -145,9 +147,6 @@ class ChannelStateMachine(object):
         else:
             self._run_coroutine_threadsafe(
                 self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
-
-    def _consensus_on_enter(self, *args, **kwargs):
-        self.block_height_sync()
 
     def _blockheightsync_on_enter(self, *args, **kwargs):
         self.evaluate_network()
@@ -214,9 +213,6 @@ class ChannelStateMachine(object):
         async def _run_with_handling_exception():
             try:
                 await coro
-            except ConsensusChanged as e:
-                loop.exception = e
-                loop.stop()
             except Exception:
                 traceback.print_exc()
 

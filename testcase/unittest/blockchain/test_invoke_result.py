@@ -19,7 +19,6 @@ def icon_query() -> dict:
     """
 
     return {
-        "reps_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "addedTransactions": {
             "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
                 "version": "0x3",
@@ -35,8 +34,9 @@ def icon_query() -> dict:
                 }
             }
         },
+        "currentRepsHash": "1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de",
         "prep": {
-            "preps": [
+            "nextReps": [
                 {
                     "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
                     "p2pEndpoint": "123.45.67.89:7100"
@@ -375,7 +375,7 @@ class TestInvokeData:
         assert invoke_data.epoch_num == epoch_num
         assert invoke_data.round_num == epoch_num
         assert invoke_data.added_transactions == icon_query["addedTransactions"]
-        assert invoke_data.validators_hash.hex() == icon_query["reps_hash"]
+        assert invoke_data.validators_hash.hex() == icon_query["currentRepsHash"]
 
     def test_validators_changed(self, icon_query: dict):
         # GIVEN I queried and validators changed
@@ -393,7 +393,7 @@ class TestInvokeData:
         assert reason != NextRepsChangeReason.NoChange
 
         # AND next validators and theirs hash should be exist
-        assert invoke_data.next_validators == icon_query["prep"]["preps"]
+        assert invoke_data.next_validators == icon_query["prep"]["nextReps"]
         assert invoke_data.next_validators_hash.hex() == icon_query["prep"]["rootHash"]
 
     def test_validators_not_changed(self, icon_query: dict):
@@ -415,7 +415,7 @@ class TestInvokeData:
 
         # AND There are no next validators
         assert not invoke_data.next_validators
-        assert invoke_data.next_validators_hash.hex() == invoke_data.validators_hash.hex() == icon_query["reps_hash"]
+        assert invoke_data.next_validators_hash.hex() == invoke_data.validators_hash.hex() == icon_query["currentRepsHash"]
 
     def test_add_invoke_result(self, icon_query: dict, icon_invoke: dict):
         # GIVEN I queried and got data

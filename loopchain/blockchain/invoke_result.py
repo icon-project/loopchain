@@ -127,7 +127,7 @@ class InvokeData(Message):
         self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
 
         if next_validators_origin:
-            self._next_validators = next_validators_origin["preps"]
+            self._next_validators = next_validators_origin["nextReps"]
             self._next_validators_hash = Hash32.fromhex(next_validators_origin["rootHash"], ignore_prefix=True)
             self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_validators_origin["state"])
 
@@ -181,7 +181,7 @@ class InvokeData(Message):
     @classmethod
     def from_dict(cls, epoch_num, round_num, query_result: dict):
         added_txs: Dict[str, dict] = query_result.get("addedTransactions")
-        validators_hash: Hash32 = Hash32.fromhex(query_result.get("reps_hash"), ignore_prefix=True)
+        validators_hash: Hash32 = Hash32.fromhex(query_result.get("currentRepsHash"), ignore_prefix=True)
         next_validators_info: Optional[dict] = query_result.get("prep")
 
         return cls(
@@ -214,9 +214,9 @@ class InvokePool(MessagePool):
     def prepare_invoke(self, epoch_num: int, round_num: int) -> InvokeData:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
-        query_result: dict = icon_service.sync_task().query()  # TODO: NotImplemented
+        preinvoke_result = self._preinvoke_temp()  # FIXME: Do communicate with ICON-Service
         invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num, round_num=round_num, query_result=query_result
+            epoch_num=epoch_num, round_num=round_num, query_result=preinvoke_result
         )
         self.add_message(invoke_data)
 
@@ -233,3 +233,38 @@ class InvokePool(MessagePool):
         invoke_data.add_invoke_result(invoke_result=invoke_result_dict)
 
         return invoke_data
+
+    def _preinvoke_temp(self) -> dict:
+        return {
+            "addedTransactions": {
+                "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
+                    "version": "0x3",
+                    "timestamp": "0x563a6cf330136",
+                    "dataType": "base",
+                    "data": {
+                        "prep": {
+                            "incentive": "0x1",
+                            "rewardRate": "0x1",
+                            "totalDelegation": "0x3872423746291",
+                            "value": "0x7800000"
+                        }
+                    }
+                }
+            },
+            "currentRepsHash": "1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de",
+            "prep": {
+                "nextReps": [
+                    {
+                        "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
+                        "p2pEndpoint": "123.45.67.89:7100"
+                    },
+                    {
+                        "id": "hx13aca3210918a9b116973f3c4b27c41a54d5dad1",
+                        "p2pEndPoint": "210.34.56.17:7100"
+                    }
+                ],
+                "irep": "0x1",
+                "state": "0x0",
+                "rootHash": "c7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+            }
+        }

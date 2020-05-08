@@ -110,7 +110,6 @@ def icon_query() -> dict:
     """
 
     return {
-        "reps_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "addedTransactions": {
             "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
                 "version": "0x3",
@@ -126,8 +125,9 @@ def icon_query() -> dict:
                 }
             }
         },
+        "currentRepsHash": "1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de",
         "prep": {
-            "preps": [
+            "nextReps": [
                 {
                     "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
                     "p2pEndpoint": "123.45.67.89:7100"
