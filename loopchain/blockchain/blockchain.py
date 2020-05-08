@@ -956,7 +956,7 @@ class BlockChain:
         block_version = self.block_versioner.get_version(0)
         if block_version == "1.0":
             # TODO remove this start_lft code in here after 3.0 launched.
-            raise RuntimeError("START LFT!")
+            raise ConsensusChanged
 
         block_builder = BlockBuilder.new(block_version, self.__tx_versioner)
         block_builder.height = 0

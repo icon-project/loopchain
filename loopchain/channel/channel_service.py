@@ -19,7 +19,7 @@ from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.blocks.v1_0 import BlockFactory
 from loopchain.blockchain.epoch3 import LoopchainEpoch
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError, ConsensusChanged
 from loopchain.blockchain.invoke_result import InvokePool
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
@@ -257,8 +257,8 @@ class ChannelService:
         await self._select_node_type()
         try:
             self.__ready_to_height_sync()
-        except RuntimeError:
-            self.__block_manager.start_lft()
+        except ConsensusChanged:
+            self.state_machine.start_lft()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):

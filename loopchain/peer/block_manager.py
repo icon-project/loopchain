@@ -760,17 +760,12 @@ class BlockManager:
 
         return max_height, unconfirmed_block_height, peer_stubs
 
-    def start_lft(self):
-        self.__channel_service.state_machine.start_lft()
-
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
         if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
-            self.start_lft()
-            # TODO remove catch exception(ConsensusChanged) code.
-            # raise ConsensusChanged
+            self.__channel_service.state_machine.start_lft()
 
     def stop(self):
         # for reuse key value store when restart channel.
