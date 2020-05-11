@@ -261,6 +261,28 @@ message BlockAnnounce {
     optional bytes block = 3;
 }
 
+message Block {
+    required string version = 1;
+    required bytes prev_hash = 2;
+    required bytes transactions_hash = 3;
+    required bytes state_hash = 4;
+    required bytes receipts_hash = 5;
+    required bytes reps_hash = 6;
+    required bytes next_reps_hash = 7;
+    required bytes leader_votes_hash = 8;
+    required bytes prev_votes_hash = 9;
+    required bytes logs_bloom = 10;
+    required int64 timestamp = 11;
+    required bytes transactions = 12;
+    required bytes leader_votes = 13;
+    required bytes prev_votes = 14;
+    required bytes hash = 15;
+    required int32 height = 16;
+    required bytes leader = 17;
+    required bytes signature = 18;
+    required bytes next_leader = 19;
+}
+
 
 // ########################################################################
 // RadioStation, Peer, BlockGenerator 공통 요소

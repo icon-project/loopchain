@@ -702,8 +702,41 @@ class BlockChain:
         next_total_tx_bytes = next_total_tx.to_bytes(byte_length, byteorder='big')
 
         block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
-        block_serialized = json.dumps(block_serializer.serialize(block))
+        serialized_block = block_serializer.serialize(block)
+        block_serialized = json.dumps(serialized_block)
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+
+        header: BlockHeader = block.header
+        import sys
+        if block.header.height > 0:
+            utils.logger.warning(f"header.hash value: {header.hash}")
+            utils.logger.warning(f"block_serialized size: {sys.getsizeof(block_serialized)}")
+            utils.logger.warning(f"encoded size: {sys.getsizeof(block_serialized.encode('utf-8'))}")
+
+            from loopchain.protos import loopchain_pb2
+            proto_buff = loopchain_pb2.Block(
+                version=header.version,
+                prev_hash=header.prev_hash,
+                transactions_hash=header.transactions_hash,
+                state_hash=header.state_hash,
+                receipts_hash=header.receipts_hash,
+                reps_hash=header.reps_hash,
+                next_reps_hash=header.next_reps_hash,
+                leader_votes_hash=header.leader_votes_hash,
+                prev_votes_hash=header.prev_votes_hash,
+                logs_bloom=header.logs_bloom,
+                timestamp=header.timestamp,
+                transactions=json.dumps(serialized_block["transactions"]).encode("utf-8"),
+                leader_votes=json.dumps(serialized_block["leaderVotes"]).encode("utf-8"),
+                prev_votes=json.dumps(serialized_block["prevVotes"]).encode("utf-8"),
+                hash=header.hash,
+                height=header.height,
+                leader=header.peer_id,
+                signature=header.signature,
+                next_leader=header.next_leader
+            )
+            utils.logger.warning(f"proto_buff: {sys.getsizeof(proto_buff)}")
+            utils.logger.warning(f"proto_buff: {proto_buff}")
 
         batch = self._blockchain_store.WriteBatch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
