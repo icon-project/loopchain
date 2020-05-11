@@ -2,7 +2,8 @@
   "log": {
     "logger": "iconservice",
     "colorLog": true,
-    "level": "warning",
+    "level": "info",
+    "filePath": "./log/iconservice.log",
     "outputType": "console|file",
     "rotate": {
       "type": "period|bytes",
@@ -19,6 +20,9 @@
     "deployerWhiteList": false,
     "scorePackageValidator": false
   },
+  "channel": "icon_dex",
+  "amqpKey": "10.211.1.22:7100",
+  "amqpTarget": "127.0.0.1",
   "mainPRepCount": 4,
   "mainAndSubPRepCount": 8,
   "decentralizeTrigger": 0,

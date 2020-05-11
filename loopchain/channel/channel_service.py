@@ -345,7 +345,8 @@ class ChannelService:
 
     async def __run_score_container(self):
         if conf.RUN_ICON_IN_LAUNCHER:
-            process_args = ['python3', '-m', 'loopchain', 'score',
+            """
+            process_args = ['python', '-m', 'loopchain', 'score',
                             '--channel', ChannelProperty().name]
             process_args += command_arguments.get_raw_commands_by_filter(
                 command_arguments.Type.AMQPTarget,
@@ -354,6 +355,9 @@ class ChannelService:
                 command_arguments.Type.ConfigurationFilePath,
                 command_arguments.Type.RadioStationTarget
             )
+            """
+            process_args = ['pypy3', '-m', 'iconservice', 'start',
+                            '-c', '../pypy_perf/icon-service/iconservice_conf.json']
             self.__score_container = CommonSubprocess(process_args)
 
         await StubCollection().create_icon_score_stub(ChannelProperty().name)
