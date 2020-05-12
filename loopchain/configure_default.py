@@ -1,10 +1,4 @@
-"""All loopchain configure value can set by system environment.
-But before set by system environment, loopchain use this default values.
-
-configure 의 default 값으로 지정하여 사용한다.
-이곳에서 직접 대입하거나 export 로 값을 지정할 수 있다.
-configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
-configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)"""
+"""It use setting default value about configure. It can set directly value or use export."""
 
 import os
 import sys
@@ -168,6 +162,7 @@ TIMESTAMP_BOUNDARY_SECOND = 60 * 15
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
 TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
+
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 INVOKE_RESULT_AGING_SECONDS = 60 * 60
 SAFE_BLOCK_BROADCAST = True
@@ -215,9 +210,9 @@ CONNECTION_RETRY_TIMEOUT_WHEN_INITIAL = 5  # seconds
 CONNECTION_RETRY_TIMEOUT = 60  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS = 60 * 5  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS_TEST = 30  # seconds for testcase
-CONNECTION_RETRY_TIMES = 3  # times
-BROADCAST_RETRY_TIMES = 1  # times
-RELAY_RETRY_TIMES = 3  # times
+CONNECTION_RETRY_TIMES = 3
+BROADCAST_RETRY_TIMES = 1
+RELAY_RETRY_TIMES = 3
 REQUEST_BLOCK_GENERATOR_TIMEOUT = 10  # seconds
 BLOCK_GENERATOR_BROADCAST_TIMEOUT = 5  # seconds
 WAIT_GRPC_SERVICE_START = 5  # seconds
@@ -234,9 +229,11 @@ GET_LAST_BLOCK_TIMER = 30
 BLOCK_SYNC_RETRY_NUMBER = 5
 TIMEOUT_FOR_LEADER_COMPLAIN = 60
 MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
-CITIZEN_ASYNC_RESULT_MAX_SIZE = 10_000_000 # dictionary Length
-CITIZEN_ASYNC_REQUEST_RETRY_TIMES = 20 # times
-CITIZEN_ASYNC_REQUEST_WAITE = 3 # seconds
+CITIZEN_ASYNC_RESULT_MAX_SIZE = 10_000_000  # dictionary Length
+CITIZEN_ASYNC_REQUEST_RETRY_TIMES = 20
+CITIZEN_ASYNC_REQUEST_WAIT = 3  # seconds
+
+
 
 class NodeFunction(IntEnum):
     Block = 1 << 0  # 1
