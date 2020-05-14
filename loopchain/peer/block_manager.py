@@ -1,30 +1,28 @@
 """A management class for blockchain."""
 
+import asyncio
+from collections import defaultdict
+
 import json
 import threading
 import traceback
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
-
-from pkg_resources import parse_version
 from lft.consensus.events import ReceiveDataEvent
+from pkg_resources import parse_version
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception,
-                                  NoConfirmInfo,
+from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception, NoConfirmInfo,
                                   BlockHeightMismatch, RoundMismatch)
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
-from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
-                                            TransactionOutOfTimeBound, NotInReps,
-                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader, ConsensusChanged)
+from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, NotInReps,
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -34,7 +32,6 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.store.key_value_store import KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -75,6 +72,9 @@ class BlockManager:
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
         self.event_system = event_system
+
+        self.request_result_for_async = dict()
+        self.peer_target_for_async = dict()
 
     @property
     def channel_name(self):
@@ -132,7 +132,7 @@ class BlockManager:
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
-        if (self.__channel_service.state_machine.state != "BlockGenerate" and 
+        if (self.__channel_service.state_machine.state != "BlockGenerate" and
                 last_block.header.height > block_.header.height):
             util.logger.debug(
                 f"Last block has reached a sufficient height. Broadcast will stop! ({block_.header.hash.hex()})")
@@ -378,18 +378,56 @@ class BlockManager:
 
             return need_to_sync, self.__block_height_future
 
-    def __block_request(self, peer_stub, block_height):
+    async def __block_request(self, peer_stubs, block_height, max_height):
         """request block by gRPC or REST
 
-        :param peer_stub:
+        :param peer_stubs:
         :param block_height:
         :return block, max_block_height, confirm_info, response_code
         """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            return self.__block_request_by_voter(block_height, peer_stub)
-        else:
-            # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height)
+
+        peer_index = 0
+        retry_time = 0
+
+        while max_height > block_height:
+            self.peer_target_for_async[block_height], peer_stub = peer_stubs[peer_index]
+            try:
+                if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
+                    self.request_result_for_async[block_height] = self.__block_request_by_voter(block_height, peer_stub)
+                else:
+                    if len(self.request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+                        self.request_result_for_async[block_height] = \
+                            await self.__block_request_by_citizen_async(block_height, max_height)
+                    else:
+                        await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAITE)
+                        continue
+
+                response_code = self.request_result_for_async[block_height][-1]
+            except NoConfirmInfo as e:
+                util.logger.warning(f"{e}")
+                response_code = message_code.Response.fail_no_confirm_info
+            except exception.BlockError:
+                util.exit_and_msg("Block Error Clear all block and restart peer.")
+                raise
+            except Exception as e:
+                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
+                traceback.print_exc()
+                response_code = message_code.Response.fail
+
+            if response_code != message_code.Response.success:
+                if len(peer_stubs) == 1:
+                    raise ConnectionError
+
+                peer_index = (peer_index + 1) % len(peer_stubs)
+                retry_time += 1
+                await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAITE)
+
+                if retry_time > conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
+                    util.exit_and_msg(f"This height({block_height}) can't get Block Information.")
+
+                continue
+
+            block_height += 1
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -438,6 +476,41 @@ class BlockManager:
         except json.JSONDecodeError:
             votes = votes_dumped
         return block, max_height, -1, votes, message_code.Response.success
+
+    async def __block_request_by_citizen_async(self, block_height, max_height):
+        rs_client = ObjectManager().channel_service.rs_client
+        get_block_result = await rs_client.call_async(
+            RestMethod.GetBlockByHeight,
+            RestMethod.GetBlockByHeight.value.params(height=str(block_height))
+        )
+
+        block_version = self.blockchain.block_versioner.get_version(block_height)
+        block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
+        block = block_serializer.deserialize(get_block_result['block'])
+        votes_dumped: str = get_block_result.get('confirm_info', '')
+        try:
+            votes_serialized = json.loads(votes_dumped)
+            version = self.blockchain.block_versioner.get_version(block_height)
+            votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
+        except json.JSONDecodeError:
+            votes = votes_dumped
+        return block, max_height, -1, votes, message_code.Response.success
+
+    def __get_block_last_height(self):
+        rs_client = ObjectManager().channel_service.rs_client
+        retry_count = 0
+
+        max_height = -1
+        while retry_count < conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
+            last_block = rs_client.call(RestMethod.GetLastBlock)
+            if not last_block:
+                util.logging.warning("The Radiostation may not be ready. It will retry after a while.")
+                retry_count += 1
+            else:
+                max_height = self.blockchain.block_versioner.get_height(last_block)
+                break
+
+        return max_height
 
     def __start_block_height_sync_timer(self, is_run_at_start=False):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
@@ -535,7 +608,7 @@ class BlockManager:
                                       reps_getter=reps_getter)
         return self.blockchain.add_block(prev_block, confirm_info)
 
-    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
+    async def __block_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
 
@@ -545,26 +618,23 @@ class BlockManager:
         :param max_height:
         :return: my_height, max_height
         """
+
         peer_index = 0
 
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_target, peer_stub = peer_stubs[peer_index]
-            util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
-            try:
+            await asyncio.sleep(0)
+
+            if my_height in self.request_result_for_async.keys():
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    self.__block_request(peer_stub, my_height + 1)
-            except NoConfirmInfo as e:
-                util.logger.warning(f"{e}")
-                response_code = message_code.Response.fail_no_confirm_info
-            except Exception as e:
-                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
-                traceback.print_exc()
-                response_code = message_code.Response.fail
+                    self.request_result_for_async.pop(my_height)
+            else:
+                continue
 
             if response_code == message_code.Response.success:
+                self.peer_target_for_async[my_height]
                 util.logger.debug(f"try add block height: {block.header.height}")
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
@@ -592,25 +662,59 @@ class BlockManager:
                 except KeyError as e:
                     util.logger.error(f"{type(e)} during block height sync: {e, e.__traceback__}")
                     raise
-                except exception.BlockError:
-                    util.exit_and_msg("Block Error Clear all block and restart peer.")
-                    raise
                 except Exception as e:
                     util.logger.warning(f"fail block height sync: {type(e), e}")
 
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
                     else:
+                        peer_target = self.peer_target_for_async[my_height]
                         self.__block_height_sync_bad_targets[peer_target] = max_block_height
                         raise
                 else:
                     peer_index = (peer_index + 1) % len(peer_stubs)
+                    del self.peer_target_for_async[my_height]
+
                     my_height += 1
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
 
                 peer_index = (peer_index + 1) % len(peer_stubs)
+
+        return my_height, max_height
+
+    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
+        """Extracted func from __block_height_sync.
+        It has block request loop with peer_stubs for block height sync.
+
+        :param peer_stubs:
+        :param my_height:
+        :param unconfirmed_block_height:
+        :param max_height:
+        :return: my_height, max_height
+        """
+
+        while max_height > my_height:
+            async def loop_run():
+                fts = list()
+                fts.append(asyncio.ensure_future(self.__block_request(peer_stubs, my_height+1, max_height)))
+                fts.append(asyncio.ensure_future(
+                    self.__block_sync(peer_stubs, my_height+1, unconfirmed_block_height, max_height)
+                ))
+
+                result = await asyncio.gather(*fts)
+                return result
+
+            result = asyncio.run(loop_run())
+            my_height = result[1][0]
+            max_height = result[1][1]
+
+            last_block_height = self.__get_block_last_height()
+
+            if last_block_height > max_height:
+                util.logger.spam(f"set max_height :{max_height} -> {last_block_height}")
+                max_height = last_block_height
 
         return my_height, max_height
 
