@@ -42,7 +42,7 @@ class RestService(CommonProcess):
         server = CommonSubprocess(args)
         api_port = self._port + conf.PORT_DIFF_REST_SERVICE_CONTAINER
         server.set_proctitle(f"{setproctitle.getproctitle()} RestServer api_port({api_port})")
-        logging.info(f'RestService run complete port {self._port}')
+        logging.info(f'RestService run complete port {api_port}')
 
         # complete init
         event.set()
