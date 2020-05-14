@@ -1,3 +1,5 @@
+from loopchain.blockchain.transactions import TransactionVersioner
+from loopchain.blockchain.transactions.v3 import TransactionSerializer
 from loopchain.blockchain.blocks.v1_0.block import Block
 
 
@@ -90,4 +92,11 @@ class TestBlockSerializer:
         # AND all properties of block body must be same
         body = block._body
         assert body.prev_votes == block_data["prevVotes"]
-        assert body.transactions == block_data["transactions"]
+
+        # AND also transactions
+        for deserialized_tx_hash_and_tx, orig_tx in zip(body.transactions.items(), block_data["transactions"]):
+            des_hash, des_tx = deserialized_tx_hash_and_tx
+            serializer = TransactionSerializer.new(des_tx.version, des_tx.type(), TransactionVersioner())
+            dumped_tx = serializer.to_full_data(des_tx)
+
+            assert dumped_tx == orig_tx

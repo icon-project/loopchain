@@ -98,6 +98,23 @@ class InvokeRequest:
         else:
             return []
 
+    @classmethod
+    def from_block(cls, block: 'Block'):
+        header: 'BlockHeader' = block.header
+        body: 'BlockBody' = block.body
+
+        return cls(
+            height=header.height,
+            transactions=body.transactions,
+            prev_peer_id=header.peer_id,
+            block_hash=header.hash,
+            prev_block_hash=header.prev_hash,
+            timestamp=header.timestamp,
+            prev_votes=body.prev_votes,
+            tx_versioner=TransactionVersioner(),
+            is_block_editable=True
+        )
+
 
 class InvokeData(Message):
     def __init__(self,

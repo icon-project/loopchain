@@ -149,15 +149,20 @@ class BlockBuilder(BaseBlockBuilder):
 
     def build_validators_hash(self):
         if self.validators_hash is None:
-            block_prover = BlockProver((validator.extend() for validator in self.validators), BlockProverType.Rep)
-            self.validators_hash = block_prover.get_proof_root()
+            self.validators_hash = self._build_validators_hash(self.validators)
+
         return self.validators_hash
 
     def build_next_validators_hash(self):
         if self.next_validators_hash is None:
-            block_prover = BlockProver((validator.extend() for validator in self.next_validators), BlockProverType.Rep)
-            self.next_validators_hash = block_prover.get_proof_root()
+            self.next_validators_hash = self._build_validators_hash(self.next_validators)
+
         return self.next_validators_hash
+
+    def _build_validators_hash(self, validators):
+        block_prover = BlockProver((validator.extend() for validator in validators), BlockProverType.Rep)
+
+        return block_prover.get_proof_root()
 
     def build_logs_bloom(self):
         if self.prev_logs_bloom is None:
