@@ -174,9 +174,16 @@ class ChannelService:
 
         invoke_pool.genesis_invoke(block)
 
+        next_validators = [
+            "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
+            "hx9f049228bade72bc0a3490061b824f16bbb74589",
+            "hx6435405122df9fe5187d659588beccdf7aee8557",
+            "hx475bfec4178f3abc88c959faa2e6384e6b409c8f"
+        ]
+        next_validators = [ExternalAddress.fromhex_address(validator) for validator in next_validators]
         event = InitializeEvent(
             commit_id=block.header.prev_hash,
-            epoch_pool=[LoopchainEpoch(num=0, voters=()), LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))],
+            epoch_pool=[LoopchainEpoch(num=0, voters=()), LoopchainEpoch(num=1, voters=next_validators)],
             data_pool=[block],
             vote_pool=[]
         )
