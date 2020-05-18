@@ -7,9 +7,11 @@ from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.utils.icon_service import convert_params, ParamType
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
+    from loopchain.blockchain.blocks.v1_0 import Block
     from loopchain.blockchain.votes.v1_0.vote import BlockVote
 
 
@@ -139,6 +141,7 @@ class InvokeData(Message):
         self._validators_hash: Hash32 = validators_hash
 
         # Additional params
+        self.height = None
         self._next_validators: Optional[list] = None
         self._next_validators_hash: Hash32 = validators_hash
         self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
@@ -151,6 +154,11 @@ class InvokeData(Message):
         # Added after invoke
         self.receipts: Optional[dict] = None
         self.state_hash: Optional[Hash32] = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(" \
+            f"epoch_num={self._epoch_num}," \
+            f"round_num={self._round_num})"
 
     @property
     def id(self) -> bytes:
@@ -198,7 +206,11 @@ class InvokeData(Message):
     @classmethod
     def from_dict(cls, epoch_num, round_num, query_result: dict):
         added_txs: Dict[str, dict] = query_result.get("addedTransactions")
-        validators_hash: Hash32 = Hash32.fromhex(query_result.get("currentRepsHash"), ignore_prefix=True)
+
+        validators_hash = query_result.get("currentRepsHash", Hash32.empty().hex())
+        if validators_hash:
+            validators_hash: Hash32 = Hash32.fromhex(validators_hash, ignore_prefix=True)
+
         next_validators_info: Optional[dict] = query_result.get("prep")
 
         return cls(
@@ -226,7 +238,18 @@ class InvokeData(Message):
 class InvokePool(MessagePool):
     def get_invoke_data(self, epoch_num: int, round_num: int) -> InvokeData:
         id_ = f"{epoch_num}_{round_num}".encode()
-        return self.get_message(id_)
+        try:
+            invoke_data = self.get_message(id_)
+        except KeyError:
+            invoke_data = InvokeData(
+                epoch_num=epoch_num,
+                round_num=round_num,
+                added_transactions={},
+                validators_hash=""
+            )
+            self.add_message(invoke_data)
+
+        return invoke_data
 
     def prepare_invoke(self, epoch_num: int, round_num: int) -> InvokeData:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
@@ -243,6 +266,7 @@ class InvokePool(MessagePool):
         """Originated from `Blockchain.score_invoke`."""
 
         invoke_data: InvokeData = self.get_invoke_data(epoch_num, round_num)
+        invoke_data.height = invoke_request._height
 
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())
