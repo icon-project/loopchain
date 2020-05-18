@@ -207,6 +207,7 @@ class TestInvokeRequest:
         # AND I received votes of them
         prev_votes: List[BlockVote] = [
             BlockVote(
+                height=1,
                 data_id=vote_result,
                 commit_id=self.prev_block_hash,
                 voter_id=validator,

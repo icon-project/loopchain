@@ -16,11 +16,12 @@ class BlockVoteFactory(VoteFactory):
         self._signer: Signer = signer
         self._voter_id = ExternalAddress.fromhex(self._signer.address)
 
-    def _get_signature(self, voter_id, commit_id, data_id,
+    def _get_signature(self, voter_id, height: int, commit_id, data_id,
                        epoch_num, state_hash, receipt_hash, round_num, timestamp) -> Signature:
         origin_data = {
             "validator": voter_id.hex_hx(),
             "timestamp": hex(timestamp),
+            "blockHeight": hex(height),
             "blockHash": Hash32(data_id),
             "commitHash": Hash32(commit_id),
             "stateHash": state_hash,
@@ -40,6 +41,7 @@ class BlockVoteFactory(VoteFactory):
         timestamp = util.get_time_stamp()
         signature = self._get_signature(
             voter_id=self._voter_id,
+            height=invoke_data.height,
             commit_id=commit_id,
             data_id=data_id,
             epoch_num=epoch_num,
@@ -58,7 +60,8 @@ class BlockVoteFactory(VoteFactory):
             timestamp=timestamp,
             epoch_num=epoch_num,
             round_num=round_num,
-            signature=signature
+            signature=signature,
+            height=invoke_data.height
         )
 
         return vote
@@ -66,6 +69,7 @@ class BlockVoteFactory(VoteFactory):
     def create_none_vote(self, epoch_num: int, round_num: int) -> BlockVote:
         timestamp = util.get_time_stamp()
         signature = self._get_signature(
+            height=0,
             voter_id=self._voter_id,
             commit_id=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
@@ -77,6 +81,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
+            height=0,
             receipt_hash=BlockVote.NoneVote,
             state_hash=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
@@ -91,6 +96,7 @@ class BlockVoteFactory(VoteFactory):
     def create_lazy_vote(self, voter_id: bytes, epoch_num: int, round_num: int) -> BlockVote:
         timestamp = util.get_time_stamp()
         signature = self._get_signature(
+            height=0,
             voter_id=self._voter_id,
             commit_id=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
@@ -102,6 +108,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
+            height=0,
             receipt_hash=BlockVote.LazyVote,
             state_hash=BlockVote.LazyVote,
             data_id=BlockVote.LazyVote,

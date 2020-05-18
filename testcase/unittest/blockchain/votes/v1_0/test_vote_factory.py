@@ -15,7 +15,7 @@ class TestVoteFactory:
         return InvokePool()
 
     @pytest.fixture
-    def mock_verify(self) -> Callable[[InvokePool, int, int], InvokeData]:
+    def mock_verify(self, icon_invoke) -> Callable[[InvokePool, int, int], InvokeData]:
         """Suppose that caller of verifier proceeds invoke."""
 
         def _(invoke_pool: InvokePool, epoch_num: int, round_num: int):
@@ -25,6 +25,8 @@ class TestVoteFactory:
                 validators_hash=Hash32.fromhex("0xea2254afbeaa13c73b6f366bfc7621e2a155df9e3ee1e1e7c00df5345c84a7af"),
                 next_validators_origin={}
             )
+            invoke_data.height = 1
+            invoke_data.add_invoke_result(icon_invoke)
             invoke_pool.add_message(invoke_data)
 
             return invoke_data

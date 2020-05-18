@@ -9,7 +9,7 @@ class BlockVote(Vote):
     LazyVote = Hash32(bytes([255] * 32))
 
     def __init__(self, data_id: Hash32, commit_id: Hash32, voter_id: ExternalAddress, epoch_num: int, round_num: int,
-                 state_hash: Hash32, receipt_hash: Hash32, timestamp: int, signature: Signature):
+                 state_hash: Hash32, receipt_hash: Hash32, timestamp: int, signature: Signature, height: int, _hash=None):
         """Vote.
 
         :param state_hash:
@@ -27,6 +27,7 @@ class BlockVote(Vote):
         self._data_id: Hash32 = data_id
         self._commit_id: Hash32 = commit_id
         self._voter_id: ExternalAddress = voter_id
+        self._height: int = height
         self._epoch_num: int = epoch_num
         self._round_num: int = round_num
 
@@ -36,8 +37,27 @@ class BlockVote(Vote):
         self._timestamp: int = timestamp
         self._signature: Signature = signature
 
-        # Created
-        self._hash: Hash32 = None
+        # Optional
+        if _hash:
+            self._hash = _hash
+        else:
+            origin_data = self._serialize()
+            hash_generator = build_hash_generator(1, "icx_vote")
+            self._hash = Hash32(hash_generator.generate_hash(origin_data))
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}" \
+               f"(data_id={self._data_id}, " \
+               f"commit_id={self._commit_id}, " \
+               f"height={self._height}, " \
+               f"voter_id={self._voter_id.hex_hx()}, " \
+               f"epoch_num={self._epoch_num}, " \
+               f"round_num={self._round_num}, " \
+               f"state_hash={self._state_hash}, " \
+               f"receipt_hash={self._receipt_hash}, " \
+               f"timestamp={self._timestamp}, " \
+               f"signature={self._signature}, " \
+               f"hash={self._hash})"
 
     @property
     def version(self):
@@ -49,14 +69,7 @@ class BlockVote(Vote):
 
     @property
     def hash(self) -> Hash32:
-        if self._hash:
-            return self._hash
-        else:
-            origin_data = self._serialize()
-            hash_generator = build_hash_generator(1, "icx_vote")
-            self._hash = Hash32(hash_generator.generate_hash(origin_data))
-
-            return self._hash
+        return self._hash
 
     @property
     def data_id(self) -> Hash32:
@@ -73,6 +86,10 @@ class BlockVote(Vote):
     @property
     def epoch_num(self) -> int:
         return self._epoch_num
+
+    @property
+    def block_height(self) -> int:
+        return self._height
 
     @property
     def state_hash(self) -> Hash32:
@@ -102,12 +119,14 @@ class BlockVote(Vote):
         return {
             "validator": self._voter_id.hex_hx(),
             "timestamp": hex(self._timestamp),
+            "blockHeight": hex(self._height),
             "blockHash": self._data_id.hex_0x(),
             "commitHash": self._commit_id.hex_0x(),
             "stateHash": self._state_hash.hex_0x(),
             "receiptHash": self._receipt_hash.hex_0x(),
             "epoch": hex(self._epoch_num),
-            "round": hex(self._round_num)
+            "round": hex(self._round_num),
+            "signature": self._signature.to_base64str()
         }
 
     @classmethod
@@ -121,7 +140,8 @@ class BlockVote(Vote):
             timestamp=int(data["timestamp"], 16),
             epoch_num=int(data["epoch"], 16),
             round_num=int(data["round"], 16),
-            signature=Signature.from_base64str(data["signature"])
+            signature=Signature.from_base64str(data["signature"]),
+            height=int(data["blockHeight"], 16)
         )
 
     def is_none(self) -> bool:
