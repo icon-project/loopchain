@@ -13,81 +13,29 @@
 # limitations under the License.
 """block serializer for version 0.5 block"""
 
-from collections import OrderedDict
+from typing import TYPE_CHECKING
 
-from loopchain.blockchain.blocks.v0_4 import BlockSerializer
-from loopchain.blockchain.blocks.v0_5 import BlockHeader, BlockBody
-from loopchain.blockchain.transactions import TransactionSerializer
-from loopchain.blockchain.votes import v0_1a
-from loopchain.blockchain.votes.v0_5 import BlockVotes, LeaderVotes
+from loopchain.blockchain.blocks.block_serializer import BlockSerializer as BaseBlockSerializer
+from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
+
+if TYPE_CHECKING:
+    from lft.consensus.messages.data import Data
 
 
-class BlockSerializer(BlockSerializer):
+class BlockSerializer(BaseBlockSerializer):
     version = BlockHeader.version
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
 
-    def _serialize(self, block: 'Block'):
-        header: BlockHeader = block.header
-        body: BlockBody = block.body
+    def _serialize(self, block: 'Data'):
+        return block._serialize()
 
-        transactions = []
-        for tx in body.transactions.values():
-            ts = TransactionSerializer.new(tx.version, tx.type(), self._tx_versioner)
-            tx_serialized = ts.to_full_data(tx)
-            transactions.append(tx_serialized)
+    def _deserialize(self, json_data: dict):
+        return Block._deserialize(**json_data)
 
-        vote_class = BlockVotes
-        leader_vote_class = LeaderVotes
-        if body.prev_votes:
-            any_vote = next(vote for vote in body.prev_votes if vote)
-            if any_vote.version is None:
-                vote_class = v0_1a.BlockVotes
-                leader_vote_class = v0_1a.LeaderVotes
-
-        return {
-            "version": header.version,
-            "prevHash": header.prev_hash.hex_0x(),
-            "transactionsHash": header.transactions_hash.hex_0x(),
-            "stateHash": header.state_hash.hex_0x(),
-            "receiptsHash": header.receipts_hash.hex_0x(),
-            "repsHash": header.reps_hash.hex_0x(),
-            "nextRepsHash": header.next_reps_hash.hex_0x(),
-            "leaderVotesHash": header.leader_votes_hash.hex_0x(),
-            "prevVotesHash": header.prev_votes_hash.hex_0x(),
-            "logsBloom": header.logs_bloom.hex_0x(),
-            "timestamp": hex(header.timestamp),
-            "transactions": transactions,
-            "leaderVotes": leader_vote_class.serialize_votes(body.leader_votes),
-            "prevVotes": vote_class.serialize_votes(body.prev_votes),
-            "hash": header.hash.hex_0x(),
-            "height": hex(header.height),
-            "leader": header.peer_id.hex_hx(),
-            "signature": header.signature.to_base64str(),
-            "nextLeader": header.next_leader.hex_xx(),
-        }
+    def _deserialize_header_data(self, json_data: dict):
+        pass
 
     def _deserialize_body_data(self, json_data: dict):
-        transactions = OrderedDict()
-        for tx_data in json_data['transactions']:
-            tx_version, tx_type = self._tx_versioner.get_version(tx_data)
-            ts = TransactionSerializer.new(tx_version, tx_type, self._tx_versioner)
-            tx = ts.from_(tx_data)
-            transactions[tx.hash] = tx
+        pass
 
-        vote_class = BlockVotes
-        leader_vote_class = LeaderVotes
-        if json_data["prevVotes"]:
-            any_vote = next(vote for vote in json_data["prevVotes"] if vote)
-            if any_vote.get("round") is None:
-                vote_class = v0_1a.BlockVotes
-                leader_vote_class = v0_1a.LeaderVotes
-
-        leader_votes = leader_vote_class.deserialize_votes(json_data["leaderVotes"])
-        prev_votes = vote_class.deserialize_votes(json_data["prevVotes"])
-
-        return {
-            "transactions": transactions,
-            "leader_votes": leader_votes,
-            "prev_votes": prev_votes
-        }
