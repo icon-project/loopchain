@@ -251,37 +251,43 @@ class InvokePool(MessagePool):
 
         return invoke_data
 
+    def genesis_invoke(self, block: 'Block') -> InvokeData:
+        method = "icx_sendTransaction"
+        transactions = []
+        tx_versioner = TransactionVersioner()
+        for tx in block.body.transactions.values():
+            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
+            transaction = {
+                "method": method,
+                "params": {
+                    "txHash": tx.hash.hex()
+                },
+                "genesisData": tx_serializer.to_full_data(tx)
+            }
+            transactions.append(transaction)
+
+        request = {
+            'block': {
+                'blockHeight': block.header.height,
+                'blockHash': block.header.hash.hex(),
+                'timestamp': block.header.timestamp
+            },
+            'transactions': transactions
+        }
+        request = convert_params(request, ParamType.invoke)
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        invoke_result_dict: dict = stub.sync_task().invoke(request)
+
+        invoke_data: InvokeData = InvokeData.from_dict(
+            epoch_num=block.header.epoch, round_num=block.header.round, query_result=invoke_result_dict
+        )
+        invoke_data.height = block.header.height
+        self.add_message(invoke_data)
+
+        return invoke_data
+
     def _preinvoke_temp(self) -> dict:
         return {
-            "addedTransactions": {
-                "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
-                    "version": "0x3",
-                    "timestamp": "0x563a6cf330136",
-                    "dataType": "base",
-                    "data": {
-                        "prep": {
-                            "incentive": "0x1",
-                            "rewardRate": "0x1",
-                            "totalDelegation": "0x3872423746291",
-                            "value": "0x7800000"
-                        }
-                    }
-                }
-            },
-            "currentRepsHash": "1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de",
-            "prep": {
-                "nextReps": [
-                    {
-                        "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
-                        "p2pEndpoint": "123.45.67.89:7100"
-                    },
-                    {
-                        "id": "hx13aca3210918a9b116973f3c4b27c41a54d5dad1",
-                        "p2pEndPoint": "210.34.56.17:7100"
-                    }
-                ],
-                "irep": "0x1",
-                "state": "0x0",
-                "rootHash": "c7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
-            }
+            "addedTransactions": {},
+            "currentRepsHash": "b6fe49ca00c53c1b33d3aee490c734401e5d6c82078ec28a9c40522d59a17305",
         }

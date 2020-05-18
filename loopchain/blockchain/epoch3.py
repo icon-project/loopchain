@@ -28,6 +28,12 @@ class LoopchainEpoch(Epoch):
         # Cached
         self._voters_num = len(self._voters)
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}" \
+               f"(num={self._num}, " \
+               f"rotate_bound={self._rotate_bound}, " \
+               f"voters={[voter.hex_hx() for voter in self._voters]})"
+
     @property
     def num(self) -> int:
         """Unique index of this epoch."""
@@ -55,7 +61,7 @@ class LoopchainEpoch(Epoch):
 
     def verify_proposer(self, proposer_id: bytes, round_num: int):
         expected_proposer = self.get_proposer_id(round_num)
-        if proposer_id != expected_proposer:
+        if proposer_id != expected_proposer and proposer_id != ExternalAddress.empty():
             raise InvalidProposer(proposer_id, expected_proposer)
 
     def verify_voter(self, voter: bytes, vote_index: int = -1):
