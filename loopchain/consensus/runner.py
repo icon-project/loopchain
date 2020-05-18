@@ -1,15 +1,27 @@
+"""Consensus (lft) execution and event handling"""
+import json
 from typing import TYPE_CHECKING
 
 from lft.consensus import Consensus
-from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, ReceiveDataEvent, ReceiveVoteEvent, \
-    InitializeEvent
+from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
 from lft.event import EventSystem, EventRegister
+from lft.event.mediators import DelayedEventMediator
+
+from loopchain import configure_default as conf
+from loopchain import utils
+from loopchain.blockchain.epoch3 import LoopchainEpoch
+from loopchain.blockchain.types import ExternalAddress
+from loopchain.blockchain.votes.v1_0 import BlockVoteFactory
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.protos import loopchain_pb2
 
 if TYPE_CHECKING:
-    from loopchain.blockchain.types import ExternalAddress
     from loopchain.baseservice import BroadcastScheduler
-    from lft.consensus.messages.data import DataFactory, Data
-    from lft.consensus.messages.vote import VoteFactory, Vote
+    from lft.consensus.messages.data import DataFactory
+    from lft.consensus.messages.vote import VoteFactory
+    from loopchain.blockchain.blocks.v1_0 import Block, BlockFactory
+    from loopchain.blockchain.blocks.v1_0 import BlockVote
+    from loopchain.blockchain import BlockManager
 
 
 class ConsensusRunner(EventRegister):
@@ -18,33 +30,96 @@ class ConsensusRunner(EventRegister):
                  event_system: 'EventSystem',
                  data_factory: 'DataFactory',
                  vote_factory: 'VoteFactory',
-                 broadcast_scheduler: 'BroadcastScheduler'):
+                 broadcast_scheduler: 'BroadcastScheduler',
+                 block_manager):
         super().__init__(event_system.simulator)
         self.broadcast_scheduler = broadcast_scheduler
         self.event_system = event_system
         self.consensus = Consensus(self.event_system, node_id, data_factory, vote_factory)
+        self._block_manager: 'BlockManager' = block_manager
+        self._block_factory: 'BlockFactory' = data_factory
+        self._vote_factory: 'BlockVoteFactory' = vote_factory
 
     def start(self, event: InitializeEvent):
         self.event_system.start(blocking=False)
         self.event_system.simulator.raise_event(event)
 
-    async def _on_event_broadcast_data(self, block: 'Data'):
-        # call broadcast block
-        pass
+    async def _on_event_broadcast_data(self, event: BroadcastDataEvent):
+        target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
+        self._block_manager._send_unconfirmed_block(
+            block_=event.data,
+            target_reps_hash=target_reps_hash,
+            round_=event.data.round_num
+        )
 
-    async def _on_event_broadcast_vote(self, vote: 'Vote'):
-        # call broadcast vote
-        pass
+    async def _on_event_broadcast_vote(self, event: BroadcastVoteEvent):
+        vote_dumped = self._vote_dumps(event.vote)
+        block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
 
-    async def _on_event_receive_data(self, block: 'Data'):
-        await self.consensus.receive_data(block)
+        target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
 
-    async def _on_event_receive_vote(self, vote: 'Vote'):
-        await self.consensus.receive_vote(vote)
+        self.broadcast_scheduler.schedule_broadcast(
+            "VoteUnconfirmedBlock",
+            block_vote,
+            reps_hash=target_reps_hash
+        )
+
+    async def _on_round_end_event(self, round_end_event: RoundEndEvent):
+        utils.logger.notice(f"_on_round_end_event")
+
+        await self._write_block(round_end_event)
+        await self._round_start(round_end_event)
+
+    # FIXME: Temporary
+    async def _write_block(self, round_end_event):
+        utils.logger.notice(f"> EPOCH // ROUND ({round_end_event.epoch_num} // {round_end_event.round_num})")
+        utils.logger.notice(f"> Candidate id: {round_end_event.candidate_id}")
+        utils.logger.notice(f"> Commit id: {round_end_event.commit_id}")
+
+        if round_end_event.is_success:
+            consensus_db_pool = self.consensus._data_pool  # FIXME
+            blockchain = self._block_manager.blockchain
+            db = blockchain.blockchain_store
+
+            try:
+                block: 'Block' = consensus_db_pool.get_data(round_end_event.commit_id)
+            except KeyError:
+                utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
+            else:
+                utils.logger.notice(f"> ADDED Block : {block}")
+                block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+                block_serialized = block.serialize()["!data"]
+                block_serialized = json.dumps(block_serialized).encode(encoding='UTF-8')
+
+                batch = db.WriteBatch()
+                batch.put(block_hash_encoded, block_serialized)
+                batch.put(blockchain.LAST_BLOCK_KEY, block_hash_encoded)
+                batch.put(
+                    blockchain.BLOCK_HEIGHT_KEY +
+                    block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
+                    block_hash_encoded
+                )
+                batch.write()
+
+    # FIXME: Temporary
+    async def _round_start(self, event: RoundEndEvent):
+        epoch1 = LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))
+        next_round = event.round_num + 1
+
+        round_start_event = RoundStartEvent(
+            epoch=epoch1,
+            round_num=next_round
+        )
+        round_start_event.deterministic = False
+        mediator = self.event_system.get_mediator(DelayedEventMediator)
+        mediator.execute(0.5, round_start_event)
 
     _handler_prototypes = {
         BroadcastDataEvent: _on_event_broadcast_data,
         BroadcastVoteEvent: _on_event_broadcast_vote,
-        ReceiveDataEvent: _on_event_receive_data,
-        ReceiveVoteEvent: _on_event_receive_vote
+        RoundEndEvent: _on_round_end_event
     }
+
+    def _vote_dumps(self, vote: 'BlockVote') -> bytes:
+        vote_dumped: dict = vote.serialize()["!data"]
+        return json.dumps(vote_dumped)
