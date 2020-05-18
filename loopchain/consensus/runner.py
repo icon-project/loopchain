@@ -117,7 +117,8 @@ class ConsensusRunner(EventRegister):
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
-        epoch1 = LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))
+        voters = self._get_next_valiators()
+        epoch1 = LoopchainEpoch(num=1, voters=voters)
         next_round = event.round_num + 1
 
         round_start_event = RoundStartEvent(
@@ -137,6 +138,15 @@ class ConsensusRunner(EventRegister):
         InitializeEvent: _on_init_event,
         RoundEndEvent: _on_round_end_event
     }
+
+    def _get_next_valiators(self) -> List[ExternalAddress]:
+        validators = [
+            "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
+            "hx9f049228bade72bc0a3490061b824f16bbb74589",
+            "hx6435405122df9fe5187d659588beccdf7aee8557",
+            "hx475bfec4178f3abc88c959faa2e6384e6b409c8f"
+        ]
+        return [ExternalAddress.fromhex_address(validator) for validator in validators]
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
