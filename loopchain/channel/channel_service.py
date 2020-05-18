@@ -209,9 +209,15 @@ class ChannelService:
         block_builder.prev_hash = Hash32.empty()
         block_builder.signer = None
 
-        peer_id = ExternalAddress.fromhex_address(signer.address)
+        next_validators = [
+            "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
+            "hx9f049228bade72bc0a3490061b824f16bbb74589",
+            "hx6435405122df9fe5187d659588beccdf7aee8557",
+            "hx475bfec4178f3abc88c959faa2e6384e6b409c8f"
+        ]
+        next_validators = [ExternalAddress.fromhex_address(validator) for validator in next_validators]
         block_builder.validators_hash = Hash32.empty()
-        block_builder.next_validators = [peer_id]
+        block_builder.next_validators = next_validators
 
         block_builder.epoch = 0
         block_builder.round = 0
