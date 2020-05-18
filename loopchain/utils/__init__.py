@@ -21,26 +21,23 @@ import os
 import re
 import signal
 import socket
+import sys
+import time
 import timeit
 import traceback
+from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Tuple, Union
 
-import sys
-import time
 import verboselogs
-from binascii import unhexlify
-from fluent import event
 
 from loopchain import configure as conf
 from loopchain.protos import message_code
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
-
-apm_event = None
 
 logger = verboselogs.VerboseLogger("dev")
 
@@ -489,14 +486,6 @@ def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
     return store, store_path
 
 
-def no_send_apm_event(peer_id, event_param):
-    pass
-
-
-def send_apm_event(peer_id, event_param):
-    event.Event(peer_id, event_param)
-
-
 # ------------------- data utils ----------------------------
 
 def is_hex(s):
@@ -525,9 +514,3 @@ def create_invoke_result_specific_case(confirmed_transaction_list, invoke_result
     for tx in confirmed_transaction_list:
         invoke_results[tx.tx_hash] = invoke_result
     return invoke_results
-
-
-if not conf.MONITOR_LOG:
-    apm_event = no_send_apm_event
-else:
-    apm_event = send_apm_event

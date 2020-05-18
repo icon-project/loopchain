@@ -14,15 +14,15 @@
 
 import logging
 import logging.handlers
-import coloredlogs
-import verboselogs
 import os
 import sys
 import traceback
-
 from functools import partial, reduce
 from operator import or_
-from fluent import sender
+
+import coloredlogs
+import verboselogs
+
 from loopchain import configure as conf
 from .sized_timed_file_handler import SizedTimedRotatingFileHandler
 
@@ -44,9 +44,6 @@ class LogConfiguration:
         self.log_file_rotate_max_bytes = 0
         self.log_file_rotate_backup_count = 0
         self.log_file_rotate_utf = False
-        self.log_monitor = False
-        self.log_monitor_host = None
-        self.log_monitor_port = None
         self.is_leader = False
 
         self._log_level = None
@@ -75,9 +72,6 @@ class LogConfiguration:
                         handler.addFilter(self._root_stream_filter)
         else:
             logger.setLevel(self._log_level)
-
-        if self.log_monitor:
-            sender.setup('loopchain', host=self.log_monitor_host, port=self.log_monitor_port)
 
     def _update_log_color_set(self, logger):
         # level SPAM value is 5
