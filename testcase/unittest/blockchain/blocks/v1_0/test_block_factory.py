@@ -15,7 +15,7 @@ from loopchain.store.key_value_store import KeyValueStore
 
 class TestBlockFactory:
     @pytest.fixture
-    def block_factory(self, mocker, icon_query) -> v1_0.BlockFactory:
+    def block_factory(self, mocker, icon_preinvoke) -> v1_0.BlockFactory:
         # TODO: Temporary mocking...
         tx_queue: AgingCache = mocker.MagicMock(AgingCache)
         db: KeyValueStore = mocker.MagicMock(KeyValueStore)
@@ -25,7 +25,7 @@ class TestBlockFactory:
         invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_query
+            query_result=icon_preinvoke
         )
         signer: Signer = Signer.new()
         epoch_pool = EpochPool()
