@@ -320,6 +320,7 @@ class ChannelService:
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         try:
+            raise ConsensusChanged("TEST")
             self.__ready_to_height_sync()
         except ConsensusChanged:
             self.state_machine.start_lft()
