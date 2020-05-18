@@ -638,7 +638,6 @@ class ChannelInnerTask:
 
         if self._channel_service.state_machine.state == "Consensus":
             from lft.consensus.events import ReceiveDataEvent
-            logging.critical(f"announce_unconfirmed_block: type is {type(unconfirmed_block)}, {unconfirmed_block}")
             event = ReceiveDataEvent(unconfirmed_block)
             self._channel_service.consensus_runner.event_system.simulator.raise_event(event)
             return
