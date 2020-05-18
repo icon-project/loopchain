@@ -9,7 +9,7 @@ from loopchain.blockchain.blocks import NextRepsChangeReason, BlockBuilder as Ba
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader, BlockBody
 from loopchain.blockchain.transactions import TransactionVersioner
-from loopchain.blockchain.types import ExternalAddress, BloomFilter, Hash32
+from loopchain.blockchain.types import ExternalAddress, BloomFilter, Hash32, Signature
 from loopchain.blockchain.votes.v1_0 import BlockVote
 
 
@@ -72,7 +72,11 @@ class BlockBuilder(BaseBlockBuilder):
     def build(self) -> 'Block':
         self.build_peer_id()
         self.build_hash()
-        self.sign()
+        if self.signer:
+            self.sign()
+        else:
+            # No signature for Genesis Block
+            self.signature = Signature.empty()
 
         self.block = self.build_block()
         return self.block
@@ -194,7 +198,7 @@ class BlockBuilder(BaseBlockBuilder):
         return self.hash
 
     def _build_hash(self):
-        if self.fixed_timestamp:
+        if self.fixed_timestamp is not None:
             self._timestamp = self.fixed_timestamp
         else:
             self._timestamp = int(time.time() * 1_000_000)

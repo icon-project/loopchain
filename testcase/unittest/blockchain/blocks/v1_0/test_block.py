@@ -1,6 +1,8 @@
+import itertools
+
+from loopchain.blockchain.blocks.v1_0.block import Block
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.transactions.v3 import TransactionSerializer
-from loopchain.blockchain.blocks.v1_0.block import Block
 
 
 class TestBlockSerializer:
@@ -91,7 +93,9 @@ class TestBlockSerializer:
 
         # AND all properties of block body must be same
         body = block._body
-        assert body.prev_votes == block_data["prevVotes"]
+        prev_votes = itertools.zip_longest(body.prev_votes, block_data["prevVotes"])
+        for deserialized_vote, serialized_vote in prev_votes:
+            assert deserialized_vote.serialize()["!data"] == serialized_vote
 
         # AND also transactions
         for deserialized_tx_hash_and_tx, orig_tx in zip(body.transactions.items(), block_data["transactions"]):

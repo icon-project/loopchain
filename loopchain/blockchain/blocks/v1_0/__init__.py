@@ -1,4 +1,4 @@
-from .block import Block
+from .block import Block, BlockHeader, BlockBody
 from .block_builder import BlockBuilder
 from .block_factory import BlockFactory
 from .block_verifier import BlockVerifier
