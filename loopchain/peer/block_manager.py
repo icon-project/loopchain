@@ -9,7 +9,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor, Future
 from lft.consensus.events import ReceiveDataEvent
 from pkg_resources import parse_version
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -138,7 +138,7 @@ class BlockManager:
         else:
             self._send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
 
-    def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
+    def _send_unconfirmed_block(self, block_: Union[Block, "Data"], target_reps_hash, round_: int):
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
             f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
@@ -620,7 +620,7 @@ class BlockManager:
                 break
 
             await asyncio.sleep(0)
-            
+
             process_height = my_height+1
             if process_height in self.request_result_for_async.keys():
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \

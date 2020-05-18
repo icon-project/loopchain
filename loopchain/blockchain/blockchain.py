@@ -36,6 +36,7 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peer import BlockManager
+    from lft.consensus.messages.data import Data
 
 __all__ = ("NID", "BlockChain")
 
@@ -1055,17 +1056,21 @@ class BlockChain:
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
-    def block_dumps(self, block: Block) -> bytes:
-        block_version = self.__block_versioner.get_version(block.header.height)
-        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
-        block_serialized = block_serializer.serialize(block)
+    def block_dumps(self, block: Union[Block, "Data"]) -> bytes:
+        if hasattr(block, "serialize"):
+            # Block 1.0
+            block_serialized: dict = block.serialize()["!data"]
+        else:
+            block_version = self.__block_versioner.get_version(block.header.height)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
+            block_serialized = block_serializer.serialize(block)
 
-        """
-        FIXME: this is a workaround. confirm_prev_block is used temporarily. We will remove the attribute.
-        If confirm_prev_block is serialized in serialize() function, it will be put in DB but we don't want it.
-        """
-        if hasattr(block.body, 'confirm_prev_block'):
-            block_serialized['confirm_prev_block'] = block.body.confirm_prev_block
+            """
+            FIXME: this is a workaround. confirm_prev_block is used temporarily. We will remove the attribute.
+            If confirm_prev_block is serialized in serialize() function, it will be put in DB but we don't want it.
+            """
+            if hasattr(block.body, 'confirm_prev_block'):
+                block_serialized['confirm_prev_block'] = block.body.confirm_prev_block
 
         block_json = json.dumps(block_serialized)
         block_dumped = block_json.encode(encoding=conf.PEER_DATA_ENCODING)
