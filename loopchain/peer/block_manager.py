@@ -64,7 +64,6 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.__service_status = status_code.Service.online
 
@@ -96,14 +95,6 @@ class BlockManager:
     def consensus_algorithm(self):
         return self.__consensus_algorithm
 
-    @property
-    def precommit_block(self):
-        return self.__precommit_block
-
-    @precommit_block.setter
-    def precommit_block(self, block):
-        self.__precommit_block = block
-
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
@@ -128,7 +119,7 @@ class BlockManager:
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
-        if (self.__channel_service.state_machine.state != "BlockGenerate" and 
+        if (self.__channel_service.state_machine.state != "BlockGenerate" and
                 last_block.header.height > block_.header.height):
             util.logger.debug(
                 f"Last block has reached a sufficient height. Broadcast will stop! ({block_.header.hash.hex()})")

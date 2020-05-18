@@ -36,26 +36,6 @@ class PeerInnerTask:
     async def get_node_key(self) -> bytes:
         return self._peer_service.node_key
 
-    # FIXME : not used?
-    @message_queue_task
-    async def stop_outer(self):
-        """
-        deprecated
-        """
-        import warnings
-        warnings.warn("stop_outer is not support", DeprecationWarning)
-        return "stop outer"
-
-    # FIXME : not used?
-    @message_queue_task
-    async def start_outer(self):
-        """
-        deprecated
-        """
-        import warnings
-        warnings.warn("start_outer is not support", DeprecationWarning)
-        return "start outer"
-
     @message_queue_task(type_=MessageQueueType.Worker)
     async def stop(self, message):
         logging.info(f"peer_inner_service:stop")
