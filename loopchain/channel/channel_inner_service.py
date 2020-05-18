@@ -699,10 +699,21 @@ class ChannelInnerTask:
         except json.decoder.JSONDecodeError:
             util.logger.warning(f"This vote({vote_dumped}) may be from old version.")
         else:
-            version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
-            vote = Vote.get_block_vote_class(version).deserialize(vote_serialized)
+            height: str = vote_serialized.get("blockHeight")  # FIXME
+            version = self._blockchain.block_versioner.get_version(int(height, 16))
+            if parse_version(version) == parse_version("1.0"):
+                from loopchain.blockchain.votes import v1_0
+                vote = v1_0.BlockVote._deserialize(**vote_serialized)
+                vote_round = vote.round_num
+                vote_block_hash = vote.id
+                voter = vote.voter_id
+            else:
+                vote = Vote.get_block_vote_class(version).deserialize(vote_serialized)
+                vote_round = vote.round
+                vote_block_hash = vote.block_hash
+                voter = vote.rep.hex_hx()
             util.logger.debug(
-                f"Peer vote to: {vote.block_height}({vote.round}) {vote.block_hash} from {vote.rep.hex_hx()}"
+                f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
             if self._event_system:
                 util.logger.notice(f'loopchain 3.x has event_system!')
@@ -715,7 +726,6 @@ class ChannelInnerTask:
                 if self._channel_service.state_machine.state == "BlockGenerate" and \
                         self._block_manager.consensus_algorithm:
                     self._block_manager.consensus_algorithm.vote(vote)
-
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
