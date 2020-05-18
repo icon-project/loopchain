@@ -3,6 +3,7 @@ from typing import List
 import pytest
 from lft.consensus.epoch import EpochPool
 
+from loopchain import ExternalAddress
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Hash32
 from loopchain.blockchain.blocks import v1_0
@@ -73,3 +74,28 @@ class TestBlockFactory:
 
         # THEN It should be return v1.0 block
         assert block.header.version == v1_0.version
+        assert block.is_real()
+
+    @pytest.mark.asyncio
+    async def test_create_none_data(self, block_factory: v1_0.BlockFactory):
+        # WHEN I create none block
+        epoch_num = 1
+        round_num = 1
+        proposer_id = ExternalAddress.empty()
+        block = block_factory.create_none_data(epoch_num, round_num, proposer_id)
+
+        # THEN It should be a none block
+        assert not block.is_lazy()
+        assert block.is_none()
+
+    @pytest.mark.asyncio
+    async def test_create_none_data(self, block_factory: v1_0.BlockFactory):
+        # WHEN I create lazy block
+        epoch_num = 1
+        round_num = 1
+        proposer_id = ExternalAddress.empty()
+        block = block_factory.create_lazy_data(epoch_num, round_num, proposer_id)
+
+        # THEN It should be a lazy block
+        assert block.is_lazy()
+        assert not block.is_none()
