@@ -126,6 +126,8 @@ class ChannelService:
 
         # loop.set_debug(True)
         loop.create_task(_serve())
+        loop.create_task(self.broadcast_scheduler.start())
+
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)
 
@@ -345,7 +347,7 @@ class ChannelService:
     def __init_broadcast_scheduler(self):
         scheduler = BroadcastSchedulerFactory.new(channel=ChannelProperty().name,
                                                   self_target=ChannelProperty().peer_target)
-        scheduler.start()
+        # scheduler.start()
         self.__broadcast_scheduler = scheduler
 
     def _get_radiostations(self):

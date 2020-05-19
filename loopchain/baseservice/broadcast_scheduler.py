@@ -1,5 +1,6 @@
 """gRPC broadcast thread"""
 
+import asyncio
 import abc
 import logging
 import multiprocessing as mp
@@ -317,11 +318,11 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
             for cb in callbacks:
                 cb(command, params)
 
-    def schedule_job(self, command, params, block=False, block_timeout=None):
-        self._put_command(command, params, block=block, block_timeout=block_timeout)
+    async def schedule_job(self, command, params, block=False, block_timeout=None):
+        await self._put_command(command, params, block=block, block_timeout=block_timeout)
         self.__perform_schedule_listener(command, params)
 
-    def _update_audience(self, reps_hash):
+    async def _update_audience(self, reps_hash):
         blockchain = ObjectManager().channel_service.block_manager.blockchain
         update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
 
@@ -329,12 +330,12 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
             util.logger.info(f"\nupdate_reps({update_reps})")
             audience_targets = list(update_reps.values())
 
-            self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
+            await self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
             self.__audience_reps_hash = reps_hash
         else:
             util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
 
-    def schedule_broadcast(self,
+    async def schedule_broadcast(self,
                            method_name,
                            method_param, *,
                            reps_hash=None, retry_times=None, timeout=None):
@@ -350,42 +351,45 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
             kwargs['timeout'] = timeout
 
         util.logger.debug(f"broadcast method_name({method_name})")
-        self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+        await self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
 
-    def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
-        self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
+    async def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
+        await self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
 
 
-class _BroadcastThread(CommonThread):
+class _BroadcastThread():
     def __init__(self, channel: str, self_target: str=None):
-        self.broadcast_queue = queue.PriorityQueue()
-        self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
+        self.broadcast_queue = asyncio.PriorityQueue()
         self.__broadcaster = _Broadcaster(channel, self_target)
+        self._is_running = False
 
-    def stop(self):
-        super().stop()
-        self.broadcast_queue.put((None, None, None, None))
-        self.__broadcast_pool.shutdown(False)
+    async def _empty_queue(self):
+        while not self.broadcast_queue.empty():
+            await self.broadcast_queue.get()
 
-    def run(self, event: threading.Event):
-        event.set()
+    async def start(self):
+        self._is_running = True
+        await self.run()
+
+    def wait(self):
+        pass
+
+    async def stop(self):
+        self._is_running = False
+        self._empty_queue()
+        await self.broadcast_queue.put((None, None, None))
+
+    async def run(self):
         self.__broadcaster.start()
 
-        def _callback(curr_future: futures.Future, executor_future: futures.Future):
-            if executor_future.exception():
-                curr_future.set_exception(executor_future.exception())
-                logging.error(executor_future.exception())
-            else:
-                curr_future.set_result(executor_future.result())
-
-        while self.is_run():
-            priority, command, params, future = self.broadcast_queue.get()
-            if command is None:
+        while self._is_running:
+            priority, command, params = await self.broadcast_queue.get()
+            if not self.__broadcaster.is_running or command is None:
                 break
 
-            return_future = self.__broadcast_pool.submit(self.__broadcaster.handle_command, command, params)
-            if future is not None:
-                return_future.add_done_callback(partial(_callback, future))
+            await self.__broadcaster.handle_command(command, params)
+
+        self._empty_queue()
 
 
 class _BroadcastSchedulerThread(BroadcastScheduler):
@@ -394,16 +398,16 @@ class _BroadcastSchedulerThread(BroadcastScheduler):
 
         self.__broadcast_thread = _BroadcastThread(channel, self_target=self_target)
 
-    def start(self):
-        self.__broadcast_thread.start()
+    async def start(self):
+        await self.__broadcast_thread.start()
 
-    def stop(self):
-        self.__broadcast_thread.stop()
+    async def stop(self):
+        await self.__broadcast_thread.stop()
 
     def wait(self):
         self.__broadcast_thread.wait()
 
-    def _put_command(self, command, params, block=False, block_timeout=None):
+    async def _put_command(self, command, params, block=False, block_timeout=None):
         if command == BroadcastCommand.CREATE_TX:
             priority = (10, time.time())
         elif isinstance(params, tuple) and params[0] == "AddTx":
@@ -411,11 +415,7 @@ class _BroadcastSchedulerThread(BroadcastScheduler):
         else:
             priority = (0, time.time())
 
-        future = futures.Future() if block else None
-        self.__broadcast_thread.broadcast_queue.put((priority, command, params, future))
-        if future is not None:
-            future.result(block_timeout)
-
+        await self.__broadcast_thread.broadcast_queue.put((priority, command, params))
 
 class _BroadcastSchedulerMp(BroadcastScheduler):
     def __init__(self, channel: str, self_target: str=None):
@@ -456,6 +456,7 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
 
         while True:
             command, params = broadcast_queue.get()
+            logging.info(f"Command, Params : {command}, {params}")
             if not broadcaster.is_running or command is None:
                 break
             broadcaster.handle_command(command, params)
