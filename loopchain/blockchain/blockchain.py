@@ -1033,6 +1033,7 @@ class BlockChain:
             reps_hash, reps = PeerLoader.load()
             utils.logger.info(f"Initial Loaded Reps: {reps}")
             if not self.is_roothash_exist_in_db(reps_hash):
+                utils.logger.info(f"Write Reps: {reps_hash}")
                 self.write_preps(reps_hash, reps)
 
     def generate_genesis_block(self, reps: List[ExternalAddress]):
