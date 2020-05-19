@@ -141,6 +141,7 @@ class BlockFactory(DataFactory):
     def create_none_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
         return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.NoneData)
 
+
     def create_lazy_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
         return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.LazyData)
 
@@ -150,7 +151,7 @@ class BlockFactory(DataFactory):
             prev_hash=_hash,
             height=-1,
             timestamp=utils.get_time_stamp(),
-            peer_id=self._signer.address,
+            peer_id=proposer_id,
             signature="",
             epoch=epoch_num,
             round=round_num,
