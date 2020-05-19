@@ -87,8 +87,6 @@ class ConsensusRunner(EventRegister):
     # FIXME: Temporary
     async def _write_block(self, round_end_event):
         utils.logger.notice(f"> EPOCH // ROUND ({round_end_event.epoch_num} // {round_end_event.round_num})")
-        utils.logger.notice(f"> Candidate id: {round_end_event.candidate_id}")
-        utils.logger.notice(f"> Commit id: {round_end_event.commit_id}")
 
         if round_end_event.is_success:
             consensus_db_pool = self.consensus._data_pool  # FIXME
@@ -100,7 +98,7 @@ class ConsensusRunner(EventRegister):
             except KeyError:
                 utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
             else:
-                utils.logger.notice(f"> ADDED Block : {block}")
+                utils.logger.notice(f"> ADDED Block : {block.header.hash}")
                 block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
                 block_serialized = block.serialize()["!data"]
                 block_serialized = json.dumps(block_serialized).encode(encoding='UTF-8')

@@ -635,7 +635,6 @@ class ChannelInnerTask:
 
         if self._channel_service.state_machine.state == "Consensus":
             from lft.consensus.events import ReceiveDataEvent
-            logging.critical(f"announce_unconfirmed_block: type is {type(unconfirmed_block)}, {unconfirmed_block}")
             event = ReceiveDataEvent(unconfirmed_block)
             self._channel_service.consensus_runner.event_system.simulator.raise_event(event)
             return
@@ -723,7 +722,7 @@ class ChannelInnerTask:
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
             if self._event_system:
-                util.logger.notice(f'loopchain 3.x has event_system!')
+                # util.logger.notice(f'loopchain 3.x has event_system!')
                 e = ReceiveVoteEvent(vote)
                 self._event_system.simulator.raise_event(e)
             else:
