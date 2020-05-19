@@ -318,45 +318,6 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
             for cb in callbacks:
                 cb(command, params)
 
-    async def schedule_job(self, command, params, block=False, block_timeout=None):
-        await self._put_command(command, params, block=block, block_timeout=block_timeout)
-        self.__perform_schedule_listener(command, params)
-
-    async def _update_audience(self, reps_hash):
-        blockchain = ObjectManager().channel_service.block_manager.blockchain
-        update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
-
-        if update_reps:
-            util.logger.info(f"\nupdate_reps({update_reps})")
-            audience_targets = list(update_reps.values())
-
-            await self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
-            self.__audience_reps_hash = reps_hash
-        else:
-            util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
-
-    async def schedule_broadcast(self,
-                           method_name,
-                           method_param, *,
-                           reps_hash=None, retry_times=None, timeout=None):
-        if reps_hash and reps_hash != self.__audience_reps_hash:
-            self._update_audience(reps_hash)
-        elif not self.__audience_reps_hash:
-            self._update_audience(ChannelProperty().crep_root_hash)
-
-        kwargs = {}
-        if retry_times is not None:
-            kwargs['retry_times'] = retry_times
-        if timeout is not None:
-            kwargs['timeout'] = timeout
-
-        util.logger.debug(f"broadcast method_name({method_name})")
-        await self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
-
-    async def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
-        await self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
-
-
 class _BroadcastThread():
     def __init__(self, channel: str, self_target: str=None):
         self.broadcast_queue = asyncio.PriorityQueue()
@@ -398,10 +359,16 @@ class _BroadcastSchedulerThread(BroadcastScheduler):
 
         self.__broadcast_thread = _BroadcastThread(channel, self_target=self_target)
 
-    async def start(self):
+    def start(self):
+        self.__broadcast_thread.start()
+
+    def stop(self):
+        self.__broadcast_thread.stop()
+
+    async def start_async(self):
         await self.__broadcast_thread.start()
 
-    async def stop(self):
+    async def stop_async(self):
         await self.__broadcast_thread.stop()
 
     def wait(self):
@@ -416,6 +383,53 @@ class _BroadcastSchedulerThread(BroadcastScheduler):
             priority = (0, time.time())
 
         await self.__broadcast_thread.broadcast_queue.put((priority, command, params))
+
+    async def schedule_job(self, command, params, block=False, block_timeout=None):
+        await self._put_command(command, params, block=block, block_timeout=block_timeout)
+        self.__perform_schedule_listener(command, params)
+
+    async def _update_audience(self, reps_hash):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+        update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
+
+        if update_reps:
+            util.logger.info(f"\nupdate_reps({update_reps})")
+            audience_targets = list(update_reps.values())
+
+            await self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
+            self.__audience_reps_hash = reps_hash
+        else:
+            util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
+
+    def schedule_broadcast(self,
+                           method_name,
+                           method_param, *,
+                           reps_hash=None, retry_times=None, timeout=None):
+        async def __run(method_name,
+                        method_param, *,
+                        reps_hash=None, retry_times=None, timeout=None):
+            if reps_hash and reps_hash != self.__audience_reps_hash:
+                self._update_audience(reps_hash)
+            elif not self.__audience_reps_hash:
+                self._update_audience(ChannelProperty().crep_root_hash)
+
+            kwargs = {}
+            if retry_times is not None:
+                kwargs['retry_times'] = retry_times
+            if timeout is not None:
+                kwargs['timeout'] = timeout
+
+            util.logger.debug(f"broadcast method_name({method_name})")
+            await self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+
+        loop = asyncio.get_event_loop()
+        asyncio.run_coroutine_threadsafe(
+            __run(method_name, method_name, reps_hash=reps_hash, retry_times=retry_times, timeout=timeout),
+            loop
+        )
+
+    async def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
+        await self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
 
 class _BroadcastSchedulerMp(BroadcastScheduler):
     def __init__(self, channel: str, self_target: str=None):
@@ -485,6 +499,43 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
     def _put_command(self, command, params, block=False, block_timeout=None):
         self.__broadcast_queue.put((command, params))
 
+    def schedule_job(self, command, params, block=False, block_timeout=None):
+        self._put_command(command, params, block=block, block_timeout=block_timeout)
+        self.__perform_schedule_listener(command, params)
+
+    def _update_audience(self, reps_hash):
+        blockchain = ObjectManager().channel_service.block_manager.blockchain
+        update_reps = blockchain.find_preps_targets_by_roothash(reps_hash)
+
+        if update_reps:
+            util.logger.info(f"\nupdate_reps({update_reps})")
+            audience_targets = list(update_reps.values())
+
+            self.schedule_job(BroadcastCommand.UPDATE_AUDIENCE, audience_targets)
+            self.__audience_reps_hash = reps_hash
+        else:
+            util.logger.warning(f"fail find_preps_by_roothash by ({reps_hash})")
+
+    def schedule_broadcast(self,
+                           method_name,
+                           method_param, *,
+                           reps_hash=None, retry_times=None, timeout=None):
+        if reps_hash and reps_hash != self.__audience_reps_hash:
+            self._update_audience(reps_hash)
+        elif not self.__audience_reps_hash:
+            self._update_audience(ChannelProperty().crep_root_hash)
+
+        kwargs = {}
+        if retry_times is not None:
+            kwargs['retry_times'] = retry_times
+        if timeout is not None:
+            kwargs['timeout'] = timeout
+
+        util.logger.debug(f"broadcast method_name({method_name})")
+        self.schedule_job(BroadcastCommand.BROADCAST, (method_name, method_param, kwargs))
+
+    def schedule_send_failed_leader_complain(self, method_name, method_param, *, target: str):
+        self.schedule_job(BroadcastCommand.SEND_TO_SINGLE_TARGET, (method_name, method_param, target))
 
 class BroadcastSchedulerFactory:
     @staticmethod

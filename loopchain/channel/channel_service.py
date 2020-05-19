@@ -126,7 +126,7 @@ class ChannelService:
 
         # loop.set_debug(True)
         loop.create_task(_serve())
-        loop.create_task(self.broadcast_scheduler.start())
+        loop.create_task(self.broadcast_scheduler.start_async())
 
         loop.add_signal_handler(signal.SIGINT, self.close)
         loop.add_signal_handler(signal.SIGTERM, self.close)
