@@ -175,10 +175,13 @@ class ChannelService:
         invoke_pool.genesis_invoke(block)
 
         next_validators = [
-            "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
-            "hx9f049228bade72bc0a3490061b824f16bbb74589",
-            "hx6435405122df9fe5187d659588beccdf7aee8557",
-            "hx475bfec4178f3abc88c959faa2e6384e6b409c8f"
+            "hxdf93e48a747fac042460f1a7c349d4a3082db0e0",
+            "hx11e5fca16d2e429e354fa8b23ef77d65198cd258",
+            "hx3d1f7566c28cf757f820374f79a1ef839d2ea404",
+            "hxeb5b66a86321dc1a5b3716cee8c9f53f38395eaa",
+            "hx2f38e47c7ef71ec113415d22b48d9da799aa8eef",
+            "hx0bccda1a3d864c949f425959bbbf9040cc0a1622",
+            "hx21da9f153bb749e1c38c71d067d4d47853804a40",
         ]
         next_validators = [ExternalAddress.fromhex_address(validator) for validator in next_validators]
         event = InitializeEvent(
@@ -210,10 +213,13 @@ class ChannelService:
         block_builder.signer = None
 
         next_validators = [
-            "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
-            "hx9f049228bade72bc0a3490061b824f16bbb74589",
-            "hx6435405122df9fe5187d659588beccdf7aee8557",
-            "hx475bfec4178f3abc88c959faa2e6384e6b409c8f"
+            "hxdf93e48a747fac042460f1a7c349d4a3082db0e0",
+            "hx11e5fca16d2e429e354fa8b23ef77d65198cd258",
+            "hx3d1f7566c28cf757f820374f79a1ef839d2ea404",
+            "hxeb5b66a86321dc1a5b3716cee8c9f53f38395eaa",
+            "hx2f38e47c7ef71ec113415d22b48d9da799aa8eef",
+            "hx0bccda1a3d864c949f425959bbbf9040cc0a1622",
+            "hx21da9f153bb749e1c38c71d067d4d47853804a40",
         ]
         next_validators = [ExternalAddress.fromhex_address(validator) for validator in next_validators]
         block_builder.validators_hash = Hash32.empty()
