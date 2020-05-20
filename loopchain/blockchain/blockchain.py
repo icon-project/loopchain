@@ -3,6 +3,7 @@
 import json
 import pickle
 import threading
+import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -10,7 +11,6 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
-import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -25,7 +25,7 @@ from loopchain.blockchain.peer_loader import PeerLoader
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
-from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -64,10 +64,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None, block_manager=None):
-        if channel_name is None:
-            channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
-
+    def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
         # last block in block db
         self.__last_block = None
         self.__made_block_counter = MadeBlockCounter()
@@ -78,8 +75,9 @@ class BlockChain:
         self.__peer_id = ChannelProperty().peer_id
         self.__block_manager: BlockManager = block_manager
 
-        store_id = f"{store_id}_{channel_name}"
-        self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
+        # FIXME : old_store_id is temporary code to rename dbpath
+        old_store_id = f"{ChannelProperty().peer_target}_{channel_name}"
+        self._blockchain_store = utils.init_default_key_value_store(old_store_id, store_id)
 
         # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
         self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)

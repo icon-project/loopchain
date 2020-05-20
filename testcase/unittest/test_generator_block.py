@@ -41,6 +41,7 @@ class TestGeneratorBlock(unittest.TestCase):
     __peer_id = 'aaa'
 
     def setUp(self):
+        self.channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
         test_util.print_testname(self._testMethodName)
         self.peer_auth = Signer.from_prikey(os.urandom(32))
 
@@ -71,7 +72,7 @@ class TestGeneratorBlock(unittest.TestCase):
         create genesis block
         """
         store_identity = 'genesis_db'
-        chain = BlockChain(store_id=store_identity)
+        chain = BlockChain(self.channel_name, store_id=store_identity)
         self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
         block = test_util.add_genesis_block()
         chain.add_block(block)
@@ -88,7 +89,7 @@ class TestGeneratorBlock(unittest.TestCase):
         """
         store_identity = 'add_test_db'
         # test_store = test_util.make_key_value_store(store_identity)
-        chain = BlockChain(store_id=store_identity)
+        chain = BlockChain(self.channel_name, store_id=store_identity)
         self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
 
         block = test_util.add_genesis_block()
@@ -126,7 +127,7 @@ class TestGeneratorBlock(unittest.TestCase):
 
     def test_block_confirm(self):
         store_identity = 'block_confirm_db'
-        chain = BlockChain(store_id=store_identity)
+        chain = BlockChain(self.channel_name, store_id=store_identity)
 
         self.assertIsNotNone(chain.get_blockchain_store(), "impossible create DB")
         block = test_util.add_genesis_block()
