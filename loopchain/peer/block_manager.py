@@ -54,8 +54,8 @@ class BlockManager:
         self.__channel_name = channel_name
         self.__peer_id = peer_id
 
-        self.__txQueue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
-                                    default_item_status=TransactionStatusInQueue.normal)
+        self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
+                                     default_item_status=TransactionStatusInQueue.normal)
         self.blockchain = BlockChain(channel_name, store_identity, self)
         self.__peer_type = None
         self.__consensus_algorithm = None
@@ -165,7 +165,7 @@ class BlockManager:
 
         :param tx: transaction object
         """
-        self.__txQueue[tx.hash.hex()] = tx
+        self.__tx_queue[tx.hash.hex()] = tx
 
     def get_tx(self, tx_hash) -> Transaction:
         """Get transaction from block_db by tx_hash
@@ -192,22 +192,22 @@ class BlockManager:
         return self.blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     def get_tx_queue(self):
-        return self.__txQueue
+        return self.__tx_queue
 
     def get_count_of_unconfirmed_tx(self):
         """BlockManager 의 상태를 확인하기 위하여 현재 입력된 unconfirmed_tx 의 카운트를 구한다.
 
         :return: 현재 입력된 unconfirmed tx 의 갯수
         """
-        return len(self.__txQueue)
+        return len(self.__tx_queue)
 
     async def relay_all_txs(self):
         rs_client = ObjectManager().channel_service.rs_client
         if not rs_client:
             return
 
-        items = list(self.__txQueue.d.values())
-        self.__txQueue.d.clear()
+        items = list(self.__tx_queue.d.values())
+        self.__tx_queue.d.clear()
 
         for item in items:
             tx = item.value
@@ -232,6 +232,10 @@ class BlockManager:
                     util.logger.warning(f"Relay failed. Tx({tx}), {e}")
                 else:
                     break
+
+    def restore_tx_status(self, tx: Transaction):
+        util.logger.debug(f"restore_tx_status() tx : {tx}")
+        self.__tx_queue.set_item_status(tx.hash.hex(), TransactionStatusInQueue.normal)
 
     def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
         if self.blockchain.last_block.header.height >= unconfirmed_block.header.height:
