@@ -213,9 +213,10 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
             candidate_block = self.__build_candidate_block(block_builder)
-            candidate_block, invoke_results = self._blockchain.score_invoke(
+            candidate_block, _ = self._blockchain.score_invoke(
                 candidate_block, self._blockchain.latest_block,
-                is_block_editable=True, is_unrecorded_block=is_unrecorded_block)
+                is_block_editable=True, is_unrecorded_block=is_unrecorded_block
+            )
 
             util.logger.spam(f"candidate block : {candidate_block.header}")
             self._block_manager.candidate_blocks.add_block(

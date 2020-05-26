@@ -230,7 +230,7 @@ class TestBlock(unittest.TestCase):
         test_signer = Signer.from_prikey(os.urandom(32))
         tx_versioner = TransactionVersioner()
 
-        dummy_receipts = {}
+        dummy_receipts = []
         block_builder = BlockBuilder.new(block_version, tx_versioner)
         for i in range(5):
             tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
@@ -243,10 +243,7 @@ class TestBlock(unittest.TestCase):
 
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
             block_builder.transactions[tx.hash] = tx
-            dummy_receipts[tx.hash.hex()] = {
-                "dummy_receipt": "dummy",
-                "tx_dumped": tx_serializer.to_full_data(tx)
-            }
+            dummy_receipts.append({"dummy_receipt": "dummy", "tx_dumped": tx_serializer.to_full_data(tx)})
 
         next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
@@ -298,7 +295,7 @@ class TestBlock(unittest.TestCase):
         test_signer = Signer.from_prikey(os.urandom(32))
         tx_versioner = TransactionVersioner()
 
-        dummy_receipts = {}
+        dummy_receipts = []
         block_builder = BlockBuilder.new(block_version, tx_versioner)
         for i in range(5):
             tx_builder = TransactionBuilder.new("0x3", None, tx_versioner)
@@ -311,10 +308,7 @@ class TestBlock(unittest.TestCase):
 
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
             block_builder.transactions[tx.hash] = tx
-            dummy_receipts[tx.hash.hex()] = {
-                "dummy_receipt": "dummy",
-                "tx_dumped": tx_serializer.to_full_data(tx)
-            }
+            dummy_receipts.append({"dummy_receipt": "dummy", "tx_dumped": tx_serializer.to_full_data(tx)})
 
         next_leader = ExternalAddress.fromhex("hx00112233445566778899aabbccddeeff00112233")
 
