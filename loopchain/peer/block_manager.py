@@ -394,6 +394,7 @@ class BlockManager:
         retry_time = 0
 
         while max_height > block_height:
+            block_height += 1
             self.peer_target_for_async[block_height], peer_stub = peer_stubs[peer_index]
             try:
                 if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
@@ -430,8 +431,6 @@ class BlockManager:
                     util.exit_and_msg(f"This height({block_height}) can't get Block Information.")
 
                 continue
-
-            block_height += 1
 
     def __block_request_by_voter(self, block_height, peer_stub):
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
@@ -630,15 +629,16 @@ class BlockManager:
                 break
 
             await asyncio.sleep(0)
-
-            if my_height in self.request_result_for_async.keys():
+            
+            process_height = my_height+1
+            if process_height in self.request_result_for_async.keys():
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    self.request_result_for_async.pop(my_height)
+                    self.request_result_for_async.pop(process_height)
             else:
                 continue
 
             if response_code == message_code.Response.success:
-                self.peer_target_for_async[my_height]
+                self.peer_target_for_async[process_height]
                 util.logger.debug(f"try add block height: {block.header.height}")
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
@@ -672,12 +672,12 @@ class BlockManager:
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
                     else:
-                        peer_target = self.peer_target_for_async[my_height]
+                        peer_target = self.peer_target_for_async[process_height]
                         self.__block_height_sync_bad_targets[peer_target] = max_block_height
                         raise
                 else:
                     peer_index = (peer_index + 1) % len(peer_stubs)
-                    del self.peer_target_for_async[my_height]
+                    del self.peer_target_for_async[process_height]
 
                     my_height += 1
             else:
@@ -702,9 +702,9 @@ class BlockManager:
         while max_height > my_height:
             async def loop_run():
                 fts = list()
-                fts.append(asyncio.ensure_future(self.__block_request(peer_stubs, my_height+1, max_height)))
+                fts.append(asyncio.ensure_future(self.__block_request(peer_stubs, my_height, max_height)))
                 fts.append(asyncio.ensure_future(
-                    self.__block_sync(peer_stubs, my_height+1, unconfirmed_block_height, max_height)
+                    self.__block_sync(peer_stubs, my_height, unconfirmed_block_height, max_height)
                 ))
 
                 result = await asyncio.gather(*fts)
