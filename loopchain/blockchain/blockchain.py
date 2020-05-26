@@ -218,6 +218,10 @@ class BlockChain:
     def last_block(self) -> Block:
         return self.__last_block
 
+    @last_block.setter
+    def last_block(self, block):
+        self.__last_block = block
+
     @property
     def latest_block(self) -> Block:
         return self.last_unconfirmed_block or self.__last_block

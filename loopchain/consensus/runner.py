@@ -86,6 +86,7 @@ class ConsensusRunner(EventRegister):
             except KeyError:
                 utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
             else:
+                blockchain.last_block = block
                 utils.logger.notice(f"> ADDED Block : {block}")
                 block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
                 block_serialized = block.serialize()["!data"]
