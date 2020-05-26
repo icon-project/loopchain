@@ -44,11 +44,6 @@ LOG_FILE_ROTATE_MAX_BYTES = 0  # Default 0, Do not rotate log files by max bytes
 LOG_FILE_ROTATE_BACKUP_COUNT = 10
 LOG_FILE_ROTATE_UTC = False
 
-MONITOR_LOG = False
-MONITOR_LOG_HOST = 'localhost'
-MONITOR_LOG_PORT = 24224
-MONITOR_LOG_MODULE = 'fluent'
-
 
 ###################
 # MULTI PROCESS ###

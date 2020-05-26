@@ -21,10 +21,6 @@ preset_others = LogConfiguration()
 
 
 def update_other_loggers():
-    preset_others.log_monitor = conf.MONITOR_LOG
-    preset_others.log_monitor_host = conf.MONITOR_LOG_HOST
-    preset_others.log_monitor_port = conf.MONITOR_LOG_PORT
-
     if get_preset_type() == PresetType.develop:
         preset_others.log_level = logging.WARNING
         preset_others.log_color = True

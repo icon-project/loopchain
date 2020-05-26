@@ -3,7 +3,6 @@ grpcio-tools==1.27.2
 protobuf==3.11.3
 coloredlogs==14.0
 earlgrey>=0.0.4
-fluent-logger==0.9.5
 jsonrpcclient[aiohttp]==3.3.5
 jsonrpcserver==4.1.2
 plyvel>=1.0.5
