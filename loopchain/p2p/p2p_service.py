@@ -21,7 +21,6 @@ except ImportError as exc:
 class PeerType(IntEnum):
     PEER = loopchain_pb2.PEER                           # 0
     BLOCK_GENERATOR = loopchain_pb2.BLOCK_GENERATOR     # 1
-    RADIO_STATION = loopchain_pb2.RADIO_STATION         # 2
 
 
 class NodeType(IntEnum):

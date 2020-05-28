@@ -1,48 +1,7 @@
-"""helper class for TxMessages"""
-
-import json
 from queue import Queue
-from typing import List
-
-import sys
+from typing import List, Any
 
 from loopchain import configure
-from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
-from loopchain.protos import loopchain_pb2
-
-
-class TxItem:
-    tx_serializers = {}
-
-    def __init__(self, tx_json: str, channel: str):
-        self.channel = channel
-        self.__tx_json = tx_json
-        self.__len = sys.getsizeof(tx_json) + sys.getsizeof(channel)
-
-    def __len__(self):
-        return self.__len
-
-    def get_tx_message(self):
-        message = loopchain_pb2.TxSend(
-            tx_json=self.__tx_json,
-            channel=self.channel)
-        return message
-
-    @classmethod
-    def create_tx_item(cls, tx_param: tuple, channel: str):
-        tx, tx_versioner = tx_param
-        tx_serializer = cls.get_serializer(tx, tx_versioner)
-        tx_item = TxItem(
-            json.dumps(tx_serializer.to_raw_data(tx)),
-            channel
-        )
-        return tx_item
-
-    @classmethod
-    def get_serializer(cls, tx: Transaction, tx_versioner: TransactionVersioner):
-        if tx.version not in cls.tx_serializers:
-            cls.tx_serializers[tx.version] = TransactionSerializer.new(tx.version, tx.type(), tx_versioner)
-        return cls.tx_serializers[tx.version]
 
 
 class TxMessages:
@@ -65,7 +24,7 @@ class TxMessages:
 
 
 class TxMessagesQueue(Queue):
-    """TXMessagesQueue is for blocking queue
+    """TXMessagesQueue is blocking queue
 
     enqueue item to queue 'append()'
     dequeue item from queue 'pop()'
@@ -82,7 +41,7 @@ class TxMessagesQueue(Queue):
         return (f"{self.__class__.__name__}(queue={self.qsize()}, "
                 f"tx_count={len(self._tx_messages)})")
 
-    def append(self, tx_item: TxItem):
+    def append(self, tx_item: Any):
         with self.not_full:
             tx_total_size = self._tx_messages.size() + len(tx_item)
             tx_total_count = len(self._tx_messages) + 1

@@ -14,7 +14,7 @@ from functools import partial
 from loopchain import configure as conf, utils
 from loopchain.baseservice import CommonThread, BroadcastCommand, TimerService, Timer, ObjectManager
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.baseservice.tx_message import TxItem
+from loopchain.baseservice.tx_item import TxItem
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.p2p.broadcaster import Broadcaster
 
@@ -27,10 +27,10 @@ class BroadcastHandler:
         self.__channel = channel
 
         self.__handler_map = {
-            BroadcastCommand.CREATE_TX: self.__handler_create_tx,
-            BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
-            BroadcastCommand.BROADCAST: self.__handler_broadcast,
-            BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handler_send_to_single_target,
+            BroadcastCommand.CREATE_TX: self.__handle_create_tx,
+            BroadcastCommand.UPDATE_AUDIENCE: self.__handle_update_audience,
+            BroadcastCommand.BROADCAST: self.__handle_broadcast,
+            BroadcastCommand.SEND_TO_SINGLE_TARGET: self.__handle_send_to_single_target,
         }
 
         self.__broadcast_with_self_target_methods = {
@@ -59,7 +59,7 @@ class BroadcastHandler:
         func = self.__handler_map[command]
         func(params)
 
-    def __handler_send_to_single_target(self, param):
+    def __handle_send_to_single_target(self, param):
         method_name = param[0]
         method_param = param[1]
         target = param[2]
@@ -70,10 +70,10 @@ class BroadcastHandler:
         utils.logger.debug(f"audience_target({audience_target})")
         self.__broadcaster.add_audience(audience_target)
 
-    def __handler_update_audience(self, audience_targets):
+    def __handle_update_audience(self, audience_targets):
         self.__broadcaster.update_audience(audience_targets)
 
-    def __handler_broadcast(self, broadcast_param):
+    def __handle_broadcast(self, broadcast_param):
         # utils.logger.debug(f"BroadcastThread received broadcast command")
         broadcast_method_name = broadcast_param[0]
         broadcast_method_param = broadcast_param[1]
@@ -81,14 +81,13 @@ class BroadcastHandler:
 
         self.__broadcaster.broadcast(broadcast_method_name, broadcast_method_param, broadcast_method_kwparam)
 
-    def __handler_create_tx(self, create_tx_param):
-        # logging.debug(f"Broadcast create_tx....")
+    def __handle_create_tx(self, create_tx_param):
         try:
             tx_item = TxItem.create_tx_item(create_tx_param, self.__channel)
         except Exception as e:
-            logging.warning(f"tx in channel({self.__channel})")
-            logging.warning(f"__handler_create_tx: meta({create_tx_param})")
-            logging.warning(f"tx dumps fail ({e})")
+            logging.warning(f"create_tx_item() tx in channel({self.__channel})"
+                            f"create_tx_param({create_tx_param})")
+            logging.warning(f"create_tx_item() tx dumps fail ({e})")
             return
 
         self.__broadcaster.add_tx_item(tx_item)

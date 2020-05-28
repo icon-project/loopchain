@@ -18,9 +18,9 @@ import logging
 from functools import partial
 
 from loopchain import configure as conf
-from loopchain.baseservice import TxMessagesQueue
 from loopchain.p2p.protos import loopchain_pb2_grpc, loopchain_pb2
 from loopchain.p2p.stub_manager import StubManager
+from loopchain.p2p.tx_message import TxMessagesQueue
 
 
 class Broadcaster:
@@ -138,37 +138,6 @@ class Broadcaster:
             except KeyError as e:
                 logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
-    def subscribe(self, audience_target):
-        """FIXME : remove"""
-
-        logging.warning("BroadcastThread received subscribe command peer_target: " + str(audience_target))
-        if audience_target not in self.__audience:
-            stub_manager = StubManager.get_stub_manager_to_server(
-                audience_target, loopchain_pb2_grpc.PeerServiceStub,
-                time_out_seconds=conf.CONNECTION_RETRY_TIMEOUT_WHEN_INITIAL,
-                is_allow_null_stub=True,
-                ssl_auth_type=conf.GRPC_SSL_TYPE
-            )
-            self.__audience[audience_target] = stub_manager
-
-        # p2p_service.subscribe(audience_target)
-
-    def unsubscribe(self, audience_target):
-        """FIXME : remove"""
-
-        # logging.debug(f"BroadcastThread received unsubscribe command peer_target({unsubscribe_peer_target})")
-        try:
-            del self.__audience[audience_target]
-        except KeyError:
-            logging.warning(f"Already deleted peer: {audience_target}")
-
-        # p2p_service.unsubscribe(audience_target)
-
-    def call_async_to_target(self, target, method_name, method_param,
-                             is_use_stub, retry_times, retry_timeout):
-        self.__call_async_to_target(target, method_name, method_param,
-                                    is_use_stub, retry_times, retry_timeout)
-
     def add_audience(self, audience_target):
         if audience_target not in self.__audience:
             stub_manager = StubManager(
@@ -228,5 +197,3 @@ class Broadcaster:
 
     def queue_empty(self) -> bool:
         return self.tx_messages_queue.empty()
-
-

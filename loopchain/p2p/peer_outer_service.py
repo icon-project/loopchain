@@ -1,15 +1,12 @@
 """gRPC service for Peer Outer Service"""
 
-import asyncio
 import copy
 import json
 
 from loopchain import utils, configure as conf
-from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.p2p import message_code, status_code
 from loopchain.p2p.bridge import PeerBridgeBase
 from loopchain.p2p.protos import loopchain_pb2, loopchain_pb2_grpc, ComplainLeaderRequest
-from loopchain.utils.message_queue import StubCollection
 
 
 class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
@@ -19,41 +16,6 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
     def __init__(self, peer_bridge):
         self._peer_bridge: PeerBridgeBase = peer_bridge
         self.__status_cache = None
-
-    @property
-    def peer_service(self):
-        # TODO : remove ObjectManager
-        from loopchain.baseservice import ObjectManager
-        return ObjectManager().peer_service
-
-    def __set_status_cache(self, future):
-        self.__status_cache = future.result()
-
-    @lru_cache(maxsize=1, valued_returns_only=True)
-    def __get_status_cache(self, channel_name, time_in_seconds):
-        """Cache status data.
-
-        :param channel_name:
-        :param time_in_seconds: An essential parameter for the `LRU cache` even if not used.
-
-        :return:
-        """
-        try:
-            channel_stub = StubCollection().channel_stubs[channel_name]
-        except KeyError:
-            # TODO : remove import from loopchain.blockchain
-            from loopchain.blockchain import ChannelStatusError
-            raise ChannelStatusError(f"Invalid channel({channel_name})")
-
-        if self.__status_cache is None:
-            self.__status_cache = channel_stub.sync_task().get_status()
-        else:
-            future = asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().get_status(),
-                self.peer_service.inner_service.loop)
-            future.add_done_callback(self.__set_status_cache)
-
-        return self.__status_cache
 
     def GetStatus(self, request, context):
         """Request current status of Peer

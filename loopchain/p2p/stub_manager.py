@@ -181,3 +181,11 @@ class StubManager:
             retry_times -= 1
 
         return None
+
+    def is_stub_reuse(self, stub, result, timeout):
+        def _keep_grpc_connection():
+            return (isinstance(result, _Rendezvous)
+                    and result.code() in (grpc.StatusCode.DEADLINE_EXCEEDED, grpc.StatusCode.UNAVAILABLE)
+                    and self.elapsed_last_succeed_time() < timeout)
+
+        return self.stub != stub or _keep_grpc_connection()

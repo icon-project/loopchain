@@ -22,38 +22,6 @@ class P2PMessage:
     """
 
     @staticmethod
-    def get_connect_peer_request_message(peer_id=None,
-                                         channel=None,
-                                         peer_target=None,
-                                         group_id=None,
-                                         peer_order=None,
-                                         peer_object=None):
-        return loopchain_pb2.ConnectPeerRequest(peer_id=peer_id,
-                                                channel=channel,
-                                                peer_target=peer_target,
-                                                group_id=group_id,
-                                                peer_order=peer_order,
-                                                peer_object=peer_object)
-
-    @staticmethod
-    def peer_request(peer_id=None,
-                     channel=None,
-                     peer_target=None,
-                     group_id=None,
-                     peer_type=None,
-                     peer_order=None,
-                     peer_object=None,
-                     node_type=None):
-        return loopchain_pb2.PeerRequest(channel=channel,
-                                         peer_target=peer_target,
-                                         peer_id=peer_id,
-                                         group_id=group_id,
-                                         peer_type=peer_type,
-                                         peer_order=peer_order,
-                                         peer_object=peer_object,
-                                         node_type=node_type)
-
-    @staticmethod
     def tx_send(tx=None, tx_json=None, channel=None):
         return loopchain_pb2.TxSend(tx=tx,
                                     tx_json=tx_json,
@@ -71,11 +39,6 @@ class P2PMessage:
                                               channel=channel)
 
     @staticmethod
-    def precommit_block_request(last_block_height=None, channel=None):
-        return loopchain_pb2.PrecommitBlockRequest(last_block_height=last_block_height,
-                                                   channel=channel)
-
-    @staticmethod
     def status_request(request=None, channel=None):
         return loopchain_pb2.StatusRequest(request=request,
                                            channel=channel)
@@ -89,26 +52,6 @@ class P2PMessage:
     def block_vote(vote=None, channel=None):
         return loopchain_pb2.BlockVote(vote=vote,
                                        channel=channel)
-
-    @staticmethod
-    def get_peer_id(peer_id=None,
-                    channel=None,
-                    group_id=None):
-        return loopchain_pb2.PeerID(peer_id=peer_id,
-                                    channel=channel,
-                                    group_id=group_id)
-
-    @staticmethod
-    def get_message(code=None,
-                    channel=None,
-                    message=None,
-                    meta=None,
-                    object_=None):
-        return loopchain_pb2.Message(code=code,
-                                     channel=channel,
-                                     message=message,
-                                     meta=meta,
-                                     object=object_)
 
     @staticmethod
     def common_request(request=None,

@@ -24,10 +24,11 @@ import multiprocessing
 import signal
 import timeit
 from functools import partial
-from typing import Tuple
+from typing import Tuple, cast
 
 from loopchain.baseservice import CommonSubprocess, RestService
 # FIXME : import directly
+from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain import *
 from loopchain.crypto.signature import Signer
 from loopchain.p2p.bridge import PeerBridgeBase
@@ -50,45 +51,38 @@ class PeerInnerBridge(PeerBridgeBase):
 
     def _status_update(self, channel_name, future):
         # update peer outer status cache by channel
-        utils.logger.spam(f"status_update channel({channel_name}) result({future.result()})")
+        utils.logger.spam(f"status_update() channel({channel_name}) result({future.result()})")
         self._status_cache_update_time[channel_name] = datetime.datetime.now()
         self._peer_state.status_cache[channel_name] = future.result()
 
-    def _get_status_from_cache(self, channel: str) -> Dict:
-        if channel in self._peer_state.status_cache:
-            if channel in self._status_cache_update_time:
-                diff = utils.datetime_diff_in_mins(self._status_cache_update_time[channel])
-                if diff > conf.ALLOW_STATUS_CACHE_LAST_UPDATE_IN_MINUTES:
-                    return {}
-            status_data = self._peer_state.status_cache[channel]
-        else:
-            channel_stub = StubCollection().channel_stubs[channel]
-            status_data = asyncio.run_coroutine_threadsafe(
-                channel_stub.async_task().get_status(),
-                self._inner_service.loop
-            ).result()
-            self._peer_state.status_cache[channel] = status_data
+    @lru_cache(maxsize=1, valued_returns_only=True)
+    def __get_status_cache(self, channel_name, time_in_seconds):
+        """Cache status data.
 
-        return status_data
+        :param channel_name:
+        :param time_in_seconds: An essential parameter for the `LRU cache` even if not used.
 
-    def channel_get_status_data(self, channel_name: str, request: str) -> Dict:
-        """ FIXME : check and remove
-        channel_stub = StubCollection().channel_stubs[channel_name]
-
+        :return:
+        """
         try:
+            channel_stub = StubCollection().channel_stubs[channel_name]
+        except KeyError:
+            from loopchain.blockchain import ChannelStatusError
+            raise ChannelStatusError(f"Invalid channel({channel_name})")
+
+        logging.warning(f"__get_status_cache() status_cache = {self._peer_state.status_cache}")
+        if self._peer_state.status_cache.get(channel_name) is None:
+            self._peer_state.status_cache[channel_name] = channel_stub.sync_task().get_status()
+        else:
             future = asyncio.run_coroutine_threadsafe(
                 channel_stub.async_task().get_status(),
-                self._inner_service.loop
-            )
-
+                self._inner_service.loop)
             callback = partial(self._status_update, channel_name)
             future.add_done_callback(callback)
-        except BaseException as e:
-            logging.error(f"Peer GetStatus Exception : {e}")
 
-        status_data = self._get_status_from_cache(channel_name)
-        """
+        return self._peer_state.status_cache.get(channel_name)
 
+    def channel_get_status_data(self, channel_name: str, request: str) -> Dict:
         try:
             channel_stub = StubCollection().channel_stubs[channel_name]
         except KeyError:
@@ -98,17 +92,10 @@ class PeerInnerBridge(PeerBridgeBase):
         status_data: Optional[dict] = None
         if request == 'block_sync':
             try:
-                future = asyncio.run_coroutine_threadsafe(
-                    channel_stub.async_task().get_status(),
-                    self._inner_service.loop
-                )
-
-                callback = partial(self._status_update, channel_name)
-                future.add_done_callback(callback)
+                status_data = cast(dict, channel_stub.sync_task().get_status())
             except BaseException as e:
                 utils.logger.error(f"Peer GetStatus(block_sync) Exception : {e}")
         else:
-            # FIXME : how to get status cache?
             status_data = self.__get_status_cache(channel_name,
                                                   time_in_seconds=math.trunc(time.time()))
 
@@ -117,24 +104,6 @@ class PeerInnerBridge(PeerBridgeBase):
             raise ChannelStatusError(f"Fail get status data from channel({channel_name})")
 
         return status_data
-
-    def channel_get_peer_status_data(self, channel_name: str) -> Dict:
-        status_cache = self.channel_get_status_data(channel_name)
-        return {
-                'state': status_cache['state'],
-                'peer_type': status_cache['peer_type'],
-                'block_height': status_cache['block_height'],
-                'peer_count': status_cache['peer_count'],
-                'leader': status_cache['leader']
-            }
-
-    def channel_get_tx_by_address(self, channel_name, address, index) -> Tuple:
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_tx_by_address(address, index),
-            self._inner_service.loop
-        )
-        return future.result()
 
     def channel_mq_status_data(self, channel_name) -> Dict:
         stubs = {
@@ -171,27 +140,6 @@ class PeerInnerBridge(PeerBridgeBase):
 
     def channel_tx_receiver_add_tx_list(self, channel_name, request):
         StubCollection().channel_tx_receiver_stubs[channel_name].sync_task().add_tx_list(request)
-
-    def channel_get_block(self, channel_name, block_height, block_hash, block_data_filter, tx_data_filter):
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_block(
-                block_height=block_height,
-                block_hash=block_hash,
-                block_data_filter=block_data_filter,
-                tx_data_filter=tx_data_filter
-            ), self._inner_service.loop
-        )
-
-        return future.result()
-
-    def channel_get_invoke_result(self, channel_name, tx_hash) -> Tuple:
-        channel_stub = StubCollection().channel_stubs[channel_name]
-        future = asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().get_invoke_result(tx_hash),
-            self._inner_service.loop
-        )
-        return future.result()
 
     def channel_announce_unconfirmed_block(self, channel_name, block, round_):
         channel_stub = StubCollection().channel_stubs[channel_name]
