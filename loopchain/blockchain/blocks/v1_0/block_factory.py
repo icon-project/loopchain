@@ -139,34 +139,15 @@ class BlockFactory(DataFactory):
             block_builder.transactions[tx.hash] = tx
 
     def create_none_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        header = BlockHeader(
-            hash=Block.NoneData,
-            prev_hash=Block.NoneData,
-            height=-1,
-            timestamp=utils.get_time_stamp(),
-            peer_id=self._signer.address,
-            signature="",
-            epoch=epoch_num,
-            round=round_num,
-            validators_hash=Hash32.empty(),
-            next_validators_hash=Hash32.empty(),
-            prev_votes_hash=Hash32.empty(),
-            transactions_hash=Hash32.empty(),
-            prev_state_hash=Hash32.empty(),
-            prev_receipts_hash=Hash32.empty(),
-            prev_logs_bloom=BloomFilter.empty()
-        )
-        body = BlockBody(
-            transactions=[],
-            prev_votes=[],
-        )
-
-        return Block(header, body)
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.NoneData)
 
     def create_lazy_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.LazyData)
+
+    def _create_unreal_data(self, epoch_num: int, round_num: int, proposer_id: bytes, _hash: Hash32):
         header = BlockHeader(
-            hash=Block.LazyData,
-            prev_hash=Block.NoneData,
+            hash=_hash,
+            prev_hash=_hash,
             height=-1,
             timestamp=utils.get_time_stamp(),
             peer_id=self._signer.address,
