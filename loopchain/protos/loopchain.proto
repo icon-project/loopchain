@@ -3,205 +3,36 @@
 syntax = "proto2";
 
 
-// ########################################################################
-// Peer Services
-// ########################################################################
-
-// Peer Inner Service
-service InnerService {
-    rpc Request (Message) returns (Message) {}
-    rpc GetStatus (StatusRequest) returns (StatusReply) {}
-    rpc Stop (StopRequest) returns (StopReply) {}
-    rpc Echo (CommonRequest) returns (CommonReply) {}
-    rpc GetBlock (GetBlockRequest) returns (GetBlockReply) {}
-    rpc Query (QueryRequest) returns (QueryReply) {}
-    rpc Subscribe (PeerRequest) returns (CommonReply) {}
-    rpc UnSubscribe (PeerRequest) returns (CommonReply) {}
-    rpc NotifyLeaderBroken (CommonRequest) returns (CommonReply) {}
-    rpc NotifyProcessError (CommonRequest) returns (CommonReply) {}
-}
-
-// Peer Outer Service for Outer Client or other Peer
+// Peer Outer Service for other Peers
 service PeerService {
-    rpc Request (Message) returns (Message) {}
+    // get status of Peer
     rpc GetStatus (StatusRequest) returns (StatusReply) {}
-    rpc Stop (StopRequest) returns (StopReply) {}
-    rpc CreateTx (CreateTxRequest) returns (CreateTxReply) {}
-    rpc GetTx (GetTxRequest) returns (GetTxReply) {}
-    rpc GetBlock (GetBlockRequest) returns (GetBlockReply) {}
-    rpc GetPrecommitBlock (PrecommitBlockRequest) returns (PrecommitBlockReply) {}
-    rpc Query (QueryRequest) returns (QueryReply) {}
-    rpc GetInvokeResult (GetInvokeResultRequest) returns (GetInvokeResultReply) {}
-    // Peer 의 Block Height 보정용 interface
+    // Block Height sync assistant
     rpc BlockSync (BlockSyncRequest) returns (BlockSyncReply) {}
-    // Subscribe 후 broadcast 받는 인터페이스는 Announce- 로 시작한다.
+    // broadcast proposed block
     rpc AnnounceUnconfirmedBlock (BlockSend) returns (CommonReply) {}
-    rpc AnnounceConfirmedBlock (BlockAnnounce) returns (CommonReply) {}
-    // Test 검증을 위한 인터페이스
-    rpc Echo (CommonRequest) returns (CommonReply) {}
-    // Leader 선정을 위한 인터페이스
+    // elect new Leader
     rpc ComplainLeader (ComplainLeaderRequest) returns (CommonReply) {}
-    // RadioStation(High layer node) function
-    rpc GetChannelInfos (GetChannelInfosRequest) returns (GetChannelInfosReply) {}
 
-    ///////////////////////////////////////////////////////////////////////
-    // BlockGenerator (leader) 에게만 허용되어야 하는 interface
-    ///////////////////////////////////////////////////////////////////////
-    // RadioStation 에서 GetLastBlockHash 는 Block Height Sync 를 위해서 사용된다.
-    rpc GetLastBlockHash (CommonRequest) returns (BlockReply) {}
-    // Subscribe 와 UnSubscribe 는 Broadcast 관련 메소드로 radiostation.proto 와 동일하게 구성되어야 한다.
-    rpc Subscribe (PeerRequest) returns (CommonReply) {}
-    rpc UnSubscribe (PeerRequest) returns (CommonReply) {}
-    rpc AddTx (TxSend) returns (CommonReply) {}
+    // broadcast transactions
     rpc AddTxList (TxSendList) returns (CommonReply) {}
+    // broadcast vote on proposed block
     rpc VoteUnconfirmedBlock (BlockVote) returns (CommonReply) {}
-    rpc BroadcastVote (Vote) returns (CommonReply) {}
-    ///////////////////////////////////////////////////////////////////////
 }
 
-
-// ########################################################################
-// RadioStation Services
-// ########################################################################
-
-// RadioStation Outer Service
-service RadioStation {
-    rpc Request (Message) returns (Message) {}
-    rpc GetStatus (StatusRequest) returns (StatusReply) {}
-    rpc Stop (StopRequest) returns (StopReply) {}
-    // Peer 접속
-    rpc GetChannelInfos (GetChannelInfosRequest) returns (GetChannelInfosReply) {}
-    rpc ConnectPeer (ConnectPeerRequest) returns (ConnectPeerReply) {}
-    rpc GetPeerList (CommonRequest) returns (PeerList) {}
-    rpc GetPeerStatus (PeerID) returns (StatusReply) {}
-    rpc AnnounceNewLeader (ComplainLeaderRequest) returns (CommonReply) {}
-    rpc GetRandomTable (CommonRequest) returns (CommonReply) {}
-    // Subscribe 와 UnSubscribe 는 Broadcast 관련 메소드로 loopchain.proto 와 동일하게 구성되어야 한다.
-    rpc Subscribe (PeerRequest) returns (CommonReply) {}
-    rpc UnSubscribe (PeerRequest) returns (CommonReply) {}
-}
-
-// RadioStation Inner Service for Admin
-service AdminService {
-    rpc Request (Message) returns (Message) {}
-}
-
-
-// ########################################################################
-// Container Service
-// ########################################################################
-
-service Container {
-    rpc Request (Message) returns (Message) {}
-}
-
-
-message Message {
-    required int32 code = 1;        // numeric value for request type and response result, see protos/message_code.py
-    optional string channel = 2;    // channel ID for multichain network
-    optional string message = 3;    // expain about code (optional)
-    optional string meta = 4;       // json data for object or itself (optional)
-    optional bytes object = 5;      // dumped python object in json for response (optional)
-}
-
-
-// Leader 선정을 위한 인터페이스 Mesages
-message ComplainLeaderRequest {
-    required string complain_vote = 1;
+message StatusRequest {
+    required string request = 1;
     optional string channel = 2;
 }
 
-
-//[RadioStation] for Peer list
-message PeerList {
-    required bytes peer_list = 1;
+message StatusReply {
+    required string status = 1;
+    required int32 block_height = 2;
+    required int32 total_tx = 3;
+    optional int32 unconfirmed_block_height = 4;
+    optional int32 is_leader_complaining = 5;
+    optional string peer_id = 6;
 }
-
-
-//[Peer&BlockGenerator] for Create and Send Transaction
-message CreateTxRequest {
-    required string data = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-message CreateTxReply {
-    required int32 response_code = 1;
-    required string tx_hash = 2;
-    required string more_info = 3;
-}
-
-message TxSend {
-    optional bytes tx = 1;
-    optional string tx_json = 2;
-    optional string channel = 3; // channel ID for multichain network
-}
-
-message TxSendList {
-    required string channel = 1;
-    repeated TxSend tx_list = 2;
-}
-
-// GetBlock Request and Reply
-message GetBlockRequest {
-    optional string block_hash = 1;
-    optional string channel = 2;            // channel ID for multichain network
-    optional int32 block_height = 3 [default = -1];
-    required string block_data_filter = 4;  // "version, prev_block_hash, time_stamp, ..." fields of Block"
-    required string tx_data_filter = 5;     // "tx_hash, data_string, ..." fields of Transaction
-}
-
-message GetBlockReply {
-    required int32 response_code = 1;
-    required string block_hash = 2;
-    // json key:value by block_data_filter "{version:'0.1', prev_block_hash:'0000', time_stamp:'1990-10-10'}"
-    required string block_data_json = 3;
-    // json key:value by tx_data_filter "{transaction_hash:'12345', data:'12345', time_stamp:'1990-10-10'}"
-    repeated string tx_data_json = 4;
-    optional bytes confirm_info = 5;
-}
-
-
-// Query Request and Reply
-message QueryRequest {
-    required string params = 1;     // json params
-    optional string channel = 2;    // channel ID for multichain network
-}
-
-message QueryReply {
-    required int32 response_code = 1;
-    required string response = 2; // json response for query
-}
-
-
-// GetTx Request and Reply
-message GetTxRequest {
-    // tx_hash 는 CreateTxReply 의 tx_hash 값이다.
-    required string tx_hash = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-message GetTxReply {
-    // Find Tx 의 data 는 CreateTxRequest 의 data 와 같다.
-    required int32 response_code = 1;
-    required string meta = 2;
-    required string data = 3;
-    required string more_info = 4;
-    required bytes signature = 5;
-    required bytes public_key = 6;
-}
-
-// GetTxResult Request and Reply
-message GetInvokeResultRequest {
-    required string tx_hash = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-message GetInvokeResultReply {
-    required int32 response_code = 1;
-    // Transaction invoke result
-    optional string result = 2;
-}
-
 
 // For Block Sync
 message BlockSyncRequest {
@@ -219,29 +50,28 @@ message BlockSyncReply {
     required int32 unconfirmed_block_height = 6;
 }
 
-message PrecommitBlockRequest {
-    optional int32 last_block_height = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-message PrecommitBlockReply {
-    required int32 response_code = 1;
-    required string response_message = 2;
-    required bytes block = 3;
-}
-
-
-//[Peer&BlockGenerator] for send Block, this message type shared in AnnounceUnconfirmedBlock and SendConfirmedBlock
+// Peer send Block by AnnounceUnconfirmedBlock
 message BlockSend {
     required bytes block = 1;
     required int32 round_ = 2;
     optional string channel = 3; // channel ID for multichain network
 }
 
-message BlockReply {
-    required int32 response_code = 1;
-    required string message = 2;
-    required string block_hash = 3;
+// elect new Leader Message
+message ComplainLeaderRequest {
+    required string complain_vote = 1;
+    optional string channel = 2;
+}
+
+message TxSend {
+    optional bytes tx = 1;
+    optional string tx_json = 2;
+    optional string channel = 3; // channel ID for multichain network
+}
+
+message TxSendList {
+    required string channel = 1;
+    repeated TxSend tx_list = 2;
 }
 
 message BlockVote {
@@ -249,36 +79,6 @@ message BlockVote {
     optional string channel = 2; // channel ID for multichain network
 }
 
-message Vote {
-    required string vote_data = 1;
-    optional string channel = 2; // channel ID for multichain network
-}
-
-//[Peer&BlockGenerator] for announce confirmed Block
-message BlockAnnounce {
-    required string block_hash = 1;
-    optional string channel = 2; // channel ID for multichain network
-    optional bytes block = 3;
-}
-
-
-// ########################################################################
-// RadioStation, Peer, BlockGenerator 공통 요소
-// ########################################################################
-
-
-enum PeerType {
-    PEER = 0;
-    BLOCK_GENERATOR = 1;
-    RADIO_STATION = 2;
-}
-
-enum NodeType {
-    CommunityNode = 3;
-    CitizenNode = 1;
-}
-
-// for Common Mesage
 message CommonRequest {
     required string request = 1;
     optional string channel = 2; // channel ID for multichain network
@@ -290,76 +90,13 @@ message CommonReply {
     required string message = 2;
 }
 
-
-// Data for RadioStation
-message StatusRequest {
-    required string request = 1;
-    optional string channel = 2;
+// Enum Types
+enum PeerType {
+    PEER = 0;
+    BLOCK_GENERATOR = 1;
 }
 
-message StatusReply {
-    required string status = 1;
-    required int32 block_height = 2;
-    required int32 total_tx = 3;
-    optional int32 unconfirmed_block_height = 4;
-    optional int32 is_leader_complaining = 5;
-    optional string peer_id = 6;
-}
-
-
-// for Stop request
-message StopRequest {
-    required string reason = 1;
-}
-
-message StopReply {
-    required string status = 1;
-}
-
-
-// Peer가 RadioStation에 접속할 때 줄 정보들
-// * target = "[IP]:[port]", It's gRPC way
-message PeerRequest {
-    required string peer_id = 1;
-    optional string channel = 2;
-    required string peer_target = 3;
-    optional string group_id = 4;
-    optional PeerType peer_type = 5;
-    optional int32 peer_order = 6;
-    optional bytes peer_object = 7;
-    optional NodeType node_type = 8;
-}
-
-message ConnectPeerRequest {
-    required string peer_id = 1;
-    optional string channel = 2;
-    required string peer_target = 3;
-    optional string group_id = 4;
-    optional int32 peer_order = 5;
-    optional bytes peer_object = 6;
-}
-
-// RadioStation이 Peer에게 줄 정보들
-message ConnectPeerReply {
-    required int32 status = 1;
-    required bytes peer_list = 2;
-    repeated string channels = 3;
-    optional string more_info = 4;
-}
-
-message GetChannelInfosRequest {
-    required string peer_id = 1;
-    required string peer_target = 2;
-    optional string group_id = 3;
-}
-
-message GetChannelInfosReply {
-    required int32 response_code = 1;
-    required string channel_infos = 2;
-}
-
-message PeerID {
-    required string peer_id = 1;
-    optional string channel = 2;
-    optional string group_id = 3;
+enum NodeType {
+    CitizenNode = 1;
+    CommunityNode = 3;
 }

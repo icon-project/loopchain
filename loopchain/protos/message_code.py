@@ -1,35 +1,6 @@
 """ A massage class for the loopchain """
 
 
-class Request:
-    is_alive = 2
-    stop = -9
-
-    peer_get_leader = 601  # get leader peer object
-    peer_complain_leader = 602  # complain leader peer is no response
-    peer_reconnect_to_rs = 603  # reconnect to rs when rs restart detected.
-    peer_restart_channel = 604
-
-    rs_get_configuration = 800
-    rs_set_configuration = 801
-    rs_send_channel_manage_info_to_rs = 802
-    rs_restart_channel = 803
-    rs_delete_peer = 804
-
-    tx_connect_to_leader = 901  # connect to leader
-    tx_connect_to_inner_peer = 902  # connect to mother peer service in same inner gRPC micro service network
-    get_tx_result = 903  # json-rpc:icx_getTransactionResult
-    get_balance = 905  # josn-rpc:icx_getBalance
-    get_tx_by_address = 906  # json-rpc:icx_getTransactionByAddress
-    get_total_supply = 907  # json-rpc:icx_getTotalSupply
-
-
-class MetaParams:
-    class ScoreInfo:
-        score_id = "score_id"
-        score_version = "score_version"
-
-
 class Response:
     success = 0
     success_validate_block = 1

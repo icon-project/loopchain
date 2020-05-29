@@ -46,9 +46,7 @@ class _Broadcaster:
         }
 
         self.__broadcast_with_self_target_methods = {
-            "AddTx",
-            "AddTxList",
-            "BroadcastVote"
+            "AddTxList"
         }
 
         self.tx_messages_queue: TxMessagesQueue = TxMessagesQueue()

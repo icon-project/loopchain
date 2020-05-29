@@ -13,15 +13,15 @@
 # limitations under the License.
 
 import logging
-
 from typing import Dict, TYPE_CHECKING
+
 from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
     from loopchain.peer import PeerInnerStub
     from loopchain.channel.channel_inner_service import ChannelInnerStub, \
         ChannelTxReceiverInnerStub, ChannelTxCreatorInnerStub
-    from loopchain.scoreservice import ScoreInnerStub, IconScoreInnerStub
+    from loopchain.scoreservice import IconScoreInnerStub
 
 
 class StubCollection(metaclass=SingletonMetaClass):
@@ -33,7 +33,6 @@ class StubCollection(metaclass=SingletonMetaClass):
         self.channel_stubs: Dict[str, ChannelInnerStub] = {}
         self.channel_tx_creator_stubs: Dict[str, ChannelTxCreatorInnerStub] = {}
         self.channel_tx_receiver_stubs: Dict[str, ChannelTxReceiverInnerStub] = {}
-        self.score_stubs: Dict[str, ScoreInnerStub] = {}
         self.icon_score_stubs: Dict[str, IconScoreInnerStub] = {}
 
     async def create_peer_stub(self):
@@ -81,17 +80,6 @@ class StubCollection(metaclass=SingletonMetaClass):
         self.channel_tx_receiver_stubs[channel_name] = stub
 
         logging.debug(f"ChannelTxReceiverTasks : {channel_name}, Queue : {queue_name}")
-        return stub
-
-    async def create_score_stub(self, channel_name, score_package_name):
-        from loopchain import configure as conf
-        from loopchain.scoreservice import ScoreInnerStub
-
-        queue_name = conf.SCORE_QUEUE_NAME_FORMAT.format(
-            score_package_name=score_package_name, channel_name=channel_name, amqp_key=self.amqp_key)
-        stub = ScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
-        self.score_stubs[channel_name] = stub
         return stub
 
     async def create_icon_score_stub(self, channel_name):

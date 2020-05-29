@@ -596,57 +596,6 @@ class ChannelInnerTask:
         return status_data
 
     @message_queue_task
-    def create_tx(self, data):
-        tx = Transaction()
-        score_id = ""
-        score_version = ""
-
-        try:
-            score_info = self._channel_service.score_info
-            score_id = score_info[message_code.MetaParams.ScoreInfo.score_id]
-            score_version = score_info[message_code.MetaParams.ScoreInfo.score_version]
-        except KeyError as e:
-            logging.debug(f"CreateTX : load score info fail\n"
-                          f"cause : {e}")
-
-        send_tx_type = self._channel_service.get_channel_option()["send_tx_type"]
-        tx.init_meta(ChannelProperty().peer_id, score_id, score_version, ChannelProperty().name, send_tx_type)
-        tx.put_data(data)
-        tx.sign_hash(ChannelProperty().peer_auth)
-
-        self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, tx)
-
-        try:
-            data_log = json.loads(data)
-        except Exception as e:
-            data_log = {'tx_hash': tx.tx_hash}
-
-        return tx.tx_hash
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx(self, request) -> None:
-        tx_json = request.tx_json
-
-        tx_versioner = self._blockchain.tx_versioner
-        tx_version, tx_type = tx_versioner.get_version(tx_json)
-
-        ts = TransactionSerializer.new(tx_version, tx_type, tx_versioner)
-        tx = ts.from_(tx_json)
-
-        tv = TransactionVerifier.new(tx_version, tx_type, tx_versioner)
-        tv.verify(tx)
-
-        if tx is not None:
-            self._block_manager.add_tx_obj(tx)
-
-        if not conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self._channel_service.start_leader_complain_timer_if_tx_exists()
-
-    @message_queue_task
-    def get_tx(self, tx_hash):
-        return self._block_manager.get_tx(tx_hash)
-
-    @message_queue_task
     def get_tx_info(self, tx_hash):
         tx = self._block_manager.get_tx_queue().get(tx_hash, None)
         if tx:
@@ -868,18 +817,6 @@ class ChannelInnerTask:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
         return block, block_hash, bytes(confirm_info), fail_response_code
-
-    @message_queue_task
-    def get_precommit_block(self, last_block_height: int):
-        precommit_block = self._blockchain.get_precommit_block()
-
-        if precommit_block is None:
-            return message_code.Response.fail, "there is no precommit block.", b""
-        if precommit_block.height != last_block_height + 1:
-            return message_code.Response.fail, "need block height sync.", b""
-
-        block_dumped = self._blockchain.block_dumps(precommit_block)
-        return message_code.Response.success, "success", block_dumped
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
