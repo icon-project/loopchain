@@ -1,7 +1,10 @@
+import logging
 
 import pytest
 
 from loopchain.peer.state_borg import Borg, PeerState
+
+Logger = logging.getLogger(__name__)
 
 
 class TestBorg(object):
@@ -13,13 +16,13 @@ class TestBorg(object):
 
         borg1.state = "Running"
 
-        print(borg1)
-        print(borg2)
+        Logger.info(borg1)
+        Logger.info(borg2)
 
         assert borg1.state == borg2.state
 
     def test_peer_state_borg(self):
-        print("\n==== peer_borg1 ====")
+        Logger.info("\n==== peer_borg1 ====")
         peer_borg1 = PeerState()
 
         peer_borg1.peer_port = 8080
@@ -31,17 +34,17 @@ class TestBorg(object):
         peer_borg1.node_key = b'a2f0c1e9b'
         peer_borg1.status_cache = {'foo': 'bar', 'fooo': 'barr'}
 
-        print(peer_borg1)
+        Logger.info(peer_borg1)
 
-        print("\n==== peer_borg2 ====")
+        Logger.info("\n==== peer_borg2 ====")
         peer_borg2 = PeerState()
 
         peer_borg2.peer_port = 9000
         peer_borg1.peer_target = '192.168.0.1'
         peer_borg1.peer_id = 'new_peer_id'
 
-        print(peer_borg1)
-        print(peer_borg2)
+        Logger.info(peer_borg1)
+        Logger.info(peer_borg2)
 
         assert peer_borg1.peer_port == peer_borg2.peer_port
         assert peer_borg1.peer_target == peer_borg2.peer_target

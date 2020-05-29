@@ -5,12 +5,10 @@ import urllib
 import pytest
 import websockets
 
-from loopchain.baseservice import ObjectManager
 from loopchain.baseservice.node_subscriber import (NodeSubscriber, _check_error_in_response,
                                                    CONNECTION_FAIL_CONDITIONS, UnregisteredException)
-from loopchain.protos import message_code
-
 from loopchain.blockchain import AnnounceNewBlockError
+from loopchain.p2p import message_code
 
 
 def get_response_dict(code=message_code.Response.success):
