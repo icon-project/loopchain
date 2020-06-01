@@ -20,7 +20,7 @@ import logging
 import unittest
 import multiprocessing
 
-from aio_pika.pika.exceptions import ChannelClosed
+from aio_pika.exceptions import ChannelClosed
 from earlgrey import MessageQueueStub, MessageQueueService, MessageQueueType, message_queue_task
 from loopchain import configure as conf
 from loopchain.channel.channel_inner_service import ChannelInnerService, ChannelInnerStub
