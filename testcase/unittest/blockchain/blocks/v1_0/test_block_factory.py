@@ -3,6 +3,7 @@ from typing import List
 import pytest
 from lft.consensus.epoch import EpochPool
 
+from loopchain import ExternalAddress
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Hash32
 from loopchain.blockchain.blocks import v1_0
@@ -15,7 +16,7 @@ from loopchain.store.key_value_store import KeyValueStore
 
 class TestBlockFactory:
     @pytest.fixture
-    def block_factory(self, mocker, icon_query) -> v1_0.BlockFactory:
+    def block_factory(self, mocker, icon_preinvoke) -> v1_0.BlockFactory:
         # TODO: Temporary mocking...
         tx_queue: AgingCache = mocker.MagicMock(AgingCache)
         db: KeyValueStore = mocker.MagicMock(KeyValueStore)
@@ -25,7 +26,7 @@ class TestBlockFactory:
         invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_query
+            query_result=icon_preinvoke
         )
         signer: Signer = Signer.new()
         epoch_pool = EpochPool()
@@ -73,3 +74,28 @@ class TestBlockFactory:
 
         # THEN It should be return v1.0 block
         assert block.header.version == v1_0.version
+        assert block.is_real()
+
+    @pytest.mark.asyncio
+    async def test_create_none_data(self, block_factory: v1_0.BlockFactory):
+        # WHEN I create none block
+        epoch_num = 1
+        round_num = 1
+        proposer_id = ExternalAddress.empty()
+        block = block_factory.create_none_data(epoch_num, round_num, proposer_id)
+
+        # THEN It should be a none block
+        assert not block.is_lazy()
+        assert block.is_none()
+
+    @pytest.mark.asyncio
+    async def test_create_none_data(self, block_factory: v1_0.BlockFactory):
+        # WHEN I create lazy block
+        epoch_num = 1
+        round_num = 1
+        proposer_id = ExternalAddress.empty()
+        block = block_factory.create_lazy_data(epoch_num, round_num, proposer_id)
+
+        # THEN It should be a lazy block
+        assert block.is_lazy()
+        assert not block.is_none()

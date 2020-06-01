@@ -7,11 +7,12 @@ from lft.consensus.messages.data import DataFactory
 from loopchain import configure_default as conf
 from loopchain import utils
 from loopchain.blockchain import Hash32, TransactionStatusInQueue, ExternalAddress
-from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader
+from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader, BlockBody
 from loopchain.blockchain.blocks.v1_0.block_builder import BlockBuilder
 from loopchain.blockchain.blocks.v1_0.block_verifier import BlockVerifier
 from loopchain.blockchain.invoke_result import InvokeData, InvokePool
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionSerializer
+from loopchain.blockchain.types import BloomFilter
 from loopchain.crypto.signature import Signer
 from loopchain.store.key_value_store import KeyValueStore
 
@@ -52,6 +53,7 @@ class BlockFactory(DataFactory):
 
         # Epoch.makeup_block
         block_builder = BlockBuilder.new(BlockHeader.version, self._tx_versioner)
+        block_builder.peer_id = ExternalAddress.fromhex(self._signer.address)
         block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
 
@@ -64,8 +66,19 @@ class BlockFactory(DataFactory):
         block_builder.signer = self._signer
 
         block_builder.validators_hash = invoke_data.validators_hash
-        block_builder.next_validators = [ExternalAddress.fromhex(next_validator_info["id"])
-                                         for next_validator_info in invoke_data.next_validators]
+        if invoke_data.next_validators:
+            block_builder.next_validators = [ExternalAddress.fromhex(next_validator_info["id"])
+                                             for next_validator_info in invoke_data.next_validators]
+        else:
+            block_builder.next_validators_hash = invoke_data.validators_hash
+
+        if prev_votes:
+            prev_vote = prev_votes[0]
+            block_builder.prev_state_hash = prev_vote.state_hash
+            block_builder.receipts = prev_vote.receipt_hash
+        else:
+            block_builder.prev_state_hash = Hash32.empty()
+            block_builder.receipts = Hash32.empty()
 
         block_builder.epoch = epoch_num
         block_builder.round = round_num
@@ -126,10 +139,35 @@ class BlockFactory(DataFactory):
             block_builder.transactions[tx.hash] = tx
 
     def create_none_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        pass
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.NoneData)
 
     def create_lazy_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        pass
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.LazyData)
+
+    def _create_unreal_data(self, epoch_num: int, round_num: int, proposer_id: bytes, _hash: Hash32):
+        header = BlockHeader(
+            hash=_hash,
+            prev_hash=_hash,
+            height=-1,
+            timestamp=utils.get_time_stamp(),
+            peer_id=self._signer.address,
+            signature="",
+            epoch=epoch_num,
+            round=round_num,
+            validators_hash=Hash32.empty(),
+            next_validators_hash=Hash32.empty(),
+            prev_votes_hash=Hash32.empty(),
+            transactions_hash=Hash32.empty(),
+            prev_state_hash=Hash32.empty(),
+            prev_receipts_hash=Hash32.empty(),
+            prev_logs_bloom=BloomFilter.empty()
+        )
+        body = BlockBody(
+            transactions=[],
+            prev_votes=[],
+        )
+
+        return Block(header, body)
 
     async def create_data_verifier(self) -> BlockVerifier:
         return BlockVerifier(tx_versioner=self._tx_versioner, invoke_pool=self._invoke_pool)
