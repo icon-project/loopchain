@@ -29,6 +29,7 @@ from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.votes import Vote, Votes
 from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.jsonrpc import GenericJsonRpcServerError
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
@@ -603,11 +604,16 @@ class BlockManager:
 
         return my_height, max_height
 
-    def __request_roll_back(self):
+    def request_rollback(self) -> bool:
+        """Request block data rollback behind to 1 block
+
+        :return: if rollback success return True, else return False
+        """
         target_block = self.blockchain.find_block_by_hash32(self.blockchain.last_block.header.prev_hash)
         if not self.blockchain.check_rollback_possible(target_block):
-            util.logger.warning(f"The request cannot be rolled back to the target block({target_block}).")
-            return
+            util.logger.warning(f"request_rollback() The request cannot be "
+                                f"rolled back to the target block({target_block}).")
+            return False
 
         request_origin = {
             'blockHeight': target_block.header.height,
@@ -617,17 +623,22 @@ class BlockManager:
         request = convert_params(request_origin, ParamType.roll_back)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
 
-        util.logger.debug(f"Rollback request({request})")
+        util.logger.debug(f"request_roll_back() Rollback request({request})")
         response: dict = cast(dict, stub.sync_task().rollback(request))
-        response_to_json_query(response)
-
-        result_height = response.get("blockHeight")
-        if hex(target_block.header.height) == result_height:
-            util.logger.info(f"Rollback Success")
-            self.blockchain.roll_back(target_block)
-            self.rebuild_block()
+        try:
+            response_to_json_query(response)
+        except GenericJsonRpcServerError as e:
+            util.logger.warning(f"request_rollback() response error = {e}")
         else:
-            util.logger.warning(f"{response}")
+            result_height = response.get("blockHeight")
+            if hex(target_block.header.height) == result_height:
+                util.logger.info(f"request_rollback() Rollback Success. result height = {result_height}")
+                self.blockchain.rollback(target_block)
+                self.rebuild_block()
+                return True
+
+        util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
+        return False
 
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
@@ -650,7 +661,7 @@ class BlockManager:
                                                   max_height)
         except exception.PreviousBlockMismatch as e:
             util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
-            self.__request_roll_back()
+            self.request_rollback()
             self.__start_block_height_sync_timer(is_run_at_start=True)
         except Exception as e:
             util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")

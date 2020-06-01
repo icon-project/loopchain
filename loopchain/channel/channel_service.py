@@ -39,7 +39,7 @@ from loopchain.utils.message_queue import StubCollection
 
 
 class ChannelService:
-    def __init__(self, channel_name, amqp_target, amqp_key):
+    def __init__(self, channel_name, amqp_target, amqp_key, rollback=False):
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
@@ -48,6 +48,7 @@ class ChannelService:
         self.__rs_client: RestClient = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self._rollback: bool = rollback
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -113,15 +114,17 @@ class ChannelService:
             await StubCollection().create_peer_stub()
 
             results = await StubCollection().peer_stub.async_task().get_node_info_detail()
-            await self.init(**results)
+            self._init_properties(**results)
 
+            await self._init()
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
             logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
         loop = self.__inner_service.loop
-        loop.create_task(_serve())
+        serve_coroutine = _serve() if not self._rollback else self._serve_manual_rollback()
+        loop.create_task(serve_coroutine)
         loop.add_signal_handler(signal.SIGINT, self.close, signal.SIGINT)
         loop.add_signal_handler(signal.SIGTERM, self.close, signal.SIGTERM)
 
@@ -134,6 +137,37 @@ class ChannelService:
             self._cancel_tasks(loop)
             self._cleanup()
             loop.close()
+
+    async def _serve_manual_rollback(self):
+        """Initialize minimum channel resources and manual rollback
+
+        :return: None
+        """
+        await StubCollection().create_peer_stub()
+
+        results = await StubCollection().peer_stub.async_task().get_node_info_detail()
+        self._init_properties(**results)
+
+        self.__init_block_manager()
+        await self.__init_score_container()
+        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
+        await asyncio.sleep(0.01)   # sleep to complete peer service initialization
+
+        message = self._manual_rollback()
+        self.shutdown_peer(message=message)
+
+    def _manual_rollback(self) -> str:
+        logging.debug("_manual_rollback() start manual rollback")
+        if self.block_manager.blockchain.block_height >= 0:
+            self.block_manager.rebuild_block()
+
+        if self.block_manager.request_rollback():
+            message = "rollback finished"
+        else:
+            message = "rollback cancelled"
+
+        logging.debug("_manual_rollback() end manual rollback")
+        return message
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")
@@ -178,8 +212,9 @@ class ChannelService:
             self.__block_manager = None
             logging.info("_cleanup() BlockManager.")
 
-    async def init(self, **kwargs):
-        """Initialize Channel Service
+    @staticmethod
+    def _init_properties(**kwargs):
+        """Initialize properties
 
         :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
@@ -196,6 +231,11 @@ class ChannelService:
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None
 
+    async def _init(self):
+        """Initialize channel resources
+
+        :return: None
+        """
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
@@ -422,7 +462,7 @@ class ChannelService:
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
-        logging.debug(f"channel_service:shutdown_peer")
+        logging.debug(f"shutdown_peer() kwargs = {kwargs}")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):
