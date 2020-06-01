@@ -20,20 +20,19 @@ import asyncio
 import json
 import logging
 import os
-import random
 import time
 from sys import platform
+from typing import Optional
 
 import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import StubManager, CommonSubprocess
+from loopchain.baseservice import CommonSubprocess
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVersioner
 from loopchain.blockchain.types import Address
-from loopchain.components import SingletonMetaClass
 from loopchain.peer import Signer
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.protos import loopchain_pb2_grpc
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
@@ -82,73 +81,13 @@ def run_peer_server_as_process_and_stub(
     return process, stub
 
 
-def run_peer_server_as_process_and_stub_manager(
-        port, radiostation_port=conf.PORT_RADIOSTATION, group_id=None, score=None, timeout=None):
-    process = run_peer_server_as_process(port, radiostation_port, group_id, score)
-    stub_manager = StubManager(f"localhost:{port}", loopchain_pb2_grpc.PeerServiceStub, ssl_auth_type=conf.GRPC_SSL_TYPE)
-    return process, stub_manager
-
-
-def run_radio_station_as_process(port):
-    args = ['python3', 'loopchain.py', 'rs', '-d', '-p', str(port)]
-    logging.debug(f"run_radio_station_as_process ({args})")
-    return CommonSubprocess(args)
-
-
-def run_radio_station_as_process_and_stub_manager(port, timeout=None):
-    process = run_radio_station_as_process(port)
-    stub_manager = StubManager(f"localhost:{port}",
-                               loopchain_pb2_grpc.RadioStationStub,
-                               conf.GRPC_SSL_TYPE)
-    util.request_server_in_time(stub_manager.stub.GetStatus, loopchain_pb2.StatusRequest(request=""))
-    return process, stub_manager
-
-
-def run_radio_station_as_process_and_stub(port):
-    process = run_radio_station_as_process(port)
-
-    stub, channel = util.get_stub_to_server(
-        target=f"localhost:{port}",
-        stub_class=loopchain_pb2_grpc.RadioStationStub
-    )
-
-    return process, stub
-
-
-def run_score_server_as_process(amqp_key):
-    args = ['python3', 'loopchain.py', 'score',
-            '--channel', conf.LOOPCHAIN_DEFAULT_CHANNEL,
-            '--amqp_key', amqp_key,
-            '--score_package', "score_package",
-            '-d']
-    logging.debug(f"run_score_server_as_process ({args})")
-    return CommonSubprocess(args)
-
-
-async def run_score_server_as_process_and_stub_async():
-    amqp_key = str(time.time())
-    process = run_score_server_as_process(amqp_key)
-
-    StubCollection().amqp_target = conf.AMQP_TARGET
-    StubCollection().amqp_key = amqp_key
-
-    logging.debug(f'{StubCollection().amqp_key} score hello')
-
-    await StubCollection().create_score_stub(conf.LOOPCHAIN_DEFAULT_CHANNEL, 'score_package')
-    await StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL].async_task().hello()
-
-    logging.debug(f'{StubCollection().amqp_key} score hello complete')
-
-    return process, StubCollection().score_stubs[conf.LOOPCHAIN_DEFAULT_CHANNEL]
-
-
 def print_testname(testname):
     print("\n======================================================================")
     print("Test %s Start" % testname)
     print("======================================================================")
 
 
-def make_key_value_store(store_identity="") -> KeyValueStore:
+def make_key_value_store(store_identity="") -> Optional[KeyValueStore]:
     store_default_path = './' + (store_identity, "db_test")[store_identity == ""]
     store_path = store_default_path
     store = None
@@ -239,91 +178,3 @@ def add_genesis_block():
     block.generate_block()
     # 제네시스 블럭을 추가 합니다.
     return block
-
-
-class TestServerManager(metaclass=SingletonMetaClass):
-    """
-
-    """
-
-    def __init__(self):
-        self.__test_port_diff = random.randrange(1, 30) * -50
-        self.__radiostation_port = conf.PORT_RADIOSTATION + self.__test_port_diff
-
-        # rs and peer info is tuple (process, stub_manager, port)
-        self.__rs_info = ()
-        self.__peer_info = {}  # {num:peer_info}
-        self.__score = None
-
-    def start_servers(self, peer_count, score=None):
-        """Start BlockChain network rs and peer
-
-        :param peer_count: num of peers but 0 means start only RS.
-        :return:
-        """
-        logging.debug("TestServerManager start servers")
-        self.__score = score
-
-        # run radio station
-        process, stub_manager = run_radio_station_as_process_and_stub_manager(self.__radiostation_port)
-        self.__rs_info = (process, stub_manager, self.__radiostation_port)
-        time.sleep(2)
-
-        for i in range(peer_count):
-            peer_port = conf.PORT_PEER + (i * 7) + self.__test_port_diff
-            process, stub_manager = run_peer_server_as_process_and_stub_manager(
-                peer_port, self.__radiostation_port, score=score)
-            self.__peer_info[i] = (process, stub_manager, peer_port)
-            time.sleep(2)
-
-    def stop_all_server(self):
-        for i in self.__peer_info:
-            self.__peer_info[i][1].call_in_times(
-                "Stop",
-                loopchain_pb2.StopRequest(reason="TestServerManager"), conf.GRPC_TIMEOUT)
-        self.__rs_info[1].call_in_times(
-            "Stop",
-            loopchain_pb2.StopRequest(reason="TestServerManager"), conf.GRPC_TIMEOUT)
-
-        time.sleep(2)
-
-        for i in self.__peer_info:
-            self.__peer_info[i][0].join()
-        self.__rs_info[0].join()
-
-    def stop_peer(self, num):
-        self.__peer_info[num][1].call_in_times(
-            "Stop",
-            loopchain_pb2.StopRequest(reason="TestServerManager"), conf.GRPC_TIMEOUT)
-        time.sleep(2)
-        self.__peer_info[num][0].join()
-
-    def start_peer(self, num):
-        peer_port = conf.PORT_PEER + (num * 7) + self.__test_port_diff
-        process, stub_manager = run_peer_server_as_process_and_stub_manager(
-            peer_port, self.__radiostation_port, score=self.__score)
-        self.__peer_info[num] = (process, stub_manager, peer_port)
-        time.sleep(1)
-
-    def add_peer(self):
-        num = 0
-        return num
-
-    def get_stub_rs(self):
-        return self.__rs_info[1].stub
-
-    def get_stub_peer(self, num=0):
-        return self.__peer_info[num][1].stub
-
-    def get_port_rs(self):
-        return self.__radiostation_port
-
-    def get_port_peer(self, num):
-        return self.__peer_info[num][2]
-
-    def status(self):
-        """
-
-        :return: json object for ServerManager status
-        """
-        pass

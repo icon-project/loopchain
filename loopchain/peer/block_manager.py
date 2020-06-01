@@ -64,7 +64,6 @@ class BlockManager:
         self.__block_height_sync_lock = threading.Lock()
         self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.__service_status = status_code.Service.online
 
@@ -99,14 +98,6 @@ class BlockManager:
     @property
     def consensus_algorithm(self):
         return self.__consensus_algorithm
-
-    @property
-    def precommit_block(self):
-        return self.__precommit_block
-
-    @precommit_block.setter
-    def precommit_block(self, block):
-        self.__precommit_block = block
 
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type

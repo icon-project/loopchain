@@ -595,12 +595,6 @@ class ChannelService:
         self.__block_manager.pop_old_block_hashes(block.header.height)
         return True
 
-    def score_remove_precommit_state(self, block: Block):
-        invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-        stub = StubCollection().score_stubs[ChannelProperty().name]
-        stub.sync_task().remove_precommit_state(invoke_fail_info)
-        return True
-
     def callback_leader_complain_timeout(self):
         if self.state_machine.state == "BlockGenerate":
             _, new_leader_id = self.block_manager.get_leader_ids_for_complaint()
