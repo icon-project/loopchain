@@ -1,129 +1,68 @@
 @startuml State Machine in Siever
-[*] --> InitComponents
+hide empty description
 
-state InitComponents {
-    InitComponents: ChannelService init
+[*] --> Initialize
+state Initialize {
+    state InitComponents: Initialize Node
+    state Consensus: X
+    state BlockHeightSync: X
+
+    [*] --> InitComponents
+    InitComponents -> Consensus
+    Consensus -> BlockHeightSync
+    BlockHeightSync --> [*]
+    Initialize --> EvaluateNetwork
 }
 
-state Timer {
-    Timer: * Connect to Radiostation
-    Timer: * heartbeat to peers
-    Timer: * leader complain
-    Timer: * block generate
-    Timer: * Subscribe
-    Timer: * Shutdown
-}
 
-state GracefulShutdown {
-    GracefulShutdown: StopTimer: ALL
-}
-
-state Consensus {
-    Consensus: on_enter { block_height_sync }
-
-    [*] -[thickness=2]-> EvaluateNetwork : trigger::evaluate_network
-
+state Ready {
+    state ResetNetwork: Clear peer targets
     state EvaluateNetwork {
-        EvaluateNetwork: ready to block height sync
-        EvaluateNetwork: select node type
-        EvaluateNetwork: initialize network
+        EvaluateNetwork: Select node type
+        EvaluateNetwork: Initialize peer targets
     }
-
-    state BlockSync {
-        BlockSync: Check Highest Block in Network
-    }
-
+    state BlockSync: Sync Blocks if needed
     state SubscribeNetwork {
-        SubscribeNetwork: on_enter {
-        SubscribeNetwork: \tStartTimer: Subscribe
-        SubscribeNetwork: \tStartTimer: Shutdown
-        SubscribeNetwork:}
-        SubscribeNetwork: Connect Network (Subscribe to Radiostation, Set peer type)
-        SubscribeNetwork: on_exit {
-        SubscribeNetwork: \tStopTimer: Subscribe
-        SubscribeNetwork: \tStopTimer: Shutdown
-        SubscribeNetwork:}
+        SubscribeNetwork: Select node type again
+        SubscribeNetwork: (Citizen: Subscribe to parent)
     }
 
-    state Watch {
-        Watch: Wait for new block announcement (subscribe_loop)
-    }
+    EvaluateNetwork --> BlockSync
+    ResetNetwork -> EvaluateNetwork
+    BlockSync --> SubscribeNetwork
+    SubscribeNetwork -> BlockSync
+    BlockSync -> ResetNetwork
 
-    state Vote {
-        Vote: on_enter {
-        Vote: }
-        Vote: on_exit {
-        Vote: }
-        Vote:
-        Vote: trigger::vote\n(Recv AnnounceUnConfirmedBlock (block.height == mine + 1))
-    }
-
-    state BlockGenerate {
-        BlockGenerate: on_enter {
-        BlockGenerate: \tAddTimer: heartbeat to peers
-        BlockGenerate: \tAddTimer: block generate (default interval = 2 sec.)
-        BlockGenerate: }
-        BlockGenerate: on_exit {
-        BlockGenerate: \tStopTimer: heartbeat to peers
-        BlockGenerate: \tStopTimer: block generate
-        BlockGenerate: }
-    }
-
-    state LeaderComplain {
-        LeaderComplain: on_enter {
-        LeaderComplain: \tbroadcast complain
-        LeaderComplain: }
-        LeaderComplain: on_exit {
-        LeaderComplain: }
-    }
-    note top of LeaderComplain
-      keep leader complain Timer
-      until new leader elected
-      leader complain timer start by AddTx(List), and stop by AddBlock
-    end note
-
-    state ResetNetwork {
-        ResetNetwork: on_enter {
-        ResetNetwork: \tClean network
-        ResetNetwork: \tevaluate_network
-        ResetNetwork: }
-    }
+    SubscribeNetwork --> [*]: complete_subscribe
+    Ready --> Online: complete_subscribe
 }
 
-'----- Relations
-' Enter Consensus
-InitComponents --> Consensus: trigger::complete_init_components
+state Online {
+    state fork_state <<fork>>
+    state join_state <<join>>
+    state Watch: Citizen
+    state Vote: Validator
+    state BlockGenerate: Leader
+    state LeaderComplain: Leader fails
 
-' In BlockHeightSync
-EvaluateNetwork -[thickness=2]-> BlockSync: \ntrigger::block_sync
-BlockSync -[thickness=2]-> SubscribeNetwork: Succeeded\ntrigger::complete_sync
-SubscribeNetwork -[#green,thickness=2]-> BlockGenerate: <color:green>(if leader)\ntrigger::complete_subscribe
-SubscribeNetwork -left[#blue,thickness=2]-> Watch: <color:blue>(if node_type == citizen)\ntrigger::complete_subscribe
-SubscribeNetwork -right[#purple,thickness=2]-> Vote: <color:purple>(if not leader)\ntrigger::complete_subscribe
+    [*] --> fork_state: Check node type then transit
+    fork_state --> Watch
+    fork_state --> Vote
+    fork_state --> BlockGenerate
 
-' BlockGenerate
-Vote -down-> BlockGenerate : Recv AnnounceUnconfirmedBlock\ntrigger::turn_to_leader\n(if next leader == self)
-BlockGenerate -up-> Vote : Send AnnounceUnconfirmedBlock\ntrigger::turn_to_peer\n(block_type == vote)
+    BlockGenerate -> Vote
+    Vote -> BlockGenerate
+    Vote -> LeaderComplain
+    LeaderComplain -> Vote
+    LeaderComplain -> BlockGenerate
 
-' Watch
-Watch -right-> EvaluateNetwork: Reconnect to RS Peer\n(after connection error)\ntrigger::subscribe_network
+    Watch --> join_state
+    Vote --> join_state
+    BlockGenerate --> join_state
+    LeaderComplain --> join_state
+    join_state --> [*]: Switch Role \nOR \nHeight is falling behind
 
-' Vote
-Vote -up-> EvaluateNetwork: dest::BlockSync\n(block.height >= mine + 2)\ntrigger::block_sync
-Vote -right-> LeaderComplain : !Recv heartbeat from leader by Timer (leader complain) \nSend LeaderComplain
-LeaderComplain -left-> Vote : Recv AnnounceNewLeader\n(if next leader != self)
-LeaderComplain --> BlockGenerate : Send AnnounceNewLeader\n(if next leader == self)
-
-' Into ResetNetwork
-Watch -[dashed]-> ResetNetwork : Added a block(role_switch_block_height)\ntrigger::switch_role
-Vote -[dashed]-> ResetNetwork : Added a block(role_switch_block_height)\ntrigger::switch_role
-BlockSync -[dashed]-> ResetNetwork : Added a block(role_switch_block_height)\ntrigger::switch_role
-BlockGenerate -[dashed]-> ResetNetwork : Added a block(role_switch_block_height)\ntrigger::switch_role
-
-'ResetNetwork -> EvaluateNetwork
-
-' Exit Consensus
-Consensus --> GracefulShutdown
-GracefulShutdown --> [*]
-
+    Online --> ResetNetwork: Switch Role
+    Online --> BlockSync: Height is falling behind
+}
 @enduml
