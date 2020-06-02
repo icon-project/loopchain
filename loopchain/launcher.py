@@ -18,14 +18,10 @@
 import argparse
 import json
 import logging
-import os
 import time
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.app.app import App
-from loopchain.blockchain.types import ExternalAddress
-from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.channel.channel_service import ChannelService
 from loopchain.peer import PeerService
 from loopchain.tools.grpc_helper import grpc_patcher
