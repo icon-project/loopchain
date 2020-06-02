@@ -5,7 +5,6 @@ import multiprocessing as mp
 import signal
 from asyncio import Condition
 from collections import namedtuple
-from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
@@ -179,11 +178,11 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
                                                tx_versioner=tx_versioner)
 
         def _on_signal(signal_num):
-            logging.error(f"Channel TX Creator has been received signal({signal_num})")
+            logging.error(f"Channel TX Creator has been received signal({repr(signal_num)})")
             service.stop()
 
-        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
-        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, signal.SIGTERM)
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, signal.SIGINT)
 
         service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
@@ -278,11 +277,11 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
             service.loop.stop()
 
         def _on_signal(signal_num):
-            logging.error(f"Channel TX Receiver has been received signal({signal_num})")
+            logging.error(f"Channel TX Receiver has been received signal({repr(signal_num)})")
             asyncio.run_coroutine_threadsafe(_stop_loop(), service.loop)
 
-        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
-        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, signal.SIGTERM)
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, signal.SIGINT)
 
         service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
@@ -385,8 +384,6 @@ class ChannelInnerTask:
         self._channel_service = channel_service
         self._block_manager = None
         self._blockchain = None
-
-        self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
 
         # Citizen
         CitizenInfo = namedtuple("CitizenInfo", "peer_id target connected_time")
@@ -922,6 +919,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
         self._task.cleanup_sub_services()
+        logging.info("Cleanup ChannelInnerService.")
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):

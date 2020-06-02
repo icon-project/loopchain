@@ -18,8 +18,6 @@ import logging
 import signal
 import traceback
 
-from earlgrey import MessageQueueService
-
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
@@ -122,11 +120,10 @@ class ChannelService:
             logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
-        loop = MessageQueueService.loop
-        # loop.set_debug(True)
+        loop = self.__inner_service.loop
         loop.create_task(_serve())
-        loop.add_signal_handler(signal.SIGINT, self.close)
-        loop.add_signal_handler(signal.SIGTERM, self.close)
+        loop.add_signal_handler(signal.SIGINT, self.close, signal.SIGINT)
+        loop.add_signal_handler(signal.SIGTERM, self.close, signal.SIGTERM)
 
         try:
             loop.run_forever()
@@ -134,41 +131,52 @@ class ChannelService:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
+            self._cancel_tasks(loop)
+            self._cleanup()
             loop.close()
 
-            self.cleanup()
-
-    def close(self):
+    def close(self, signum=None):
+        logging.info(f"close() signum = {repr(signum)}")
         if self.__inner_service:
             self.__inner_service.cleanup()
-            logging.info("Cleanup ChannelInnerService.")
 
-        MessageQueueService.loop.stop()
+        self.__inner_service.loop.stop()
 
-    def cleanup(self):
-        logging.info("Cleanup Channel Resources.")
+    @staticmethod
+    def _cancel_tasks(loop):
+        for task in asyncio.Task.all_tasks(loop):
+            if task.done():
+                continue
+            task.cancel()
+            try:
+                loop.run_until_complete(task)
+            except asyncio.CancelledError as e:
+                logging.info(f"_cancel_tasks() task : {task}, error : {e}")
 
-        if self.__block_manager:
-            self.__block_manager.stop()
-            self.__block_manager = None
-            logging.info("Cleanup BlockManager.")
+    def _cleanup(self):
+        logging.info("_cleanup() Channel Resources.")
+
+        if self.__timer_service.is_run():
+            self.__timer_service.stop()
+            self.__timer_service.wait()
+            logging.info("_cleanup() TimerService.")
 
         if self.__score_container:
             self.__score_container.stop()
             self.__score_container.wait()
             self.__score_container = None
-            logging.info("Cleanup ScoreContainer.")
+            logging.info("_cleanup() ScoreContainer.")
 
         if self.__broadcast_scheduler:
             self.__broadcast_scheduler.stop()
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
-            logging.info("Cleanup BroadcastScheduler.")
+            logging.info("_cleanup() BroadcastScheduler.")
 
-        if self.__timer_service.is_run():
-            self.__timer_service.stop()
-            self.__timer_service.wait()
-            logging.info("Cleanup TimerService.")
+        if self.__block_manager:
+            self.__block_manager.stop()
+            self.__block_manager = None
+            logging.info("_cleanup() BlockManager.")
 
     async def init(self, **kwargs):
         """Initialize Channel Service
@@ -403,7 +411,7 @@ class ChannelService:
                 block_height=self.__block_manager.blockchain.block_height,
                 event=subscribe_event
             ),
-            loop=MessageQueueService.loop
+            loop=self.__inner_service.loop
         )
         task.add_done_callback(_handle_exception)
 
