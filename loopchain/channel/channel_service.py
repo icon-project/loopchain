@@ -13,6 +13,7 @@ from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
+from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.blocks.v1_0 import BlockFactory
 from loopchain.blockchain.epoch3 import LoopchainEpoch
@@ -51,6 +52,8 @@ class ChannelService:
         self._rollback: bool = rollback
         self.__consensus_runner = None
         self.__event_system = None
+        self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
+                                     default_item_status=TransactionStatusInQueue.normal)
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -58,7 +61,9 @@ class ChannelService:
         channel_queue_name = conf.CHANNEL_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
         self.__inner_service = ChannelInnerService(
             self.__event_system,
-            amqp_target, channel_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, channel_service=self)
+            amqp_target, channel_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, channel_service=self,
+            tx_queue=self.__tx_queue
+        )
 
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
 
@@ -178,13 +183,12 @@ class ChannelService:
         self.__event_system = EventSystem()
 
         epoch_pool = EpochPool()
-        tx_queue = self.block_manager.get_tx_queue()
         db = self.block_manager.blockchain.blockchain_store
         invoke_pool = InvokePool()
         signer = ChannelProperty().peer_auth
         block_factory = BlockFactory(
             epoch_pool_with_app=epoch_pool,
-            tx_queue=tx_queue,
+            tx_queue=self.__tx_queue,
             db=db,
             tx_versioner=TransactionVersioner(),
             invoke_pool=invoke_pool,
@@ -389,7 +393,8 @@ class ChannelService:
                 peer_id=ChannelProperty().peer_id,
                 channel_name=channel_name,
                 store_id=store_id,
-                event_system=self.__event_system
+                event_system=self.__event_system,
+                tx_queue=self.__tx_queue
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
@@ -677,7 +682,7 @@ class ChannelService:
         self.start_leader_complain_timer()
 
     def start_leader_complain_timer_if_tx_exists(self):
-        if not self.block_manager.get_tx_queue().is_empty_in_status(TransactionStatusInQueue.normal):
+        if not self.__tx_queue.is_empty_in_status(TransactionStatusInQueue.normal):
             utils.logger.debug("Start leader complain timer because unconfirmed tx exists.")
             self.start_leader_complain_timer()
 

@@ -13,17 +13,17 @@ from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.votes.votes import VoteError, Votes
-from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.channel.channel_property import ChannelProperty
 
 if TYPE_CHECKING:
-    from loopchain.peer import BlockManager
+    from loopchain.baseservice.aging_cache import AgingCache
+    from loopchain.blockchain import BlockChain
 
 
 class Epoch:
-    def __init__(self, block_manager: 'BlockManager', leader_id=None):
-        self.__block_manager: BlockManager = block_manager
-        self.__blockchain = block_manager.blockchain
+    def __init__(self, tx_queue: 'AgingCache', blockchain: 'BlockChain', leader_id=None):
+        self.__tx_queue: 'AgingCache' = tx_queue
+        self.__blockchain: 'BlockChain' = blockchain
         if self.__blockchain.last_block:
             self.height = self.__blockchain.last_block.header.height + 1
         else:
@@ -119,7 +119,7 @@ class Epoch:
             return None
 
     def __add_tx_to_block(self, block_builder):
-        tx_queue = self.__block_manager.get_tx_queue()
+        tx_queue = self.__tx_queue
 
         block_tx_size = 0
         tx_versioner = self.__blockchain.tx_versioner
@@ -163,7 +163,7 @@ class Epoch:
     def remove_duplicate_tx_when_turn_to_leader(self):
         if self.__blockchain.last_unconfirmed_block and \
                 self.__blockchain.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
-            tx_queue = self.__block_manager.get_tx_queue()
+            tx_queue = self.__tx_queue
 
             for tx_hash_in_unconfirmed_block in self.__blockchain.last_unconfirmed_block.body.transactions:
                 try:

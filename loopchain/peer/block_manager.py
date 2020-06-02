@@ -54,14 +54,14 @@ class BlockManager:
                  peer_id: str,
                  channel_name: str,
                  store_id: str,
-                 event_system: 'EventSystem'):
+                 event_system: 'EventSystem',
+                 tx_queue: AgingCache):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
         self.__peer_id = peer_id
 
-        self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
-                                     default_item_status=TransactionStatusInQueue.normal)
-        self.blockchain = BlockChain(channel_name, store_id, self)
+        self.__tx_queue: AgingCache = tx_queue
+        self.blockchain = BlockChain(channel_name, store_id, self, self.__tx_queue)
         self.__peer_type = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
@@ -186,9 +186,6 @@ class BlockManager:
         :return:
         """
         return self.blockchain.find_invoke_result_by_tx_hash(tx_hash)
-
-    def get_tx_queue(self):
-        return self.__tx_queue
 
     def get_count_of_unconfirmed_tx(self):
         """BlockManager 의 상태를 확인하기 위하여 현재 입력된 unconfirmed_tx 의 카운트를 구한다.
@@ -625,7 +622,7 @@ class BlockManager:
                 break
 
             await asyncio.sleep(0)
-            
+
             process_height = my_height+1
             if process_height in self.request_result_for_async.keys():
                 block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
@@ -876,7 +873,7 @@ class BlockManager:
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
-        self.epoch = Epoch(self, new_leader_id)
+        self.epoch = Epoch(self.__tx_queue, self.blockchain, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
         if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
             self.__channel_service.state_machine.start_lft()
