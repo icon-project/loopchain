@@ -187,13 +187,6 @@ class BlockManager:
         """
         return self.blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
-    def get_count_of_unconfirmed_tx(self):
-        """BlockManager 의 상태를 확인하기 위하여 현재 입력된 unconfirmed_tx 의 카운트를 구한다.
-
-        :return: 현재 입력된 unconfirmed tx 의 갯수
-        """
-        return len(self.__tx_queue)
-
     async def relay_all_txs(self):
         rs_client = ObjectManager().channel_service.rs_client
         if not rs_client:

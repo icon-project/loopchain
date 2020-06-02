@@ -587,7 +587,7 @@ class ChannelInnerTask:
         status_data["epoch_height"] = self._block_manager.epoch.height if self._block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = self._block_manager.get_total_tx()
-        status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
+        status_data["unconfirmed_tx"] = len(self._tx_queue)
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = peer_count
