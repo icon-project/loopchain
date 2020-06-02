@@ -3,9 +3,8 @@ from typing import List
 import pytest
 from lft.consensus.epoch import EpochPool
 
-from loopchain import ExternalAddress
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import Hash32
+from loopchain.blockchain import Hash32, ExternalAddress
 from loopchain.blockchain.blocks import v1_0
 from loopchain.blockchain.invoke_result import InvokePool, InvokeData
 from loopchain.blockchain.transactions import TransactionVersioner
