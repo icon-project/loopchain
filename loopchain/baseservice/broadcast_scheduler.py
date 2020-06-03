@@ -445,7 +445,8 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
         def _signal_handler(signal_num, frame):
             signal.signal(signal.SIGTERM, original_sigterm_handler)
             signal.signal(signal.SIGINT, original_sigint_handler)
-            logging.error(f"BroadcastScheduler process({channel}) has been received signal({signal_num})")
+            logging.error(f"BroadcastScheduler process({channel}) has been received "
+                          f"signal({repr(signal.Signals(signal_num))})")
             broadcast_queue.put((None, None))
             broadcaster.stop()
 

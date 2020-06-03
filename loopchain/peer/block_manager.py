@@ -62,7 +62,7 @@ class BlockManager:
         self.candidate_blocks = CandidateBlocks(self.blockchain)
         self.__block_height_sync_bad_targets = {}
         self.__block_height_sync_lock = threading.Lock()
-        self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
+        self.__block_height_thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
         self.set_peer_type(loopchain_pb2.PEER)
         self.__service_status = status_code.Service.online
@@ -867,11 +867,15 @@ class BlockManager:
             self.__channel_service.state_machine.start_lft()
 
     def stop(self):
-        # for reuse key value store when restart channel.
-        self.blockchain.close_blockchain_store()
+        self.__block_height_thread_pool.shutdown()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
+
+        # close store(aka. leveldb) after cleanup all threads
+        # because hard crashes may occur.
+        # https://plyvel.readthedocs.io/en/latest/api.html#DB.close
+        self.blockchain.close_blockchain_store()
 
     def add_complain(self, vote: LeaderVote):
         util.logger.spam(f"add_complain vote({vote})")

@@ -235,7 +235,7 @@ class BlockChain:
         return self._blockchain_store
 
     def close_blockchain_store(self):
-        print(f"close blockchain_store = {self._blockchain_store}")
+        logging.info(f"close_blockchain_store() : {self._blockchain_store}")
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
