@@ -29,7 +29,7 @@ from websockets import WebSocketClientProtocol
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager, TimerService, Timer
-from loopchain.blockchain import AnnounceNewBlockError
+from loopchain.blockchain.exception import AnnounceNewBlockError
 from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty

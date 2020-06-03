@@ -912,6 +912,10 @@ class BlockChain:
         tx = tx_builder.build(False)
 
         block_version = self.block_versioner.get_version(0)
+        if block_version == "1.0":
+            # TODO remove this start_lft code in here after 3.0 launched.
+            raise ConsensusChanged
+
         block_builder = BlockBuilder.new(block_version, self.__tx_versioner)
         block_builder.height = 0
         block_builder.fixed_timestamp = utils.get_now_time_stamp()

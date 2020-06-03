@@ -16,6 +16,8 @@
 import asyncio
 
 import loopchain.utils as util
+from earlgrey import MessageQueueService
+from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.baseservice import TimerService, Timer
 
 
@@ -73,7 +75,14 @@ class SlotTimer:
         if not self.is_running:
             util.logger.warning(f"SlotTimer is not running. slot({self.__slot}) delayed({self.__delayed})")
             return
-        self.__loop.create_task(self.__callback())
+        self.__loop.create_task(self.__try_callback())
+
+    async def __try_callback(self):
+        try:
+            await self.__callback()
+        except ConsensusChanged as e:
+            MessageQueueService.loop.exception = e
+            MessageQueueService.loop.stop()
 
     def call_in_slot(self):
         util.logger.spam(f"call slot({self.__slot}) delayed({self.__delayed})")

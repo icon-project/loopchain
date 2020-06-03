@@ -10,6 +10,7 @@ from typing import Union, Dict, List, Tuple
 from earlgrey import *
 from pkg_resources import parse_version
 
+from lft.consensus.events import ReceiveVoteEvent
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
@@ -29,6 +30,7 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+    from lft.event import EventSystem
 
 
 class ChannelTxCreatorInnerTask:
@@ -391,6 +393,7 @@ class ChannelInnerTask:
         self._citizens: Dict[str, CitizenInfo] = dict()
         self._citizen_condition_new_block: Condition = None
         self._citizen_condition_unregister: Condition = None
+        self._event_system: EventSystem = None
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
@@ -701,11 +704,18 @@ class ChannelInnerTask:
             util.logger.debug(
                 f"Peer vote to: {vote.block_height}({vote.round}) {vote.block_hash} from {vote.rep.hex_hx()}"
             )
-            self._block_manager.candidate_blocks.add_vote(vote)
+            if self._event_system:
+                util.logger.notice(f'loopchain 3.x has event_system!')
+                e = ReceiveVoteEvent(vote)
+                self._event_system.simulator.raise_event(e)
+            else:
+                util.logger.notice(f'loopchain 2.x has no event_system!')
+                self._block_manager.candidate_blocks.add_vote(vote)
 
-            if self._channel_service.state_machine.state == "BlockGenerate" and \
-                    self._block_manager.consensus_algorithm:
-                self._block_manager.consensus_algorithm.vote(vote)
+                if self._channel_service.state_machine.state == "BlockGenerate" and \
+                        self._block_manager.consensus_algorithm:
+                    self._block_manager.consensus_algorithm.vote(vote)
+
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
@@ -882,10 +892,11 @@ class ChannelInnerTask:
 class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
-    def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
+    def __init__(self, event_system, amqp_target, route_key, username=None, password=None, **task_kwargs):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
+        self._task._event_system = event_system
 
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
