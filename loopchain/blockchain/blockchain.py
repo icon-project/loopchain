@@ -1,4 +1,4 @@
-"""Block chain class with authorized blocks only"""
+"""Block chain class with authorized blocks only and consensus essential data."""
 import json
 import threading
 import time
