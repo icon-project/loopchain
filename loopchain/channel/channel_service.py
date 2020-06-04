@@ -280,13 +280,17 @@ class ChannelService:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
     def __init_block_manager(self):
-        logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
+        logging.debug(f"__init_block_manager() : channel({ChannelProperty().name})")
+
+        channel_name = ChannelProperty().name
+        develop = command_arguments.command_values.get(command_arguments.Type.Develop, False)
+        store_id = f"{ChannelProperty().peer_port}_{channel_name}" if develop else channel_name
         try:
             self.__block_manager = BlockManager(
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
-                channel_name=ChannelProperty().name,
-                store_identity=ChannelProperty().peer_target
+                channel_name=channel_name,
+                store_id=store_id
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")

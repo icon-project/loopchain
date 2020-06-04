@@ -43,7 +43,7 @@ class LogConfiguration:
         self.log_file_rotate_interval = 0
         self.log_file_rotate_max_bytes = 0
         self.log_file_rotate_backup_count = 0
-        self.log_file_rotate_utf = False
+        self.log_file_rotate_utc = False
         self.is_leader = False
 
         self._log_level = None
@@ -181,7 +181,7 @@ class LogConfiguration:
                 when=self.log_file_rotate_when,
                 interval=self.log_file_rotate_interval,
                 backup_count=self.log_file_rotate_backup_count,
-                utc=self.log_file_rotate_utf,
+                utc=self.log_file_rotate_utc,
                 encoding='utf-8',
                 delay=False)
         elif self.log_file_rotate_when:
@@ -192,7 +192,7 @@ class LogConfiguration:
                 backupCount=self.log_file_rotate_backup_count,
                 encoding='utf-8',
                 delay=False,
-                utc=self.log_file_rotate_utf
+                utc=self.log_file_rotate_utc
             )
         elif self.log_file_rotate_max_bytes:
             file_handler = logging.handlers.RotatingFileHandler(

@@ -78,7 +78,7 @@ def update_preset(update_logger=True):
     preset.log_file_rotate_backup_count = conf.LOG_FILE_ROTATE_BACKUP_COUNT
     preset.log_file_rotate_interval = conf.LOG_FILE_ROTATE_INTERVAL
     preset.log_file_rotate_max_bytes = conf.LOG_FILE_ROTATE_MAX_BYTES
-    preset.log_file_rotate_utf = conf.LOG_FILE_ROTATE_UTC
+    preset.log_file_rotate_utc = conf.LOG_FILE_ROTATE_UTC
     preset.log_file_rotate_when = conf.LOG_FILE_ROTATE_WHEN
 
     if preset is develop:

@@ -23,7 +23,6 @@ import signal
 import socket
 import sys
 import time
-import timeit
 import traceback
 from binascii import unhexlify
 from contextlib import closing
@@ -35,7 +34,6 @@ from typing import Tuple, Union
 import verboselogs
 
 from loopchain import configure as conf
-from loopchain.protos import message_code
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 
@@ -391,23 +389,53 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
+def rename_db_dir(old_store_name: str, store_name: str):
+    """Rename db directory
+    This method is temporary implementation for remove 'ip:port' in db directory name
+    Ths method is useless after rename all nodes done.
+
+    :param old_store_name: old store name
+    :param store_name: new store name
+    :return:
+    """
+    storage_path = Path(conf.DEFAULT_STORAGE_PATH)
+    if os.path.exists(storage_path / store_name):
+        return
+
+    src_path = storage_path / old_store_name
+    dst_path = storage_path / store_name
+    if os.path.exists(src_path):
+        try:
+            logger.info(f"rename_db_dir() : src = {src_path}, dst = {dst_path}")
+            os.rename(src_path, dst_path)
+        except OSError as e:
+            logger.error(f"rename_db_dir() : error = {e}")
+            raise e
+
+
+def init_default_key_value_store(old_store_id: str, store_id: str) -> KeyValueStore:
     """init default key value store
 
-    :param store_identity: identity for store
+    :param old_store_id: old identity of key-value store
+    :param store_id: new identity of key-value store
     :return: KeyValueStore, store_path
     """
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
-    logger.spam(f"utils:init_default_key_value_store ({store_identity})")
+    db_dirname = f'db_{store_id}'
+
+    # FIXME : remove rename_db_dir() after all applied, maybe next release
+    rename_db_dir(f"db_{old_store_id}", db_dirname)
+
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, db_dirname)
+    logger.info(f"init_default_key_value_store() store_id={store_id}")
 
     retry_count = 0
     store = None
+    uri = f"file://{store_path}"
     while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            uri = f"file://{store_path}"
             store = KeyValueStore.new(uri, create_if_missing=True)
         except KeyValueStoreError as e:
             logging.error(f"KeyValueStoreError: {e}")
@@ -419,7 +447,7 @@ def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
         logging.error("Fail! Create key value store")
         raise KeyValueStoreError(f"Fail to create key value store. path={store_path}")
 
-    return store, store_path
+    return store
 
 
 # ------------------- data utils ----------------------------
