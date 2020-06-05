@@ -1,15 +1,14 @@
 """A management class for blockchain."""
-
 import asyncio
-from collections import defaultdict
-
 import json
 import threading
 import traceback
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+
 from lft.consensus.events import ReceiveDataEvent
 from pkg_resources import parse_version
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -49,14 +48,19 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, channel_service, peer_id, channel_name, store_identity, event_system: 'EventSystem'):
+    def __init__(self,
+                 channel_service: 'ChannelService',
+                 peer_id: str,
+                 channel_name: str,
+                 store_id: str,
+                 event_system: 'EventSystem'):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
         self.__peer_id = peer_id
 
         self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                      default_item_status=TransactionStatusInQueue.normal)
-        self.blockchain = BlockChain(channel_name, store_identity, self)
+        self.blockchain = BlockChain(channel_name, store_id, self)
         self.__peer_type = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
