@@ -13,6 +13,7 @@ from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier
 from loopchain.blockchain.types import TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.votes.votes import VoteError, Votes
+from loopchain.blockchain.exception import ConsensusChanged
 from loopchain.channel.channel_property import ChannelProperty
 
 if TYPE_CHECKING:

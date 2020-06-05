@@ -116,6 +116,7 @@ def start_as_channel(args):
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
     ChannelService(channel, amqp_target, amqp_key).serve()
+    # App(ExternalAddress.new()).start()
 
 
 def start_as_rest_server(args):
@@ -249,7 +250,7 @@ def print_prologue():
     print()
     print("                 ##                                                                                ")
     print("         #     ###                                                                                 ")
-    print("      #######  ###                                                                                 ")
+    print("      ##LFT##  ###                                                                                 ")
     print("     ########                                                                                      ")
     print("    ####   #          ###   #######    #######   ###   ###  ###      #######     ######    ####### ")
     print("   ####       ##      ###  #########  #########  ####  ###  ###     #########   ########   ########")
@@ -261,7 +262,7 @@ def print_prologue():
     print("    #       ####      ###  ########   ########   ##    ###  #######  ########   ########   ##      ")
     print("       ########       ###   ######     ######    ##    ###  ######    ######     ######    ##      ")
     print("  ## #########                                                                                     ")
-    print(" ####  #####                                                                                       ")
+    print(" ####  #####                                                                             loopchain3")
     print("  ###                                                                                              ")
     print()
 
@@ -282,7 +283,7 @@ def print_epilogue():
     print("   $$$       $$$      $$$ $$$$   $$$ $$$$   $$$  $$   $$$$  $$$     $$$   $$$$ $$$   $$$$  $$$$$$$ ")
     print("    $       $$$$      $$$  $$$$$$$$   $$$$$$$$   $$    $$$  $$$$$$$  $$$$$$$$   $$$$$$$$   $$      ")
     print("       $$$$$$$$       $$$   $$$$$$     $$$$$$    $$    $$$  $$$$$$    $$$$$$     $$$$$$    $$      ")
-    print("  $$ $$$$$$$$$                                                                                     ")
-    print(" $$$$  $$$$$                                                                                       ")
+    print("  $$ $$$$:)$$$                                                                                     ")
+    print(" $$$$  $$$$$                                                                             loopchain3")
     print("  $$$                                                                                              ")
     print()

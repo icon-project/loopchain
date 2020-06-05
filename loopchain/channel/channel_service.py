@@ -1,34 +1,31 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
+"""Channel Service (The main service for single blockchain.)"""
 import asyncio
-import json
 import logging
 import signal
 import traceback
+from typing import TYPE_CHECKING
+
+from lft.consensus.epoch import EpochPool
+from lft.consensus.events import InitializeEvent
+from lft.event import EventSystem
 
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
+from loopchain.blockchain.blocks.v1_0 import BlockFactory
+from loopchain.blockchain.epoch3 import LoopchainEpoch
+from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError, ConsensusChanged
+from loopchain.blockchain.invoke_result import InvokePool
+from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.votes.v1_0 import BlockVoteFactory
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
+from loopchain.consensus.runner import ConsensusRunner
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2
@@ -36,6 +33,9 @@ from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
 from loopchain.utils.icon_service import convert_params, ParamType
 from loopchain.utils.message_queue import StubCollection
+
+if TYPE_CHECKING:
+    from loopchain.blockchain.blocks import v1_0
 
 
 class ChannelService:
@@ -48,12 +48,15 @@ class ChannelService:
         self.__rs_client: RestClient = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self.__consensus_runner = None
+        self.__event_system = None
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
 
         channel_queue_name = conf.CHANNEL_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
         self.__inner_service = ChannelInnerService(
+            self.__event_system,
             amqp_target, channel_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, channel_service=self)
 
         logging.info(f"ChannelService : {channel_name}, Queue : {channel_queue_name}")
@@ -110,23 +113,21 @@ class ChannelService:
 
     def serve(self):
         async def _serve():
-            await StubCollection().create_peer_stub()
-
-            results = await StubCollection().peer_stub.async_task().get_node_info_detail()
-            await self.init(**results)
-
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
             logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
         loop = self.__inner_service.loop
+        loop.run_until_complete(self.init())
         loop.create_task(_serve())
         loop.add_signal_handler(signal.SIGINT, self.close, signal.SIGINT)
         loop.add_signal_handler(signal.SIGTERM, self.close, signal.SIGTERM)
 
         try:
             loop.run_forever()
+            if hasattr(loop, "exception"):
+                raise loop.exception
         except Exception as e:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:
@@ -134,6 +135,56 @@ class ChannelService:
             self._cancel_tasks(loop)
             self._cleanup()
             loop.close()
+
+    async def start_lft(self):
+        self.__event_system = EventSystem()
+
+        epoch_pool = EpochPool()
+        tx_queue = self.block_manager.get_tx_queue()
+        db = self.block_manager.blockchain.blockchain_store
+        invoke_pool = InvokePool()
+        signer = ChannelProperty().peer_auth
+        block_factory = BlockFactory(
+            epoch_pool_with_app=epoch_pool,
+            tx_queue=tx_queue,
+            db=db,
+            tx_versioner=TransactionVersioner(),
+            invoke_pool=invoke_pool,
+            signer=signer
+        )
+        vote_factory = BlockVoteFactory(
+            invoke_result_pool=invoke_pool,
+            signer=signer
+        )
+        self.__consensus_runner = ConsensusRunner(
+            ChannelProperty().peer_address,
+            self.__event_system,
+            block_factory,
+            vote_factory,
+            self.__broadcast_scheduler
+        )
+
+        # last_block: Block = self.block_manager.blockchain.last_block
+
+        block: "v1_0.Block" = await block_factory.create_data(
+            data_number=0,
+            prev_id=b'',
+            epoch_num=0,
+            round_num=0,
+            prev_votes=()
+        )
+
+        # voters = self.block_manager.blockchain.find_preps_by_roothash(block.header.validators_hash)
+
+        event = InitializeEvent(
+            commit_id=b'',
+            epoch_pool=[LoopchainEpoch(num=0, voters=(ChannelProperty().peer_address,))],
+            data_pool=[block],
+            vote_pool=block.body.prev_votes
+        )
+        event.deterministic = False
+
+        self.__consensus_runner.start(event)
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")
@@ -178,20 +229,23 @@ class ChannelService:
             self.__block_manager = None
             logging.info("_cleanup() BlockManager.")
 
-    async def init(self, **kwargs):
+    async def init(self):
         """Initialize Channel Service
 
         :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
         :return: None
         """
-        loggers.get_preset().peer_id = kwargs.get('peer_id')
+        await StubCollection().create_peer_stub()
+        results = await StubCollection().peer_stub.async_task().get_node_info_detail()
+
+        loggers.get_preset().peer_id = results.get('peer_id')
         loggers.get_preset().update_logger()
 
-        ChannelProperty().peer_port = kwargs.get('peer_port')
-        ChannelProperty().peer_target = kwargs.get('peer_target')
-        ChannelProperty().rest_target = kwargs.get('rest_target')
-        ChannelProperty().peer_id = kwargs.get('peer_id')
+        ChannelProperty().peer_port = results.get('peer_port')
+        ChannelProperty().peer_target = results.get('peer_target')
+        ChannelProperty().rest_target = results.get('rest_target')
+        ChannelProperty().peer_id = results.get('peer_id')
         ChannelProperty().peer_address = ExternalAddress.fromhex_address(ChannelProperty().peer_id)
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None
@@ -208,7 +262,10 @@ class ChannelService:
         await self._init_rs_client()
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
-        self.__ready_to_height_sync()
+        try:
+            self.__ready_to_height_sync()
+        except ConsensusChanged:
+            self.state_machine.start_lft()
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):
@@ -290,7 +347,8 @@ class ChannelService:
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
                 channel_name=channel_name,
-                store_id=store_id
+                store_id=store_id,
+                event_system=self.__event_system
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
@@ -474,8 +532,8 @@ class ChannelService:
             if self._is_genesis_node():
                 self.generate_genesis_block()
 
-        if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
-            utils.exit_and_msg(f"There's no radiostation target to sync block.")
+        # if not self.is_support_node_function(conf.NodeFunction.Vote) and not ChannelProperty().rs_target:
+        #     utils.exit_and_msg(f"There's no radiostation target to sync block.")
 
     def reset_leader(self, new_leader_id, block_height=0, complained=False):
         """
