@@ -57,7 +57,6 @@ class BlockChain:
 
     NID_KEY = b'NID_KEY'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
-    LAST_BLOCK_KEY = b'last_block_key'
     LAST_CANDIDATE_KEY = b'last_candidate_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
 
@@ -65,7 +64,7 @@ class BlockChain:
     CONFIRM_INFO_KEY = b'confirm_info_key'
     CANDIDATE_CONFIRM_INFO_KEY = b'candidate_confirm_info_key'
     PREPS_KEY = b'preps_key'
-    INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
+    LAST_BLOCK_HEIGHT = b'invoke_result_block_height_key'  # don't modify string value. It recorded in block db.
 
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None, tx_queue=None):
         # last block in block db
@@ -663,7 +662,7 @@ class BlockChain:
         byte_length = (bit_length + 7) // 8
         block_height_bytes = block.header.height.to_bytes(byte_length, byteorder='big')
         write_target.put(
-            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
+            BlockChain.LAST_BLOCK_HEIGHT,
             block_height_bytes
         )
 
@@ -683,7 +682,6 @@ class BlockChain:
 
         batch = self._blockchain_store.WriteBatch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
-        batch.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
         batch.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
         batch.put(
             BlockChain.BLOCK_HEIGHT_KEY +
@@ -777,7 +775,7 @@ class BlockChain:
         elif score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
-                    self._blockchain_store.get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
+                    self._blockchain_store.get(BlockChain.LAST_BLOCK_HEIGHT)
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
                 if invoke_result_block_height == next_height:
@@ -981,10 +979,14 @@ class BlockChain:
     def _init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
         try:
-            last_block_key = self._blockchain_store.get(BlockChain.LAST_BLOCK_KEY, verify_checksums=True)
+            block_height = int.from_bytes(self._blockchain_store.get(BlockChain.LAST_BLOCK_HEIGHT), byteorder='big')
+            last_block_key = self._blockchain_store.get(
+                BlockChain.BLOCK_HEIGHT_KEY +
+                block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+            )
         except KeyError:
             last_block_key = None
-        logging.debug("LAST BLOCK KEY : %s", last_block_key)
+        utils.logger.debug(f"LAST BLOCK KEY : {last_block_key}")
 
         if last_block_key:
             block_dump = self._blockchain_store.get(last_block_key)
