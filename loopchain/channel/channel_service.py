@@ -357,7 +357,7 @@ class ChannelService:
             )
             """
             process_args = ['pypy3', '-m', 'iconservice', 'start',
-                            '-c', '../pypy_perf/icon-service/iconservice_conf.json']
+                            '-c', './conf/mainnet/iconservice_conf.json']
             self.__score_container = CommonSubprocess(process_args)
 
         await StubCollection().create_icon_score_stub(ChannelProperty().name)
