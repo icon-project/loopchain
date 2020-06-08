@@ -9,7 +9,8 @@ class BlockVote(Vote):
     LazyVote = Hash32(bytes([255] * 32))
 
     def __init__(self, data_id: Hash32, commit_id: Hash32, voter_id: ExternalAddress, epoch_num: int, round_num: int,
-                 state_hash: Hash32, receipt_hash: Hash32, timestamp: int, signature: Signature, height: int, _hash=None):
+                 state_hash: Hash32, receipt_hash: Hash32, next_validators_hash: Hash32,
+                 timestamp: int, signature: Signature, height: int, _hash=None):
         """Vote.
 
         :param state_hash:
@@ -34,6 +35,7 @@ class BlockVote(Vote):
         # Not in Interface
         self._state_hash: Hash32 = state_hash
         self._receipt_hash: Hash32 = receipt_hash
+        self._next_validators_hash: Hash32 = next_validators_hash
         self._timestamp: int = timestamp
         self._signature: Signature = signature
 
@@ -54,7 +56,8 @@ class BlockVote(Vote):
                f"epoch_num={self._epoch_num}, " \
                f"round_num={self._round_num}, " \
                f"state_hash={self._state_hash}, " \
-               f"receipt_hash={self._receipt_hash}, " \
+               f"receipt_hash={self._receipt_hash}, "\
+               f"next_validators_hash={self._next_validators_hash}, " \
                f"timestamp={self._timestamp}, " \
                f"signature={self._signature}, " \
                f"hash={self._hash})"
@@ -80,6 +83,10 @@ class BlockVote(Vote):
         return self._commit_id
 
     @property
+    def consensus_id(self) -> Hash32:
+        return self._data_id ^ self._state_hash ^ self._receipt_hash ^ self._next_validators_hash
+
+    @property
     def voter_id(self) -> ExternalAddress:
         return self._voter_id
 
@@ -98,6 +105,10 @@ class BlockVote(Vote):
     @property
     def receipt_hash(self) -> Hash32:
         return self._receipt_hash
+
+    @property
+    def next_validators_hash(self) -> Hash32:
+        return self._next_validators_hash
 
     @property
     def timestamp(self) -> int:
@@ -124,6 +135,7 @@ class BlockVote(Vote):
             "commitHash": self._commit_id.hex_0x(),
             "stateHash": self._state_hash.hex_0x(),
             "receiptHash": self._receipt_hash.hex_0x(),
+            "nextValidatorsHash": self._next_validators_hash.hex_0x(),
             "epoch": hex(self._epoch_num),
             "round": hex(self._round_num),
             "signature": self._signature.to_base64str()
@@ -134,6 +146,7 @@ class BlockVote(Vote):
         return cls(
             state_hash=Hash32.fromhex(data["stateHash"]),
             receipt_hash=Hash32.fromhex(data["receiptHash"]),
+            next_validators_hash=Hash32.fromhex(data["nextValidatorsHash"]),
             data_id=Hash32.fromhex(data["blockHash"]),
             commit_id=Hash32.fromhex(data["commitHash"]),
             voter_id=ExternalAddress.fromhex_address(data["validator"]),

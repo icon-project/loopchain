@@ -17,7 +17,7 @@ class BlockVoteFactory(VoteFactory):
         self._voter_id = ExternalAddress.fromhex(self._signer.address)
 
     def _get_signature(self, voter_id, height: int, commit_id, data_id,
-                       epoch_num, state_hash, receipt_hash, round_num, timestamp) -> Signature:
+                       epoch_num, state_hash, receipt_hash, next_validators_hash, round_num, timestamp) -> Signature:
         origin_data = {
             "validator": voter_id.hex_hx(),
             "timestamp": hex(timestamp),
@@ -26,6 +26,7 @@ class BlockVoteFactory(VoteFactory):
             "commitHash": Hash32(commit_id),
             "stateHash": state_hash,
             "receiptHash": receipt_hash,
+            "nextValidatorsHash": next_validators_hash,
             "epoch": epoch_num,
             "round": round_num
         }
@@ -47,6 +48,7 @@ class BlockVoteFactory(VoteFactory):
             epoch_num=epoch_num,
             state_hash=invoke_data.state_hash,
             receipt_hash=invoke_data.receipt_hash,
+            next_validators_hash=invoke_data.next_validators_hash,
             round_num=round_num,
             timestamp=timestamp
         )
@@ -55,6 +57,7 @@ class BlockVoteFactory(VoteFactory):
             voter_id=self._voter_id,
             receipt_hash=invoke_data.receipt_hash,
             state_hash=invoke_data.state_hash,
+            next_validators_hash=invoke_data.next_validators_hash,
             data_id=Hash32(data_id),
             commit_id=Hash32(commit_id),
             timestamp=timestamp,
@@ -76,6 +79,7 @@ class BlockVoteFactory(VoteFactory):
             epoch_num=epoch_num,
             state_hash=BlockVote.NoneVote,
             receipt_hash=BlockVote.NoneVote,
+            next_validators_hash=BlockVote.NoneVote,
             round_num=round_num,
             timestamp=timestamp
         )
@@ -84,6 +88,7 @@ class BlockVoteFactory(VoteFactory):
             height=0,
             receipt_hash=BlockVote.NoneVote,
             state_hash=BlockVote.NoneVote,
+            next_validators_hash=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
             commit_id=BlockVote.NoneVote,
             voter_id=self._voter_id,
@@ -98,11 +103,12 @@ class BlockVoteFactory(VoteFactory):
         signature = self._get_signature(
             height=0,
             voter_id=self._voter_id,
-            commit_id=BlockVote.NoneVote,
-            data_id=BlockVote.NoneVote,
+            commit_id=BlockVote.LazyVote,
+            data_id=BlockVote.LazyVote,
             epoch_num=epoch_num,
-            state_hash=BlockVote.NoneVote,
-            receipt_hash=BlockVote.NoneVote,
+            state_hash=BlockVote.LazyVote,
+            receipt_hash=BlockVote.LazyVote,
+            next_validators_hash=BlockVote.LazyVote,
             round_num=round_num,
             timestamp=timestamp
         )
@@ -111,6 +117,7 @@ class BlockVoteFactory(VoteFactory):
             height=0,
             receipt_hash=BlockVote.LazyVote,
             state_hash=BlockVote.LazyVote,
+            next_validators_hash=BlockVote.LazyVote,
             data_id=BlockVote.LazyVote,
             commit_id=BlockVote.LazyVote,
             voter_id=self._voter_id,

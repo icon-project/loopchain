@@ -1,12 +1,13 @@
+import pytest
+
+from loopchain.blockchain import Hash32
 from loopchain.blockchain.votes.v1_0.vote import BlockVote
 
 
 class TestVote_v1_0:
-    def test_vote_deserialized(self):
-        """Test deserialize."""
-
-        # GIVEN I got serialized BlockVote
-        dumped_vote = {
+    @pytest.fixture
+    def dumped_vote(self) -> dict:
+        return {
             "!type": "loopchain.blockchain.votes.v1_0.vote.BlockVote",
             "!data": {
                 "validator": "hx9f049228bade72bc0a3490061b824f16bbb74589",
@@ -16,6 +17,7 @@ class TestVote_v1_0:
                 "commitHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3d",
                 "stateHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3e",
                 "receiptHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3f",
+                "nextValidatorsHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3a",
                 "epoch": "0x2",
                 "round": "0x1",
                 "signature": "aC8qGOAO5Fz/lNVZW5nHdR8MiNj5WaDr+2IimKiYJ9dAXLQoaolOU/"
@@ -23,6 +25,14 @@ class TestVote_v1_0:
             }
         }
 
+    @pytest.fixture
+    def vote(self, dumped_vote) -> BlockVote:
+        return BlockVote.deserialize(dumped_vote)
+
+    def test_vote_deserialized(self, dumped_vote):
+        """Test deserialize."""
+
+        # GIVEN I got serialized BlockVote
         # WHEN BlockVote is deserialized
         vote: BlockVote = BlockVote.deserialize(dumped_vote)
 
@@ -39,3 +49,10 @@ class TestVote_v1_0:
 
         # AND custom properties also should be identical
         assert vote.id == vote.hash
+
+    def test_consensus_hash(self, vote: BlockVote):
+        expected = vote.data_id ^ vote.receipt_hash ^ vote.state_hash ^ vote.next_validators_hash
+
+        assert isinstance(vote.consensus_id, Hash32)
+        assert vote.consensus_id == expected
+        assert vote.data_id ^ vote.receipt_hash == vote.receipt_hash ^ vote.data_id
