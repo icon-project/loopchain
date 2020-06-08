@@ -368,7 +368,12 @@ class BlockChain:
         return total_tx
 
     def _rebuild_transaction_count_from_cached(self):
-        tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
+        block_height_encoded = self.__last_block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+        try:
+            tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY + block_height_encoded)
+        except KeyError:
+            tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
+
         return int.from_bytes(tx_count_bytes, byteorder='big')
 
     def __find_block_by_key(self, key):
@@ -679,14 +684,12 @@ class BlockChain:
         block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+        block_height_encoded = block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
 
         batch = self._blockchain_store.WriteBatch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
-        batch.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-        batch.put(
-            BlockChain.BLOCK_HEIGHT_KEY +
-            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-            block_hash_encoded)
+        batch.put(BlockChain.TRANSACTION_COUNT_KEY + block_height_encoded, next_total_tx_bytes)
+        batch.put(BlockChain.BLOCK_HEIGHT_KEY + block_height_encoded, block_hash_encoded)
 
         if receipts:
             self._write_tx(block, receipts, batch)
