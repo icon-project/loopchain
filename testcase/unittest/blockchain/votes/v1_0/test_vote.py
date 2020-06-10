@@ -51,7 +51,7 @@ class TestVote_v1_0:
         assert vote.id == vote.hash
 
     def test_consensus_hash(self, vote: BlockVote):
-        expected = vote.data_id ^ vote.receipt_hash ^ vote.state_hash ^ vote.next_validators_hash
+        expected = Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000007")
 
         assert isinstance(vote.consensus_id, Hash32)
         assert vote.consensus_id == expected
