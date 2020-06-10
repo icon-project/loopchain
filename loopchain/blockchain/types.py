@@ -78,6 +78,13 @@ class VarBytes(Bytes):
 class Hash32(VarBytes):
     size = 32
 
+    def __xor__(self, other: 'Hash32'):
+        me = bytearray(self)
+        for idx, byte in enumerate(other):
+            me[idx] ^= byte
+
+        return Hash32(me)
+
 
 class Address(Bytes, metaclass=ABCMeta):
     size = 20

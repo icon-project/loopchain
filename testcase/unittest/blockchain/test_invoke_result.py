@@ -215,6 +215,7 @@ class TestInvokeRequest:
                 round_num=1,
                 state_hash=Hash32.new(),
                 receipt_hash=Hash32.new(),
+                next_validators_hash=Hash32.new(),
                 timestamp=1,
                 signature=Signature.new()
             ) for validator, vote_result in zip(validators, vote_results)
