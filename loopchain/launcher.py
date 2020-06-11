@@ -115,7 +115,7 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    ChannelService(channel, amqp_target, amqp_key).serve()
+    ChannelService(channel, amqp_target, amqp_key, rollback=args.rollback).serve()
 
 
 def start_as_rest_server(args):

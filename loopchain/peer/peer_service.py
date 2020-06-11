@@ -259,7 +259,8 @@ class PeerService:
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
                 command_arguments.Type.ConfigurationFilePath,
-                command_arguments.Type.RadioStationTarget
+                command_arguments.Type.RadioStationTarget,
+                command_arguments.Type.Rollback
             )
 
             service = CommonSubprocess(args)

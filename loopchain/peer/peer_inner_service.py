@@ -42,7 +42,7 @@ class PeerInnerTask:
         for stub in StubCollection().channel_stubs.values():
             await stub.async_task().stop(message)
 
-        util.exit_and_msg(message)
+        self._peer_service.close()
 
 
 class PeerInnerService(MessageQueueService[PeerInnerTask]):

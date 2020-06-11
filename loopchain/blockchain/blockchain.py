@@ -296,7 +296,7 @@ class BlockChain:
 
                 return self.__remove_block_up_to_target(target_block)
 
-    def roll_back(self, target_block):
+    def rollback(self, target_block):
         self.__remove_block_up_to_target(target_block)
 
     def rebuild_made_block_count(self):
