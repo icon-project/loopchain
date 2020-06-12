@@ -22,7 +22,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, ConsensusChanged
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
@@ -230,7 +230,7 @@ class ConsensusSiever(ConsensusBase):
                                                            True)
                 self._blockchain.last_unconfirmed_block = candidate_block
                 try:
-                    await self._wait_for_voting(candidate_block)
+                    votes = await self._wait_for_voting(candidate_block)
                 except NotEnoughVotes:
                     return
 

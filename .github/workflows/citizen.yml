@@ -42,11 +42,6 @@ jobs:
         cd -
         icon_rc -version
 
-    - name: Install Loopchain
-      run: |
-        pwd
-        make develop
-
     - name: Generate-key
       run: |
         sed "23 a\  \"PRIVATE_PASSWORD\": \"${pwd}\"," -i conf/mainnet/loopchain_conf.json
@@ -56,6 +51,11 @@ jobs:
         tbears keystore -p ${pwd} my_keystore.json
       env:
         pwd: Most_safest_pw_in_the_wor1d
+
+    - name: Install Loopchain
+      run: |
+        pwd
+        make develop
 
     - name: Sync to MainNet
       run: |
