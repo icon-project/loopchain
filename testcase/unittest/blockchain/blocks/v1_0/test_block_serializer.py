@@ -1,12 +1,17 @@
+import itertools
+
+import pytest
+
+from loopchain.blockchain.blocks import BlockSerializer
+from loopchain.blockchain.blocks.v1_0.block import Block
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.transactions.v3 import TransactionSerializer
-from loopchain.blockchain.blocks.v1_0.block import Block
 
 
 class TestBlockSerializer:
-    def test_block_deserialized(self):
-        # GIVEN I got a serialized Block
-        dumped_block = {
+    @pytest.fixture
+    def dumped_block(self):
+        return {
             "!type": "loopchain.blockchain.blocks.v1_0.block.Block",
             "!data": {
                 "version": "1.0",
@@ -57,6 +62,7 @@ class TestBlockSerializer:
                         "commitHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3d",
                         "stateHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3e",
                         "receiptHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3f",
+                        "nextValidatorsHash": "0x0399e62d77438f940dd207a2ba4593d2b231214606140c0ee6fa8f4fa7ff1d3b",
                         "epoch": "0x2",
                         "round": "0x1",
                         "signature": "aC8qGOAO5Fz/lNVZW5nHdR8MiNj5WaDr+2IimKiYJ9dAXLQoaolOU/"
@@ -66,9 +72,23 @@ class TestBlockSerializer:
             }
         }
 
+    @pytest.fixture
+    def block_serializer(self):
+        return BlockSerializer.new(version="1.0", tx_versioner=TransactionVersioner())
+
+    def test_serializer_version_check(self, block_serializer):
+        assert block_serializer.version == "1.0"
+
+    @pytest.mark.parametrize("use_serializer", [True, False], ids=["BlockSerializer", "DataItself"])
+    def test_deserialize_value_check(self, dumped_block, block_serializer, use_serializer):
+        # GIVEN I got a dumped block
+        block_data: dict = dumped_block["!data"]
+
         # WHEN I deserialized it
-        block: Block = Block.deserialize(dumped_block)
-        block_data = dumped_block["!data"]
+        if use_serializer:
+            block: Block = block_serializer.deserialize(block_data)
+        else:
+            block: Block = Block.deserialize(dumped_block)  # Checks LFT interface
 
         # Then all properties of block header must be same
         header = block._header
@@ -91,7 +111,9 @@ class TestBlockSerializer:
 
         # AND all properties of block body must be same
         body = block._body
-        assert body.prev_votes == block_data["prevVotes"]
+        prev_votes = itertools.zip_longest(body.prev_votes, block_data["prevVotes"])
+        for deserialized_vote, serialized_vote in prev_votes:
+            assert deserialized_vote.serialize()["!data"] == serialized_vote
 
         # AND also transactions
         for deserialized_tx_hash_and_tx, orig_tx in zip(body.transactions.items(), block_data["transactions"]):
@@ -100,3 +122,21 @@ class TestBlockSerializer:
             dumped_tx = serializer.to_full_data(des_tx)
 
             assert dumped_tx == orig_tx
+
+    @pytest.mark.parametrize("use_serializer", [True, False], ids=["BlockSerializer", "DataItself"])
+    def test_deserialize_serialize_identical(self, dumped_block, block_serializer, use_serializer):
+        # GIVEN I got a dumped block
+        block_data: dict = dumped_block["!data"]
+
+        # WHEN I deserialize dumped block and serialize it again
+        if use_serializer:
+            block: Block = block_serializer.deserialize(block_data)
+            block_dict_restructed: dict = block_serializer.serialize(block)
+        else:
+            block: Block = Block.deserialize(dumped_block)  # Checks LFT interface
+            block_dict_restructed: dict = block.serialize()["!data"]  # Checks LFT interface
+
+        # THEN two dicts must be equal, except hex ones
+        block_dict_restructed["epoch"] = hex(block_dict_restructed.pop("epoch"))
+        block_dict_restructed["round"] = hex(block_dict_restructed.pop("round"))
+        assert block_data == block_dict_restructed
