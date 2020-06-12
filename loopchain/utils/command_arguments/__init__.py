@@ -30,6 +30,7 @@ class Type(IntEnum):
     AMQPTarget = 9
     AMQPKey = 10
     Version = 11
+    Rollback = 12
 
 
 class Attribute:
@@ -62,7 +63,9 @@ types_by_names = {
     "channel": Type.Channel,
     "amqp_target": Type.AMQPTarget,
     "amqp_key": Type.AMQPKey,
-    "version": Type.Version
+    "version": Type.Version,
+    "rollback": Type.Rollback
+
 }
 
 attributes = {
@@ -87,7 +90,7 @@ attributes = {
                        "or just [IP Address of Radio Station]"),
     Type.Develop:
         Attribute("-d", "--develop", action="store_true",
-                  help="set log level to SPAM (low develop mode)"),
+                  help="develop mode(log level, etc)"),
 
     Type.AgentPin:
         Attribute("-a", "--agent_pin",
@@ -117,7 +120,11 @@ attributes = {
 
     Type.Version:
         Attribute("--version", action='store_true',
-                  help="show version of loopchain and it's dependencies")
+                  help="show version of loopchain and it's dependencies"),
+
+    Type.Rollback:
+        Attribute("--rollback", action='store_true',
+                  help="rollback behind to 1 block(max 10 blocks is possible to rollback")
 }
 
 command_values: Dict[Type, str] = {}
