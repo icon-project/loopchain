@@ -657,9 +657,6 @@ class BlockChain:
 
             tx_queue.pop(tx_hash, None)
 
-            if block.header.height > 0:
-                self._write_tx_by_address(tx, batch)
-
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
         byte_length = (bit_length + 7) // 8
@@ -786,27 +783,9 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    def _write_tx_by_address(self, tx: 'Transaction', batch):
-        if tx.type() == "base":
-            return
-        address = tx.from_address.hex_hx()
-        return self.add_tx_to_list_by_address(address, tx.hash.hex(), batch)
-
     @staticmethod
     def __get_tx_list_key(address, index):
         return conf.TX_LIST_ADDRESS_PREFIX + (address + str(index)).encode(encoding=conf.HASH_KEY_ENCODING)
-
-    def get_tx_list_by_address(self, address, index=0):
-        list_key = self.__get_tx_list_key(address, index)
-
-        try:
-            tx_list = pickle.loads(self._blockchain_store.get(list_key))
-            next_index = tx_list[-1]
-        except KeyError:
-            tx_list = [0]  # 0 means there is no more list after this.
-            next_index = 0
-
-        return tx_list, next_index
 
     def find_nid(self):
         try:
@@ -819,22 +798,6 @@ class BlockChain:
         except KeyError as e:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
-
-    def add_tx_to_list_by_address(self, address, tx_hash, batch=None):
-        write_target = batch or self._blockchain_store
-        current_list, current_index = self.get_tx_list_by_address(address, 0)
-
-        if len(current_list) > conf.MAX_TX_LIST_SIZE_BY_ADDRESS:
-            new_index = current_index + 1
-            new_list_key = self.__get_tx_list_key(address, new_index)
-            self._blockchain_store.put(new_list_key, pickle.dumps(current_list))
-            current_list = [new_index]
-
-        current_list.insert(0, tx_hash)
-        list_key = self.__get_tx_list_key(address, 0)
-        write_target.put(list_key, pickle.dumps(current_list))
-
-        return True
 
     def find_tx_by_key(self, tx_hash_key):
         """find tx by hash

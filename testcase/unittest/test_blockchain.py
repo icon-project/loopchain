@@ -112,29 +112,6 @@ class TestBlockChain(unittest.TestCase):
         util.logger.spam(f"test_blockchain:test_nonce new_nonce({next_new_nonce})")
         self.assertEqual(hex(int(new_nonce, 16) + 1), next_new_nonce)
 
-    def test_tx_list_by_address(self):
-        """test add tx_hash to tx_list by address
-
-        :return:
-        """
-        # GIVEN
-        for i in range(201):
-            self.chain.add_tx_to_list_by_address("ABC", "112233_" + str(i))
-
-        # WHEN
-        current_tx_list, last_list_index = self.chain.get_tx_list_by_address("ABC")
-        util.logger.spam(f"test_get_current_tx_list_by_address "
-                         f"length of tx_list({len(current_tx_list)}) next_index({last_list_index})")
-
-        oldest_tx_list, first_index = self.chain.get_tx_list_by_address("ABC", 1)
-        util.logger.spam(f"test_get_oldest_tx_list_by_address "
-                         f"length of tx_list({len(oldest_tx_list)}) next_index({first_index})")
-
-        # THEN
-        self.assertEqual(first_index, 0)
-        self.assertEqual(last_list_index, 2)
-        self.assertEqual(len(oldest_tx_list), conf.MAX_TX_LIST_SIZE_BY_ADDRESS + 1)
-
     def test_find_block_by_height(self):
         # GIVEN
         size = 10
