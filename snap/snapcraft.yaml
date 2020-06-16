@@ -34,9 +34,9 @@ parts:
       - bin/rctool
   python3:
     after: [ snapcraft-preload ]
-    source: https://www.python.org/ftp/python/3.7.3/Python-3.7.3.tar.xz
+    source: https://www.python.org/ftp/python/3.7.7/Python-3.7.7.tar.xz
     source-type: tar
-    source-checksum: md5/93df27aec0cd18d6d42173e601ffbbfd
+    source-checksum: md5/172c650156f7bea68ce31b2fd01fa766
     plugin: autotools
     configflags: [--prefix=/usr]
     build-packages:
@@ -89,7 +89,6 @@ parts:
       snapcraftctl set-version $(cat VERSION)
       snapcraftctl set-grade stable
     override-build: |
-      # cat VERSION > $SNAPCRAFT_STAGE/version
       snapcraftctl build
       cat > $SNAPCRAFT_PART_INSTALL/bin/init.sh <<EOF
       #!/bin/bash

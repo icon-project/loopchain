@@ -40,8 +40,8 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice==1.6.1
-	$(PIP_INSTALL) iconrpcserver==1.4.9
+	$(PIP_INSTALL) iconservice==1.7.0
+	$(PIP_INSTALL) iconrpcserver==1.5.0
 	$(PIP_INSTALL) tbears
 
 ## pip install packages
