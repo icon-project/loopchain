@@ -4,8 +4,6 @@ Candidate Blocks, Quorum, Votes and Leader Complaints.
 
 from typing import Dict, Optional, TYPE_CHECKING
 
-from pkg_resources import parse_version
-
 from loopchain import utils, configure as conf
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.votes.votes import VoteError, Votes
@@ -48,11 +46,10 @@ class ComplainVoteControl:
         else:
             return None
 
-    def init_complain_votes(self, ratio, reps, version, height, round_, leader_id):
-        # TODO After the v0.4 update, remove this version parsing.
+    def init_complain_votes(self, reps, version, height, round_, leader_id):
         leader_votes = Votes.get_leader_votes_class(version)(
             reps,
-            ratio,
+            conf.VOTING_RATIO,
             height,
             round_,
             ExternalAddress.fromhex_address(leader_id)
@@ -61,12 +58,9 @@ class ComplainVoteControl:
 
 
 class Epoch:
-    def __init__(self, blockchain: 'BlockChain', leader_id=None):
+    def __init__(self, reps_hash, reps, version, height=None, leader_id=None):
         self.leader_vote_manager = ComplainVoteControl()
-        if blockchain.last_block:
-            self.height = blockchain.last_block.header.height + 1
-        else:
-            self.height = 1
+        self.height = height + 1 if height else 1
         self.leader_id = leader_id
         utils.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
 
@@ -77,33 +71,35 @@ class Epoch:
         self.reps_hash = None  # init by self.new_votes()
         self.reps = []  # init by self.new_votes()
 
-        self.new_votes(blockchain)
+        self.new_votes(reps_hash, reps, version)
 
     @property
     def complain_duration(self):
         return min((2 ** self.round) * conf.TIMEOUT_FOR_LEADER_COMPLAIN, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
 
-    def new_round(self, new_leader_id, blockchain):
+    @classmethod
+    def new(cls, blockchain: 'BlockChain', leader_id=None):
+        reps_hash = blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
+        reps = blockchain.find_preps_addresses_by_roothash(reps_hash)
+        height = blockchain.last_block.header.height
+        version = blockchain.block_versioner.get_version(height)
+
+        return cls(
+            reps_hash, reps, version, height, leader_id
+        )
+
+    def new_round(self, new_leader_id, reps_hash, reps, version):
         self._set_epoch_leader(new_leader_id)
         self.round += 1
         utils.logger.debug(f"new round {self.round-1}, {self.round}")
 
-        self.new_votes(blockchain)
+        self.new_votes(reps_hash, reps, version)
 
-    def new_votes(self, blockchain):
-        self.reps_hash = blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
-        self.reps = blockchain.find_preps_addresses_by_roothash(self.reps_hash)
+    def new_votes(self, reps_hash, reps, version):
+        self.reps_hash = reps_hash
+        self.reps = reps
 
-        ratio = self._get_ratio(blockchain.last_block.header.version)
-        version = blockchain.block_versioner.get_version(self.height)
-
-        self.leader_vote_manager.init_complain_votes(ratio, self.reps, version, self.height, self.round, self.leader_id)
-
-    def _get_ratio(self, last_block_version):
-        if parse_version(last_block_version) >= parse_version("0.4"):
-            return conf.VOTING_RATIO
-        else:
-            return conf.LEADER_COMPLAIN_RATIO
+        self.leader_vote_manager.init_complain_votes(self.reps, version, self.height, self.round, self.leader_id)
 
     def _set_epoch_leader(self, leader_id):
         utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")

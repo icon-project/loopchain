@@ -2,15 +2,15 @@ import logging
 import os
 import random
 import threading
+import time
 from typing import List, Tuple, Callable
 
 import pytest
-import time
 
 from loopchain import configure
 from loopchain.baseservice.tx_message import TxItem, TxMessages, TxMessagesQueue
-from loopchain.blockchain import ExternalAddress, Transaction
-from loopchain.blockchain.transactions import TransactionVersioner, TransactionBuilder
+from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionBuilder
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.crypto.signature import Signer
 
 Logger = logging.getLogger(__name__)

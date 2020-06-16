@@ -6,13 +6,12 @@ from lft.consensus.messages.data import DataFactory
 
 from loopchain import configure_default as conf
 from loopchain import utils
-from loopchain.blockchain import Hash32, TransactionStatusInQueue, ExternalAddress
 from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader, BlockBody
 from loopchain.blockchain.blocks.v1_0.block_builder import BlockBuilder
 from loopchain.blockchain.blocks.v1_0.block_verifier import BlockVerifier
 from loopchain.blockchain.invoke_result import InvokeData, InvokePool
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionSerializer
-from loopchain.blockchain.types import BloomFilter
+from loopchain.blockchain.types import BloomFilter, Hash32, TransactionStatusInQueue, ExternalAddress
 from loopchain.crypto.signature import Signer
 from loopchain.store.key_value_store import KeyValueStore
 

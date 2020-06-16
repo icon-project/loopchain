@@ -8,9 +8,8 @@ import pytest
 from pkg_resources import parse_version
 from plyvel._plyvel import Error
 
-from loopchain.blockchain import TransactionVerifier
 from loopchain.blockchain.blocks import BlockVersioner, BlockVerifier, BlockSerializer
-from loopchain.blockchain.transactions import TransactionVersioner
+from loopchain.blockchain.transactions import TransactionVersioner, TransactionVerifier
 
 Logger = logging.getLogger(__name__)
 
