@@ -64,7 +64,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
+    def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None, tx_queue=None):
         # last block in block db
         self.__last_block = None
         self.__made_block_counter = MadeBlockCounter()
@@ -78,6 +78,7 @@ class BlockChain:
         # FIXME : old_store_id is temporary code to rename dbpath
         old_store_id = f"{ChannelProperty().peer_target}_{channel_name}"
         self._blockchain_store = utils.init_default_key_value_store(old_store_id, store_id)
+        self.__tx_queue: AgingCache = tx_queue
 
         # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
         self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
@@ -636,7 +637,7 @@ class BlockChain:
 
         # loop all tx in block
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        tx_queue = self.__block_manager.get_tx_queue()
+        tx_queue = self.__tx_queue
 
         for index, tx in enumerate(block.body.transactions.values()):
             tx_hash = tx.hash.hex()
@@ -867,7 +868,7 @@ class BlockChain:
         try:
             tx_info = self.find_tx_info(tx_hash)
         except KeyError as e:
-            if tx_hash in self.__block_manager.get_tx_queue():
+            if tx_hash in self.__tx_queue:
                 # this case is tx pending
                 logging.debug(f"blockchain:find_invoke_result_by_tx_hash pending tx({tx_hash})")
                 return {'code': ScoreResponse.NOT_INVOKED}

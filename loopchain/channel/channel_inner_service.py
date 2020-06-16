@@ -8,15 +8,15 @@ from collections import namedtuple
 from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
+from lft.consensus.events import ReceiveVoteEvent
 from pkg_resources import parse_version
 
-from lft.consensus.events import ReceiveVoteEvent
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
                                    ScoreResponse)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.blockchain.blocks import Block, BlockSerializer
+from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
@@ -29,6 +29,7 @@ from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
+    from loopchain.baseservice.aging_cache import AgingCache
     from loopchain.channel.channel_service import ChannelService
     from lft.event import EventSystem
 
@@ -382,10 +383,11 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 
 
 class ChannelInnerTask:
-    def __init__(self, channel_service: 'ChannelService'):
+    def __init__(self, channel_service: 'ChannelService', tx_queue: 'AgingCache'):
         self._channel_service = channel_service
         self._block_manager = None
         self._blockchain = None
+        self._tx_queue: 'AgingCache' = tx_queue
 
         # Citizen
         CitizenInfo = namedtuple("CitizenInfo", "peer_id target connected_time")
@@ -460,7 +462,7 @@ class ChannelInnerTask:
 
     def __add_tx_list(self, tx_list):
         for tx in tx_list:
-            if tx.hash.hex() in self._block_manager.get_tx_queue():
+            if tx.hash.hex() in self._tx_queue:
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in transaction queue.")
                 continue
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
@@ -585,7 +587,7 @@ class ChannelInnerTask:
         status_data["epoch_height"] = self._block_manager.epoch.height if self._block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
         status_data["total_tx"] = self._block_manager.get_total_tx()
-        status_data["unconfirmed_tx"] = self._block_manager.get_count_of_unconfirmed_tx()
+        status_data["unconfirmed_tx"] = len(self._tx_queue)
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
         status_data["peer_count"] = peer_count
@@ -597,7 +599,7 @@ class ChannelInnerTask:
 
     @message_queue_task
     def get_tx_info(self, tx_hash):
-        tx = self._block_manager.get_tx_queue().get(tx_hash, None)
+        tx = self._tx_queue.get(tx_hash, None)
         if tx:
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self._blockchain.tx_versioner)
             tx_origin = tx_serializer.to_origin_data(tx)
