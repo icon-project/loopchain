@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from loopchain.baseservice.aging_cache import AgingCache
     from loopchain.channel.channel_service import ChannelService
     from lft.event import EventSystem
+    from loopchain.blockchain.blockchain import BlockChain
 
 
 class ChannelTxCreatorInnerTask:
@@ -386,7 +387,7 @@ class ChannelInnerTask:
     def __init__(self, channel_service: 'ChannelService', tx_queue: 'AgingCache'):
         self._channel_service = channel_service
         self._block_manager = None
-        self._blockchain = None
+        self._blockchain: 'BlockChain' = None
         self._tx_queue: 'AgingCache' = tx_queue
 
         # Citizen
@@ -469,7 +470,7 @@ class ChannelInnerTask:
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
 
-            self._block_manager.add_tx_obj(tx)
+            self._tx_queue[tx.hash.hex()] = tx
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -586,7 +587,7 @@ class ChannelInnerTask:
         status_data["round"] = self._block_manager.epoch.round if self._block_manager.epoch else -1
         status_data["epoch_height"] = self._block_manager.epoch.height if self._block_manager.epoch else -1
         status_data["unconfirmed_block_height"] = unconfirmed_block_height or -1
-        status_data["total_tx"] = self._block_manager.get_total_tx()
+        status_data["total_tx"] = self._blockchain.total_tx
         status_data["unconfirmed_tx"] = len(self._tx_queue)
         status_data["peer_target"] = ChannelProperty().peer_target
         status_data["leader_complaint"] = 1
@@ -613,7 +614,7 @@ class ChannelInnerTask:
             return message_code.Response.success, tx_info
         else:
             try:
-                return message_code.Response.success, self._block_manager.get_tx_info(tx_hash)
+                return message_code.Response.success, self._blockchain.find_tx_info(tx_hash)
             except KeyError as e:
                 logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
                 response_code = message_code.Response.fail_invalid_key_error
@@ -746,7 +747,7 @@ class ChannelInnerTask:
     @message_queue_task
     def get_invoke_result(self, tx_hash):
         try:
-            invoke_result = self._block_manager.get_invoke_result(tx_hash)
+            invoke_result = self._blockchain.find_invoke_result_by_tx_hash(tx_hash)
             invoke_result_str = json.dumps(invoke_result)
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
@@ -781,7 +782,7 @@ class ChannelInnerTask:
 
         confirmed_tx_list_without_fail = []
         for tx in block.body.transactions.values():
-            invoke_result = self._block_manager.get_invoke_result(tx.hash)
+            invoke_result = self._blockchain.find_invoke_result_by_tx_hash(tx.hash)
 
             if 'failure' in invoke_result:
                 continue

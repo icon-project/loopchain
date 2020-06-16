@@ -780,10 +780,6 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    @staticmethod
-    def __get_tx_list_key(address, index):
-        return conf.TX_LIST_ADDRESS_PREFIX + (address + str(index)).encode(encoding=conf.HASH_KEY_ENCODING)
-
     def find_nid(self):
         try:
             if self.__nid is not None:
@@ -796,7 +792,7 @@ class BlockChain:
             logging.debug(f"blockchain:get_nid::There is no NID.")
             return None
 
-    def find_tx_by_key(self, tx_hash_key):
+    def find_tx_by_key(self, tx_hash_key) -> Optional[Transaction]:
         """find tx by hash
 
         :param tx_hash_key: tx hash
@@ -839,6 +835,11 @@ class BlockChain:
         return tx_info['result']
 
     def find_tx_info(self, tx_hash_key: Union[str, Hash32]):
+        """Get transaction info from block_db by tx_hash
+
+        :param tx_hash_key: tx hash key
+        :return: {'block_hash': "", 'block_height': "", "transaction": "", "result": {"code": ""}}
+        """
         if isinstance(tx_hash_key, Hash32):
             tx_hash_key = tx_hash_key.hex()
 
