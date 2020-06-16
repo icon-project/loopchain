@@ -198,11 +198,11 @@ def start_as_tool(args, quick_command):
     print_prologue()
 
     try:
-        from _tools.loopchain_private_tools.demotool import DemoTool
+        from loopchain_tools.tools.basictool import BasicTool
     except Exception as e:
         logging.error(f"tool service does not be provided. {e}")
     else:
-        DemoTool().main()
+        BasicTool().main()
 
     print_epilogue()
 
