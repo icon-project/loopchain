@@ -838,12 +838,6 @@ class ChannelInnerTask:
         return block, block_hash, bytes(confirm_info), fail_response_code
 
     @message_queue_task
-    def get_tx_by_address(self, address, index):
-        tx_list, next_index = self._blockchain.get_tx_list_by_address(address=address, index=index)
-
-        return tx_list, next_index
-
-    @message_queue_task
     async def get_tx_proof(self, tx_hash: str) -> Union[list, dict]:
         try:
             proof = self._blockchain.get_transaction_proof(Hash32.fromhex(tx_hash))
