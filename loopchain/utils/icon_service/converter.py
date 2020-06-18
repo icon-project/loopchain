@@ -36,6 +36,7 @@ class ParamType(Enum):
     send_tx_response = 14
     roll_back = 15
     change_block_hash = 16
+    pre_invoke = 17
 
 
 class ValueType(Enum):
@@ -265,6 +266,8 @@ templates[ParamType.write_precommit_state] = {
 templates[ParamType.remove_precommit_state] = templates[ParamType.write_precommit_state]
 
 templates[ParamType.roll_back] = templates[ParamType.write_precommit_state]
+
+templates[ParamType.pre_invoke] = templates[ParamType.write_precommit_state]
 
 templates[ParamType.get_block_by_hash_request] = {
     "hash": ValueType.hex_number

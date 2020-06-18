@@ -16,17 +16,20 @@
 import asyncio
 import json
 from functools import partial
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
 
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock, ConsensusChanged
+from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
+from loopchain.blockchain.transactions import TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.peer.consensus_base import ConsensusBase
+from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
+from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.blockchain import BlockBuilder
@@ -90,6 +93,9 @@ class ConsensusSiever(ConsensusBase):
         block_builder.signer = ChannelProperty().peer_auth
         block_builder.confirm_prev_block = (block_builder.version == '0.1a')
 
+        added_transactions = self.__pre_invoke(last_block.header.height, last_block.header.hash)
+        self.__process_added_transactions(block_builder, added_transactions)
+
         if block_builder.version == '0.1a' or (not block_builder.next_leader and not block_builder.reps):
             block_builder.next_leader = ExternalAddress.fromhex_address(self._block_manager.epoch.leader_id)
             block_builder.reps = self._block_manager.epoch.reps
@@ -102,6 +108,33 @@ class ConsensusSiever(ConsensusBase):
             util.logger.info(f"block_version = {block_builder.version} : {e}")
 
         return block_builder.build()
+
+    def __process_added_transactions(self, block_builder: 'BlockBuilder', added_transactions: dict):
+        """Add added_transactions to block_builder.transactions.
+
+        :param block_builder:
+        :param added_transactions:
+        :return:
+        """
+        for tx_data in added_transactions.values():  # type: dict
+            tx_version, tx_type = self._blockchain.tx_versioner.get_version(tx_data)
+            ts = TransactionSerializer.new(tx_version, tx_type, self._blockchain.tx_versioner)
+            tx = ts.from_(tx_data)
+            block_builder.transactions[tx.hash] = tx
+            block_builder.transactions.move_to_end(tx.hash, last=False)
+
+    def __pre_invoke(self, block_height: int, block_hash: Hash32) -> dict:
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        request = {
+            "blockHeight": block_height,
+            "blockHash": block_hash.hex()
+        }
+        request = convert_params(request, ParamType.pre_invoke)
+        response: dict = cast(dict, stub.sync_task().pre_invoke(request))
+        response_to_json_query(response)
+
+        added_transactions = response.get("addedTransactions", {})
+        return added_transactions
 
     async def __add_block(self, block: Block):
         vote = await self._wait_for_voting(block)

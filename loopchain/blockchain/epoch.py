@@ -2,10 +2,10 @@
 Candidate Blocks, Quorum, Votes and Leader Complaints.
 """
 
-import time
 import traceback
 from typing import Dict, Optional, TYPE_CHECKING
 
+import time
 from pkg_resources import parse_version
 
 from loopchain import utils, configure as conf

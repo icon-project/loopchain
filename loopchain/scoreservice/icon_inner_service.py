@@ -29,6 +29,10 @@ class IconScoreInnerTask:
         pass
 
     @message_queue_task
+    async def pre_invoke(self, request: dict) -> dict:
+        pass
+
+    @message_queue_task
     async def invoke(self, request: dict) -> dict:
         pass
 
