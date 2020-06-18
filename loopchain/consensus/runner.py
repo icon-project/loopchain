@@ -79,28 +79,13 @@ class ConsensusRunner(EventRegister):
         if round_end_event.is_success:
             consensus_db_pool = self.consensus._data_pool  # FIXME
             blockchain = self._block_manager.blockchain
-            db = blockchain.blockchain_store
 
             try:
                 block: 'Block' = consensus_db_pool.get_data(round_end_event.commit_id)
             except KeyError:
                 utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
             else:
-                blockchain.last_block = block
-                utils.logger.notice(f"> ADDED Block : {block}")
-                block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
-                block_serialized = block.serialize()["!data"]
-                block_serialized = json.dumps(block_serialized).encode(encoding='UTF-8')
-
-                batch = db.WriteBatch()
-                batch.put(block_hash_encoded, block_serialized)
-                batch.put(blockchain.LAST_BLOCK_KEY, block_hash_encoded)
-                batch.put(
-                    blockchain.BLOCK_HEIGHT_KEY +
-                    block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-                    block_hash_encoded
-                )
-                batch.write()
+                blockchain.add_block(block=block, need_to_score_invoke=False)
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):

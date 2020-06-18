@@ -34,6 +34,32 @@ class BlockHeader(BaseBlockHeader):
     prev_receipts_hash: Hash32
     prev_logs_bloom: BloomFilter
 
+    @property
+    def next_leader(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
+        return None
+
+    @property
+    def prep_changed(self) -> bool:
+        """Return reason for prep changed
+
+        :return: False means there is no change.
+        """
+        return self.next_validators_hash != Hash32.empty()
+
+    @property
+    def prep_changed_reason(self) -> None:
+        """If the block version doesn't support this, it should return None.
+        """
+        return None
+
+    @property
+    def revealed_next_reps_hash(self):
+        if self.prep_changed:
+            return self.next_validators_hash
+        return self.validators_hash
+
 
 @dataclass(frozen=True)
 class BlockBody(BaseBlockBody):

@@ -868,8 +868,8 @@ class BlockManager:
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self.__tx_queue, self.blockchain, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
-        if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
-            self.__channel_service.state_machine.start_lft()
+        # if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
+        #     self.__channel_service.state_machine.start_lft()
 
     def stop(self):
         self.__block_height_thread_pool.shutdown()
