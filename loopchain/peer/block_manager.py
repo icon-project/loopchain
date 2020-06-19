@@ -137,13 +137,13 @@ class BlockManager:
 
         if last_block.header.revealed_next_reps_hash:
             if block_.header.is_unrecorded:
-                self._send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
+                self.send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
             else:
-                self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
+                self.send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            self._send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
+            self.send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
 
-    def _send_unconfirmed_block(self, block_: Union[Block, "Data"], target_reps_hash, round_: int):
+    def send_unconfirmed_block(self, block_: Union[Block, "Data"], target_reps_hash, round_: int):
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
             f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "

@@ -7,7 +7,6 @@ from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, Initial
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
 
-from loopchain import configure_default as conf
 from loopchain import utils
 from loopchain.blockchain.epoch3 import LoopchainEpoch
 from loopchain.blockchain.types import ExternalAddress
@@ -46,7 +45,7 @@ class ConsensusRunner(EventRegister):
 
     async def _on_event_broadcast_data(self, event: BroadcastDataEvent):
         target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
-        self._block_manager._send_unconfirmed_block(
+        self._block_manager.send_unconfirmed_block(
             block_=event.data,
             target_reps_hash=target_reps_hash,
             round_=event.data.round_num
@@ -72,10 +71,6 @@ class ConsensusRunner(EventRegister):
 
     # FIXME: Temporary
     async def _write_block(self, round_end_event):
-        utils.logger.notice(f"> EPOCH // ROUND ({round_end_event.epoch_num} // {round_end_event.round_num})")
-        utils.logger.notice(f"> Candidate id: {round_end_event.candidate_id}")
-        utils.logger.notice(f"> Commit id: {round_end_event.commit_id}")
-
         if round_end_event.is_success:
             consensus_db_pool = self.consensus._data_pool  # FIXME
             blockchain = self._block_manager.blockchain

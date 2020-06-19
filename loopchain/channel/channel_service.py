@@ -184,7 +184,8 @@ class ChannelService:
     async def start_lft(self):
         self.__event_system = EventSystem()
         self.__event_system.set_mediator(DelayedEventMediator)
-        self.__inner_service._task._event_system = self.__event_system  # --;.. ChannelInnerTask
+        # FIXME: How to initialize ChannelInnerService._event_system better way?
+        self.__inner_service._task._event_system = self.__event_system
 
         epoch_pool = EpochPool()
         db = self.block_manager.blockchain.blockchain_store
@@ -215,10 +216,14 @@ class ChannelService:
         block: Block = self._generate_genesis_block()
 
         invoke_pool.genesis_invoke(block)
+        initial_epoches = [
+            LoopchainEpoch(num=0, voters=()),
+            LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))
+        ]
 
         event = InitializeEvent(
             commit_id=block.header.prev_hash,
-            epoch_pool=[LoopchainEpoch(num=0, voters=()), LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))],
+            epoch_pool=initial_epoches,
             data_pool=[block],
             vote_pool=[]
         )
@@ -263,14 +268,11 @@ class ChannelService:
 
         tx_builder = TransactionBuilder.new("genesis", "", tx_versioner)
         nid = tx_info.get("nid")
-        if nid is not None:
-            nid = int(nid, 16)
-        tx_builder.nid = nid  # Optional. It will be 0x3 except for mainnet and testnet if not defined
+        tx_builder.nid = int(nid, 16) if nid else None
         tx_builder.accounts = tx_info["accounts"]
         tx_builder.message = tx_info["message"]
 
         return tx_builder.build(False)
-
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")
