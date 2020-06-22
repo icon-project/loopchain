@@ -640,9 +640,8 @@ class BlockChain:
         tx_queue = self.__tx_queue
 
         for index, tx in enumerate(block.body.transactions.values()):
+            receipt = receipts[index]
             tx_hash = tx.hash.hex()
-            receipt = receipts[tx_hash]
-
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
             tx_info = {
                 'block_hash': block.header.hash.hex(),
@@ -1158,7 +1157,7 @@ class BlockChain:
         new_block = block_builder.build()
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, block.header.hash)
 
-        for tx_receipt in tx_receipts.values():
+        for tx_receipt in tx_receipts:
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
@@ -1214,41 +1213,6 @@ class BlockChain:
         block_builder.reps = reps
         block_builder.next_reps = next_preps
         block_builder.next_reps_hash = next_preps_hash
-
-    def _process_added_transactions(self,
-                                    block_builder: BlockBuilder,
-                                    added_transactions: dict,
-                                    tx_receipts: dict,
-                                    is_block_editable: bool):
-        if is_block_editable:
-            original_tx_length: int = len(block_builder.transactions)
-            invoked_tx_length: int = len(tx_receipts) - len(added_transactions)
-            if original_tx_length > invoked_tx_length:
-                # restore tx status to normal and remove tx that dropped in block_builder
-                utils.logger.debug(f"_process_added_transactions() : origin tx length = {original_tx_length}, "
-                                   f"after invoke tx length = {invoked_tx_length}, "
-                                   f"added_transactions length = {len(added_transactions)}")
-                dropped_transactions: List[Transaction] = []
-                for txhash, tx in reversed(block_builder.transactions.items()):  # type: Hash32, Transaction
-                    if txhash.hex() not in tx_receipts:
-                        dropped_transactions.append(tx)
-                        original_tx_length -= 1
-                        if original_tx_length == invoked_tx_length:
-                            break
-
-                for tx in dropped_transactions:  # type: Transaction
-                    self.__block_manager.restore_tx_status(tx)
-                    block_builder.transactions.pop(tx.hash)
-                utils.logger.debug(f"_process_added_transactions() dropped tx length = {len(dropped_transactions)}")
-
-        if added_transactions:
-            # add added_transactions to block_builder.transactions
-            for tx_data in added_transactions.values():  # type: dict
-                tx_version, tx_type = self.__tx_versioner.get_version(tx_data)
-                ts = TransactionSerializer.new(tx_version, tx_type, self.__tx_versioner)
-                tx = ts.from_(tx_data)
-                block_builder.transactions[tx.hash] = tx
-                block_builder.transactions.move_to_end(tx.hash, last=False)  # move to first
 
     def score_invoke(self,
                      _block: Block,
@@ -1312,12 +1276,7 @@ class BlockChain:
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
-
-        tx_receipts_origin = response.get("txResults")
-        if not isinstance(tx_receipts_origin, dict):
-            tx_receipts: dict = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
-        else:
-            tx_receipts: dict = tx_receipts_origin
+        tx_receipts = response.get("txResults")
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
@@ -1336,9 +1295,6 @@ class BlockChain:
                 # TODO : need check that legacy useless after upgrade to block v0.4
                 self._process_next_prep_legacy(_block, block_builder, next_prep)
 
-        added_transactions = response.get("addedTransactions")
-        self._process_added_transactions(block_builder, added_transactions, tx_receipts, is_block_editable)
-
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
         }
@@ -1356,10 +1312,11 @@ class BlockChain:
             self.__write_preps(preps=next_prep["preps"], next_reps_hash=new_block.header.next_reps_hash)
         self.__block_manager.set_old_block_hash(new_block.header.height, new_block.header.hash, _block.header.hash)
 
-        for tx_receipt in tx_receipts.values():
+        for tx_receipt in tx_receipts:
             tx_receipt["blockHash"] = new_block.header.hash.hex()
 
         self.__invoke_results[new_block.header.hash] = (tx_receipts, next_prep)
+
         return new_block, tx_receipts
 
     def __write_preps(self, preps: list, next_reps_hash):

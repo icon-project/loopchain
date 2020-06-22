@@ -49,7 +49,7 @@ install: $(INSTALL_REQUIRES)
 	$(PIP_INSTALL_CMD)
 
 requires-dev:
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@develop
+	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@support_lft
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
 
 ## pip install packages for develop

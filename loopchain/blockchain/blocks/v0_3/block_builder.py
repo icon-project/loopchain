@@ -51,7 +51,7 @@ class BlockBuilder(BaseBlockBuilder):
         if len(self.transactions) != len(receipts):
             raise RuntimeError("Transactions and Receipts are not matched.")
 
-        self._receipts = [dict(receipts[tx_hash.hex()]) for tx_hash in self.transactions]
+        self._receipts = receipts
         for receipt in self._receipts:
             receipt.pop("blockHash", None)
 
