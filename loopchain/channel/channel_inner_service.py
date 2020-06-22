@@ -616,7 +616,7 @@ class ChannelInnerTask:
             try:
                 return message_code.Response.success, self._blockchain.find_tx_info(tx_hash)
             except KeyError as e:
-                logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
+                logging.error(f"find_tx_info error : tx_hash({tx_hash}) not found error({e})")
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
 
