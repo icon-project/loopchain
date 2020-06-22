@@ -3,11 +3,16 @@ from typing import List
 
 import pytest
 
+from loopchain import ChannelService
+from loopchain.blockchain import BlockBuilder
 from loopchain.blockchain.blocks import NextRepsChangeReason
 from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes.v1_0.vote import BlockVote
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.scoreservice import IconScoreInnerStub
+from loopchain.utils.message_queue import StubCollection
 from testcase.unittest.blockchain.conftest import TxFactory
 
 
@@ -109,7 +114,6 @@ class TestInvokeRequest:
             tx_versioner=TransactionVersioner(),
             is_block_editable=is_block_editable
         ).serialize()
-        print("Invoke request: ", invoke_request_dict)
 
         # THEN Invoke Message should be identical as I expected
         assert invoke_request_dict == expected_request
@@ -273,7 +277,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=epoch_num,
             round_num=round_num,
-            query_result=icon_preinvoke
+            pre_invoke_result=icon_preinvoke
         )
 
         # THEN It should contain required data
@@ -290,7 +294,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_preinvoke
+            pre_invoke_result=icon_preinvoke
         )
         # THEN It should tell why validators list has been changed
         reason = invoke_data.changed_reason
@@ -310,7 +314,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_preinvoke
+            pre_invoke_result=icon_preinvoke
         )
 
         # THEN Prep list is not changed
@@ -327,7 +331,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_preinvoke
+            pre_invoke_result=icon_preinvoke
         )
 
         # AND It should not contain receipts and its hash at first,
@@ -350,9 +354,118 @@ class TestInvokeData:
 
 
 class TestInvokePool:
+    channel_name = "test"
+
+    @pytest.fixture
+    def genesis_block(self, tx_factory):
+        from loopchain.blockchain.blocks import v1_0
+
+        tx_versioner = TransactionVersioner()
+        signer = pytest.SIGNERS[0]
+
+        block_builder = BlockBuilder.new(v1_0.version, tx_versioner)
+        block_builder.peer_id = ExternalAddress.empty()
+        block_builder.fixed_timestamp = 0
+        block_builder.prev_votes = []
+        block_builder.prev_state_hash = Hash32.empty()
+
+        from loopchain.blockchain.transactions import genesis
+        tx = tx_factory(genesis.version)
+        block_builder.transactions[tx.hash] = tx
+
+        block_builder.height = 0
+        block_builder.prev_hash = Hash32.empty()
+        block_builder.signer = None
+
+        peer_id = ExternalAddress.fromhex_address(signer.address)
+        block_builder.validators_hash = Hash32.empty()
+        block_builder.next_validators = [peer_id]
+
+        block_builder.epoch = 0
+        block_builder.round = 0
+
+        return block_builder.build()
+
     @pytest.fixture
     def invoke_pool(self):
         return InvokePool()
+
+    @pytest.fixture(autouse=True)
+    def mock_channel_name(self):
+        ChannelProperty().name = TestInvokePool.channel_name
+
+        yield
+
+        ChannelProperty().name = None
+
+    @pytest.fixture
+    def icon_score_stub(self, mocker, icon_preinvoke, icon_invoke):
+        stub = mocker.MagicMock(IconScoreInnerStub)
+        task = mocker.MagicMock()
+        stub.sync_task.return_value = task
+        task.pre_invoke.return_value = icon_preinvoke
+        task.invoke.return_value = icon_invoke
+
+        return stub
+
+    @pytest.fixture(autouse=True)
+    def mock_stub_collection(self, icon_score_stub):
+        StubCollection().icon_score_stubs[ChannelProperty().name] = icon_score_stub
+
+        yield
+
+        StubCollection().icon_score_stubs = {}
+
+    def test_preinvoke(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
+        block_height = 1
+        block_hash = Hash32.new()
+        epoch_num = 1
+        round_num = 1
+
+        # GIVEN I have no invoke data
+        with pytest.raises(KeyError):
+            invoke_pool.get_invoke_data(epoch_num, round_num)
+
+        # WHEN I call prepare invoke
+        invoke_pool.prepare_invoke(
+            block_height=block_height,
+            block_hash=block_hash,
+            epoch_num=epoch_num,
+            round_num=round_num
+        )
+
+        # THEN The pool should create invoke data
+        assert invoke_pool.get_invoke_data(epoch_num, round_num)
+
+    def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block'):
+        # GIVEN I have no invoke data
+        assert not invoke_pool._messages
+
+        # AND Suppose that ICON-Service returns below as a result of genesis invoke
+        StubCollection().icon_score_stubs[ChannelProperty().name].sync_task().invoke.return_value = {
+            "txResults": [
+                {"txHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                 "blockHeight": "0x0",
+                 "blockHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                 "txIndex": "0x0",
+                 "stepUsed": "0x0",
+                 "stepPrice": "0x0",
+                 "cumulativeStepUsed": "0x0",
+                 "status": "0x1"}
+            ],
+            "stateRootHash": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+
+        # WHEN I call invoke as a genesis block
+        invoke_pool.genesis_invoke(genesis_block)
+
+        # THEN The pool must have genesis invoke result
+        genesis_invoke_result = invoke_pool.get_invoke_data(genesis_block.header.epoch, genesis_block.header.round)
+        assert genesis_invoke_result
+
+    @pytest.mark.xfail
+    def test_preinvoke_before_rev6(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
+        assert False
 
     @pytest.mark.xfail(reason="Resolve ICON stub object in invoke pool first!")
     def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool):

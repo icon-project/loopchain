@@ -204,14 +204,16 @@ class InvokeData(Message):
         return block_prover.get_proof_root()
 
     @classmethod
-    def from_dict(cls, epoch_num, round_num, query_result: dict):
-        added_txs: Dict[str, dict] = query_result.get("addedTransactions")
+    def from_dict(cls, epoch_num, round_num, pre_invoke_result: dict):
+        """Create Invoke Data from PreInvoke result.
 
-        validators_hash = query_result.get("currentRepsHash", Hash32.empty().hex())
-        if validators_hash:
-            validators_hash: Hash32 = Hash32.fromhex(validators_hash, ignore_prefix=True)
-
-        next_validators_info: Optional[dict] = query_result.get("prep")
+        FIXME: `currentRepsHash` and `addedTransactions` may always be returned after Rev.6.
+        """
+        added_txs: Dict[str, dict] = pre_invoke_result.get("addedTransactions", {})
+        validators_hash = pre_invoke_result.get("currentRepsHash")
+        validators_hash = Hash32.fromhex(validators_hash, ignore_prefix=True) \
+            if validators_hash else ChannelProperty().crep_root_hash
+        next_validators_info: Optional[dict] = pre_invoke_result.get("prep")
 
         return cls(
             epoch_num=epoch_num,
@@ -241,12 +243,16 @@ class InvokePool(MessagePool):
 
         return cast(InvokeData, self.get_message(id_))
 
-    def prepare_invoke(self, epoch_num: int, round_num: int) -> InvokeData:
+    def prepare_invoke(self, block_height: int, block_hash:Hash32, epoch_num: int, round_num: int) -> InvokeData:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
-        preinvoke_result = self._preinvoke_temp()  # FIXME: Do communicate with ICON-Service
+        request = {
+            "blockHeight": hex(block_height),
+            "blockHash": block_hash.hex()
+        }
+        pre_invoke_result = cast(dict, icon_service.sync_task().pre_invoke(request))
         invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num, round_num=round_num, query_result=preinvoke_result
+            epoch_num=epoch_num, round_num=round_num, pre_invoke_result=pre_invoke_result
         )
         self.add_message(invoke_data)
 
@@ -293,15 +299,9 @@ class InvokePool(MessagePool):
         invoke_result_dict: dict = stub.sync_task().invoke(request)
 
         invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=block.header.epoch, round_num=block.header.round, query_result=invoke_result_dict
+            epoch_num=block.header.epoch, round_num=block.header.round, pre_invoke_result=invoke_result_dict
         )
         invoke_data.height = block.header.height
         self.add_message(invoke_data)
 
         return invoke_data
-
-    def _preinvoke_temp(self) -> dict:
-        return {
-            "addedTransactions": {},
-            "currentRepsHash": "b6fe49ca00c53c1b33d3aee490c734401e5d6c82078ec28a9c40522d59a17305",
-        }

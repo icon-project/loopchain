@@ -56,7 +56,12 @@ class BlockFactory(DataFactory):
         block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
 
-        invoke_data: InvokeData = self._invoke_pool.prepare_invoke(epoch_num, round_num)
+        invoke_data: InvokeData = self._invoke_pool.prepare_invoke(
+            block_height=data_number,
+            block_hash=prev_id,
+            epoch_num=epoch_num,
+            round_num=round_num
+        )
         self._add_tx_to_block(block_builder, invoke_data.added_transactions)
 
         # ConsensusSiever.__build_candidate_block

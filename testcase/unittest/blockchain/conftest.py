@@ -104,9 +104,9 @@ def tx_factory(tx_builder_factory) -> TxFactory:
 
 @pytest.fixture
 def icon_preinvoke() -> dict:
-    """Get queried data from ICON-Service.
+    """Suppose that I request PreInvoke to ICON-Service.
 
-    TODO: Check that the all data have valid key and value, especially hash prefix!
+    Note that no value will be returned before Rev. 6.
     """
 
     return {

@@ -25,7 +25,7 @@ class TestBlockFactory:
         invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            query_result=icon_preinvoke
+            pre_invoke_result=icon_preinvoke
         )
         signer: Signer = Signer.new()
         epoch_pool = EpochPool()
