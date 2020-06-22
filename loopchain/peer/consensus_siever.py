@@ -164,6 +164,17 @@ class ConsensusSiever(ConsensusBase):
             return self._block_manager.epoch.complain_votes[self._block_manager.epoch.round - 1]
         return None
 
+    def __change_block_hash(self, height, old_hash, new_hash):
+        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        request = {
+            "blockHeight": height,
+            "oldBlockHash": old_hash.hex(),
+            "newBlockHash": new_hash.hex()
+        }
+        request = convert_params(request, ParamType.change_block_hash)
+        response: dict = cast(dict, stub.sync_task().change_block_hash(request))
+        response_to_json_query(response)
+
     async def consensus(self):
         util.logger.debug(f"-------------------consensus-------------------")
         async with self.__lock:
@@ -246,12 +257,14 @@ class ConsensusSiever(ConsensusBase):
 
             util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
             candidate_block = self.__build_candidate_block(block_builder)
+            old_hash = candidate_block.header.hash
             candidate_block, _ = self._blockchain.score_invoke(
                 candidate_block, self._blockchain.latest_block,
                 is_block_editable=True, is_unrecorded_block=is_unrecorded_block
             )
-
+            self.__change_block_hash(candidate_block.header.height, old_hash, candidate_block.header.hash)
             util.logger.spam(f"candidate block : {candidate_block.header}")
+
             self._block_manager.candidate_blocks.add_block(
                 candidate_block, self._blockchain.find_preps_addresses_by_header(candidate_block.header))
             self.__broadcast_block(candidate_block)
