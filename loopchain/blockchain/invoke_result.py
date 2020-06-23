@@ -238,18 +238,8 @@ class InvokeData(Message):
 class InvokePool(MessagePool):
     def get_invoke_data(self, epoch_num: int, round_num: int) -> InvokeData:
         id_ = f"{epoch_num}_{round_num}".encode()
-        try:
-            invoke_data = self.get_message(id_)
-        except KeyError:
-            invoke_data = InvokeData(
-                epoch_num=epoch_num,
-                round_num=round_num,
-                added_transactions={},
-                validators_hash=""
-            )
-            self.add_message(invoke_data)
 
-        return invoke_data
+        return cast(InvokeData, self.get_message(id_))
 
     def prepare_invoke(self, epoch_num: int, round_num: int) -> InvokeData:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
