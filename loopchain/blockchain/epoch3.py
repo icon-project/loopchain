@@ -61,8 +61,11 @@ class LoopchainEpoch(Epoch):
 
     def verify_proposer(self, proposer_id: bytes, round_num: int):
         expected_proposer = self.get_proposer_id(round_num)
-        if proposer_id != expected_proposer and proposer_id != ExternalAddress.empty():
+        if proposer_id != expected_proposer and not self._is_genesis_epoch():
             raise InvalidProposer(proposer_id, expected_proposer)
+
+    def _is_genesis_epoch(self):
+        return len(self._voters) == 0
 
     def verify_voter(self, voter: bytes, vote_index: int = -1):
         """Check that the voter is valid or not.
