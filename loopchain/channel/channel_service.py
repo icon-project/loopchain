@@ -184,8 +184,7 @@ class ChannelService:
     async def start_lft(self):
         self.__event_system = EventSystem()
         self.__event_system.set_mediator(DelayedEventMediator)
-        # FIXME: How to initialize ChannelInnerService._event_system better way?
-        self.__inner_service._task._event_system = self.__event_system
+        self.__inner_service.event_system = self.__event_system
 
         epoch_pool = EpochPool()
         db = self.block_manager.blockchain.blockchain_store
