@@ -661,7 +661,7 @@ class ChannelService:
             reps = blockchain.find_preps_addresses_by_roothash(reps_hash)
             epoch = self.__block_manager.epoch
             version = blockchain.block_versioner.get_version(epoch.height)
-            self.__block_manager.epoch.new_round(new_leader_id, reps_hash, reps, version)
+            epoch.new_round(new_leader_id, reps_hash, reps, version)
 
         if ChannelProperty().peer_id == new_leader_id:
             utils.logger.debug("Set Peer Type Leader!")

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from loopchain.blockchain import BlockChain
 
 
-class ComplainVoteControl:
+class ComplainVoteManager:
     def __init__(self):
         self.complain_votes: Dict[int, 'LeaderVotes'] = {}
         self.reps_hash = None
@@ -59,7 +59,7 @@ class ComplainVoteControl:
 
 class Epoch:
     def __init__(self, reps_hash, reps, version, height=None, leader_id=None):
-        self.leader_vote_manager = ComplainVoteControl()
+        self.leader_vote_manager = ComplainVoteManager()
         self.height = height + 1 if height else 1
         self.leader_id = leader_id
         utils.logger.debug(f"New Epoch Start height({self.height }) leader_id({leader_id})")
@@ -76,6 +76,10 @@ class Epoch:
     @property
     def complain_duration(self):
         return min((2 ** self.round) * conf.TIMEOUT_FOR_LEADER_COMPLAIN, conf.MAX_TIMEOUT_FOR_LEADER_COMPLAIN)
+
+    @property
+    def complain_votes(self) -> Dict[int, 'LeaderVotes']:
+        return self.leader_vote_manager.complain_votes
 
     @classmethod
     def new(cls, blockchain: 'BlockChain', leader_id=None):

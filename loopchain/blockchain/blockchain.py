@@ -1329,11 +1329,10 @@ class BlockChain:
     def remove_duplicate_tx_when_turn_to_leader(self):
         if self.last_unconfirmed_block and \
                 self.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
-            tx_queue = self.__tx_queue
 
             for tx_hash_in_unconfirmed_block in self.last_unconfirmed_block.body.transactions:
                 try:
-                    tx_queue.set_item_status(
+                    self.__tx_queue.set_item_status(
                         tx_hash_in_unconfirmed_block.hex(),
                         TransactionStatusInQueue.added_to_block)
                 except KeyError:
@@ -1341,19 +1340,16 @@ class BlockChain:
             utils.logger.spam(f"There is no duplicated tx anymore.")
 
     def __add_tx_to_block(self, block_builder):
-        tx_queue = self.__tx_queue
-
         block_tx_size = 0
-        tx_versioner = self._tx_versioner
-        while tx_queue:
+        while self.__tx_queue:
             if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
                 utils.logger.warning(
                     f"consensus_base total size({block_builder.size()}) "
                     f"count({len(block_builder.transactions)}) "
-                    f"_txQueue size ({len(tx_queue)})")
+                    f"_txQueue size ({len(self.__tx_queue)})")
                 break
 
-            tx: 'Transaction' = tx_queue.get_item_in_status(
+            tx: 'Transaction' = self.__tx_queue.get_item_in_status(
                 get_status=TransactionStatusInQueue.normal,
                 set_status=TransactionStatusInQueue.added_to_block
             )
@@ -1367,7 +1363,7 @@ class BlockChain:
                                   f"tx({tx.hash}), timestamp({tx.timestamp})")
                 continue
 
-            tv = TransactionVerifier.new(tx.version, tx.type(), tx_versioner)
+            tv = TransactionVerifier.new(tx.version, tx.type(), self.__tx_versioner)
 
             try:
                 tv.verify(tx, self)
@@ -1380,7 +1376,7 @@ class BlockChain:
                 traceback.print_exc()
             else:
                 block_builder.transactions[tx.hash] = tx
-                block_tx_size += tx.size(tx_versioner)
+                block_tx_size += tx.size(self.__tx_versioner)
 
     def makeup_block(self,
                      complain_votes: 'LeaderVotes',
