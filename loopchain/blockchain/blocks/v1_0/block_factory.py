@@ -25,13 +25,13 @@ class BlockFactory(DataFactory):
     NoneData = Hash32.empty()
     LazyData = Hash32(bytes([255] * 32))
 
-    def __init__(self, epoch_pool_with_app, tx_queue: 'AgingCache', db: KeyValueStore, tx_versioner, invoke_pool: InvokePool, signer):
+    def __init__(self, epoch_pool_with_app, tx_queue: 'AgingCache', blockchain, tx_versioner, invoke_pool: InvokePool, signer):
         self._epoch_pool: EpochPool = epoch_pool_with_app
         self._tx_versioner = tx_versioner
 
         self._tx_queue: 'AgingCache' = tx_queue
         self._invoke_pool: InvokePool = invoke_pool
-        self._db: 'KeyValueStorePlyvel' = db  # TODO: Will be replaced as DB Component
+        self._blockchain = blockchain  # TODO: Will be replaced as DB Component
         self._last_block: Block = ""  # FIXME: store it in memory or get it from db
 
         # From BlockBuilder
@@ -122,7 +122,7 @@ class BlockFactory(DataFactory):
             try:
                 # FIXME: Currently TransactionVerifier uses `Blockchain` to check uniqueness of tx.
                 # FIXME: To cut the dependencies with `Blockchain`, implement related methods into db store.
-                tv.verify(tx, blockchain=self._db)
+                tv.verify(tx, blockchain=self._blockchain)
             except Exception as e:
                 utils.logger.warning(
                     f"tx hash invalid. tx: {tx} exception: {e}", exc_info=e)

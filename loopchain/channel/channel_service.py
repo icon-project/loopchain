@@ -187,13 +187,12 @@ class ChannelService:
         self.__inner_service.event_system = self.__event_system
 
         epoch_pool = EpochPool()
-        db = self.block_manager.blockchain.blockchain_store
         invoke_pool = InvokePool()
         signer = ChannelProperty().peer_auth
         block_factory = BlockFactory(
             epoch_pool_with_app=epoch_pool,
             tx_queue=self.__tx_queue,
-            db=db,
+            blockchain=self.block_manager.blockchain,
             tx_versioner=TransactionVersioner(),
             invoke_pool=invoke_pool,
             signer=signer
