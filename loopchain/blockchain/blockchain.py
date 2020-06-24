@@ -36,6 +36,7 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peer import BlockManager
+    from lft.consensus.messages.data import Data
 
 __all__ = ("NID", "BlockChain")
 
@@ -1016,7 +1017,7 @@ class BlockChain:
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
-    def block_dumps(self, block: Block) -> bytes:
+    def block_dumps(self, block: Union[Block, "Data"]) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
         block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         block_serialized = block_serializer.serialize(block)

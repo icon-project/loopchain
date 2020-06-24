@@ -635,6 +635,13 @@ class ChannelInnerTask:
             f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
 
+        if self._channel_service.state_machine.state == "Consensus":
+            from lft.consensus.events import ReceiveDataEvent
+            logging.critical(f"announce_unconfirmed_block: type is {type(unconfirmed_block)}, {unconfirmed_block}")
+            event = ReceiveDataEvent(unconfirmed_block)
+            self._channel_service.consensus_runner.event_system.simulator.raise_event(event)
+            return
+
         if self._channel_service.state_machine.state not in \
                 ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
@@ -902,7 +909,16 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
-        self._task._event_system = event_system
+        self._task._event_system: 'EventSystem' = event_system
+
+    @property
+    def event_system(self) -> 'EventSystem':
+        # FIXME: Possible removal property after 3.0 - no more dynamic assignment of EventSystem on ChannelInnerTask.
+        return self._task._event_system
+
+    @event_system.setter
+    def event_system(self, es: 'EventSystem'):
+        self._task._event_system = es
 
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")

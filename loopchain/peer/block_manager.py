@@ -5,7 +5,7 @@ import threading
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Union
 
 from lft.consensus.events import ReceiveDataEvent
 from pkg_resources import parse_version
@@ -137,13 +137,13 @@ class BlockManager:
 
         if last_block.header.revealed_next_reps_hash:
             if block_.header.is_unrecorded:
-                self._send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
+                self.send_unconfirmed_block(block_, last_block.header.reps_hash, round_)
             else:
-                self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
+                self.send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            self._send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
+            self.send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
 
-    def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
+    def send_unconfirmed_block(self, block_: Union[Block, "Data"], target_reps_hash, round_: int):
         util.logger.debug(
             f"BroadCast AnnounceUnconfirmedBlock "
             f"height({block_.header.height}) round({round_}) block({block_.header.hash}) peers: "
@@ -868,8 +868,8 @@ class BlockManager:
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self.__tx_queue, self.blockchain, new_leader_id)
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
-        if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
-            self.__channel_service.state_machine.start_lft()
+        # if self.blockchain.block_versioner.get_version(self.epoch.height) == "1.0":
+        #     self.__channel_service.state_machine.start_lft()
 
     def stop(self):
         self.__block_height_thread_pool.shutdown()
