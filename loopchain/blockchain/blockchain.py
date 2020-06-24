@@ -558,13 +558,15 @@ class BlockChain:
                   block: Block,
                   confirm_info=None,
                   need_to_write_tx_info=True,
-                  need_to_score_invoke=True) -> bool:
+                  need_to_score_invoke=True,
+                  force_write_block=False) -> bool:
         """
 
         :param block:
         :param confirm_info: additional info for this block, but It came from next block of this block.
         :param need_to_write_tx_info:
         :param need_to_score_invoke:
+        :param force_write_block:
         :return:
         """
         with self.__add_block_lock:
@@ -572,9 +574,10 @@ class BlockChain:
                     not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
+            return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke, force_write_block)
 
-    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
+    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True,
+                    force_write_block=False):
         with self.__add_block_lock:
             channel_service = ObjectManager().channel_service
 
@@ -589,7 +592,7 @@ class BlockChain:
             next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
 
             try:
-                if need_to_score_invoke:
+                if force_write_block or need_to_score_invoke:
                     channel_service.score_write_precommit_state(block)
             except Exception as e:
                 utils.exit_and_msg(f"score_write_precommit_state FAIL {e}")

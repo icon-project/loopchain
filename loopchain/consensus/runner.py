@@ -80,7 +80,7 @@ class ConsensusRunner(EventRegister):
             except KeyError:
                 utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
             else:
-                blockchain.add_block(block=block, need_to_score_invoke=False)
+                blockchain.add_block(block=block, need_to_score_invoke=False, force_write_block=True)
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
