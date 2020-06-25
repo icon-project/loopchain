@@ -5,10 +5,7 @@ from typing import Sequence
 from lft.consensus.messages.data import Data
 from lft.consensus.messages.vote import Vote
 
-from loopchain.blockchain.blocks import (BlockHeader as BaseBlockHeader,
-                                         BlockBody as BaseBlockBody)
-
-from loopchain.blockchain.blocks import BlockSerializer
+from loopchain.blockchain.blocks import BlockHeader as BaseBlockHeader, BlockBody as BaseBlockBody
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.transactions.v3 import TransactionSerializer
 from loopchain.blockchain.types import Hash32, BloomFilter, ExternalAddress

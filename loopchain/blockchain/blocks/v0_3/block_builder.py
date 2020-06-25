@@ -47,7 +47,7 @@ class BlockBuilder(BaseBlockBuilder):
     @receipts.setter
     def receipts(self, receipts):
         if not receipts:
-            receipts = {}
+            receipts = []
 
         if len(self.transactions) != len(receipts):
             raise RuntimeError("Transactions and Receipts are not matched.")

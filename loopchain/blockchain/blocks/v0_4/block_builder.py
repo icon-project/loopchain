@@ -1,11 +1,11 @@
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
-from loopchain.blockchain.blocks.v0_3 import BlockBuilder
+from loopchain.blockchain.blocks.v0_3 import BlockBuilder as BaseBlockBuilder
 from loopchain.blockchain.blocks.v0_4 import BlockHeader, BlockBody
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.types import ExternalAddress
 
 
-class BlockBuilder(BlockBuilder):
+class BlockBuilder(BaseBlockBuilder):
     version = BlockHeader.version
     BlockHeaderClass = BlockHeader
     BlockBodyClass = BlockBody
