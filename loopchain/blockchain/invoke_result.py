@@ -277,7 +277,7 @@ class InvokePool(MessagePool):
 
         return cast(InvokeData, self.get_message(id_))
 
-    def prepare_invoke(self, block_height: int, block_hash:Hash32, epoch_num: int, round_num: int) -> InvokeData:
+    def prepare_invoke(self, block_height: int, block_hash:Hash32) -> PreInvokeResponse:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
         request = {
@@ -285,12 +285,8 @@ class InvokePool(MessagePool):
             "blockHash": block_hash.hex()
         }
         pre_invoke_result = cast(dict, icon_service.sync_task().pre_invoke(request))
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num, round_num=round_num, pre_invoke_result=pre_invoke_result
-        )
-        self.add_message(invoke_data)
 
-        return invoke_data
+        return PreInvokeResponse.from_dict(pre_invoke_result)
 
     def invoke(self, epoch_num: int, round_num: int, invoke_request: InvokeRequest) -> InvokeData:
         """Originated from `Blockchain.score_invoke`."""
