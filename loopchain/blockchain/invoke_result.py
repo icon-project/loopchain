@@ -118,6 +118,40 @@ class InvokeRequest:
         )
 
 
+class PreInvokeResponse:
+    def __init__(self,
+                 added_transactions,
+                 validators_hash: Hash32):
+        self._added_txs = added_transactions
+        self._validators_hash: Hash32 = validators_hash
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(" \
+            f"added_transactions={self._added_txs}," \
+            f"validators_hash={self._validators_hash})"
+
+    @property
+    def added_transactions(self):
+        return self._added_txs
+
+    @property
+    def validators_hash(self) -> Hash32:
+        return self._validators_hash
+
+    @classmethod
+    def from_dict(cls, pre_invoke_result: dict):
+        # FIXME: `currentRepsHash` and `addedTransactions` may always be returned after Rev.6.
+        added_txs: Dict[str, dict] = pre_invoke_result.get("addedTransactions", {})
+        validators_hash = pre_invoke_result.get("currentRepsHash")
+        validators_hash = Hash32.fromhex(validators_hash, ignore_prefix=True) \
+            if validators_hash else ChannelProperty().crep_root_hash
+
+        return cls(
+            added_transactions=added_txs,
+            validators_hash=validators_hash
+        )
+
+
 class InvokeData(Message):
     def __init__(self,
                  epoch_num: int,

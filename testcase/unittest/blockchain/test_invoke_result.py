@@ -6,7 +6,7 @@ import pytest
 from loopchain import ChannelService
 from loopchain.blockchain import BlockBuilder
 from loopchain.blockchain.blocks import NextRepsChangeReason
-from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool
+from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes.v1_0.vote import BlockVote
@@ -267,6 +267,28 @@ class TestInvokeRequest:
 
         # THEN Invoke Message should be identical as I expected
         assert invoke_request_dict == expected_request
+
+
+class TestPreInvokeResponse:
+    def test_from_dict(self, icon_preinvoke):
+        response = PreInvokeResponse.from_dict(icon_preinvoke)
+
+        assert response.validators_hash.hex_0x() == "0x1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de"
+        assert response.added_transactions == {
+            "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
+                "version": "0x3",
+                "timestamp": "0x563a6cf330136",
+                "dataType": "base",
+                "data": {
+                    "prep": {
+                        "incentive": "0x1",
+                        "rewardRate": "0x1",
+                        "totalDelegation": "0x3872423746291",
+                        "value": "0x7800000"
+                    }
+                }
+            }
+        }
 
 
 class TestInvokeData:
