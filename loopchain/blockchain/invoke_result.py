@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, cast, Sequence, List, Union, Dict, OrderedDict
 from lft.consensus.messages.message import MessagePool, Message
 
 from loopchain.blockchain.blocks import BlockProverType
-from loopchain.blockchain.blocks import NextRepsChangeReason
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress
@@ -175,10 +174,6 @@ class InvokeData(Message):
         self._epoch_num: int = epoch_num
         self._round_num: int = round_num
         self._height = height
-        self._next_validators: Optional[list] = None
-        self._next_validators_hash: Hash32 = validators_hash
-        self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
-
         self._receipts: list = receipts
         self._state_hash: Optional[Hash32] = state_root_hash
 
@@ -186,7 +181,8 @@ class InvokeData(Message):
             reps = [ExternalAddress.fromhex(rep["id"]) for rep in next_validators_origin["nextReps"]]
             block_prover = BlockProver((rep.extend() for rep in reps), BlockProverType.Rep)
             self._next_validators_hash = block_prover.get_proof_root()
-            self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_validators_origin["state"])
+        else:
+            self._next_validators_hash: Hash32 = validators_hash
 
     def __repr__(self):
         return f"{self.__class__.__name__}(" \

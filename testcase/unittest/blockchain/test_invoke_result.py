@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from loopchain.blockchain import BlockBuilder
+from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
 from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer

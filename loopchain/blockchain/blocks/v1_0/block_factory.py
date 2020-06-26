@@ -9,28 +9,26 @@ from loopchain import utils
 from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader, BlockBody
 from loopchain.blockchain.blocks.v1_0.block_builder import BlockBuilder
 from loopchain.blockchain.blocks.v1_0.block_verifier import BlockVerifier
-from loopchain.blockchain.invoke_result import InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionSerializer
 from loopchain.blockchain.types import BloomFilter, Hash32, TransactionStatusInQueue, ExternalAddress
 from loopchain.crypto.signature import Signer
-from loopchain.store.key_value_store import KeyValueStore
 
 if TYPE_CHECKING:
     from loopchain.blockchain.votes.v1_0.vote import BlockVote
+    from loopchain.blockchain.invoke_result import InvokePool, PreInvokeResponse
     from loopchain.baseservice.aging_cache import AgingCache
-    from loopchain.store.key_value_store_plyvel import KeyValueStorePlyvel
 
 
 class BlockFactory(DataFactory):
     NoneData = Hash32.empty()
     LazyData = Hash32(bytes([255] * 32))
 
-    def __init__(self, epoch_pool_with_app, tx_queue: 'AgingCache', blockchain, tx_versioner, invoke_pool: InvokePool, signer):
+    def __init__(self, epoch_pool_with_app, tx_queue: 'AgingCache', blockchain, tx_versioner, invoke_pool: 'InvokePool', signer):
         self._epoch_pool: EpochPool = epoch_pool_with_app
         self._tx_versioner = tx_versioner
 
         self._tx_queue: 'AgingCache' = tx_queue
-        self._invoke_pool: InvokePool = invoke_pool
+        self._invoke_pool: 'InvokePool' = invoke_pool
         self._blockchain = blockchain  # TODO: Will be replaced as DB Component
         self._last_block: Block = ""  # FIXME: store it in memory or get it from db
 
@@ -56,7 +54,7 @@ class BlockFactory(DataFactory):
         block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
 
-        pre_invoke_response: PreInvokeResponse = self._invoke_pool.prepare_invoke(
+        pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.prepare_invoke(
             block_height=data_number,
             block_hash=prev_id
         )
