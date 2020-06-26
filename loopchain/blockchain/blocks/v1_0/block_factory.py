@@ -9,7 +9,7 @@ from loopchain import utils
 from loopchain.blockchain.blocks.v1_0.block import Block, BlockHeader, BlockBody
 from loopchain.blockchain.blocks.v1_0.block_builder import BlockBuilder
 from loopchain.blockchain.blocks.v1_0.block_verifier import BlockVerifier
-from loopchain.blockchain.invoke_result import InvokeData, InvokePool
+from loopchain.blockchain.invoke_result import InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionSerializer
 from loopchain.blockchain.types import BloomFilter, Hash32, TransactionStatusInQueue, ExternalAddress
 from loopchain.crypto.signature import Signer
@@ -56,33 +56,28 @@ class BlockFactory(DataFactory):
         block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
 
-        invoke_data: InvokeData = self._invoke_pool.prepare_invoke(
+        pre_invoke_response: PreInvokeResponse = self._invoke_pool.prepare_invoke(
             block_height=data_number,
-            block_hash=prev_id,
-            epoch_num=epoch_num,
-            round_num=round_num
+            block_hash=prev_id
         )
-        self._add_tx_to_block(block_builder, invoke_data.added_transactions)
+        self._add_tx_to_block(block_builder, pre_invoke_response.added_transactions)
 
         # ConsensusSiever.__build_candidate_block
         block_builder.height = data_number
         block_builder.prev_hash = prev_id
         block_builder.signer = self._signer
 
-        block_builder.validators_hash = invoke_data.validators_hash
-        if invoke_data.next_validators:
-            block_builder.next_validators = [ExternalAddress.fromhex(next_validator_info["id"])
-                                             for next_validator_info in invoke_data.next_validators]
-        else:
-            block_builder.next_validators_hash = invoke_data.validators_hash
+        block_builder.validators_hash = pre_invoke_response.validators_hash
 
         if prev_votes:
-            prev_vote = prev_votes[0]
+            prev_vote = prev_votes[0]  # FIXME
             block_builder.prev_state_hash = prev_vote.state_hash
             block_builder.receipts = prev_vote.receipt_hash
+            block_builder.next_validators_hash = prev_vote.next_validators_hash
         else:
             block_builder.prev_state_hash = Hash32.empty()
             block_builder.receipts = Hash32.empty()
+            block_builder.next_validators_hash = Hash32.empty()
 
         block_builder.epoch = epoch_num
         block_builder.round = round_num
