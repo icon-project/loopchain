@@ -51,14 +51,12 @@ class BlockManager:
 
     def __init__(self,
                  channel_service: 'ChannelService',
-                 peer_id: str,
                  channel_name: str,
                  store_id: str,
                  event_system: 'EventSystem',
                  tx_queue: AgingCache):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
-        self.__peer_id = peer_id
 
         self.__tx_queue: AgingCache = tx_queue
         self.blockchain = BlockChain(channel_name, store_id, self, self.__tx_queue)
@@ -116,14 +114,6 @@ class BlockManager:
     def pop_old_block_hashes(self, block_height: int):
         self.__old_block_hashes.pop(block_height)
 
-    def get_total_tx(self):
-        """
-        블럭체인의 Transaction total 리턴합니다.
-
-        :return: 블럭체인안의 transaction total count
-        """
-        return self.blockchain.total_tx
-
     def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps
         """
@@ -155,37 +145,6 @@ class BlockManager:
             loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
             reps_hash=target_reps_hash
         )
-
-    def add_tx_obj(self, tx):
-        """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
-
-        :param tx: transaction object
-        """
-        self.__tx_queue[tx.hash.hex()] = tx
-
-    def get_tx(self, tx_hash) -> Transaction:
-        """Get transaction from block_db by tx_hash
-
-        :param tx_hash: tx hash
-        :return: tx object or None
-        """
-        return self.blockchain.find_tx_by_key(tx_hash)
-
-    def get_tx_info(self, tx_hash) -> dict:
-        """Get transaction info from block_db by tx_hash
-
-        :param tx_hash: tx hash
-        :return: {'block_hash': "", 'block_height': "", "transaction": "", "result": {"code": ""}}
-        """
-        return self.blockchain.find_tx_info(tx_hash)
-
-    def get_invoke_result(self, tx_hash):
-        """ get invoke result by tx
-
-        :param tx_hash:
-        :return:
-        """
-        return self.blockchain.find_invoke_result_by_tx_hash(tx_hash)
 
     async def relay_all_txs(self):
         rs_client = ObjectManager().channel_service.rs_client
@@ -275,11 +234,7 @@ class BlockManager:
 
         last_unconfirmed_block: Block = self.blockchain.last_unconfirmed_block
 
-        # TODO After the v0.4 update, remove this version parsing.
-        if parse_version(unconfirmed_block.header.version) >= parse_version("0.4"):
-            ratio = conf.VOTING_RATIO
-        else:
-            ratio = conf.LEADER_COMPLAIN_RATIO
+        ratio = conf.VOTING_RATIO
 
         if unconfirmed_block.header.reps_hash:
             reps = self.blockchain.find_preps_addresses_by_roothash(unconfirmed_block.header.reps_hash)
@@ -579,23 +534,6 @@ class BlockManager:
             )
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
-
-    def __confirm_prev_block_by_sync(self, block_):
-        prev_block = self.blockchain.last_unconfirmed_block
-        confirm_info = block_.body.confirm_prev_block
-
-        util.logger.debug(f"confirm_prev_block_by_sync :: height({prev_block.header.height})")
-
-        block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
-        block_verifier.invoke_func = self.blockchain.get_invoke_func(prev_block.header.height)
-
-        reps_getter = self.blockchain.find_preps_addresses_by_roothash
-        block_verifier.verify_loosely(prev_block,
-                                      self.blockchain.last_block,
-                                      self.blockchain,
-                                      reps_getter=reps_getter)
-        return self.blockchain.add_block(prev_block, confirm_info)
 
     async def __block_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.

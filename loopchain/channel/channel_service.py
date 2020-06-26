@@ -435,7 +435,6 @@ class ChannelService:
         try:
             self.__block_manager = BlockManager(
                 channel_service=self,
-                peer_id=ChannelProperty().peer_id,
                 channel_name=channel_name,
                 store_id=store_id,
                 event_system=self.__event_system,

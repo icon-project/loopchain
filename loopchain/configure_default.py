@@ -149,7 +149,6 @@ CANDIDATE_BLOCK_TIMEOUT = 60 * 60  # seconds
 # default storage path
 DEFAULT_STORAGE_PATH = os.getenv('DEFAULT_STORAGE_PATH', os.path.join(LOOPCHAIN_ROOT_PATH, '.storage'))
 # max tx list size by address
-TX_LIST_ADDRESS_PREFIX = b'tx_list_by_address_'
 MAX_TX_LIST_SIZE_BY_ADDRESS = 100
 MAX_PRE_VALIDATE_TX_CACHE = 10000
 TIMESTAMP_BOUNDARY_SECOND = 60 * 15
