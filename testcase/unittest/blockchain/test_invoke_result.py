@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from typing import List, Callable
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -268,8 +269,8 @@ class TestInvokeRequest:
 
 
 class TestPreInvokeResponse:
-    def test_from_dict(self, icon_preinvoke):
-        response = PreInvokeResponse.from_dict(icon_preinvoke)
+    def test_create_from_preinvoke_response(self, icon_preinvoke):
+        response = PreInvokeResponse.new(icon_preinvoke)
 
         assert response.validators_hash.hex_0x() == "0x1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de"
         assert response.added_transactions == {
@@ -317,7 +318,7 @@ class TestInvokeData:
         block_prover = BlockProver((rep.extend() for rep in preps), BlockProverType.Rep)
         return block_prover.get_proof_root()
 
-    def test_next_validators_hash_equals_current_validators_hash_if_validators_not_changed(self, invoke_data_factory, icon_invoke):
+    def test_next_validators_hash_eq_curr_validators_hash_if_validators_not_changed(self, invoke_data_factory, icon_invoke):
         # GIVEN Prep is not changed
         icon_invoke.pop("prep")
         assert "prep" not in icon_invoke
@@ -328,7 +329,7 @@ class TestInvokeData:
         # THEN next validators hash should be current validators hash
         assert invoke_result.next_validators_hash == TestInvokeData.current_validators_hash
 
-    def test_validators_changed(self, invoke_data_factory, icon_invoke):
+    def test_next_validators_hash_not_eq_curr_validators_hash_if_changed(self, invoke_data_factory, icon_invoke):
         # GIVEN I call Invoke and validators changed
         assert "prep" in icon_invoke
         expected_next_validators_hash = self._get_reps_root_hash(icon_invoke["prep"])
@@ -342,6 +343,11 @@ class TestInvokeData:
 
 class TestInvokePool:
     channel_name = "test"
+    epoch_num = 1
+    round_num = 1
+    height = 1
+    block_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+    current_validators_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
 
     @pytest.fixture
     def genesis_block(self, tx_factory):
@@ -404,48 +410,108 @@ class TestInvokePool:
         StubCollection().icon_score_stubs = {}
 
     def test_preinvoke(self, icon_preinvoke, invoke_pool):
-        block_height = 1
-        block_hash = Hash32.new()
-
         # WHEN I call prepare invoke
-        response = invoke_pool.prepare_invoke(
-            block_height=block_height,
-            block_hash=block_hash
+        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+            block_height=TestInvokePool.height,
+            block_hash=TestInvokePool.block_hash
         )
 
-        # FIXME
-        assert isinstance(response, PreInvokeResponse)
+        # THEN params should be contained
+        assert response.validators_hash == Hash32.fromhex(icon_preinvoke["currentRepsHash"], ignore_prefix=True)
+        assert response.added_transactions == icon_preinvoke["addedTransactions"]
 
-    def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block'):
+    def test_preinvoke_before_rev6(self, invoke_pool):
+        # GIVEN IS Revision is under 6
+        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub.sync_task().pre_invoke.return_value = {}
+
+        # WHEN I call PreInvoke
+        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+            block_height=TestInvokePool.height,
+            block_hash=TestInvokePool.block_hash
+        )
+
+        # THEN current validators should be C-Rep
+        assert response.validators_hash == ChannelProperty().crep_root_hash
+        # AND addedTransactions should be empty
+        assert response.added_transactions == {}
+
+    def test_invoke(self, invoke_pool):
+        # WHEN I call invoke
+        invoke_pool.invoke(
+            epoch_num=TestInvokePool.epoch_num,
+            round_num=TestInvokePool.round_num,
+            height=TestInvokePool.height,
+            current_validators_hash=TestInvokePool.current_validators_hash,
+            invoke_request=MagicMock(InvokeRequest)
+        )
+        invoke_data = invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+
+        # THEN params should be expected
+        assert invoke_data.epoch_num == TestInvokePool.epoch_num
+        assert invoke_data.round_num == TestInvokePool.round_num
+        assert invoke_data.height == TestInvokePool.height
+        # NOTE: below params could be changed as mocked Invoke response changed
+        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_data.receipt_hash == Hash32.fromhex("0x45c918ac10599dd632a2880fc7ca344753956490f6226b3f052742aa305db258")
+
+    def test_invoke_before_rev6(self, invoke_pool, icon_invoke):
+        # GIVEN IS Revision is under 6
+        icon_invoke["txResults"] = []  # GIVEN there are no txs
+        icon_invoke.pop("prep")
+
+        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub.sync_task().invoke.return_value = icon_invoke
+
+        # WHEN I call invoke
+        invoke_pool.invoke(
+            epoch_num=TestInvokePool.epoch_num,
+            round_num=TestInvokePool.round_num,
+            height=TestInvokePool.height,
+            current_validators_hash=TestInvokePool.current_validators_hash,
+            invoke_request=MagicMock(InvokeRequest)
+        )
+        invoke_data = invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+
+        # THEN params should be expected
+        assert invoke_data.epoch_num == TestInvokePool.epoch_num
+        assert invoke_data.round_num == TestInvokePool.round_num
+        assert invoke_data.height == TestInvokePool.height
+        # NOTE: below params could be changed as mocked Invoke response changed
+        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_data.receipt_hash == Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
+
+    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
+        # GIVEN There are no invoke data in the given epoch and round
+        with pytest.raises(KeyError):
+            invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
+
+        # WHEN I call invoke
+        invoke_pool.invoke(
+            epoch_num=TestInvokePool.epoch_num,
+            round_num=TestInvokePool.round_num,
+            height=TestInvokePool.height,
+            current_validators_hash=Hash32.new(),
+            invoke_request=MagicMock(InvokeRequest)
+        )
+
+        # THEN I can fetch that message by the given epoch and round
+        assert invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+
+    def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block', icon_invoke):
         # GIVEN I have no invoke data
-        assert not invoke_pool._messages
-
-        # AND Suppose that ICON-Service returns below as a result of genesis invoke
-        StubCollection().icon_score_stubs[ChannelProperty().name].sync_task().invoke.return_value = {
-            "txResults": [
-                {"txHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                 "blockHeight": "0x0",
-                 "blockHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                 "txIndex": "0x0",
-                 "stepUsed": "0x0",
-                 "stepPrice": "0x0",
-                 "cumulativeStepUsed": "0x0",
-                 "status": "0x1"}
-            ],
-            "stateRootHash": "4444444444444444444444444444444444444444444444444444444444444444"
-        }
+        with pytest.raises(KeyError):
+            invoke_pool.get_invoke_data(genesis_block.header.epoch, genesis_block.header.round)
 
         # WHEN I call invoke as a genesis block
         invoke_pool.genesis_invoke(genesis_block)
 
         # THEN The pool must have genesis invoke result
         genesis_invoke_result = invoke_pool.get_invoke_data(genesis_block.header.epoch, genesis_block.header.round)
-        assert genesis_invoke_result
-
-    @pytest.mark.xfail
-    def test_preinvoke_before_rev6(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
-        assert False
-
-    @pytest.mark.xfail(reason="Resolve ICON stub object in invoke pool first!")
-    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
-        assert False
+        # AND below should be zero
+        assert genesis_invoke_result.height == 0
+        assert genesis_invoke_result.epoch_num == 0
+        assert genesis_invoke_result.round_num == 0
+        # AND below hashes should be valid
+        assert isinstance(genesis_invoke_result.state_hash, Hash32) and genesis_invoke_result.state_hash != Hash32.empty()
+        assert isinstance(genesis_invoke_result.receipt_hash, Hash32) and genesis_invoke_result.receipt_hash != Hash32.empty()

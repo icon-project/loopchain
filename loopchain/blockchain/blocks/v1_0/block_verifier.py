@@ -24,6 +24,8 @@ class BlockVerifier(DataVerifier):
         invoke_result = self._invoke_pool.invoke(
             epoch_num=block.header.epoch,
             round_num=block.header.round,
+            height=block.header.height,
+            current_validators_hash=block.header.validators_hash,
             invoke_request=invoke_request
         )
 

@@ -22,7 +22,7 @@ class TestBlockFactory:
         tx_versioner = TransactionVersioner()
 
         invoke_pool: InvokePool = mocker.MagicMock(InvokePool)
-        invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
+        invoke_pool.prepare_invoke.return_value = InvokeData.new(
             epoch_num=1,
             round_num=1,
             invoke_result=icon_preinvoke
