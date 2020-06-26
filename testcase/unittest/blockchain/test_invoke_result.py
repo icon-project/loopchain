@@ -299,7 +299,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=epoch_num,
             round_num=round_num,
-            pre_invoke_result=icon_preinvoke
+            invoke_result=icon_preinvoke
         )
 
         # THEN It should contain required data
@@ -316,7 +316,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            pre_invoke_result=icon_preinvoke
+            invoke_result=icon_preinvoke
         )
         # THEN It should tell why validators list has been changed
         reason = invoke_data.changed_reason
@@ -336,7 +336,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            pre_invoke_result=icon_preinvoke
+            invoke_result=icon_preinvoke
         )
 
         # THEN Prep list is not changed
@@ -353,7 +353,7 @@ class TestInvokeData:
         invoke_data: InvokeData = InvokeData.from_dict(
             epoch_num=1,
             round_num=1,
-            pre_invoke_result=icon_preinvoke
+            invoke_result=icon_preinvoke
         )
 
         # AND It should not contain receipts and its hash at first,
