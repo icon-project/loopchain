@@ -1,11 +1,9 @@
 from collections import OrderedDict
-from typing import List
+from typing import List, Callable
 
 import pytest
 
-from loopchain import ChannelService
 from loopchain.blockchain import BlockBuilder
-from loopchain.blockchain.blocks import NextRepsChangeReason
 from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
@@ -292,87 +290,54 @@ class TestPreInvokeResponse:
 
 
 class TestInvokeData:
-    def test_created_from_query_dict(self, icon_preinvoke):
-        # WHEN I create InvokeData by using the queried data
-        epoch_num = 1
-        round_num = 1
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num,
-            round_num=round_num,
-            invoke_result=icon_preinvoke
-        )
+    epoch_num = 1
+    round_num = 1
+    height = 1
+    current_validators_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
 
-        # THEN It should contain required data
-        assert invoke_data.epoch_num == epoch_num
-        assert invoke_data.round_num == epoch_num
-        assert invoke_data.added_transactions == icon_preinvoke["addedTransactions"]
-        assert invoke_data.validators_hash.hex() == icon_preinvoke["currentRepsHash"]
+    @pytest.fixture
+    def invoke_data_factory(self) -> Callable[..., InvokeData]:
+        def _(_icon_invoke: dict, **kwargs):
+            return InvokeData.new(
+                epoch_num=kwargs.get("epoch_num", TestInvokeData.epoch_num),
+                round_num=kwargs.get("round_num", TestInvokeData.round_num),
+                height=kwargs.get("height", TestInvokeData.height),
+                current_validators_hash=kwargs.get("current_validators_hash", TestInvokeData.current_validators_hash),
+                invoke_result=_icon_invoke
+            )
 
-    def test_validators_changed(self, icon_preinvoke):
-        # GIVEN I queried and validators changed
-        assert "prep" in icon_preinvoke
+        return _
 
-        # WHEN I create InvokeData by using the queried data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            invoke_result=icon_preinvoke
-        )
-        # THEN It should tell why validators list has been changed
-        reason = invoke_data.changed_reason
-        assert isinstance(reason, NextRepsChangeReason)
-        assert reason != NextRepsChangeReason.NoChange
+    def _get_reps_root_hash(self, prep) -> Hash32:
+        preps = prep.get("nextReps")
+        preps = [ExternalAddress.fromhex(prep["id"]) for prep in preps]
 
-        # AND next validators and theirs hash should be exist
-        assert invoke_data.next_validators == icon_preinvoke["prep"]["nextReps"]
-        assert invoke_data.next_validators_hash.hex() == icon_preinvoke["prep"]["rootHash"]
+        from loopchain.blockchain.blocks import BlockProverType
+        from loopchain.blockchain.blocks.v0_3 import BlockProver
+        block_prover = BlockProver((rep.extend() for rep in preps), BlockProverType.Rep)
+        return block_prover.get_proof_root()
 
-    def test_validators_not_changed(self, icon_preinvoke):
-        # GIVEN I queried and no changes in validators list
-        icon_preinvoke.pop("prep")
-        assert "prep" not in icon_preinvoke
+    def test_next_validators_hash_equals_current_validators_hash_if_validators_not_changed(self, invoke_data_factory, icon_invoke):
+        # GIVEN Prep is not changed
+        icon_invoke.pop("prep")
+        assert "prep" not in icon_invoke
 
-        # WHEN I create InvokeData by using the queried data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            invoke_result=icon_preinvoke
-        )
+        # WHEN I created InvokeData
+        invoke_result = invoke_data_factory(icon_invoke)
 
-        # THEN Prep list is not changed
-        reason = invoke_data.changed_reason
-        assert isinstance(reason, NextRepsChangeReason)
-        assert reason == NextRepsChangeReason.NoChange
+        # THEN next validators hash should be current validators hash
+        assert invoke_result.next_validators_hash == TestInvokeData.current_validators_hash
 
-        # AND There are no next validators
-        assert not invoke_data.next_validators
-        assert invoke_data.next_validators_hash.hex() == invoke_data.validators_hash.hex() == icon_preinvoke["currentRepsHash"]
+    def test_validators_changed(self, invoke_data_factory, icon_invoke):
+        # GIVEN I call Invoke and validators changed
+        assert "prep" in icon_invoke
+        expected_next_validators_hash = self._get_reps_root_hash(icon_invoke["prep"])
 
-    def test_add_invoke_result(self, icon_preinvoke, icon_invoke: dict):
-        # GIVEN I queried and got data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            invoke_result=icon_preinvoke
-        )
+        # WHEN I created InvokeData
+        invoke_data: InvokeData = invoke_data_factory(icon_invoke)
 
-        # AND It should not contain receipts and its hash at first,
-        assert not invoke_data.receipts
-        assert invoke_data.receipt_hash == Hash32.empty()
-
-        # AND neither state hash.
-        assert not invoke_data.state_hash
-
-        # WHEN I add invoke result message
-        invoke_data.add_invoke_result(invoke_result=icon_invoke)
-
-        # THEN receipt_hash should be generated
-        assert "txResults" in icon_invoke
-        assert invoke_data.receipts
-        assert invoke_data.receipt_hash != Hash32.empty()
-
-        # AND invoke data should contain state hash
-        assert invoke_data.state_hash.hex() == icon_invoke["stateRootHash"]
+        # THEN next_validators_hash should be differ with
+        assert invoke_data.next_validators_hash == expected_next_validators_hash != TestInvokeData.current_validators_hash
 
 
 class TestInvokePool:
