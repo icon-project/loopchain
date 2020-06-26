@@ -178,7 +178,6 @@ def icon_invoke() -> dict:
                 }
             ],
             "irep": "0x1",
-            "state": "0x0",
-            "rootHash": "c7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+            "state": "0x0"
         }
     }
