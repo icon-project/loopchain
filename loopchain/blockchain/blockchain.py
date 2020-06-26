@@ -273,16 +273,9 @@ class BlockChain:
         else:
             with self.__add_block_lock:
                 new_last_block: Block = self.find_block_by_hash32(block_to_be_removed.header.prev_hash)
-                self.__total_tx -= (
-                        len(block_to_be_removed.body.transactions) +
-                        len(new_last_block.body.transactions)
-                )
-
+                self.__total_tx -= len(block_to_be_removed.body.transactions) + len(new_last_block.body.transactions)
                 confirm_info = self.__get_confirm_info_from_block(block_to_be_removed)
-                next_total_tx = self.__write_block_data(new_last_block,
-                                                        confirm_info,
-                                                        receipts=None,
-                                                        next_prep=None)
+                next_total_tx = self.__write_block_data(new_last_block, confirm_info, receipts=None, next_prep=None)
 
                 for index, tx in enumerate(block_to_be_removed.body.transactions.values()):
                     tx_hash = tx.hash.hex()
@@ -591,10 +584,6 @@ class BlockChain:
             if not need_to_write_tx_info:
                 receipts = None
 
-            if next_prep and self.find_preps_addresses_by_roothash(
-                    Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True)):
-                next_prep = None
-
             next_total_tx = self.__write_block_data(block, confirm_info, receipts, next_prep)
 
             try:
@@ -694,10 +683,17 @@ class BlockChain:
             self._write_tx(block, receipts, batch)
 
         if next_prep:
-            utils.logger.spam(
-                f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
-                f"\npreps({next_prep['preps']})")
-            self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
+            block_prover = BlockProver.new(
+                block.header.version,
+                (ExternalAddress.fromhex(rep['id']) for rep in next_prep['preps']),
+                BlockProverType.Rep)
+            next_preps_hash = block_prover.get_proof_root()
+
+            utils.logger.spam(f"store next_prep in __write_block_data\n"
+                              f"prep_hash({next_preps_hash})\n"
+                              f"preps({next_prep['preps']})")
+            if not self.find_preps_addresses_by_roothash(next_preps_hash):
+                self.write_preps(next_preps_hash, next_prep['preps'], batch)
 
         if confirm_info:
             if isinstance(confirm_info, list):
@@ -1164,7 +1160,7 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
-    def _process_next_prep_legacy(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
+    def _process_next_prep_legacy(self, _block: Block, block_builder: BlockBuilder, reps: list, next_prep: dict):
         next_leader = _block.header.next_leader
 
         if next_prep:
@@ -1176,19 +1172,19 @@ class BlockChain:
             if change_reason == NextRepsChangeReason.TermEnd:
                 next_leader = ExternalAddress.empty()
 
-            next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
+            next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
+            next_preps_hash = None  # to rebuild next_reps_hash
         else:
             # P-Rep list has no changes
-            next_leader = _block.header.next_leader
+            next_preps = reps
             next_preps_hash = Hash32.empty()
 
         block_builder.next_leader = next_leader
-        block_builder.reps = self.find_preps_addresses_by_header(_block.header)
+        block_builder.reps = reps
+        block_builder.next_reps = next_preps
         block_builder.next_reps_hash = next_preps_hash
 
-    def _process_next_prep(self, _block: Block, block_builder: BlockBuilder, next_prep: dict):
-        reps = self.find_preps_addresses_by_header(_block.header)
-
+    def _process_next_prep(self, _block: Block, block_builder: BlockBuilder, reps: list, next_prep: dict):
         if next_prep:
             # P-Rep list has been changed
             utils.logger.debug(f"_process_next_prep() current_height({_block.header.height}),"
@@ -1283,18 +1279,19 @@ class BlockChain:
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
 
-        next_prep = response.get("prep")
+        next_prep = response.get("prep", {})
 
         if is_unrecorded_block:
             block_builder.next_leader = ExternalAddress.empty()
             block_builder.reps = []
             block_builder.next_reps_hash = Hash32.empty()
         else:
+            reps = self.find_preps_addresses_by_header(_block.header)
             if parse_version(block_builder.version) >= parse_version('0.4'):
-                self._process_next_prep(_block, block_builder, next_prep)
+                self._process_next_prep(_block, block_builder, reps, next_prep)
             else:
                 # TODO : need check that legacy useless after upgrade to block v0.4
-                self._process_next_prep_legacy(_block, block_builder, next_prep)
+                self._process_next_prep_legacy(_block, block_builder, reps, next_prep)
 
         block_builder.commit_state = {
             ChannelProperty().name: response['stateRootHash']
