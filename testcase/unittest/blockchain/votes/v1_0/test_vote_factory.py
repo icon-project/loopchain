@@ -19,14 +19,13 @@ class TestVoteFactory:
         """Suppose that caller of verifier proceeds invoke."""
 
         def _(invoke_pool: InvokePool, epoch_num: int, round_num: int):
-            invoke_data: InvokeData = InvokeData(
-                epoch_num=epoch_num, round_num=round_num,
-                added_transactions={},
-                validators_hash=Hash32.fromhex("0xea2254afbeaa13c73b6f366bfc7621e2a155df9e3ee1e1e7c00df5345c84a7af"),
-                next_validators_origin={}
+            invoke_data: InvokeData = InvokeData.new(
+                epoch_num=epoch_num,
+                round_num=round_num,
+                height=1,
+                current_validators_hash=Hash32.fromhex("0xea2254afbeaa13c73b6f366bfc7621e2a155df9e3ee1e1e7c00df5345c84a7af"),
+                invoke_result=icon_invoke
             )
-            invoke_data.height = 1
-            invoke_data.add_invoke_result(icon_invoke)
             invoke_pool.add_message(invoke_data)
 
             return invoke_data
