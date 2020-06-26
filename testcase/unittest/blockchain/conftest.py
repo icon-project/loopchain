@@ -151,21 +151,6 @@ def icon_invoke() -> dict:
             }
         ],
         "stateRootHash": "c71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238",
-        "addedTransactions": {
-            "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
-                "version": "0x3",
-                "timestamp": "0x563a6cf330136",
-                "dataType": "base",
-                "data": {
-                    "prep": {
-                        "incentive": "0x1",
-                        "rewardRate": "0x1",
-                        "totalDelegation": "0x3872423746291",
-                        "value": "0x7800000"
-                    }
-                }
-            }
-        },
         "prep": {
             "nextReps": [
                 {
