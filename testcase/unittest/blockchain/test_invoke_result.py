@@ -438,26 +438,18 @@ class TestInvokePool:
 
         StubCollection().icon_score_stubs = {}
 
-    def test_preinvoke(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
+    def test_preinvoke(self, icon_preinvoke, invoke_pool):
         block_height = 1
         block_hash = Hash32.new()
-        epoch_num = 1
-        round_num = 1
-
-        # GIVEN I have no invoke data
-        with pytest.raises(KeyError):
-            invoke_pool.get_invoke_data(epoch_num, round_num)
 
         # WHEN I call prepare invoke
-        invoke_pool.prepare_invoke(
+        response = invoke_pool.prepare_invoke(
             block_height=block_height,
-            block_hash=block_hash,
-            epoch_num=epoch_num,
-            round_num=round_num
+            block_hash=block_hash
         )
 
-        # THEN The pool should create invoke data
-        assert invoke_pool.get_invoke_data(epoch_num, round_num)
+        # FIXME
+        assert isinstance(response, PreInvokeResponse)
 
     def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block'):
         # GIVEN I have no invoke data
