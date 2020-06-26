@@ -1,10 +1,11 @@
 from collections import OrderedDict
-from typing import List, Callable
+from typing import List, Callable, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from loopchain.blockchain import BlockBuilder
+from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
 from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
@@ -409,6 +410,21 @@ class TestInvokePool:
 
         StubCollection().icon_score_stubs = {}
 
+    @pytest.fixture
+    def block(self):
+        header = MagicMock(BlockHeader)
+        header.height = TestInvokePool.height
+        header.epoch = TestInvokePool.epoch_num
+        header.round = TestInvokePool.round_num
+        header.validators_hash = TestInvokePool.current_validators_hash
+
+        body = cast(BlockBody, MagicMock(BlockBody))
+
+        return Block(
+            header,
+            body
+        )
+
     def test_preinvoke(self, icon_preinvoke, invoke_pool):
         # WHEN I call prepare invoke
         response: PreInvokeResponse = invoke_pool.prepare_invoke(
@@ -436,16 +452,12 @@ class TestInvokePool:
         # AND addedTransactions should be empty
         assert response.added_transactions == {}
 
-    def test_invoke(self, invoke_pool):
+    def test_invoke(self, invoke_pool, block, monkeypatch):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
         # WHEN I call invoke
-        invoke_pool.invoke(
-            epoch_num=TestInvokePool.epoch_num,
-            round_num=TestInvokePool.round_num,
-            height=TestInvokePool.height,
-            current_validators_hash=TestInvokePool.current_validators_hash,
-            invoke_request=MagicMock(InvokeRequest)
-        )
-        invoke_data = invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+        invoke_data = invoke_pool.invoke(block=block)
 
         # THEN params should be expected
         assert invoke_data.epoch_num == TestInvokePool.epoch_num
@@ -455,7 +467,10 @@ class TestInvokePool:
         assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
         assert invoke_data.receipt_hash == Hash32.fromhex("0x45c918ac10599dd632a2880fc7ca344753956490f6226b3f052742aa305db258")
 
-    def test_invoke_before_rev6(self, invoke_pool, icon_invoke):
+    def test_invoke_before_rev6(self, invoke_pool, icon_invoke, monkeypatch, block):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
         # GIVEN IS Revision is under 6
         icon_invoke["txResults"] = []  # GIVEN there are no txs
         icon_invoke.pop("prep")
@@ -464,14 +479,7 @@ class TestInvokePool:
         icon_stub.sync_task().invoke.return_value = icon_invoke
 
         # WHEN I call invoke
-        invoke_pool.invoke(
-            epoch_num=TestInvokePool.epoch_num,
-            round_num=TestInvokePool.round_num,
-            height=TestInvokePool.height,
-            current_validators_hash=TestInvokePool.current_validators_hash,
-            invoke_request=MagicMock(InvokeRequest)
-        )
-        invoke_data = invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+        invoke_data = invoke_pool.invoke(block=block)
 
         # THEN params should be expected
         assert invoke_data.epoch_num == TestInvokePool.epoch_num
@@ -481,22 +489,19 @@ class TestInvokePool:
         assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
         assert invoke_data.receipt_hash == Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
 
-    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
+    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool, block, monkeypatch):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
         # GIVEN There are no invoke data in the given epoch and round
         with pytest.raises(KeyError):
             invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
 
         # WHEN I call invoke
-        invoke_pool.invoke(
-            epoch_num=TestInvokePool.epoch_num,
-            round_num=TestInvokePool.round_num,
-            height=TestInvokePool.height,
-            current_validators_hash=Hash32.new(),
-            invoke_request=MagicMock(InvokeRequest)
-        )
+        invoke_pool.invoke(block=block)
 
         # THEN I can fetch that message by the given epoch and round
-        assert invoke_pool.get_invoke_data(TestInvokePool.epoch_num, TestInvokePool.round_num)
+        assert invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
 
     def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block', icon_invoke):
         # GIVEN I have no invoke data

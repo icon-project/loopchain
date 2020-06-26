@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from lft.consensus.messages.data import DataVerifier
 
-from loopchain.blockchain.invoke_result import InvokePool, InvokeRequest, InvokeData
+from loopchain.blockchain.invoke_result import InvokePool, InvokeData
 from loopchain.blockchain.transactions import TransactionVersioner
 
 if TYPE_CHECKING:
@@ -20,13 +20,6 @@ class BlockVerifier(DataVerifier):
         self._do_invoke(data)
 
     def _do_invoke(self, block) -> InvokeData:
-        invoke_request = InvokeRequest.from_block(block=block)
-        invoke_result = self._invoke_pool.invoke(
-            epoch_num=block.header.epoch,
-            round_num=block.header.round,
-            height=block.header.height,
-            current_validators_hash=block.header.validators_hash,
-            invoke_request=invoke_request
-        )
+        invoke_result = self._invoke_pool.invoke(block=block)
 
         return invoke_result
