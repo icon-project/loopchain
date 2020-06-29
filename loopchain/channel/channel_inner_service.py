@@ -116,6 +116,7 @@ class ChannelTxCreatorInnerTask:
                 return result_code, tx_hash, relay_target
 
     async def schedule_job(self, command, params):
+        logging.warning(f"ChannelTxCreatorInnerTask:schedule_job() command = {command}, params = {params}")
         self.__broadcast_scheduler.schedule_job(command, params)
 
 
@@ -331,6 +332,7 @@ class _ChannelTxCreatorProcess(ModuleProcess):
         self.__broadcast_queue: mp.Queue = None
 
     def __broadcast_callback(self, command, params):
+        logging.warning(f"_ChannelTxCreatorProcess:__broadcast_callback() command = {command}, params = {params}")
         self.__broadcast_queue.put((command, params))
 
 

@@ -258,6 +258,21 @@ class _Broadcaster:
         return peer_targets
 
 
+def handler_update_audience_patch(self, audience_targets):
+    under_quorum = (len(audience_targets) // 3) * 2
+    new_targets = audience_targets[:under_quorum]
+
+    old_audience = self.__audience.copy()
+
+    for audience_target in new_targets:
+        self.__add_audience(audience_target)
+        old_audience.pop(audience_target, None)
+
+    for old_audience_target in old_audience:
+        old_stubmanager: StubManager = self.__audience.pop(old_audience_target, None)
+        # TODO If necessary, close grpc with old_stubmanager. If not necessary just remove this comment.
+
+
 class BroadcastScheduler(metaclass=abc.ABCMeta):
     def __init__(self):
         self.__schedule_listeners = dict()
@@ -357,17 +372,19 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
 class _BroadcastThread(CommonThread):
     def __init__(self, channel: str, self_target: str=None):
         self.broadcast_queue = queue.PriorityQueue()
-        self.__broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
-        self.__broadcaster = _Broadcaster(channel, self_target)
+        self._broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
+        self._broadcaster = _Broadcaster(channel, self_target)
+
+        self._broadcaster._Broadcaster__handler_update_audience = handler_update_audience_patch
 
     def stop(self):
         super().stop()
         self.broadcast_queue.put((None, None, None, None))
-        self.__broadcast_pool.shutdown(False)
+        self._broadcast_pool.shutdown(False)
 
     def run(self, event: threading.Event):
         event.set()
-        self.__broadcaster.start()
+        self._broadcaster.start()
 
         def _callback(curr_future: futures.Future, executor_future: futures.Future):
             if executor_future.exception():
@@ -381,7 +398,8 @@ class _BroadcastThread(CommonThread):
             if command is None:
                 break
 
-            return_future = self.__broadcast_pool.submit(self.__broadcaster.handle_command, command, params)
+            logging.warning(f"_BroadcastThread:run() command = {command}, params = {params}")
+            return_future = self._broadcast_pool.submit(self._broadcaster.handle_command, command, params)
             if future is not None:
                 return_future.add_done_callback(partial(_callback, future))
 
@@ -402,6 +420,7 @@ class _BroadcastSchedulerThread(BroadcastScheduler):
         self.__broadcast_thread.wait()
 
     def _put_command(self, command, params, block=False, block_timeout=None):
+        logging.warning(f"_BroadcastSchedulerThread:_put_command() command = {command}, params = {params}")
         if command == BroadcastCommand.CREATE_TX:
             priority = (10, time.time())
         elif isinstance(params, tuple) and params[0] == "AddTx":
@@ -457,6 +476,7 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
             command, params = broadcast_queue.get()
             if not broadcaster.is_running or command is None:
                 break
+            logging.warning(f"_BroadcastSchedulerMp:_main() command = {command}, params = {params}")
             broadcaster.handle_command(command, params)
 
         while not broadcast_queue.empty():
@@ -481,6 +501,7 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
         self.__process.join()
 
     def _put_command(self, command, params, block=False, block_timeout=None):
+        logging.warning(f"_BroadcastSchedulerMp:_put_command() command = {command}, params = {params}")
         self.__broadcast_queue.put((command, params))
 
 
