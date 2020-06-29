@@ -1,6 +1,6 @@
-import time
 from typing import TYPE_CHECKING, Sequence
 
+import time
 from lft.consensus.epoch import EpochPool
 from lft.consensus.messages.data import DataFactory
 
@@ -60,7 +60,7 @@ class BlockFactory(DataFactory):
         block_builder.prev_votes = prev_votes
 
         pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.prepare_invoke(
-            block_height=data_number,
+            block_height=data_number-1,
             block_hash=prev_id
         )
         self._add_tx_to_block(block_builder, pre_invoke_response.added_transactions)
@@ -146,12 +146,12 @@ class BlockFactory(DataFactory):
             block_builder.transactions[tx.hash] = tx
 
     def create_none_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.NoneData)
+        return self._create_unreal_data(epoch_num, round_num, _hash=Block.NoneData)
 
     def create_lazy_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.LazyData)
+        return self._create_unreal_data(epoch_num, round_num, _hash=Block.LazyData)
 
-    def _create_unreal_data(self, epoch_num: int, round_num: int, proposer_id: bytes, _hash: Hash32):
+    def _create_unreal_data(self, epoch_num: int, round_num: int, _hash: Hash32):
         header = BlockHeader(
             hash=_hash,
             prev_hash=_hash,
@@ -177,4 +177,6 @@ class BlockFactory(DataFactory):
         return Block(header, body)
 
     async def create_data_verifier(self) -> BlockVerifier:
-        return BlockVerifier(tx_versioner=self._tx_versioner, invoke_pool=self._invoke_pool)
+        return BlockVerifier(tx_versioner=self._tx_versioner,
+                             invoke_pool=self._invoke_pool,
+                             reps_getter=self._blockchain.find_preps_addresses_by_roothash)

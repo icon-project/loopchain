@@ -13,16 +13,11 @@
 # limitations under the License.
 
 import functools
-import json
-import logging
 import urllib.parse
-from typing import Union
 
 import plyvel
 
-from loopchain import configure_default as conf
-from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
-from loopchain.blockchain.types import Hash32
+from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.store.key_value_store import KeyValueStoreWriteBatch, KeyValueStoreCancelableWriteBatch, KeyValueStore
 from loopchain.store.key_value_store import _validate_args_bytes, _validate_args_bytes_without_first

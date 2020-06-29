@@ -2,6 +2,7 @@ from lft.consensus.messages.vote import Vote
 
 from loopchain.blockchain.types import ExternalAddress, Signature, Hash32
 from loopchain.crypto.hashing import build_hash_generator
+from loopchain.crypto.signature import SignVerifier
 
 
 class BlockVote(Vote):
@@ -44,8 +45,7 @@ class BlockVote(Vote):
             self._hash = _hash
         else:
             origin_data = self._serialize()
-            hash_generator = build_hash_generator(1, "icx_vote")
-            self._hash = Hash32(hash_generator.generate_hash(origin_data))
+            self._hash = self._to_hash(origin_data)
 
     def __repr__(self):
         return f"{self.__class__.__name__}" \
@@ -157,6 +157,24 @@ class BlockVote(Vote):
             height=int(data["blockHeight"], 16)
         )
 
+    def _to_hash(self, origin_data: dict):
+        hash_generator = build_hash_generator(1, "icx_vote")
+        return Hash32(hash_generator.generate_hash(origin_data))
+
+    def _to_origin_data(self):
+        return {
+            "validator": self._voter_id.hex_hx(),
+            "timestamp": hex(self._timestamp),
+            "blockHeight": hex(self._height),
+            "blockHash": Hash32(self._data_id),
+            "commitHash": Hash32(self._commit_id),
+            "stateHash": self._state_hash,
+            "receiptHash": self._receipt_hash,
+            "nextValidatorsHash": self._next_validators_hash,
+            "epoch": self._epoch_num,
+            "round": self._round_num
+        }
+
     def is_none(self) -> bool:
         """Check that the vote is against a block of `data_id`."""
         return self.data_id == self.NoneVote
@@ -164,3 +182,13 @@ class BlockVote(Vote):
     def is_lazy(self) -> bool:
         """Check that the vote is created by timeout."""
         return self.data_id == self.LazyVote
+
+    def verify(self):
+        origin_data = self._to_origin_data()
+        hash_ = self._to_hash(origin_data)
+        sign_verifier = SignVerifier.from_address(self.voter_id.hex_hx())
+        try:
+            sign_verifier.verify_hash(hash_, self._signature)
+        except Exception as e:
+            raise RuntimeError(f"Invalid vote signature. {self}\n"
+                               f"{e}")

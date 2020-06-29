@@ -1,6 +1,6 @@
 from lft.consensus.messages.vote import VoteFactory, VoteVerifier
 
-import loopchain.utils as util
+from loopchain import utils
 from loopchain.blockchain.invoke_result import InvokePool, InvokeData
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.crypto.hashing import build_hash_generator
@@ -39,7 +39,7 @@ class BlockVoteFactory(VoteFactory):
 
         invoke_data: InvokeData = self._invoke_result_pool.get_invoke_data(epoch_num, round_num)
 
-        timestamp = util.get_time_stamp()
+        timestamp = utils.get_time_stamp()
         signature = self._get_signature(
             voter_id=self._voter_id,
             height=invoke_data.height,
@@ -70,9 +70,9 @@ class BlockVoteFactory(VoteFactory):
         return vote
 
     def create_none_vote(self, epoch_num: int, round_num: int) -> BlockVote:
-        timestamp = util.get_time_stamp()
+        timestamp = utils.get_time_stamp()
         signature = self._get_signature(
-            height=0,
+            height=-1,
             voter_id=self._voter_id,
             commit_id=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
@@ -85,7 +85,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
-            height=0,
+            height=-1,
             receipt_hash=BlockVote.NoneVote,
             state_hash=BlockVote.NoneVote,
             next_validators_hash=BlockVote.NoneVote,
@@ -99,7 +99,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
     def create_lazy_vote(self, voter_id: bytes, epoch_num: int, round_num: int) -> BlockVote:
-        timestamp = util.get_time_stamp()
+        timestamp = utils.get_time_stamp()
         signature = self._get_signature(
             height=0,
             voter_id=voter_id,
@@ -114,7 +114,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
-            height=0,
+            height=-1,
             receipt_hash=BlockVote.LazyVote,
             state_hash=BlockVote.LazyVote,
             next_validators_hash=BlockVote.LazyVote,
