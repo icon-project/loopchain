@@ -176,6 +176,8 @@ class InvokeData(Message):
         self._height = height
         self._receipts: list = receipts
         self._state_hash: Optional[Hash32] = state_root_hash
+        self._validators_hash = validators_hash
+        self._next_validators = next_validators_origin
 
         if next_validators_origin:
             reps = [ExternalAddress.fromhex(rep["id"]) for rep in next_validators_origin["nextReps"]]
@@ -210,9 +212,17 @@ class InvokeData(Message):
         return self._state_hash
 
     @property
+    def validators_hash(self) -> Hash32:
+        return self._validators_hash
+
+    @property
     def next_validators_hash(self) -> Hash32:
         # TODO: need to be defined according to ICON-Service API
         return self._next_validators_hash
+
+    @property
+    def next_validators(self) -> dict:
+        return self._next_validators
 
     @property
     def receipt_hash(self) -> Hash32:
@@ -229,7 +239,9 @@ class InvokeData(Message):
             invoke_result: dict):
         """Create Invoke Data from PreInvoke result."""
         state_hash = Hash32(bytes.fromhex(invoke_result.get("stateRootHash")))
-        next_validators_info: Optional[dict] = invoke_result.get("prep")
+        current_reps_hash = invoke_result.get('currentRepsHash')
+        current_validators_hash = current_reps_hash if current_reps_hash else current_validators_hash
+        next_validators_info: Optional[dict] = invoke_result.get("prep", {})
         receipts: list = invoke_result.get("txResults")
 
         return cls(

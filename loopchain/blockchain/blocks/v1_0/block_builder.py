@@ -1,8 +1,9 @@
 """block builder for version 1.0 block"""
-import time
 from functools import reduce
 from operator import or_
 from typing import List, Optional
+
+import time
 
 from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks import NextRepsChangeReason, BlockBuilder as BaseBlockBuilder
@@ -24,7 +25,6 @@ class BlockBuilder(BaseBlockBuilder):
         # Attributes that must be assigned
         self.validators: Optional[List[ExternalAddress]] = None
         self.next_validators: Optional[List[ExternalAddress]] = None
-        self.next_validators_hash: Optional[Hash32] = None
         self.next_validators_change_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
         self.prev_votes: Optional[List[BlockVote]] = None
         self.epoch: Optional[int] = None
@@ -40,6 +40,7 @@ class BlockBuilder(BaseBlockBuilder):
         self.prev_state_hash: Optional[Hash32] = None
         self.prev_receipts_hash: Optional[Hash32] = None
         self.validators_hash: Optional[Hash32] = None
+        self.next_validators_hash: Optional[Hash32] = None
         self.prev_logs_bloom: Optional[BloomFilter] = None
         self._timestamp: Optional[int] = None
         self._prev_receipts: Optional[list] = None
@@ -56,9 +57,8 @@ class BlockBuilder(BaseBlockBuilder):
             receipt.pop("blockHash", None)
 
     def reset_cache(self):
-        # TODO In 'LFT', this method call is unnecessary. Delete after confirmation.
-        super().reset_cache()
-
+        self.block = None
+        self.hash = None
         self.prev_votes_hash = None
         self.transactions_hash = None
         self.prev_state_hash = None
@@ -66,8 +66,6 @@ class BlockBuilder(BaseBlockBuilder):
         self.validators_hash = None
         self.prev_logs_bloom = None
         self._timestamp = None
-        self.epoch = None
-        self.round = None
 
     def build(self) -> 'Block':
         self.build_peer_id()
