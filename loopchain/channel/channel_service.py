@@ -657,7 +657,11 @@ class ChannelService:
 
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
-            self.__block_manager.epoch.new_round(new_leader_id)
+            reps_hash = blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
+            reps = blockchain.find_preps_addresses_by_roothash(reps_hash)
+            epoch = self.__block_manager.epoch
+            version = blockchain.block_versioner.get_version(epoch.height)
+            epoch.new_round(new_leader_id, reps_hash, reps, version)
 
         if ChannelProperty().peer_id == new_leader_id:
             utils.logger.debug("Set Peer Type Leader!")

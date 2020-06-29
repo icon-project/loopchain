@@ -3,6 +3,8 @@
 import json
 import pickle
 import threading
+import time
+import traceback
 import zlib
 from collections import Counter
 from enum import Enum
@@ -23,9 +25,9 @@ from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersi
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.peer_loader import PeerLoader
 from loopchain.blockchain.score_base import *
-from loopchain.blockchain.transactions import Transaction, TransactionBuilder
+from loopchain.blockchain.transactions import Transaction, TransactionBuilder, TransactionVerifier
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
-from loopchain.blockchain.types import Hash32, ExternalAddress
+from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
@@ -1323,3 +1325,79 @@ class BlockChain:
         self.write_preps(roothash=next_reps_hash, preps=preps)
         self.__cache_clear_roothash()
         ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
+
+    def remove_duplicate_tx_when_turn_to_leader(self):
+        if self.last_unconfirmed_block and \
+                self.last_unconfirmed_block.header.peer_id != ChannelProperty().peer_address:
+
+            for tx_hash_in_unconfirmed_block in self.last_unconfirmed_block.body.transactions:
+                try:
+                    self.__tx_queue.set_item_status(
+                        tx_hash_in_unconfirmed_block.hex(),
+                        TransactionStatusInQueue.added_to_block)
+                except KeyError:
+                    continue
+            utils.logger.spam(f"There is no duplicated tx anymore.")
+
+    def __add_tx_to_block(self, block_builder):
+        block_tx_size = 0
+        while self.__tx_queue:
+            if block_tx_size >= conf.MAX_TX_SIZE_IN_BLOCK:
+                utils.logger.warning(
+                    f"consensus_base total size({block_builder.size()}) "
+                    f"count({len(block_builder.transactions)}) "
+                    f"_txQueue size ({len(self.__tx_queue)})")
+                break
+
+            tx: 'Transaction' = self.__tx_queue.get_item_in_status(
+                get_status=TransactionStatusInQueue.normal,
+                set_status=TransactionStatusInQueue.added_to_block
+            )
+            if tx is None:
+                break
+
+            block_timestamp = block_builder.fixed_timestamp
+            if not utils.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND, block_timestamp):
+                utils.logger.info(f"fail add tx to block by TIMESTAMP_BOUNDARY_SECOND"
+                                  f"({conf.TIMESTAMP_BOUNDARY_SECOND}) "
+                                  f"tx({tx.hash}), timestamp({tx.timestamp})")
+                continue
+
+            tv = TransactionVerifier.new(tx.version, tx.type(), self.__tx_versioner)
+
+            try:
+                tv.verify(tx, self)
+            except Exception as e:
+                utils.logger.warning(
+                    f"tx hash invalid.\n"
+                    f"tx: {tx}\n"
+                    f"exception: {e}"
+                )
+                traceback.print_exc()
+            else:
+                block_builder.transactions[tx.hash] = tx
+                block_tx_size += tx.size(self.__tx_versioner)
+
+    def makeup_block(self,
+                     complain_votes: 'LeaderVotes',
+                     prev_votes,
+                     new_term: bool = False,
+                     skip_add_tx: bool = False):
+        last_block = self.last_unconfirmed_block or self.last_block
+        block_height = last_block.header.height + 1
+        block_version = self.__block_versioner.get_version(block_height)
+        block_builder = BlockBuilder.new(block_version, self.__tx_versioner)
+        block_builder.fixed_timestamp = int(time.time() * 1_000_000)
+        block_builder.prev_votes = prev_votes
+        if complain_votes and complain_votes.get_result():
+            block_builder.leader_votes = complain_votes.votes
+
+        if new_term:
+            block_builder.next_leader = None
+            block_builder.reps = None
+        elif skip_add_tx:
+            utils.logger.debug(f"skip_add_tx for block height({self.__block_manager.epoch.height})")
+        else:
+            self.__add_tx_to_block(block_builder)
+
+        return block_builder

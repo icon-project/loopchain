@@ -157,7 +157,7 @@ class ConsensusSiever(ConsensusBase):
             votes_class = Votes.get_block_votes_class(block_version)
             votes = votes_class.deserialize_votes(json.loads(dumped_votes.decode('utf-8')))
 
-        return self._block_manager.epoch.makeup_block(complain_votes, votes)
+        return self._blockchain.makeup_block(complain_votes, votes, )
 
     def __get_complaint_votes(self):
         if self._block_manager.epoch.complained_result:
@@ -188,7 +188,7 @@ class ConsensusSiever(ConsensusBase):
             if complained_result:
                 self._blockchain.last_unconfirmed_block = None
             else:
-                self._block_manager.epoch.remove_duplicate_tx_when_turn_to_leader()
+                self._blockchain.remove_duplicate_tx_when_turn_to_leader()
 
             last_block_vote_list = await self.__get_votes(self._blockchain.latest_block.header.hash)
             if last_block_vote_list is None:
@@ -214,7 +214,7 @@ class ConsensusSiever(ConsensusBase):
                 is_unrecorded_block = False
 
             skip_add_tx = is_unrecorded_block or complained_result
-            block_builder = self._block_manager.epoch.makeup_block(
+            block_builder = self._blockchain.makeup_block(
                 complain_votes, last_block_vote_list, new_term, skip_add_tx)
             need_next_call = False
             try:
