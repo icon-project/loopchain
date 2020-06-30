@@ -187,13 +187,12 @@ class ChannelService:
         self.__inner_service.event_system = self.__event_system
 
         epoch_pool = EpochPool()
-        db = self.block_manager.blockchain.blockchain_store
         invoke_pool = InvokePool()
         signer = ChannelProperty().peer_auth
         block_factory = BlockFactory(
             epoch_pool_with_app=epoch_pool,
             tx_queue=self.__tx_queue,
-            db=db,
+            blockchain=self.block_manager.blockchain,
             tx_versioner=TransactionVersioner(),
             invoke_pool=invoke_pool,
             signer=signer
@@ -213,6 +212,7 @@ class ChannelService:
 
         # last_block: Block = self.block_manager.blockchain.last_block
         block: Block = self._generate_genesis_block()
+        self.update_nid()
 
         invoke_pool.genesis_invoke(block)
         initial_epoches = [
@@ -267,6 +267,7 @@ class ChannelService:
 
         tx_builder = TransactionBuilder.new("genesis", "", tx_versioner)
         nid = tx_info.get("nid")
+        self.block_manager.blockchain.put_nid(nid)
         tx_builder.nid = int(nid, 16) if nid else None
         tx_builder.accounts = tx_info["accounts"]
         tx_builder.message = tx_info["message"]
