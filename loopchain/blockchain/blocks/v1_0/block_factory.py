@@ -77,12 +77,15 @@ class BlockFactory(DataFactory):
             block_builder.prev_state_hash = prev_vote.state_hash
             block_builder.receipts = prev_vote.receipt_hash
             block_builder.next_validators_hash = prev_vote.next_validators_hash
-        else:
+        elif data_number == 1:
             # FIXME: Genesis Block has no prev votes. Retrieve genesis invoke data
             invoke_data = self._invoke_pool.get_invoke_data(0, 0)
             block_builder.prev_state_hash = invoke_data.state_hash
             block_builder.receipts = invoke_data.receipt_hash
             block_builder.next_validators_hash = invoke_data.next_validators_hash
+        else:
+            from loopchain import utils
+            utils.exit_and_msg("Not found prev_votes in candidate block. \nShutdown Loopchain Node...")
 
         block_builder.epoch = epoch_num
         block_builder.round = round_num
