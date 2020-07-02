@@ -36,7 +36,6 @@ class BlockFactory(DataFactory):
         self._tx_queue: 'AgingCache' = tx_queue
         self._invoke_pool: 'InvokePool' = invoke_pool
         self._blockchain = blockchain  # TODO: Will be replaced as DB Component
-        self._last_block: Block = ""  # FIXME: store it in memory or get it from db
 
         # From BlockBuilder
         self._signer: Signer = signer
