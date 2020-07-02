@@ -71,7 +71,11 @@ class ConsensusRunner(EventRegister):
 
     # FIXME: Temporary
     async def _write_block(self, round_end_event):
-        if round_end_event.is_success:
+        """Write Block 1.0. (Temporary)
+
+        Note that RoundEndEvent can be raised when the node restarted. Avoid rewriting block which is committed.
+        """
+        if round_end_event.is_success and not self._block_manager.blockchain.find_block_by_hash(round_end_event.commit_id):
             consensus_db_pool = self.consensus._data_pool  # FIXME
             blockchain = self._block_manager.blockchain
 
@@ -80,7 +84,11 @@ class ConsensusRunner(EventRegister):
             except KeyError:
                 utils.logger.warning(f"Block({round_end_event.commit_id}) does not exists in Consensus's DataPool.")
             else:
-                blockchain.add_block(block=block, need_to_score_invoke=False, force_write_block=True)
+                vote_pool = self.consensus._vote_pool
+                votes = tuple(vote_pool.get_votes(block.header.epoch, block.header.round))
+                blockchain.add_block(
+                    block=block, confirm_info=votes, need_to_score_invoke=False, force_write_block=True
+                )
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):

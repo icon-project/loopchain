@@ -30,6 +30,7 @@ from loopchain.blockchain.transactions import TransactionSerializer, Transaction
 from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
+from loopchain.blockchain.votes.v1_0 import BlockVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.configure_default import NodeType
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
@@ -704,6 +705,11 @@ class BlockChain:
             if isinstance(confirm_info, list):
                 votes_class = Votes.get_block_votes_class(block.header.version)
                 confirm_info = json.dumps(votes_class.serialize_votes(confirm_info))
+            if isinstance(confirm_info, tuple):
+                # FIXME: Write LFT votes
+                confirm_info = cast(Sequence[BlockVote], confirm_info)
+                confirm_info = [vote.serialize() for vote in confirm_info]
+                confirm_info = json.dumps(confirm_info)
             if isinstance(confirm_info, str):
                 confirm_info = confirm_info.encode('utf-8')
             batch.put(

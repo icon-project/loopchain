@@ -711,7 +711,11 @@ class BlockManager:
             self.__start_block_height_sync_timer()
         else:
             util.logger.debug(f"block_height_sync is complete.")
-            self.__channel_service.state_machine.complete_sync()
+            last_commit_block: Union[Block, Data] = self.blockchain.last_block
+            if last_commit_block and parse_version(last_commit_block.header.version) >= parse_version("1.0"):
+                self.__channel_service.state_machine.start_lft()
+            else:
+                self.__channel_service.state_machine.complete_sync()
 
     def get_next_leader(self) -> Optional[str]:
         """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
