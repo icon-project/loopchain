@@ -78,9 +78,11 @@ class BlockFactory(DataFactory):
             block_builder.receipts = prev_vote.receipt_hash
             block_builder.next_validators_hash = prev_vote.next_validators_hash
         else:
-            block_builder.prev_state_hash = Hash32.empty()
-            block_builder.receipts = Hash32.empty()
-            block_builder.next_validators_hash = Hash32.empty()
+            # FIXME: Genesis Block has no prev votes. Retrieve genesis invoke data
+            invoke_data = self._invoke_pool.get_invoke_data(0, 0)
+            block_builder.prev_state_hash = invoke_data.state_hash
+            block_builder.receipts = invoke_data.receipt_hash
+            block_builder.next_validators_hash = invoke_data.next_validators_hash
 
         block_builder.epoch = epoch_num
         block_builder.round = round_num
