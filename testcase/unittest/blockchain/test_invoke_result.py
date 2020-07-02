@@ -457,15 +457,15 @@ class TestInvokePool:
         monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
 
         # WHEN I call invoke
-        invoke_data = invoke_pool.invoke(block=block)
+        invoke_result = invoke_pool.invoke(block=block)
 
         # THEN params should be expected
-        assert invoke_data.epoch_num == TestInvokePool.epoch_num
-        assert invoke_data.round_num == TestInvokePool.round_num
-        assert invoke_data.height == TestInvokePool.height
+        assert invoke_result.epoch_num == TestInvokePool.epoch_num
+        assert invoke_result.round_num == TestInvokePool.round_num
+        assert invoke_result.height == TestInvokePool.height
         # NOTE: below params could be changed as mocked Invoke response changed
-        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
-        assert invoke_data.receipt_hash == Hash32.fromhex("0x45c918ac10599dd632a2880fc7ca344753956490f6226b3f052742aa305db258")
+        assert invoke_result.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_result.receipt_hash == Hash32.fromhex("0x45c918ac10599dd632a2880fc7ca344753956490f6226b3f052742aa305db258")
 
     def test_invoke_before_rev6(self, invoke_pool, icon_invoke, monkeypatch, block):
         # Ignore InvokeRequest
@@ -479,15 +479,15 @@ class TestInvokePool:
         icon_service_stub.sync_task().invoke.return_value = icon_invoke
 
         # WHEN I call invoke
-        invoke_data = invoke_pool.invoke(block=block)
+        invoke_result = invoke_pool.invoke(block=block)
 
         # THEN params should be expected
-        assert invoke_data.epoch_num == TestInvokePool.epoch_num
-        assert invoke_data.round_num == TestInvokePool.round_num
-        assert invoke_data.height == TestInvokePool.height
+        assert invoke_result.epoch_num == TestInvokePool.epoch_num
+        assert invoke_result.round_num == TestInvokePool.round_num
+        assert invoke_result.height == TestInvokePool.height
         # NOTE: below params could be changed as mocked Invoke response changed
-        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
-        assert invoke_data.receipt_hash == Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
+        assert invoke_result.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_result.receipt_hash == Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
 
     def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool, block, monkeypatch):
         # Ignore InvokeRequest

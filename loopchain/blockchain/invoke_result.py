@@ -268,16 +268,16 @@ class InvokePool(MessagePool):
         icon_service = StubCollection().icon_service_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())
 
-        invoke_data = InvokeResult.new(
+        invoke_result = InvokeResult.new(
             epoch_num=block.header.epoch,
             round_num=block.header.round,
             height=block.header.height,
             current_validators_hash=block.header.validators_hash,
             invoke_response=invoke_result_dict
         )
-        self.add_message(invoke_data)
+        self.add_message(invoke_result)
 
-        return invoke_data
+        return invoke_result
 
     def genesis_invoke(self, block: 'Block') -> InvokeResult:
         method = "icx_sendTransaction"
