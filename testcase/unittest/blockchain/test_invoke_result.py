@@ -404,11 +404,11 @@ class TestInvokePool:
 
     @pytest.fixture(autouse=True)
     def mock_stub_collection(self, icon_score_stub):
-        StubCollection().icon_score_stubs[ChannelProperty().name] = icon_score_stub
+        StubCollection().icon_service_stubs[ChannelProperty().name] = icon_score_stub
 
         yield
 
-        StubCollection().icon_score_stubs = {}
+        StubCollection().icon_service_stubs = {}
 
     @pytest.fixture
     def block(self):
@@ -438,7 +438,7 @@ class TestInvokePool:
 
     def test_preinvoke_before_rev6(self, invoke_pool):
         # GIVEN IS Revision is under 6
-        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         icon_stub.sync_task().pre_invoke.return_value = {}
 
         # WHEN I call PreInvoke
@@ -475,7 +475,7 @@ class TestInvokePool:
         icon_invoke["txResults"] = []  # GIVEN there are no txs
         icon_invoke.pop("prep")
 
-        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         icon_stub.sync_task().invoke.return_value = icon_invoke
 
         # WHEN I call invoke

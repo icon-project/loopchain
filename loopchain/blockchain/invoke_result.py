@@ -250,7 +250,7 @@ class InvokePool(MessagePool):
         return cast(InvokeResult, self.get_message(id_))
 
     def pre_invoke(self, block_height: int, block_hash: Hash32) -> PreInvokeResponse:
-        icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
+        icon_service = StubCollection().icon_service_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
         request = {
             "blockHeight": hex(block_height),
@@ -265,7 +265,7 @@ class InvokePool(MessagePool):
 
         invoke_request = InvokeRequest.from_block(block=block)
 
-        icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
+        icon_service = StubCollection().icon_service_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())
 
         invoke_data = InvokeResult.new(
@@ -303,7 +303,7 @@ class InvokePool(MessagePool):
             'transactions': transactions
         }
         request = convert_params(request, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         invoke_result_dict: dict = stub.sync_task().invoke(request)
 
         invoke_data: InvokeResult = InvokeResult.new(

@@ -33,7 +33,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         self.channel_stubs: Dict[str, ChannelInnerStub] = {}
         self.channel_tx_creator_stubs: Dict[str, ChannelTxCreatorInnerStub] = {}
         self.channel_tx_receiver_stubs: Dict[str, ChannelTxReceiverInnerStub] = {}
-        self.icon_score_stubs: Dict[str, IconScoreInnerStub] = {}
+        self.icon_service_stubs: Dict[str, IconScoreInnerStub] = {}
 
     async def create_peer_stub(self):
         from loopchain import configure as conf
@@ -91,5 +91,5 @@ class StubCollection(metaclass=SingletonMetaClass):
         )
         stub = IconScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
         await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
-        self.icon_score_stubs[channel_name] = stub
+        self.icon_service_stubs[channel_name] = stub
         return stub

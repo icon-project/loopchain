@@ -663,7 +663,7 @@ class BlockManager:
         }
 
         request = convert_params(request_origin, ParamType.roll_back)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
 
         util.logger.debug(f"request_roll_back() Rollback request({request})")
         response: dict = cast(dict, stub.sync_task().rollback(request))

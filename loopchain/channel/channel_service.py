@@ -517,8 +517,8 @@ class ChannelService:
             self.__score_container = CommonSubprocess(process_args)
 
         await StubCollection().create_icon_score_stub(ChannelProperty().name)
-        await StubCollection().icon_score_stubs[ChannelProperty().name].connect()
-        await StubCollection().icon_score_stubs[ChannelProperty().name].async_task().hello()
+        await StubCollection().icon_service_stubs[ChannelProperty().name].connect()
+        await StubCollection().icon_service_stubs[ChannelProperty().name].async_task().hello()
         return None
 
     def is_support_node_function(self, node_function):
@@ -690,7 +690,7 @@ class ChannelService:
         }
         request = convert_params(request, ParamType.write_precommit_state)
 
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         precommit_result: dict = stub.sync_task().write_precommit_state(request)
         if "error" in precommit_result:
             raise WritePrecommitStateError(precommit_result['error'])

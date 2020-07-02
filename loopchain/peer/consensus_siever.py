@@ -124,7 +124,7 @@ class ConsensusSiever(ConsensusBase):
             block_builder.transactions.move_to_end(tx.hash, last=False)
 
     def __pre_invoke(self, block_height: int, block_hash: Hash32) -> dict:
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         request = {
             "blockHeight": block_height,
             "blockHash": block_hash.hex()
@@ -165,7 +165,7 @@ class ConsensusSiever(ConsensusBase):
         return None
 
     def __change_block_hash(self, height, old_hash, new_hash):
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         request = {
             "blockHeight": height,
             "oldBlockHash": old_hash.hex(),

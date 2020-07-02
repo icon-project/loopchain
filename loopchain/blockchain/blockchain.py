@@ -725,7 +725,7 @@ class BlockChain:
 
     def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
-        score_stub = StubCollection().icon_score_stubs[self.__channel_name]
+        score_stub = StubCollection().icon_service_stubs[self.__channel_name]
         request = {
             "method": "ise_getStatus",
             "params": {"filter": ["lastBlock"]}
@@ -1139,7 +1139,7 @@ class BlockChain:
             'transactions': transactions
         }
         request = convert_params(request, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         response = stub.sync_task().invoke(request)
         response_to_json_query(response)
 
@@ -1276,7 +1276,7 @@ class BlockChain:
         }
 
         request = convert_params(request_origin, ParamType.invoke)
-        stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
         tx_receipts = response.get("txResults")
