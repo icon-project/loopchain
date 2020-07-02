@@ -23,7 +23,13 @@ class BlockFactory(DataFactory):
     NoneData = Hash32.empty()
     LazyData = Hash32(bytes([255] * 32))
 
-    def __init__(self, epoch_pool_with_app, tx_queue: 'AgingCache', blockchain, tx_versioner, invoke_pool: 'InvokePool', signer):
+    def __init__(self,
+                 epoch_pool_with_app,
+                 tx_queue: 'AgingCache',
+                 blockchain,
+                 tx_versioner,
+                 invoke_pool: 'InvokePool',
+                 signer):
         self._epoch_pool: EpochPool = epoch_pool_with_app
         self._tx_versioner = tx_versioner
 
