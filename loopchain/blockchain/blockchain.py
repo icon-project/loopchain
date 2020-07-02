@@ -725,13 +725,13 @@ class BlockChain:
 
     def prevent_next_block_mismatch(self, next_height: int) -> bool:
         logging.debug(f"prevent_block_mismatch...")
-        score_stub = StubCollection().icon_service_stubs[self.__channel_name]
+        icon_service_stub = StubCollection().icon_service_stubs[self.__channel_name]
         request = {
             "method": "ise_getStatus",
             "params": {"filter": ["lastBlock"]}
         }
 
-        response = score_stub.sync_task().query(request)
+        response = icon_service_stub.sync_task().query(request)
         score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
 
         if score_last_block_height < next_height:
@@ -1139,8 +1139,8 @@ class BlockChain:
             'transactions': transactions
         }
         request = convert_params(request, ParamType.invoke)
-        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        response = stub.sync_task().invoke(request)
+        icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
+        response = icon_service_stub.sync_task().invoke(request)
         response_to_json_query(response)
 
         tx_receipts = response["txResults"]
@@ -1276,8 +1276,8 @@ class BlockChain:
         }
 
         request = convert_params(request_origin, ParamType.invoke)
-        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        response: dict = cast(dict, stub.sync_task().invoke(request))
+        icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
+        response: dict = cast(dict, icon_service_stub.sync_task().invoke(request))
         response_to_json_query(response)
         tx_receipts = response.get("txResults")
 

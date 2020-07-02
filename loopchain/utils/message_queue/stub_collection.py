@@ -89,7 +89,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         queue_name = conf.ICON_SCORE_QUEUE_NAME_FORMAT.format(
             channel_name=channel_name, amqp_key=self.amqp_key
         )
-        stub = IconScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
-        await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
-        self.icon_service_stubs[channel_name] = stub
-        return stub
+        icon_service_stub = IconScoreInnerStub(self.amqp_target, queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD)
+        await icon_service_stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
+        self.icon_service_stubs[channel_name] = icon_service_stub
+        return icon_service_stub

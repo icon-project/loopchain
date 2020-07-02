@@ -663,10 +663,10 @@ class BlockManager:
         }
 
         request = convert_params(request_origin, ParamType.roll_back)
-        stub = StubCollection().icon_service_stubs[ChannelProperty().name]
+        icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
 
         util.logger.debug(f"request_roll_back() Rollback request({request})")
-        response: dict = cast(dict, stub.sync_task().rollback(request))
+        response: dict = cast(dict, icon_service_stub.sync_task().rollback(request))
         try:
             response_to_json_query(response)
         except GenericJsonRpcServerError as e:

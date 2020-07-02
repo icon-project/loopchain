@@ -438,8 +438,8 @@ class TestInvokePool:
 
     def test_preinvoke_before_rev6(self, invoke_pool):
         # GIVEN IS Revision is under 6
-        icon_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        icon_stub.sync_task().pre_invoke.return_value = {}
+        icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
+        icon_service_stub.sync_task().pre_invoke.return_value = {}
 
         # WHEN I call PreInvoke
         response: PreInvokeResponse = invoke_pool.pre_invoke(
@@ -475,8 +475,8 @@ class TestInvokePool:
         icon_invoke["txResults"] = []  # GIVEN there are no txs
         icon_invoke.pop("prep")
 
-        icon_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        icon_stub.sync_task().invoke.return_value = icon_invoke
+        icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
+        icon_service_stub.sync_task().invoke.return_value = icon_invoke
 
         # WHEN I call invoke
         invoke_data = invoke_pool.invoke(block=block)
