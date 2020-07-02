@@ -731,8 +731,8 @@ class BlockChain:
             "params": {"filter": ["lastBlock"]}
         }
 
-        response = icon_service_stub.sync_task().query(request)
-        score_last_block_height = int(response['lastBlock']['blockHeight'], 16)
+        query_response = icon_service_stub.sync_task().query(request)
+        score_last_block_height = int(query_response['lastBlock']['blockHeight'], 16)
 
         if score_last_block_height < next_height:
             for invoke_block_height in range(score_last_block_height + 1, next_height):
@@ -1140,17 +1140,17 @@ class BlockChain:
         }
         request = convert_params(request, ParamType.invoke)
         icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        response = icon_service_stub.sync_task().invoke(request)
-        response_to_json_query(response)
+        query_response = icon_service_stub.sync_task().invoke(request)
+        response_to_json_query(query_response)
 
-        tx_receipts = response["txResults"]
+        tx_receipts = query_response["txResults"]
         block_builder = BlockBuilder.from_new(block, self.__tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = block.header.peer_id
         block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
+            ChannelProperty().name: query_response['stateRootHash']
         }
-        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.state_hash = Hash32(bytes.fromhex(query_response['stateRootHash']))
         block_builder.receipts = tx_receipts
         block_builder.reps = self.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
@@ -1277,15 +1277,15 @@ class BlockChain:
 
         request = convert_params(request_origin, ParamType.invoke)
         icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        response: dict = cast(dict, icon_service_stub.sync_task().invoke(request))
-        response_to_json_query(response)
-        tx_receipts = response.get("txResults")
+        invoke_response: dict = cast(dict, icon_service_stub.sync_task().invoke(request))
+        response_to_json_query(invoke_response)
+        tx_receipts = invoke_response.get("txResults")
 
         block_builder = BlockBuilder.from_new(_block, self.__tx_versioner)
         block_builder.reset_cache()
         block_builder.peer_id = _block.header.peer_id
 
-        next_prep = response.get("prep", {})
+        next_prep = invoke_response.get("prep", {})
 
         if is_unrecorded_block:
             block_builder.next_leader = ExternalAddress.empty()
@@ -1300,9 +1300,9 @@ class BlockChain:
                 self._process_next_prep_legacy(_block, block_builder, reps, next_prep)
 
         block_builder.commit_state = {
-            ChannelProperty().name: response['stateRootHash']
+            ChannelProperty().name: invoke_response['stateRootHash']
         }
-        block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
+        block_builder.state_hash = Hash32(bytes.fromhex(invoke_response['stateRootHash']))
         block_builder.receipts = tx_receipts
 
         if _block.header.peer_id.hex_hx() == ChannelProperty().peer_id:

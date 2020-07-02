@@ -691,9 +691,9 @@ class ChannelService:
         request = convert_params(request, ParamType.write_precommit_state)
 
         icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        precommit_result: dict = icon_service_stub.sync_task().write_precommit_state(request)
-        if "error" in precommit_result:
-            raise WritePrecommitStateError(precommit_result['error'])
+        write_precommit_state_response: dict = icon_service_stub.sync_task().write_precommit_state(request)
+        if "error" in write_precommit_state_response:
+            raise WritePrecommitStateError(write_precommit_state_response['error'])
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
         return True

@@ -666,20 +666,20 @@ class BlockManager:
         icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
 
         util.logger.debug(f"request_roll_back() Rollback request({request})")
-        response: dict = cast(dict, icon_service_stub.sync_task().rollback(request))
+        rollback_response: dict = cast(dict, icon_service_stub.sync_task().rollback(request))
         try:
-            response_to_json_query(response)
+            response_to_json_query(rollback_response)
         except GenericJsonRpcServerError as e:
             util.logger.warning(f"request_rollback() response error = {e}")
         else:
-            result_height = response.get("blockHeight")
+            result_height = rollback_response.get("blockHeight")
             if hex(target_block.header.height) == result_height:
                 util.logger.info(f"request_rollback() Rollback Success. result height = {result_height}")
                 self.blockchain.rollback(target_block)
                 self.rebuild_block()
                 return True
 
-        util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
+        util.logger.warning(f"request_rollback() Rollback Fail. response = {rollback_response}")
         return False
 
     def __block_height_sync(self):

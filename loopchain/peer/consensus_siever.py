@@ -130,10 +130,10 @@ class ConsensusSiever(ConsensusBase):
             "blockHash": block_hash.hex()
         }
         request = convert_params(request, ParamType.pre_invoke)
-        response: dict = cast(dict, icon_service_stub.sync_task().pre_invoke(request))
-        response_to_json_query(response)
+        preinvoke_response: dict = cast(dict, icon_service_stub.sync_task().pre_invoke(request))
+        response_to_json_query(preinvoke_response)
 
-        added_transactions = response.get("addedTransactions", {})
+        added_transactions = preinvoke_response.get("addedTransactions", {})
         return added_transactions
 
     async def __add_block(self, block: Block):
@@ -172,8 +172,8 @@ class ConsensusSiever(ConsensusBase):
             "newBlockHash": new_hash.hex()
         }
         request = convert_params(request, ParamType.change_block_hash)
-        response: dict = cast(dict, icon_service_stub.sync_task().change_block_hash(request))
-        response_to_json_query(response)
+        preinvoke_response: dict = cast(dict, icon_service_stub.sync_task().change_block_hash(request))
+        response_to_json_query(preinvoke_response)
 
     async def consensus(self):
         util.logger.debug(f"-------------------consensus-------------------")
