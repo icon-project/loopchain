@@ -59,7 +59,7 @@ class BlockFactory(DataFactory):
         block_builder.fixed_timestamp = int(time.time() * 1_000_000)
         block_builder.prev_votes = prev_votes
 
-        pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.prepare_invoke(
+        pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.pre_invoke(
             block_height=data_number,
             block_hash=prev_id
         )

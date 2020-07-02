@@ -249,7 +249,7 @@ class InvokePool(MessagePool):
 
         return cast(InvokeData, self.get_message(id_))
 
-    def prepare_invoke(self, block_height: int, block_hash: Hash32) -> PreInvokeResponse:
+    def pre_invoke(self, block_height: int, block_hash: Hash32) -> PreInvokeResponse:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
         request = {

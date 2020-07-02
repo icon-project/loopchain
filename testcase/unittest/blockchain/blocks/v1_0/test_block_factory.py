@@ -22,7 +22,7 @@ class TestBlockFactory:
         tx_versioner = TransactionVersioner()
 
         invoke_pool: InvokePool = mocker.MagicMock(InvokePool)
-        invoke_pool.prepare_invoke.return_value = PreInvokeResponse.new(icon_preinvoke)
+        invoke_pool.pre_invoke.return_value = PreInvokeResponse.new(icon_preinvoke)
         signer: Signer = Signer.new()
         epoch_pool = EpochPool()
 

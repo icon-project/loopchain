@@ -427,7 +427,7 @@ class TestInvokePool:
 
     def test_preinvoke(self, icon_preinvoke, invoke_pool):
         # WHEN I call prepare invoke
-        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+        response: PreInvokeResponse = invoke_pool.pre_invoke(
             block_height=TestInvokePool.height,
             block_hash=TestInvokePool.block_hash
         )
@@ -442,7 +442,7 @@ class TestInvokePool:
         icon_stub.sync_task().pre_invoke.return_value = {}
 
         # WHEN I call PreInvoke
-        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+        response: PreInvokeResponse = invoke_pool.pre_invoke(
             block_height=TestInvokePool.height,
             block_hash=TestInvokePool.block_hash
         )
