@@ -6,7 +6,7 @@ import pytest
 
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
-from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
+from loopchain.blockchain.invoke_result import InvokeRequest, InvokeResult, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes.v1_0.vote import BlockVote
@@ -298,14 +298,14 @@ class TestInvokeData:
     current_validators_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
 
     @pytest.fixture
-    def invoke_data_factory(self) -> Callable[..., InvokeData]:
+    def invoke_data_factory(self) -> Callable[..., InvokeResult]:
         def _(_icon_invoke: dict, **kwargs):
-            return InvokeData.new(
+            return InvokeResult.new(
                 epoch_num=kwargs.get("epoch_num", TestInvokeData.epoch_num),
                 round_num=kwargs.get("round_num", TestInvokeData.round_num),
                 height=kwargs.get("height", TestInvokeData.height),
                 current_validators_hash=kwargs.get("current_validators_hash", TestInvokeData.current_validators_hash),
-                invoke_result=_icon_invoke
+                invoke_response=_icon_invoke
             )
 
         return _
@@ -336,7 +336,7 @@ class TestInvokeData:
         expected_next_validators_hash = self._get_reps_root_hash(icon_invoke["prep"])
 
         # WHEN I created InvokeData
-        invoke_data: InvokeData = invoke_data_factory(icon_invoke)
+        invoke_data: InvokeResult = invoke_data_factory(icon_invoke)
 
         # THEN next_validators_hash should be differ with
         assert invoke_data.next_validators_hash == expected_next_validators_hash != TestInvokeData.current_validators_hash

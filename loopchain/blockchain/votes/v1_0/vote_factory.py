@@ -1,7 +1,7 @@
 from lft.consensus.messages.vote import VoteFactory, VoteVerifier
 
 import loopchain.utils as util
-from loopchain.blockchain.invoke_result import InvokePool, InvokeData
+from loopchain.blockchain.invoke_result import InvokePool, InvokeResult
 from loopchain.blockchain.types import Hash32, ExternalAddress, Signature
 from loopchain.crypto.hashing import build_hash_generator
 from loopchain.crypto.signature import Signer
@@ -37,7 +37,7 @@ class BlockVoteFactory(VoteFactory):
     async def create_vote(self, data_id: bytes, commit_id: bytes, epoch_num: int, round_num: int) -> BlockVote:
         data_id: Hash32
 
-        invoke_data: InvokeData = self._invoke_result_pool.get_invoke_data(epoch_num, round_num)
+        invoke_data: InvokeResult = self._invoke_result_pool.get_invoke_data(epoch_num, round_num)
 
         timestamp = util.get_time_stamp()
         signature = self._get_signature(

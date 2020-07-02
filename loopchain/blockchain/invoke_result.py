@@ -152,7 +152,7 @@ class PreInvokeResponse:
         )
 
 
-class InvokeData(Message):
+class InvokeResult(Message):
     def __init__(self,
                  epoch_num: int,
                  round_num: int,
@@ -226,11 +226,11 @@ class InvokeData(Message):
     def new(cls, epoch_num, round_num,
             height: int,
             current_validators_hash: Hash32,
-            invoke_result: dict):
+            invoke_response: dict):
         """Create Invoke Data from PreInvoke result."""
-        state_hash = Hash32(bytes.fromhex(invoke_result.get("stateRootHash")))
-        next_validators_info: Optional[dict] = invoke_result.get("prep")
-        receipts: list = invoke_result.get("txResults")
+        state_hash = Hash32(bytes.fromhex(invoke_response.get("stateRootHash")))
+        next_validators_info: Optional[dict] = invoke_response.get("prep")
+        receipts: list = invoke_response.get("txResults")
 
         return cls(
             epoch_num=epoch_num,
@@ -244,10 +244,10 @@ class InvokeData(Message):
 
 
 class InvokePool(MessagePool):
-    def get_invoke_data(self, epoch_num: int, round_num: int) -> InvokeData:
+    def get_invoke_data(self, epoch_num: int, round_num: int) -> InvokeResult:
         id_ = f"{epoch_num}_{round_num}".encode()
 
-        return cast(InvokeData, self.get_message(id_))
+        return cast(InvokeResult, self.get_message(id_))
 
     def pre_invoke(self, block_height: int, block_hash: Hash32) -> PreInvokeResponse:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
@@ -260,7 +260,7 @@ class InvokePool(MessagePool):
 
         return PreInvokeResponse.new(pre_invoke_result)
 
-    def invoke(self, block: 'Block') -> InvokeData:
+    def invoke(self, block: 'Block') -> InvokeResult:
         """Originated from `Blockchain.score_invoke`."""
 
         invoke_request = InvokeRequest.from_block(block=block)
@@ -268,18 +268,18 @@ class InvokePool(MessagePool):
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())
 
-        invoke_data = InvokeData.new(
+        invoke_data = InvokeResult.new(
             epoch_num=block.header.epoch,
             round_num=block.header.round,
             height=block.header.height,
             current_validators_hash=block.header.validators_hash,
-            invoke_result=invoke_result_dict
+            invoke_response=invoke_result_dict
         )
         self.add_message(invoke_data)
 
         return invoke_data
 
-    def genesis_invoke(self, block: 'Block') -> InvokeData:
+    def genesis_invoke(self, block: 'Block') -> InvokeResult:
         method = "icx_sendTransaction"
         transactions = []
         tx_versioner = TransactionVersioner()
@@ -306,12 +306,12 @@ class InvokePool(MessagePool):
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         invoke_result_dict: dict = stub.sync_task().invoke(request)
 
-        invoke_data: InvokeData = InvokeData.new(
+        invoke_data: InvokeResult = InvokeResult.new(
             epoch_num=block.header.epoch,
             round_num=block.header.round,
             height=block.header.height,
             current_validators_hash=block.header.validators_hash,
-            invoke_result=invoke_result_dict
+            invoke_response=invoke_result_dict
         )
         self.add_message(invoke_data)
 

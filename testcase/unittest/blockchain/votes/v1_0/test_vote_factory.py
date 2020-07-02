@@ -3,7 +3,7 @@ from typing import Callable
 
 import pytest
 
-from loopchain.blockchain.invoke_result import InvokeData, InvokePool
+from loopchain.blockchain.invoke_result import InvokeResult, InvokePool
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.crypto.signature import Signer
@@ -15,16 +15,16 @@ class TestVoteFactory:
         return InvokePool()
 
     @pytest.fixture
-    def mock_verify(self, icon_invoke) -> Callable[[InvokePool, int, int], InvokeData]:
+    def mock_verify(self, icon_invoke) -> Callable[[InvokePool, int, int], InvokeResult]:
         """Suppose that caller of verifier proceeds invoke."""
 
         def _(invoke_pool: InvokePool, epoch_num: int, round_num: int):
-            invoke_data: InvokeData = InvokeData.new(
+            invoke_data: InvokeResult = InvokeResult.new(
                 epoch_num=epoch_num,
                 round_num=round_num,
                 height=1,
                 current_validators_hash=Hash32.fromhex("0xea2254afbeaa13c73b6f366bfc7621e2a155df9e3ee1e1e7c00df5345c84a7af"),
-                invoke_result=icon_invoke
+                invoke_response=icon_invoke
             )
             invoke_pool.add_message(invoke_data)
 
