@@ -425,6 +425,54 @@ class TestInvokePool:
             body
         )
 
+    def test_prune_invoke_result_until_target_round(self, invoke_pool):
+        epoch_num = 0
+        last_round = 10
+
+        # GIVEN I have many invoke data in invoke pool
+        assert not invoke_pool._messages
+        for i in range(last_round+1):
+            invoke_data = InvokeData(
+                epoch_num=epoch_num, round_num=i,
+                # Ignore params in this test
+                height=1, receipts=[], validators_hash=Hash32.empty(), state_root_hash=Hash32.empty()
+            )
+            invoke_pool.add_message(invoke_data)
+
+        # WHEN I prune all things except one
+        invoke_pool.prune_message(latest_epoch_num=0, latest_round_num=last_round)
+
+        # THEN I have only one invoke data
+        assert len(invoke_pool._messages) == 1
+        # AND Its round should be the last round
+        invoke_data = invoke_pool.get_invoke_data(epoch_num=epoch_num, round_num=last_round)
+        assert invoke_data.epoch_num == epoch_num
+        assert invoke_data.round_num == last_round
+
+    def test_prune_result_until_target_epoch(self, invoke_pool):
+        epoch_num = 0
+        last_round = 10
+
+        # GIVEN I have many invoke data in invoke pool
+        assert not invoke_pool._messages
+        for i in range(last_round+1):
+            invoke_data = InvokeData(
+                epoch_num=epoch_num, round_num=i,
+                # Ignore params in this test
+                height=1, receipts=[], validators_hash=Hash32.empty(), state_root_hash=Hash32.empty()
+            )
+            invoke_pool.add_message(invoke_data)
+
+        # WHEN I prune all things except one
+        invoke_pool.prune_message(latest_epoch_num=0, latest_round_num=last_round)
+
+        # THEN I have only one invoke data
+        assert len(invoke_pool._messages) == 1
+        # AND Its round should be the last round
+        invoke_data = invoke_pool.get_invoke_data(epoch_num=epoch_num, round_num=last_round)
+        assert invoke_data.epoch_num == epoch_num
+        assert invoke_data.round_num == last_round
+
     def test_preinvoke(self, icon_preinvoke, invoke_pool):
         # WHEN I call prepare invoke
         response: PreInvokeResponse = invoke_pool.prepare_invoke(

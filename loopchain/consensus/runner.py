@@ -38,7 +38,7 @@ class ConsensusRunner(EventRegister):
         self._invoke_pool: InvokePool = InvokePool()
         self.broadcast_scheduler = broadcast_scheduler
         self.event_system = event_system
-        self._block_factory: 'BlockFactory' = BlockFactory(
+        self._block_factory: BlockFactory = BlockFactory(
             epoch_pool_with_app=EpochPool(),
             tx_queue=tx_queue,
             blockchain=self._block_manager.blockchain,
@@ -204,6 +204,7 @@ class ConsensusRunner(EventRegister):
                 blockchain.add_block(
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
+                self._invoke_pool.prune_message(block.header.epoch, block.header.round)
 
     def _invoke_if_not(self, block: "Block"):
         try:
