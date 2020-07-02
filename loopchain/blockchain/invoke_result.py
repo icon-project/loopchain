@@ -256,9 +256,9 @@ class InvokePool(MessagePool):
             "blockHeight": hex(block_height),
             "blockHash": block_hash.hex()
         }
-        pre_invoke_result = cast(dict, icon_service_stub.sync_task().pre_invoke(request))
+        pre_invoke_response: dict = cast(dict, icon_service_stub.sync_task().pre_invoke(request))
 
-        return PreInvokeResponse.new(pre_invoke_result)
+        return PreInvokeResponse.new(pre_invoke_response)
 
     def invoke(self, block: 'Block') -> InvokeResult:
         """Originated from `Blockchain.score_invoke`."""
@@ -304,14 +304,14 @@ class InvokePool(MessagePool):
         }
         request = convert_params(request, ParamType.invoke)
         icon_service_stub = StubCollection().icon_service_stubs[ChannelProperty().name]
-        invoke_result_dict: dict = icon_service_stub.sync_task().invoke(request)
+        invoke_response: dict = icon_service_stub.sync_task().invoke(request)
 
         invoke_data: InvokeResult = InvokeResult.new(
             epoch_num=block.header.epoch,
             round_num=block.header.round,
             height=block.header.height,
             current_validators_hash=block.header.validators_hash,
-            invoke_response=invoke_result_dict
+            invoke_response=invoke_response
         )
         self.add_message(invoke_data)
 
