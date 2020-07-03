@@ -20,7 +20,7 @@ import time
 import unittest
 
 import loopchain.utils as util
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.utils import loggers
 

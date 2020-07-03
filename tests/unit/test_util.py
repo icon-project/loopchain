@@ -1,30 +1,10 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """util functions for unittest"""
 
 import asyncio
 import json
 import logging
-import os
-import time
-from sys import platform
 from typing import Optional
 
-import loopchain
 import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import CommonSubprocess
@@ -103,38 +83,6 @@ def make_key_value_store(store_identity="") -> Optional[KeyValueStore]:
         retry_count += 1
 
     return store
-
-
-def close_open_python_process():
-    # ubuntu patch
-    if platform == "darwin":
-        os.system("pkill -f python")
-        os.system("pkill -f Python")
-    else:
-        os.system("pgrep -f python | tail -$((`pgrep -f python | wc -l` - 1)) | xargs kill -9")
-
-
-def clean_up_temp_db_files(kill_process=True):
-    from pathlib import Path
-    loopchain_root = Path(os.path.dirname(loopchain.__file__)).parent
-
-    if kill_process:
-        close_open_python_process()
-
-    print(f"loopchain root : {loopchain_root}")
-
-    os.system(f'rm -rf $(find {loopchain_root} -name db_*)')
-    os.system(f'rm -rf $(find {loopchain_root} -name *test_db*)')
-    os.system(f'rm -rf $(find {loopchain_root} -name *_block)')
-    os.system(f"rm -rf {loopchain_root}/testcase/db_*")
-    os.system(f"rm -rf {loopchain_root}/.storage")
-    time.sleep(1)
-
-
-def clean_up_mq():
-    os.system("rabbitmqctl stop_app")
-    os.system("rabbitmqctl reset")
-    os.system("rabbitmqctl start_app")
 
 
 def create_basic_tx(peer_auth: Signer) -> Transaction:

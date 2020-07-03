@@ -18,7 +18,7 @@ import unittest
 from unittest.mock import MagicMock
 
 import loopchain.utils as util
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.blockchain.blockchain import BlockChain
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.protos import loopchain_pb2

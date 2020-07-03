@@ -7,7 +7,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from loopchain.crypto.signature import Signer, SignVerifier, long_to_bytes
-from testcase.unittest import test_util
+from tests.unit import test_util
 
 
 class TestSignature(unittest.TestCase):

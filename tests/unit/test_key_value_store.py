@@ -18,7 +18,7 @@
 
 import unittest
 
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain import utils
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 

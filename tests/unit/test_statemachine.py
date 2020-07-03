@@ -18,7 +18,7 @@ import random
 import unittest
 
 import loopchain.utils as util
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.statemachine import statemachine
 
 

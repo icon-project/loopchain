@@ -20,13 +20,13 @@ import logging
 import os
 import unittest
 
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain import configure as conf
 from loopchain.blockchain import BlockChain
 from loopchain.blockchain.blocks import Block
 from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
-from testcase.unittest.mock_peer import set_mock
+from tests.unit.mock_peer import set_mock
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()

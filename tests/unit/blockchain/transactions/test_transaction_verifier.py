@@ -7,7 +7,7 @@ from loopchain.blockchain.exception import TransactionDuplicatedHashError, Trans
 from loopchain.blockchain.transactions import Transaction, TransactionVerifier, TransactionVersioner, TransactionBuilder
 from loopchain.blockchain.transactions import genesis, v2, v3
 from loopchain.blockchain.types import Hash32
-from testcase.unittest.blockchain.conftest import TxFactory, TxBuilderFactory
+from tests.unit.blockchain.conftest import TxFactory, TxBuilderFactory
 
 tx_versioner = TransactionVersioner()
 

@@ -19,7 +19,7 @@
 import unittest
 
 import loopchain.utils as util
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.blockchain import CandidateBlock, CandidateBlocks, BlockChain, ExternalAddress
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.transactions import TransactionVersioner

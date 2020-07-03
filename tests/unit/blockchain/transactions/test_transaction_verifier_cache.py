@@ -6,7 +6,7 @@ from loopchain.blockchain.transactions import TransactionVerifier, TransactionVe
 from loopchain.blockchain.transactions import v2, v3
 from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.types import Signature
-from testcase.unittest.blockchain.conftest import TxFactory
+from tests.unit.blockchain.conftest import TxFactory
 
 tx_versioner = TransactionVersioner()
 

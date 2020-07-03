@@ -15,7 +15,7 @@ import unittest
 
 from loopchain.utils import loggers
 from loopchain.utils.icon_service import convert_params, ParamType
-from testcase.unittest import test_util
+from tests.unit import test_util
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()

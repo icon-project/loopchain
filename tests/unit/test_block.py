@@ -24,14 +24,14 @@ import unittest
 
 import sys
 
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import InvalidBlock
 from loopchain.crypto.signature import Signer
-from testcase.unittest.mock_peer import set_mock
+from tests.unit.mock_peer import set_mock
 
 sys.path.append('../')
 from loopchain.blockchain.types import Hash32, ExternalAddress
