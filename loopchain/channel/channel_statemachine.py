@@ -115,7 +115,7 @@ class ChannelStateMachine(object):
     def switch_role(self):
         pass
 
-    @statemachine.transition(source=('EvaluateNetwork', 'BlockGenerate', 'Vote', 'Watch'), dest='Consensus')
+    @statemachine.transition(source=('EvaluateNetwork', 'BlockGenerate', 'Vote', 'Watch', 'BlockSync'), dest='Consensus')
     def start_lft(self):
         pass
 
