@@ -6,7 +6,7 @@ from loopchain.blockchain.transactions import TransactionBuilder
 from loopchain.blockchain.transactions import genesis, v2, v3
 from loopchain.blockchain.types import Hash32, Signature, ExternalAddress
 from loopchain.crypto.signature import Signer
-from testcase.unittest.blockchain.conftest import TxFactory, TxBuilderFactory
+from tests.unit.blockchain.conftest import TxFactory, TxBuilderFactory
 
 
 @pytest.mark.parametrize("tx_version", [genesis.version, v2.version, v3.version])

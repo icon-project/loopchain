@@ -4,7 +4,7 @@ from freezegun import freeze_time
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner, Transaction
 from loopchain.blockchain.transactions import genesis, v2, v3, v3_issue
 from loopchain.blockchain.types import Hash32
-from testcase.unittest.blockchain.conftest import TxFactory, TxBuilderFactory
+from tests.unit.blockchain.conftest import TxFactory, TxBuilderFactory
 
 tx_versioner = TransactionVersioner()
 

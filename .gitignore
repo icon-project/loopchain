@@ -178,37 +178,14 @@ include/
 
 
 # ETC
-testcase/db/
-test_chain_helper_block/
-sample_score
-servertool.py
-*_pb2.py
-*_profile.txt
-*_profile_.txt
-test_performance_result.txt
-*.icls
+.storage/
 icon-service/
-# tmux_splitter_*.py
 
-# *.pem
-resources/unittest/*
-docs_mine/
-testcase/unittest/blockchain_db*
-channel_manage_data_test2.json
-channel_manage_data_ori.json
-channel_manage_data.json
-monitoring_list.json
-run_a_test.sh
-todo.md
+channel_manage_data*.json
+monitoring_list*.json
 
 gen_docs/_build
 gen_docs/docs
-
-
-.storage
-
-deploy/LOOPCHAIN_VERSION
-parser_py.py
 
 *.whl
 

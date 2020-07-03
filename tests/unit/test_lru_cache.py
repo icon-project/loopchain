@@ -22,7 +22,7 @@ from functools import lru_cache
 from functools import partial
 
 import loopchain.utils as util
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.utils import loggers
 
 loggers.set_preset_type(loggers.PresetType.develop)

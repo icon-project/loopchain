@@ -18,7 +18,7 @@
 import os
 import random
 import unittest
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from collections import namedtuple
 from loopchain.utils import loggers
 from loopchain.blockchain.transactions import TransactionBuilder, TransactionVersioner

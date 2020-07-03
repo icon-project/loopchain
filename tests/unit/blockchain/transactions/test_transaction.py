@@ -2,7 +2,7 @@ import pytest
 
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner
 from loopchain.blockchain.transactions import genesis, v2, v3
-from testcase.unittest.blockchain.conftest import TxFactory
+from tests.unit.blockchain.conftest import TxFactory
 
 
 @pytest.mark.parametrize("tx_version", [genesis.version, v2.version, v3.version])

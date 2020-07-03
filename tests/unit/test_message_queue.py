@@ -27,7 +27,7 @@ from loopchain.channel.channel_inner_service import ChannelInnerService, Channel
 from loopchain.peer import PeerInnerService, PeerInnerStub
 from loopchain.utils import loggers
 from loopchain.utils.message_queue import StubCollection
-from testcase.unittest import test_util
+from tests.unit import test_util
 
 
 loggers.set_preset_type(loggers.PresetType.develop)

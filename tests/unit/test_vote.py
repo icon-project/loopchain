@@ -20,7 +20,7 @@ import logging
 import os
 import unittest
 
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes import vote, votes
 from loopchain.blockchain.votes.v0_1a import BlockVote, BlockVotes, LeaderVote, LeaderVotes

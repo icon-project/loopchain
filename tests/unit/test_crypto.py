@@ -36,7 +36,7 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.crypto.hashing import build_hash_generator
 
-import testcase.unittest.test_util as test_util
+import tests.unit.test_util as test_util
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
