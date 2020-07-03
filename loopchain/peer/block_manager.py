@@ -1031,11 +1031,10 @@ class BlockManager:
 
     async def vote_as_peer(self, unconfirmed_block: 'Data', round_: int):
         if self.event_system:
-            util.logger.notice(f"vote as peer loopchain2.x")
             e = ReceiveDataEvent(unconfirmed_block)
             self.event_system.simulator.raise_event(e)
         else:
-            util.logger.notice(f"vote as peer loopchain3.0")
+            util.logger.notice(f"vote as peer loopchain2.x")
             """Vote to AnnounceUnconfirmedBlock
             """
             util.logger.debug(

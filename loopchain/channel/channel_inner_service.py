@@ -15,7 +15,7 @@ from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import BlockSerializer
-from loopchain.blockchain.backup_maanger import BackupManager
+from loopchain.blockchain.backup_manager import BackupManager
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
@@ -729,7 +729,6 @@ class ChannelInnerTask:
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
             if self._event_system:
-                util.logger.notice(f'loopchain 3.x has event_system!')
                 e = ReceiveVoteEvent(vote)
                 self._event_system.simulator.raise_event(e)
             else:

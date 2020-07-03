@@ -691,8 +691,7 @@ class BlockChain:
         batch.put(BlockChain.TRANSACTION_COUNT_KEY + block_height_encoded, next_total_tx_bytes)
         batch.put(BlockChain.BLOCK_HEIGHT_KEY + block_height_encoded, block_hash_encoded)
 
-        if receipts:
-            self._write_tx(block, receipts, batch)
+        self._write_tx(block, receipts, batch)
 
         if next_prep:
             block_prover = BlockProver.new(
