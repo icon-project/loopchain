@@ -6,7 +6,7 @@ from lft.consensus.epoch import EpochPool
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain import Hash32, ExternalAddress
 from loopchain.blockchain.blocks import v1_0
-from loopchain.blockchain.invoke_result import InvokePool, InvokeData
+from loopchain.blockchain.invoke_result import InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.blockchain.votes.v1_0 import BlockVote
 from loopchain.crypto.signature import Signer
@@ -22,11 +22,7 @@ class TestBlockFactory:
         tx_versioner = TransactionVersioner()
 
         invoke_pool: InvokePool = mocker.MagicMock(InvokePool)
-        invoke_pool.prepare_invoke.return_value = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            query_result=icon_preinvoke
-        )
+        invoke_pool.prepare_invoke.return_value = PreInvokeResponse.new(icon_preinvoke)
         signer: Signer = Signer.new()
         epoch_pool = EpochPool()
 

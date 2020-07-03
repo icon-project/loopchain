@@ -1,13 +1,18 @@
 from collections import OrderedDict
-from typing import List
+from typing import List, Callable, cast
+from unittest.mock import MagicMock
 
 import pytest
 
-from loopchain.blockchain.blocks import NextRepsChangeReason
-from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool
+from loopchain.blockchain.blocks import BlockBuilder
+from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
+from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
 from loopchain.blockchain.transactions import Transaction, TransactionVersioner, TransactionSerializer
 from loopchain.blockchain.types import ExternalAddress, Hash32, Signature
 from loopchain.blockchain.votes.v1_0.vote import BlockVote
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.scoreservice import IconScoreInnerStub
+from loopchain.utils.message_queue import StubCollection
 from testcase.unittest.blockchain.conftest import TxFactory
 
 
@@ -109,7 +114,6 @@ class TestInvokeRequest:
             tx_versioner=TransactionVersioner(),
             is_block_editable=is_block_editable
         ).serialize()
-        print("Invoke request: ", invoke_request_dict)
 
         # THEN Invoke Message should be identical as I expected
         assert invoke_request_dict == expected_request
@@ -265,95 +269,254 @@ class TestInvokeRequest:
         assert invoke_request_dict == expected_request
 
 
+class TestPreInvokeResponse:
+    def test_create_from_preinvoke_response(self, icon_preinvoke):
+        response = PreInvokeResponse.new(icon_preinvoke)
+
+        assert response.validators_hash.hex_0x() == "0x1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de"
+        assert response.added_transactions == {
+            "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
+                "version": "0x3",
+                "timestamp": "0x563a6cf330136",
+                "dataType": "base",
+                "data": {
+                    "prep": {
+                        "incentive": "0x1",
+                        "rewardRate": "0x1",
+                        "totalDelegation": "0x3872423746291",
+                        "value": "0x7800000"
+                    }
+                }
+            }
+        }
+
+
 class TestInvokeData:
-    def test_created_from_query_dict(self, icon_preinvoke):
-        # WHEN I create InvokeData by using the queried data
-        epoch_num = 1
-        round_num = 1
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num,
-            round_num=round_num,
-            query_result=icon_preinvoke
-        )
+    epoch_num = 1
+    round_num = 1
+    height = 1
+    current_validators_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
 
-        # THEN It should contain required data
-        assert invoke_data.epoch_num == epoch_num
-        assert invoke_data.round_num == epoch_num
-        assert invoke_data.added_transactions == icon_preinvoke["addedTransactions"]
-        assert invoke_data.validators_hash.hex() == icon_preinvoke["currentRepsHash"]
+    @pytest.fixture
+    def invoke_data_factory(self) -> Callable[..., InvokeData]:
+        def _(_icon_invoke: dict, **kwargs):
+            return InvokeData.new(
+                epoch_num=kwargs.get("epoch_num", TestInvokeData.epoch_num),
+                round_num=kwargs.get("round_num", TestInvokeData.round_num),
+                height=kwargs.get("height", TestInvokeData.height),
+                current_validators_hash=kwargs.get("current_validators_hash", TestInvokeData.current_validators_hash),
+                invoke_result=_icon_invoke
+            )
 
-    def test_validators_changed(self, icon_preinvoke):
-        # GIVEN I queried and validators changed
-        assert "prep" in icon_preinvoke
+        return _
 
-        # WHEN I create InvokeData by using the queried data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            query_result=icon_preinvoke
-        )
-        # THEN It should tell why validators list has been changed
-        reason = invoke_data.changed_reason
-        assert isinstance(reason, NextRepsChangeReason)
-        assert reason != NextRepsChangeReason.NoChange
+    def _get_reps_root_hash(self, prep) -> Hash32:
+        preps = prep.get("nextReps")
+        preps = [ExternalAddress.fromhex(prep["id"]) for prep in preps]
 
-        # AND next validators and theirs hash should be exist
-        assert invoke_data.next_validators == icon_preinvoke["prep"]["nextReps"]
-        assert invoke_data.next_validators_hash.hex() == icon_preinvoke["prep"]["rootHash"]
+        from loopchain.blockchain.blocks import BlockProverType
+        from loopchain.blockchain.blocks.v0_3 import BlockProver
+        block_prover = BlockProver((rep.extend() for rep in preps), BlockProverType.Rep)
+        return block_prover.get_proof_root()
 
-    def test_validators_not_changed(self, icon_preinvoke):
-        # GIVEN I queried and no changes in validators list
-        icon_preinvoke.pop("prep")
-        assert "prep" not in icon_preinvoke
+    def test_next_validators_hash_eq_curr_validators_hash_if_validators_not_changed(self, invoke_data_factory, icon_invoke):
+        # GIVEN Prep is not changed
+        icon_invoke.pop("prep")
+        assert "prep" not in icon_invoke
 
-        # WHEN I create InvokeData by using the queried data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            query_result=icon_preinvoke
-        )
+        # WHEN I created InvokeData
+        invoke_result = invoke_data_factory(icon_invoke)
 
-        # THEN Prep list is not changed
-        reason = invoke_data.changed_reason
-        assert isinstance(reason, NextRepsChangeReason)
-        assert reason == NextRepsChangeReason.NoChange
+        # THEN next validators hash should be current validators hash
+        assert invoke_result.next_validators_hash == TestInvokeData.current_validators_hash
 
-        # AND There are no next validators
-        assert not invoke_data.next_validators
-        assert invoke_data.next_validators_hash.hex() == invoke_data.validators_hash.hex() == icon_preinvoke["currentRepsHash"]
+    def test_next_validators_hash_not_eq_curr_validators_hash_if_changed(self, invoke_data_factory, icon_invoke):
+        # GIVEN I call Invoke and validators changed
+        assert "prep" in icon_invoke
+        expected_next_validators_hash = self._get_reps_root_hash(icon_invoke["prep"])
 
-    def test_add_invoke_result(self, icon_preinvoke, icon_invoke: dict):
-        # GIVEN I queried and got data
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=1,
-            round_num=1,
-            query_result=icon_preinvoke
-        )
+        # WHEN I created InvokeData
+        invoke_data: InvokeData = invoke_data_factory(icon_invoke)
 
-        # AND It should not contain receipts and its hash at first,
-        assert not invoke_data.receipts
-        assert invoke_data.receipt_hash == Hash32.empty()
-
-        # AND neither state hash.
-        assert not invoke_data.state_hash
-
-        # WHEN I add invoke result message
-        invoke_data.add_invoke_result(invoke_result=icon_invoke)
-
-        # THEN receipt_hash should be generated
-        assert "txResults" in icon_invoke
-        assert invoke_data.receipts
-        assert invoke_data.receipt_hash != Hash32.empty()
-
-        # AND invoke data should contain state hash
-        assert invoke_data.state_hash.hex() == icon_invoke["stateRootHash"]
+        # THEN next_validators_hash should be differ with
+        assert invoke_data.next_validators_hash == expected_next_validators_hash != TestInvokeData.current_validators_hash
 
 
 class TestInvokePool:
+    channel_name = "test"
+    epoch_num = 1
+    round_num = 1
+    height = 1
+    block_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+    current_validators_hash = Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+
+    @pytest.fixture
+    def genesis_block(self, tx_factory):
+        from loopchain.blockchain.blocks import v1_0
+
+        tx_versioner = TransactionVersioner()
+        signer = pytest.SIGNERS[0]
+
+        block_builder = BlockBuilder.new(v1_0.version, tx_versioner)
+        block_builder.peer_id = ExternalAddress.empty()
+        block_builder.fixed_timestamp = 0
+        block_builder.prev_votes = []
+        block_builder.prev_state_hash = Hash32.empty()
+
+        from loopchain.blockchain.transactions import genesis
+        tx = tx_factory(genesis.version)
+        block_builder.transactions[tx.hash] = tx
+
+        block_builder.height = 0
+        block_builder.prev_hash = Hash32.empty()
+        block_builder.signer = None
+
+        peer_id = ExternalAddress.fromhex_address(signer.address)
+        block_builder.validators_hash = Hash32.empty()
+        block_builder.next_validators = [peer_id]
+
+        block_builder.epoch = 0
+        block_builder.round = 0
+
+        return block_builder.build()
+
     @pytest.fixture
     def invoke_pool(self):
         return InvokePool()
 
-    @pytest.mark.xfail(reason="Resolve ICON stub object in invoke pool first!")
-    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool):
-        assert False
+    @pytest.fixture(autouse=True)
+    def mock_channel_name(self):
+        ChannelProperty().name = TestInvokePool.channel_name
+
+        yield
+
+        ChannelProperty().name = None
+
+    @pytest.fixture
+    def icon_score_stub(self, mocker, icon_preinvoke, icon_invoke):
+        stub = mocker.MagicMock(IconScoreInnerStub)
+        task = mocker.MagicMock()
+        stub.sync_task.return_value = task
+        task.pre_invoke.return_value = icon_preinvoke
+        task.invoke.return_value = icon_invoke
+
+        return stub
+
+    @pytest.fixture(autouse=True)
+    def mock_stub_collection(self, icon_score_stub):
+        StubCollection().icon_score_stubs[ChannelProperty().name] = icon_score_stub
+
+        yield
+
+        StubCollection().icon_score_stubs = {}
+
+    @pytest.fixture
+    def block(self):
+        header = MagicMock(BlockHeader)
+        header.height = TestInvokePool.height
+        header.epoch = TestInvokePool.epoch_num
+        header.round = TestInvokePool.round_num
+        header.validators_hash = TestInvokePool.current_validators_hash
+
+        body = cast(BlockBody, MagicMock(BlockBody))
+
+        return Block(
+            header,
+            body
+        )
+
+    def test_preinvoke(self, icon_preinvoke, invoke_pool):
+        # WHEN I call prepare invoke
+        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+            block_height=TestInvokePool.height,
+            block_hash=TestInvokePool.block_hash
+        )
+
+        # THEN params should be contained
+        assert response.validators_hash == Hash32.fromhex(icon_preinvoke["currentRepsHash"], ignore_prefix=True)
+        assert response.added_transactions == icon_preinvoke["addedTransactions"]
+
+    def test_preinvoke_before_rev6(self, invoke_pool):
+        # GIVEN IS Revision is under 6
+        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub.sync_task().pre_invoke.return_value = {}
+
+        # WHEN I call PreInvoke
+        response: PreInvokeResponse = invoke_pool.prepare_invoke(
+            block_height=TestInvokePool.height,
+            block_hash=TestInvokePool.block_hash
+        )
+
+        # THEN current validators should be C-Rep
+        assert response.validators_hash == ChannelProperty().crep_root_hash
+        # AND addedTransactions should be empty
+        assert response.added_transactions == {}
+
+    def test_invoke(self, invoke_pool, block, monkeypatch):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
+        # WHEN I call invoke
+        invoke_data = invoke_pool.invoke(block=block)
+
+        # THEN params should be expected
+        assert invoke_data.epoch_num == TestInvokePool.epoch_num
+        assert invoke_data.round_num == TestInvokePool.round_num
+        assert invoke_data.height == TestInvokePool.height
+        # NOTE: below params could be changed as mocked Invoke response changed
+        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_data.receipt_hash == Hash32.fromhex("0x45c918ac10599dd632a2880fc7ca344753956490f6226b3f052742aa305db258")
+
+    def test_invoke_before_rev6(self, invoke_pool, icon_invoke, monkeypatch, block):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
+        # GIVEN IS Revision is under 6
+        icon_invoke["txResults"] = []  # GIVEN there are no txs
+        icon_invoke.pop("prep")
+
+        icon_stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+        icon_stub.sync_task().invoke.return_value = icon_invoke
+
+        # WHEN I call invoke
+        invoke_data = invoke_pool.invoke(block=block)
+
+        # THEN params should be expected
+        assert invoke_data.epoch_num == TestInvokePool.epoch_num
+        assert invoke_data.round_num == TestInvokePool.round_num
+        assert invoke_data.height == TestInvokePool.height
+        # NOTE: below params could be changed as mocked Invoke response changed
+        assert invoke_data.state_hash == Hash32.fromhex("0xc71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238")
+        assert invoke_data.receipt_hash == Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
+
+    def test_get_invoke_data(self, icon_preinvoke, icon_invoke: dict, invoke_pool, block, monkeypatch):
+        # Ignore InvokeRequest
+        monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
+
+        # GIVEN There are no invoke data in the given epoch and round
+        with pytest.raises(KeyError):
+            invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
+
+        # WHEN I call invoke
+        invoke_pool.invoke(block=block)
+
+        # THEN I can fetch that message by the given epoch and round
+        assert invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
+
+    def test_genesis_invoke(self, invoke_pool, genesis_block: 'Block', icon_invoke):
+        # GIVEN I have no invoke data
+        with pytest.raises(KeyError):
+            invoke_pool.get_invoke_data(genesis_block.header.epoch, genesis_block.header.round)
+
+        # WHEN I call invoke as a genesis block
+        invoke_pool.genesis_invoke(genesis_block)
+
+        # THEN The pool must have genesis invoke result
+        genesis_invoke_result = invoke_pool.get_invoke_data(genesis_block.header.epoch, genesis_block.header.round)
+        # AND below should be zero
+        assert genesis_invoke_result.height == 0
+        assert genesis_invoke_result.epoch_num == 0
+        assert genesis_invoke_result.round_num == 0
+        # AND below hashes should be valid
+        assert isinstance(genesis_invoke_result.state_hash, Hash32) and genesis_invoke_result.state_hash != Hash32.empty()
+        assert isinstance(genesis_invoke_result.receipt_hash, Hash32) and genesis_invoke_result.receipt_hash != Hash32.empty()

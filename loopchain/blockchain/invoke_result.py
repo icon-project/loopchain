@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, cast, Sequence, List, Union, Dict, OrderedDict
 
 from lft.consensus.messages.message import MessagePool, Message
 
-from loopchain.blockchain.blocks import BlockProver, BlockProverType, NextRepsChangeReason
+from loopchain.blockchain.blocks import BlockProverType
 from loopchain.blockchain.blocks.v0_3 import BlockProver
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress
@@ -118,18 +118,54 @@ class InvokeRequest:
         )
 
 
+class PreInvokeResponse:
+    def __init__(self,
+                 added_transactions,
+                 validators_hash: Hash32):
+        self._added_txs = added_transactions
+        self._validators_hash: Hash32 = validators_hash
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(" \
+            f"added_transactions={self._added_txs}," \
+            f"validators_hash={self._validators_hash})"
+
+    @property
+    def added_transactions(self):
+        return self._added_txs
+
+    @property
+    def validators_hash(self) -> Hash32:
+        return self._validators_hash
+
+    @classmethod
+    def new(cls, pre_invoke_result: dict):
+        # FIXME: `currentRepsHash` and `addedTransactions` may always be returned after Rev.6.
+        added_txs: Dict[str, dict] = pre_invoke_result.get("addedTransactions", {})
+        validators_hash = pre_invoke_result.get("currentRepsHash")
+        validators_hash = Hash32.fromhex(validators_hash, ignore_prefix=True) \
+            if validators_hash else ChannelProperty().crep_root_hash
+
+        return cls(
+            added_transactions=added_txs,
+            validators_hash=validators_hash
+        )
+
+
 class InvokeData(Message):
     def __init__(self,
                  epoch_num: int,
                  round_num: int,
-                 added_transactions: Dict[str, dict],
+                 height: int,
+                 receipts: list,
                  validators_hash: Hash32,
+                 state_root_hash: Hash32,
                  next_validators_origin: dict = None):
         """Represents a return value of Invoke Message, received from ICON-Service.
 
         :param epoch_num: Current epoch number
         :param round_num: Current round number
-        :param added_transactions: Txs added by ICON-Service
+        :param height: Height
         :param validators_hash: Current validators hash
         :param next_validators_origin: Information about next validators.
         """
@@ -137,23 +173,16 @@ class InvokeData(Message):
         self._id: bytes = f"{epoch_num}_{round_num}".encode()
         self._epoch_num: int = epoch_num
         self._round_num: int = round_num
-        self._added_transactions: Dict[str, dict] = added_transactions
-        self._validators_hash: Hash32 = validators_hash
-
-        # Additional params
-        self.height = None
-        self._next_validators: Optional[list] = None
-        self._next_validators_hash: Hash32 = validators_hash
-        self._changed_reason: NextRepsChangeReason = NextRepsChangeReason.NoChange
+        self._height = height
+        self._receipts: list = receipts
+        self._state_hash: Optional[Hash32] = state_root_hash
 
         if next_validators_origin:
-            self._next_validators = next_validators_origin["nextReps"]
-            self._next_validators_hash = Hash32.fromhex(next_validators_origin["rootHash"], ignore_prefix=True)
-            self._changed_reason = NextRepsChangeReason.convert_to_change_reason(next_validators_origin["state"])
-
-        # Added after invoke
-        self.receipts: Optional[dict] = None
-        self.state_hash: Optional[Hash32] = None
+            reps = [ExternalAddress.fromhex(rep["id"]) for rep in next_validators_origin["nextReps"]]
+            block_prover = BlockProver((rep.extend() for rep in reps), BlockProverType.Rep)
+            self._next_validators_hash = block_prover.get_proof_root()
+        else:
+            self._next_validators_hash: Hash32 = validators_hash
 
     def __repr__(self):
         return f"{self.__class__.__name__}(" \
@@ -173,18 +202,12 @@ class InvokeData(Message):
         return self._round_num
 
     @property
-    def added_transactions(self) -> dict:
-        # FIXME: Return raw data or converted one?
-        return self._added_transactions
+    def height(self) -> int:
+        return self._height
 
     @property
-    def validators_hash(self) -> Hash32:
-        return self._validators_hash
-
-    @property
-    def next_validators(self) -> Optional[List[Dict[str, str]]]:
-        # TODO: need to be defined according to ICON-Service API
-        return self._next_validators
+    def state_hash(self) -> Hash32:
+        return self._state_hash
 
     @property
     def next_validators_hash(self) -> Hash32:
@@ -192,47 +215,32 @@ class InvokeData(Message):
         return self._next_validators_hash
 
     @property
-    def changed_reason(self) -> NextRepsChangeReason:
-        return self._changed_reason
-
-    @property
     def receipt_hash(self) -> Hash32:
-        if not self.receipts:
+        if not self._receipts:
             return Hash32.empty()
 
-        block_prover = BlockProver(self.receipts, BlockProverType.Receipt)
+        block_prover = BlockProver(self._receipts, BlockProverType.Receipt)
         return block_prover.get_proof_root()
 
     @classmethod
-    def from_dict(cls, epoch_num, round_num, query_result: dict):
-        added_txs: Dict[str, dict] = query_result.get("addedTransactions")
-
-        validators_hash = query_result.get("currentRepsHash", Hash32.empty().hex())
-        if validators_hash:
-            validators_hash: Hash32 = Hash32.fromhex(validators_hash, ignore_prefix=True)
-
-        next_validators_info: Optional[dict] = query_result.get("prep")
+    def new(cls, epoch_num, round_num,
+            height: int,
+            current_validators_hash: Hash32,
+            invoke_result: dict):
+        """Create Invoke Data from PreInvoke result."""
+        state_hash = Hash32(bytes.fromhex(invoke_result.get("stateRootHash")))
+        next_validators_info: Optional[dict] = invoke_result.get("prep")
+        receipts: list = invoke_result.get("txResults")
 
         return cls(
             epoch_num=epoch_num,
             round_num=round_num,
-            added_transactions=added_txs,
-            validators_hash=validators_hash,
+            height=height,
+            receipts=receipts,
+            validators_hash=current_validators_hash,
+            state_root_hash=state_hash,
             next_validators_origin=next_validators_info
         )
-
-    def add_invoke_result(self, invoke_result: dict) -> 'InvokeData':
-        tx_receipts_origin = invoke_result.get("txResults")
-        if not isinstance(tx_receipts_origin, dict):
-            receipts = {Hash32.fromhex(tx_receipt['txHash'], ignore_prefix=True): tx_receipt
-                        for tx_receipt in cast(list, tx_receipts_origin)}
-        else:
-            receipts = tx_receipts_origin
-
-        self.receipts = receipts
-        self.state_hash = Hash32(bytes.fromhex(invoke_result.get("stateRootHash")))
-
-        return self
 
 
 class InvokePool(MessagePool):
@@ -241,27 +249,33 @@ class InvokePool(MessagePool):
 
         return cast(InvokeData, self.get_message(id_))
 
-    def prepare_invoke(self, epoch_num: int, round_num: int) -> InvokeData:
+    def prepare_invoke(self, block_height: int, block_hash: Hash32) -> PreInvokeResponse:
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
 
-        preinvoke_result = self._preinvoke_temp()  # FIXME: Do communicate with ICON-Service
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=epoch_num, round_num=round_num, query_result=preinvoke_result
-        )
-        self.add_message(invoke_data)
+        request = {
+            "blockHeight": hex(block_height),
+            "blockHash": block_hash.hex()
+        }
+        pre_invoke_result = cast(dict, icon_service.sync_task().pre_invoke(request))
 
-        return invoke_data
+        return PreInvokeResponse.new(pre_invoke_result)
 
-    def invoke(self, epoch_num: int, round_num: int, invoke_request: InvokeRequest) -> InvokeData:
+    def invoke(self, block: 'Block') -> InvokeData:
         """Originated from `Blockchain.score_invoke`."""
 
-        invoke_data: InvokeData = self.get_invoke_data(epoch_num, round_num)
-        invoke_data.height = invoke_request._height
+        invoke_request = InvokeRequest.from_block(block=block)
 
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())
 
-        invoke_data.add_invoke_result(invoke_result=invoke_result_dict)
+        invoke_data = InvokeData.new(
+            epoch_num=block.header.epoch,
+            round_num=block.header.round,
+            height=block.header.height,
+            current_validators_hash=block.header.validators_hash,
+            invoke_result=invoke_result_dict
+        )
+        self.add_message(invoke_data)
 
         return invoke_data
 
@@ -292,16 +306,13 @@ class InvokePool(MessagePool):
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
         invoke_result_dict: dict = stub.sync_task().invoke(request)
 
-        invoke_data: InvokeData = InvokeData.from_dict(
-            epoch_num=block.header.epoch, round_num=block.header.round, query_result=invoke_result_dict
+        invoke_data: InvokeData = InvokeData.new(
+            epoch_num=block.header.epoch,
+            round_num=block.header.round,
+            height=block.header.height,
+            current_validators_hash=block.header.validators_hash,
+            invoke_result=invoke_result_dict
         )
-        invoke_data.height = block.header.height
         self.add_message(invoke_data)
 
         return invoke_data
-
-    def _preinvoke_temp(self) -> dict:
-        return {
-            "addedTransactions": {},
-            "currentRepsHash": "b6fe49ca00c53c1b33d3aee490c734401e5d6c82078ec28a9c40522d59a17305",
-        }

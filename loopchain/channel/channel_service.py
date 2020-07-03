@@ -231,7 +231,6 @@ class ChannelService:
         self.__consensus_runner.start(event)
 
     def _generate_genesis_block(self):
-
         tx_versioner = TransactionVersioner()
         signer = ChannelProperty().peer_auth
 
@@ -249,7 +248,7 @@ class ChannelService:
         block_builder.signer = None
 
         peer_id = ExternalAddress.fromhex_address(signer.address)
-        block_builder.validators_hash = Hash32.empty()
+        block_builder.validators_hash = ChannelProperty().crep_root_hash
         block_builder.next_validators = [peer_id]
 
         block_builder.epoch = 0

@@ -104,9 +104,9 @@ def tx_factory(tx_builder_factory) -> TxFactory:
 
 @pytest.fixture
 def icon_preinvoke() -> dict:
-    """Get queried data from ICON-Service.
+    """Suppose that I request PreInvoke to ICON-Service.
 
-    TODO: Check that the all data have valid key and value, especially hash prefix!
+    Note that no value will be returned before Rev. 6.
     """
 
     return {
@@ -126,21 +126,6 @@ def icon_preinvoke() -> dict:
             }
         },
         "currentRepsHash": "1d04dd2ccd9a9d14416d6878a8aa09e02334cd4afa964d75993f2e991ee874de",
-        "prep": {
-            "nextReps": [
-                {
-                    "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
-                    "p2pEndpoint": "123.45.67.89:7100"
-                },
-                {
-                    "id": "hx13aca3210918a9b116973f3c4b27c41a54d5dad1",
-                    "p2pEndPoint": "210.34.56.17:7100"
-                }
-            ],
-            "irep": "0x1",
-            "state": "0x0",
-            "rootHash": "c7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
-        }
     }
 
 
@@ -166,23 +151,8 @@ def icon_invoke() -> dict:
             }
         ],
         "stateRootHash": "c71303ef8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238",
-        "addedTransactions": {
-            "6804dd2ccd9a9d17136d687838aa09e02334cd4afa964d75993f18991ee874de": {
-                "version": "0x3",
-                "timestamp": "0x563a6cf330136",
-                "dataType": "base",
-                "data": {
-                    "prep": {
-                        "incentive": "0x1",
-                        "rewardRate": "0x1",
-                        "totalDelegation": "0x3872423746291",
-                        "value": "0x7800000"
-                    }
-                }
-            }
-        },
         "prep": {
-            "preps": [
+            "nextReps": [
                 {
                     "id": "hx86aba2210918a9b116973f3c4b27c41a54d5dafe",
                     "p2pEndpoint": "123.45.67.89:7100"
@@ -193,7 +163,6 @@ def icon_invoke() -> dict:
                 }
             ],
             "irep": "0x1",
-            "state": "0x0",
-            "rootHash": "c7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+            "state": "0x0"
         }
     }
