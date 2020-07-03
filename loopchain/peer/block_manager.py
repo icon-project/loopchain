@@ -417,7 +417,7 @@ class BlockManager:
                         self.request_result_for_async[block_height] = \
                             await self.__block_request_by_citizen_async(block_height, max_height)
                     else:
-                        await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAITE)
+                        await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAIT)
                         continue
 
                 response_code = self.request_result_for_async[block_height][-1]
@@ -438,7 +438,7 @@ class BlockManager:
 
                 peer_index = (peer_index + 1) % len(peer_stubs)
                 retry_time += 1
-                await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAITE)
+                await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAIT)
 
                 if retry_time > conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
                     util.exit_and_msg(f"This height({block_height}) can't get Block Information.")
@@ -638,7 +638,6 @@ class BlockManager:
                 continue
 
             if response_code == message_code.Response.success:
-                self.peer_target_for_async[process_height]
                 util.logger.debug(f"try add block height: {block.header.height}")
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
