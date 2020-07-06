@@ -272,7 +272,7 @@ class ConsensusRunner(EventRegister):
         )
         round_start_event.deterministic = False
         mediator = self.event_system.get_mediator(DelayedEventMediator)
-        mediator.execute(0.5, round_start_event)
+        mediator.execute(2, round_start_event)
 
     _handler_prototypes = {
         BroadcastDataEvent: _on_event_broadcast_data,
