@@ -238,13 +238,15 @@ class ChannelService:
             expected_leader = curr_epoch.get_proposer_id(last_commit_block.header.round+1).hex_hx()
             initial_epoches.append(curr_epoch)
 
+            last_block_votes = blockchain.find_confirm_info_by_hash(last_commit_block.header.hash)
+            last_block_votes: List[BlockVote_V1_0] = [
+                BlockVote_V1_0.deserialize(vote_serialized)
+                for vote_serialized in json.loads(last_block_votes)
+            ]
+            initial_votes.extend(last_block_votes)
+
             is_leader: bool = ChannelProperty().peer_id == expected_leader
             if is_leader:
-                last_block_votes = blockchain.find_confirm_info_by_hash(last_commit_block.header.hash)
-                last_block_votes: List[BlockVote_V1_0] = [
-                    BlockVote_V1_0.deserialize(vote_serialized)
-                    for vote_serialized in json.loads(last_block_votes)
-                ]
                 candidate_block = await block_factory.create_data(
                     data_number=last_commit_block.header.height+1,
                     prev_id=last_commit_block.header.hash,
