@@ -1,11 +1,13 @@
-import unittest
 import os
 import random
 import tempfile
+import unittest
+
 from asn1crypto import keys
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+
 from loopchain.crypto.signature import Signer, SignVerifier, long_to_bytes
 from tests.unit import test_util
 

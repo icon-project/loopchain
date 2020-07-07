@@ -1,32 +1,18 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Test Transaction Functions"""
+
 import os
 import random
 import unittest
-import tests.unit.test_util as test_util
 from collections import namedtuple
-from loopchain.utils import loggers
+
+from loopchain.blockchain.exception import TransactionInvalidHashError, TransactionDuplicatedHashError
+from loopchain.blockchain.exception import TransactionInvalidSignatureError, TransactionInvalidNidError
 from loopchain.blockchain.transactions import TransactionBuilder, TransactionVersioner
 from loopchain.blockchain.transactions import TransactionVerifier, TransactionSerializer
-from loopchain.blockchain.exception import TransactionInvalidSignatureError, TransactionInvalidNidError
-from loopchain.blockchain.exception import TransactionInvalidHashError, TransactionDuplicatedHashError
 from loopchain.blockchain.types import ExternalAddress, Signature
 from loopchain.crypto.signature import Signer
+from loopchain.utils import loggers
+from tests.unit import test_util
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()
