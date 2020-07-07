@@ -1,19 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """Test Block functions"""
 
 import json
@@ -22,25 +6,20 @@ import os
 import random
 import unittest
 
-import sys
-
-import tests.unit.test_util as test_util
 from cli_tools.icx_test.icx_wallet import IcxWallet
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import ObjectManager
 from loopchain.blockchain import InvalidBlock
-from loopchain.crypto.signature import Signer
-from tests.unit.mock_peer import set_mock
-
-sys.path.append('../')
-from loopchain.blockchain.types import Hash32, ExternalAddress
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver, BlockProverType
+from loopchain.blockchain.blocks import (Block, BlockBuilder, BlockVerifier, BlockSerializer, BlockProver,
+                                         BlockProverType)
 from loopchain.blockchain.transactions import TransactionBuilder, TransactionSerializer, TransactionVersioner
+from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes.v0_3 import BlockVotes, BlockVote
-
-
+from loopchain.crypto.signature import Signer
 from loopchain.utils import loggers
+from tests.unit import test_util
+from tests.unit.mock_peer import set_mock
 
 loggers.set_preset_type(loggers.PresetType.develop)
 loggers.update_preset()

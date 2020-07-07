@@ -1,17 +1,21 @@
+from typing import TYPE_CHECKING
+
 import pytest
 from freezegun import freeze_time
 
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner, Transaction
 from loopchain.blockchain.transactions import genesis, v2, v3, v3_issue
 from loopchain.blockchain.types import Hash32
-from tests.unit.blockchain.conftest import TxFactory, TxBuilderFactory
+
+if TYPE_CHECKING:
+    from tests.unit.blockchain.conftest import TxFactory, TxBuilderFactory
 
 tx_versioner = TransactionVersioner()
 
 
 class TestTransactionSerializerBase:
     @pytest.mark.parametrize("tx_version", [genesis.version, v2.version, v3.version])
-    def test_serializer_version_check(self, tx_factory: TxFactory, tx_version):
+    def test_serializer_version_check(self, tx_factory: 'TxFactory', tx_version):
         tx: Transaction = tx_factory(tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -30,7 +34,7 @@ class TestTransactionSerializerBase:
         (v2.version, ["from", "to", "value", "fee", "timestamp", "nonce"]),
         (v3.version, ["version", "from", "to", "stepLimit", "timestamp", "nid", "value", "nonce"])
     ])
-    def test_to_origin_data_has_valid_form(self, tx_factory: TxFactory, tx_version, expected_keys):
+    def test_to_origin_data_has_valid_form(self, tx_factory: 'TxFactory', tx_version, expected_keys):
         tx: Transaction = tx_factory(tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -42,21 +46,21 @@ class TestTransactionSerializer_genesis:
     tx_version = genesis.version
 
     # TODO: What is diffrence between tx.raw_data and its dict casted?
-    def test_to_raw_data_equals_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_raw_data_equals_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         raw_data = ts.to_raw_data(tx)
         assert raw_data == tx.raw_data
 
-    def test_to_db_data_equals_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_db_data_equals_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
         db_data = ts.to_db_data(tx)
         assert db_data == tx.raw_data
 
-    def test_to_full_data_equals_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_full_data_equals_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -64,7 +68,7 @@ class TestTransactionSerializer_genesis:
         assert full_data == tx.raw_data
 
     @pytest.mark.xfail(reason="Check `is_signing` flag at build().")
-    def test_orig_tx_equals_deserialized_tx(self, tx_builder_factory: TxBuilderFactory):
+    def test_orig_tx_equals_deserialized_tx(self, tx_builder_factory: 'TxBuilderFactory'):
         with freeze_time():
             # TODO: origin data contains signature, so it affects tx_hash of deserialized tx.
             tx: genesis.Transaction = tx_builder_factory(self.tx_version)\
@@ -76,7 +80,7 @@ class TestTransactionSerializer_genesis:
         assert tx == tx_restored
 
     @pytest.mark.xfail(raises=KeyError, reason="Genesis tx raw_data has no `tx_hash`?")
-    def test_get_hash(self, tx_factory: TxFactory):
+    def test_get_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -101,7 +105,7 @@ class TestTransactionSerializer_v2:
     """
     tx_version = v2.version
 
-    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -110,7 +114,7 @@ class TestTransactionSerializer_v2:
         assert raw_data == tx.raw_data
         assert tx.raw_data == dict(tx.raw_data)
 
-    def test_to_db_data_equals_full_data(self, tx_factory: TxFactory):
+    def test_to_db_data_equals_full_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -119,7 +123,7 @@ class TestTransactionSerializer_v2:
 
         assert db_data == full_data
 
-    def test_to_full_data_equals_raw_data_with_method(self, tx_factory: TxFactory):
+    def test_to_full_data_equals_raw_data_with_method(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -130,7 +134,7 @@ class TestTransactionSerializer_v2:
         assert full_data == raw_data
 
     @pytest.mark.xfail(reason="Ignore `to_address (MalformedStr)` attrs ?")
-    def test_orig_tx_equals_deserialized_tx(self, tx_factory: TxFactory):
+    def test_orig_tx_equals_deserialized_tx(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -141,7 +145,7 @@ class TestTransactionSerializer_v2:
 
         assert tx == tx_restored
 
-    def test_get_hash(self, tx_factory: TxFactory):
+    def test_get_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -167,7 +171,7 @@ class TestTransactionSerializer_v3:
 
     tx_version = v3.version
 
-    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -176,7 +180,7 @@ class TestTransactionSerializer_v3:
         assert raw_data == tx.raw_data
         assert tx.raw_data == dict(tx.raw_data)
 
-    def test_to_db_data_equals_dict_raw_data(self, tx_factory: TxFactory):
+    def test_to_db_data_equals_dict_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -185,7 +189,7 @@ class TestTransactionSerializer_v3:
         assert db_data == tx.raw_data
         assert tx.raw_data == dict(tx.raw_data)
 
-    def test_to_full_data_equals_to_db_data_with_tx_hash(self, tx_factory: TxFactory):
+    def test_to_full_data_equals_to_db_data_with_tx_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -195,7 +199,7 @@ class TestTransactionSerializer_v3:
 
         assert db_data == full_data
 
-    def test_orig_tx_equals_deserialized_tx(self, tx_factory: TxFactory):
+    def test_orig_tx_equals_deserialized_tx(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -204,7 +208,7 @@ class TestTransactionSerializer_v3:
 
         assert tx == tx_restored
 
-    def test_get_hash(self, tx_factory: TxFactory):
+    def test_get_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=tx.type(), versioner=tx_versioner)
 
@@ -218,13 +222,13 @@ class TestTransactionSerializer_v3_issue:
     tx_version = v3_issue.version
     type_ = "base"
 
-    def test_serializer_version_check(self, tx_factory: TxFactory):
+    def test_serializer_version_check(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 
         assert isinstance(ts, v3_issue.TransactionSerializer)
 
-    def test_to_origin_data_has_valid_form(self, tx_factory: TxFactory):
+    def test_to_origin_data_has_valid_form(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 
@@ -233,7 +237,7 @@ class TestTransactionSerializer_v3_issue:
 
         assert set(origin_data) == set(expected_keys)
 
-    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: TxFactory):
+    def test_to_raw_data_equals_dict_tx_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 
@@ -242,7 +246,7 @@ class TestTransactionSerializer_v3_issue:
         assert raw_data == tx.raw_data
         assert tx.raw_data == dict(tx.raw_data)
 
-    def test_to_db_data_equals_dict_raw_data(self, tx_factory: TxFactory):
+    def test_to_db_data_equals_dict_raw_data(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 
@@ -251,7 +255,7 @@ class TestTransactionSerializer_v3_issue:
         assert db_data == tx.raw_data
         assert tx.raw_data == dict(tx.raw_data)
 
-    def test_to_full_data_equals_to_db_data_with_tx_hash(self, tx_factory: TxFactory):
+    def test_to_full_data_equals_to_db_data_with_tx_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 
@@ -262,7 +266,7 @@ class TestTransactionSerializer_v3_issue:
         assert db_data == full_data
 
     @pytest.mark.xfail(reason="How to test?")
-    def test_orig_tx_equals_deserialized_tx(self, tx_factory: TxFactory):
+    def test_orig_tx_equals_deserialized_tx(self, tx_factory: 'TxFactory'):
         with freeze_time():
             tx: Transaction = tx_factory(self.tx_version)
             ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
@@ -272,7 +276,7 @@ class TestTransactionSerializer_v3_issue:
 
         assert tx == tx_restored
 
-    def test_get_hash(self, tx_factory: TxFactory):
+    def test_get_hash(self, tx_factory: 'TxFactory'):
         tx: Transaction = tx_factory(self.tx_version)
         ts = TransactionSerializer.new(version=tx.version, type_=self.type_, versioner=tx_versioner)
 

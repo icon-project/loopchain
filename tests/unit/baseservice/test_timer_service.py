@@ -1,9 +1,6 @@
 import asyncio
 
-import pytest
-
 from loopchain.baseservice.timer_service import Timer, TimerService, OffType
-
 
 TIMER_KEY = "timer_key"
 INVALID_TIMER_KEY = "not_exist_key"

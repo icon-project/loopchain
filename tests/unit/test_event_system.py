@@ -24,7 +24,7 @@ import unittest
 
 from loopchain.consensus import Subscriber, Publisher
 
-from ..unit import test_util
+from tests.unit import test_util
 from loopchain.utils import loggers
 
 
