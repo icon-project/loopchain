@@ -1,6 +1,6 @@
 """Consensus (lft) execution and event handling"""
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence, cast
 
 from lft.consensus import Consensus
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
@@ -10,7 +10,7 @@ from lft.event.mediators import DelayedEventMediator
 from loopchain import utils
 from loopchain.blockchain.epoch3 import LoopchainEpoch
 from loopchain.blockchain.types import ExternalAddress
-from loopchain.blockchain.votes.v1_0 import BlockVoteFactory
+from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 
@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from lft.consensus.messages.data import DataFactory
     from lft.consensus.messages.vote import VoteFactory
     from loopchain.blockchain.blocks.v1_0 import Block, BlockFactory
-    from loopchain.blockchain.blocks.v1_0 import BlockVote
     from loopchain.blockchain import BlockManager
 
 
@@ -86,8 +85,14 @@ class ConsensusRunner(EventRegister):
             else:
                 vote_pool = self.consensus._vote_pool
                 votes = tuple(vote_pool.get_votes(block.header.epoch, block.header.round))
+
+                confirm_info = cast(Sequence[BlockVote], votes)
+                confirm_info = [vote.serialize() for vote in confirm_info]
+                confirm_info = json.dumps(confirm_info)
+                confirm_info = confirm_info.encode('utf-8')
+
                 blockchain.add_block(
-                    block=block, confirm_info=votes, need_to_score_invoke=False, force_write_block=True
+                    block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
 
     # FIXME: Temporary
