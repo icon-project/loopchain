@@ -401,6 +401,12 @@ class BlockChain:
 
         return prev_block
 
+    def is_block_in_db(self, block_hash: Hash32) -> bool:
+        try:
+            return self._blockchain_store.get(block_hash.hex().encode("UTF-8")) is not None
+        except KeyError:
+            return False
+
     def find_block_by_hash(self, block_hash: Union[str, Hash32]):
         """find block in DB by block hash.
 

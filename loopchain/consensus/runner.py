@@ -74,7 +74,7 @@ class ConsensusRunner(EventRegister):
 
         Note that RoundEndEvent can be raised when the node restarted. Avoid rewriting block which is committed.
         """
-        if round_end_event.is_success and not self._block_manager.blockchain.find_block_by_hash(round_end_event.commit_id):
+        if round_end_event.is_success and not self._block_manager.blockchain.is_block_in_db(round_end_event.commit_id):
             consensus_db_pool = self.consensus._data_pool  # FIXME
             blockchain = self._block_manager.blockchain
 
