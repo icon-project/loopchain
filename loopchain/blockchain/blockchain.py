@@ -58,10 +58,12 @@ class BlockChain:
     NID_KEY = b'NID_KEY'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
+    LAST_CANDIDATE_KEY = b'last_candidate_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
 
     # Additional information of the block is generated when the add_block phase of the consensus is reached.
     CONFIRM_INFO_KEY = b'confirm_info_key'
+    CANDIDATE_CONFIRM_INFO_KEY = b'candidate_confirm_info_key'
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 

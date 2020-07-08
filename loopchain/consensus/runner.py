@@ -1,6 +1,6 @@
 """Consensus (lft) execution and event handling"""
 import json
-from typing import TYPE_CHECKING, Sequence, cast, List
+from typing import TYPE_CHECKING, Sequence, List
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from loopchain.baseservice import BroadcastScheduler
     from loopchain.baseservice.aging_cache import AgingCache
     from loopchain.blockchain import BlockManager
+    from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 
 
 class ConsensusRunner(EventRegister):
@@ -215,15 +216,64 @@ class ConsensusRunner(EventRegister):
             else:
                 vote_pool = self.consensus._vote_pool
                 votes = tuple(vote_pool.get_votes(block.header.epoch, block.header.round))
+                confirm_info = self._serialize_votes(votes)
 
-                confirm_info = cast(Sequence[BlockVote], votes)
-                confirm_info = [vote.serialize() for vote in confirm_info]
-                confirm_info = json.dumps(confirm_info)
-                confirm_info = confirm_info.encode('utf-8')
-
+                candidate_block: 'Block' = consensus_db_pool.get_data(round_end_event.candidate_id)
+                candidate_votes: Sequence[BlockVote] = vote_pool.get_votes(
+                    epoch_num=candidate_block.header.epoch,
+                    round_num=candidate_block.header.round
+                )
+                self._write_candidate_info(candidate_block, candidate_votes)
                 blockchain.add_block(
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
+
+    def _write_candidate_info(self, candidate_block: 'Block', candidate_votes: Sequence[BlockVote]):
+        """Write candidate info in batch."""
+
+        blockchain = self._block_manager.blockchain
+        store: 'KeyValueStore' = blockchain.blockchain_store
+        batch = store.WriteBatch()
+
+        block_serialized = self._serialize_block(candidate_block)
+        candidate_height_key = self._get_candidate_block_key_by_height(candidate_block.header.height)
+        batch.put(candidate_height_key, block_serialized)
+
+        block_hash_encoded = candidate_block.header.hash.hex().encode("utf-8")
+        votes_serialized = self._serialize_votes(candidate_votes)
+        batch.put(blockchain.CONFIRM_INFO_KEY + block_hash_encoded, votes_serialized)
+
+        self._prune_candidate_info_until(candidate_block, batch)
+        batch.write()
+
+    def _prune_candidate_info_until(self, candidate_block, batch: 'KeyValueStoreWriteBatch'):
+        blockchain = self._block_manager.blockchain
+        target_height: int = candidate_block.header.height - 1
+
+        candidate_block_key = self._get_candidate_block_key_by_height(target_height)
+        batch.delete(candidate_block_key)
+
+        block_hash_encoded = candidate_block.header.prev_hash.hex().encode("utf-8")
+        candidate_vote_key = blockchain.CANDIDATE_CONFIRM_INFO_KEY + block_hash_encoded
+        batch.delete(candidate_vote_key)
+
+    def _get_candidate_block_key_by_height(self, height: int):
+        candidate_height_key = height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder="big")
+
+        return self._block_manager.blockchain.LAST_CANDIDATE_KEY + candidate_height_key
+
+    def _serialize_block(self, block: 'Block'):
+        """Serialize Block 1.0 to write in DB."""
+
+        return json.dumps(block.serialize()).encode("utf-8")
+
+    def _serialize_votes(self, votes: Sequence[BlockVote]) -> bytes:
+        """Serialize Vote 1.0 to write in DB."""
+
+        confirm_info = [vote.serialize() for vote in votes]
+        confirm_info = json.dumps(confirm_info)
+
+        return confirm_info.encode('utf-8')
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
