@@ -1,6 +1,6 @@
 """Consensus (lft) execution and event handling"""
 import json
-from typing import TYPE_CHECKING, Sequence, List
+from typing import TYPE_CHECKING, Sequence, Iterator, cast
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
@@ -74,41 +74,18 @@ class ConsensusRunner(EventRegister):
                 num=last_commit_block.header.epoch,
                 voters=blockchain.find_preps_addresses_by_header(last_commit_block.header.next_validators_hash)
             )
-            expected_leader = curr_epoch.get_proposer_id(last_commit_block.header.round+1).hex_hx()
             initial_epoches.append(curr_epoch)
 
-            last_block_votes = blockchain.find_confirm_info_by_hash(last_commit_block.header.hash)
-            last_block_votes: List[BlockVote] = [
-                BlockVote.deserialize(vote_serialized)
-                for vote_serialized in json.loads(last_block_votes)
-            ]
+            candidate_block: Block = blockchain.last_unconfirmed_block or \
+                                     self.find_candidate_block_by_height(last_commit_block.header.height+1)
+            self._invoke_pool.invoke(candidate_block)
+            initial_blocks.append(candidate_block)
+
+            last_block_votes = self._find_votes_by_hash(last_commit_block.header.hash)
+            last_candidate_votes = self._find_votes_by_hash(candidate_block.header.hash)
             initial_votes.extend(last_block_votes)
+            initial_votes.extend(last_candidate_votes)
 
-            is_leader: bool = ChannelProperty().peer_id == expected_leader
-            if is_leader:
-                candidate_block = await self._block_factory.create_data(
-                    data_number=last_commit_block.header.height+1,
-                    prev_id=last_commit_block.header.hash,
-                    epoch_num=curr_epoch.num,
-                    round_num=last_commit_block.header.round+1,
-                    prev_votes=last_block_votes
-                )
-
-                # Do self-vote to candidate block
-                self._invoke_pool.invoke(candidate_block)
-                vote_for_candidate = await self._vote_factory.create_vote(
-                    data_id=candidate_block.header.hash,
-                    commit_id=candidate_block.header.prev_hash,
-                    epoch_num=candidate_block.header.epoch,
-                    round_num=candidate_block.header.round
-                )
-                initial_votes.append(vote_for_candidate)
-            else:
-                candidate_block = self._block_manager.blockchain.last_unconfirmed_block
-
-            if candidate_block:
-                # Last unconfirmed block could be none if nothing happened in Fast Sync.
-                initial_blocks.append(candidate_block)
         else:  # Need to create Genesis Block
             candidate_block: Block = self._generate_genesis_block()
             channel_service.update_nid()
@@ -262,6 +239,11 @@ class ConsensusRunner(EventRegister):
 
         return self._block_manager.blockchain.LAST_CANDIDATE_KEY + candidate_height_key
 
+    def _find_votes_by_hash(self, block_hash: Hash32) -> Iterator[BlockVote]:
+        block_votes: bytes = self._block_manager.blockchain.find_confirm_info_by_hash(block_hash)
+
+        return (BlockVote.deserialize(vote_serialized) for vote_serialized in json.loads(block_votes))
+
     def _serialize_block(self, block: 'Block'):
         """Serialize Block 1.0 to write in DB."""
 
@@ -274,6 +256,13 @@ class ConsensusRunner(EventRegister):
         confirm_info = json.dumps(confirm_info)
 
         return confirm_info.encode('utf-8')
+
+    def find_candidate_block_by_height(self, height) -> Block:
+        candidate_key = self._get_candidate_block_key_by_height(height)
+        block_serialized = self._block_manager.blockchain.blockchain_store.get(candidate_key)
+        block_serialized = cast(dict, json.loads(block_serialized))
+
+        return Block.deserialize(block_serialized)
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
