@@ -73,6 +73,21 @@ class ChannelService:
         ObjectManager().channel_service = self
         self.__state_machine = ChannelStateMachine(self)
 
+        if conf.RPYC_ENABLED:
+            self._init_rpyc()
+
+    def _init_rpyc(self):
+        logging.info("_init_rpc() start")
+        try:
+            from ..qa import rservice
+        except ImportError as e:
+            logging.info(f"init_rpc() : rpyc module not found = {e}")
+            return
+
+        rservice.run(conf.RPYC_PORT)
+        rservice.qaservice.set_channel_service(self)
+        logging.info("_init_rpc() end")
+
     @property
     def block_manager(self):
         return self.__block_manager
@@ -189,6 +204,13 @@ class ChannelService:
 
     def _cleanup(self):
         logging.info("_cleanup() Channel Resources.")
+
+        try:
+            from ..qa.rservice import qathread
+        except ImportError as e:
+            logging.info(f"_cleanup() : rpyc module not found = {e}")
+        else:
+            qathread.close()
 
         if self.__timer_service.is_run():
             self.__timer_service.stop()

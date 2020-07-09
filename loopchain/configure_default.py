@@ -389,3 +389,8 @@ ICON_VERSIONS = {
 # QOS ####
 ####################
 TPS_LIMIT_PER_SEC = 1000
+
+
+# RPyC for remote test
+RPYC_ENABLED = False
+RPYC_PORT = 18812

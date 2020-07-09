@@ -139,7 +139,9 @@ class _Broadcaster:
         retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
         # logging.debug(f"broadcast({method_name}) async... ({len(self.__audience)})")
 
+        logging.info(f"broadcast_run_async() : method_name={method_name}")
         for target in self.__get_broadcast_targets(method_name):
+            logging.info(f"broadcast_run_async() : target={target}")
             # util.logger.debug(f"method_name({method_name}), peer_target({target})")
             self.__call_async_to_target(target, method_name, method_param, True, retry_times, timeout)
 
@@ -251,26 +253,12 @@ class _Broadcaster:
         self.__send_tx_in_timer(tx_item)
 
     def __get_broadcast_targets(self, method_name):
-
+        logging.warning(f"__get_broadcast_target : method_name = {method_name}")
         peer_targets = list(self.__audience)
+        logging.warning(f"__get_broadcast_target : peer_targets = {peer_targets}")
         if self.__self_target is not None and method_name not in self.__broadcast_with_self_target_methods:
             peer_targets.remove(self.__self_target)
         return peer_targets
-
-
-def handler_update_audience_patch(self, audience_targets):
-    under_quorum = (len(audience_targets) // 3) * 2
-    new_targets = audience_targets[:under_quorum]
-
-    old_audience = self.__audience.copy()
-
-    for audience_target in new_targets:
-        self.__add_audience(audience_target)
-        old_audience.pop(audience_target, None)
-
-    for old_audience_target in old_audience:
-        old_stubmanager: StubManager = self.__audience.pop(old_audience_target, None)
-        # TODO If necessary, close grpc with old_stubmanager. If not necessary just remove this comment.
 
 
 class BroadcastScheduler(metaclass=abc.ABCMeta):
@@ -374,8 +362,6 @@ class _BroadcastThread(CommonThread):
         self.broadcast_queue = queue.PriorityQueue()
         self._broadcast_pool = futures.ThreadPoolExecutor(conf.MAX_BROADCAST_WORKERS, "BroadcastThread")
         self._broadcaster = _Broadcaster(channel, self_target)
-
-        self._broadcaster._Broadcaster__handler_update_audience = handler_update_audience_patch
 
     def stop(self):
         super().stop()
