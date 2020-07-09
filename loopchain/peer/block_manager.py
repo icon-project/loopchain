@@ -687,6 +687,19 @@ class BlockManager:
         try:
             max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
 
+            if "1.0" in conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {}).keys():
+                lft_start_height = conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {})["1.0"]-1
+
+                if max_height > lft_start_height:
+                    util.logger.info(f"MaxHeight({max_height}) is block version 1.0. \
+                        So, Maxheight set max height of 0.5 ({lft_start_height}).")
+                    max_height = lft_start_height
+
+                if unconfirmed_block_height > lft_start_height:
+                    util.logger.info(f"Unconfirmed Height({max_height}_ is block version 1.0. \
+                        So, Unconfirmed Height set max height of 0.5 ({lft_start_height}).")
+                    unconfirmed_block_height = lft_start_height
+
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
             self.blockchain.last_unconfirmed_block = None
