@@ -728,13 +728,15 @@ class ChannelInnerTask:
                 util.logger.notice(f'loopchain 3.x has event_system!')
                 e = ReceiveVoteEvent(vote)
                 self._event_system.simulator.raise_event(e)
-            else:
+            elif parse_version(vote.version) < parse_version("1.0"):
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)
 
                 if self._channel_service.state_machine.state == "BlockGenerate" and \
                         self._block_manager.consensus_algorithm:
                     self._block_manager.consensus_algorithm.vote(vote)
+            else:
+                util.logger.notice(f'1.0+ Vote received but Consensus Engine is not ready.')
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def complain_leader(self, vote_dumped: str) -> None:
