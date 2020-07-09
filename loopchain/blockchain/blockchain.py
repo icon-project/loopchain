@@ -306,6 +306,18 @@ class BlockChain:
             synced_block_height = self.__last_block.header.height
         return synced_block_height
 
+    def get_block(self, block_hash, block_height):
+        try:
+            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
+            block = block_serializer.deserialize(json.loads(block_dump))
+        except KeyError:
+            block = self.__block_manager.block_request_by_citizen(block_height)
+            if block.header.hash.hex() != block_hash:
+                block = None
+        return block
+
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
 
@@ -320,10 +332,7 @@ class BlockChain:
             if block_height <= 0:
                 return
 
-            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
-            block_version = self.__block_versioner.get_version(block_height)
-            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
-            block = block_serializer.deserialize(json.loads(block_dump))
+            block = self.get_block(block_hash, block_height)
 
             if self.__last_block.header.peer_id != block.header.peer_id:
                 break

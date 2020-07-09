@@ -347,7 +347,7 @@ class BlockManager:
                 else:
                     if len(self.request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
                         self.request_result_for_async[block_height] = \
-                            await self.__block_request_by_citizen_async(block_height, max_height)
+                            await self._block_request_by_citizen_async(block_height, max_height)
                     else:
                         await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAITE)
                         continue
@@ -402,30 +402,26 @@ class BlockManager:
 
         return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
-    def __block_request_by_citizen(self, block_height):
+    def block_request_by_citizen(self, block_height):
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = rs_client.call(
             RestMethod.GetBlockByHeight,
             RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
-        last_block = rs_client.call(RestMethod.GetLastBlock)
-        if not last_block:
-            raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
 
-        max_height = self.blockchain.block_versioner.get_height(last_block)
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
-        votes_dumped: str = get_block_result.get('confirm_info', '')
-        try:
-            votes_serialized = json.loads(votes_dumped)
-            version = self.blockchain.block_versioner.get_version(block_height)
-            votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
-        except json.JSONDecodeError:
-            votes = votes_dumped
-        return block, max_height, -1, votes, message_code.Response.success
 
-    async def __block_request_by_citizen_async(self, block_height, max_height):
+        return block
+
+    async def _block_request_by_citizen_async(self, block_height, max_height):
+        """Get Block from parent node.
+
+        :param block_height:
+        :param max_height: For compatibility, the value is passed as it is.
+        :return:
+        """
         rs_client = ObjectManager().channel_service.rs_client
         get_block_result = await rs_client.call_async(
             RestMethod.GetBlockByHeight,
