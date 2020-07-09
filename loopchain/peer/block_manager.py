@@ -287,6 +287,10 @@ class BlockManager:
         else:
             ChannelProperty().nid = nid
 
+        if self.blockchain.get_synced_block_height() < self.blockchain.last_block.header.height:
+            # TODO run background block sync after Fast Start.
+            pass
+
     def __rebuild_nid(self, block: Block):
         nid = NID.unknown.value
         if block.header.hash.hex() == BlockManager.MAINNET:

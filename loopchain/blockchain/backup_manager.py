@@ -55,6 +55,7 @@ class BackupManager:
 
         tx_count_bytes = blockchain.blockchain_store.get(blockchain.TRANSACTION_COUNT_KEY + block_height_encoded)
 
+        self._backup_store.put(blockchain.SYNCED_BLOCK_HEIGHT, b'')
         self._backup_store.put(blockchain.LAST_BLOCK_HEIGHT, block_height_bytes)
         self._backup_store.put(block_hash_encoded, block_serialized.encode("utf-8"))
         self._backup_store.put(blockchain.BLOCK_HEIGHT_KEY + block_height_encoded, block_hash_encoded)

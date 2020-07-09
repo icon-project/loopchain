@@ -66,6 +66,9 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     LAST_BLOCK_HEIGHT = b'invoke_result_block_height_key'  # don't modify string value. It recorded in block db.
 
+    START_BLOCK_HEIGHT = b'start_block_height'
+    SYNCED_BLOCK_HEIGHT = b'synced_block_height'
+
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None, tx_queue=None):
         # last block in block db
         self.__last_block = None
@@ -294,6 +297,14 @@ class BlockChain:
 
     def rollback(self, target_block):
         self.__remove_block_up_to_target(target_block)
+
+    def get_synced_block_height(self):
+        try:  # If blockchain_store from backup.
+            synced_block_height_bytes = self._blockchain_store.get(BlockChain.SYNCED_BLOCK_HEIGHT)
+            synced_block_height = int.from_bytes(synced_block_height_bytes, byteorder='big')
+        except KeyError:  # Origin blockchain_store.
+            synced_block_height = self.__last_block.header.height
+        return synced_block_height
 
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
