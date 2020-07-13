@@ -132,7 +132,6 @@ class ConsensusRunner(EventRegister):
         return block_builder.build()
 
     def _generate_genesis_tx(self, tx_versioner):
-        print("AAA:", conf.CHANNEL_OPTION[ChannelProperty().name])
         genesis_data_path = conf.CHANNEL_OPTION[ChannelProperty().name]["genesis_data_path"]
         utils.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
         with open(genesis_data_path, encoding="utf-8") as json_file:
@@ -170,8 +169,6 @@ class ConsensusRunner(EventRegister):
         )
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
-        utils.logger.notice(f"_on_round_end_event")
-
         await self._write_block(round_end_event)
         await self._round_start(round_end_event)
 
