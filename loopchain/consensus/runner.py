@@ -21,7 +21,7 @@ from loopchain.protos import loopchain_pb2
 if TYPE_CHECKING:
     from loopchain.baseservice import BroadcastScheduler
     from loopchain.baseservice.aging_cache import AgingCache
-    from loopchain.blockchain import BlockManager
+    from loopchain.peer.block_manager import BlockManager
     from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 
 
