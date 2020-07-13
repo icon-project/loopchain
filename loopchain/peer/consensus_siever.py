@@ -336,7 +336,7 @@ class ConsensusSiever(ConsensusBase):
                 last_unconfirmed_block = self._blockchain.last_unconfirmed_block
                 if last_unconfirmed_block is None:
                     warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
-                    if self._blockchain.find_block_by_hash32(block_hash):
+                    if self._blockchain.is_block_in_db(block_hash):
                         warning_msg += "\nBut already added block so  no longer have to wait for the vote."
                         # TODO An analysis of the cause of this situation is necessary.
                         util.logger.notice(warning_msg)

@@ -1,12 +1,9 @@
 """Channel Service (The main service for single blockchain.)"""
 import asyncio
-import json
 import logging
 import signal
 import traceback
 
-from lft.consensus.epoch import EpochPool
-from lft.consensus.events import InitializeEvent
 from lft.event import EventSystem
 from lft.event.mediators import DelayedEventMediator
 
@@ -16,14 +13,9 @@ from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory
                                    RestClient, NodeSubscriber, UnregisteredException, TimerService)
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.blockchain.blocks import Block
-from loopchain.blockchain.blocks.v1_0 import BlockFactory, BlockBuilder, BlockHeader
-from loopchain.blockchain.epoch3 import LoopchainEpoch
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError, ConsensusChanged
-from loopchain.blockchain.invoke_result import InvokePool
-from loopchain.blockchain.transactions import TransactionVersioner, TransactionBuilder
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
 from loopchain.blockchain.types import Hash32
-from loopchain.blockchain.votes.v1_0 import BlockVoteFactory
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
@@ -185,93 +177,13 @@ class ChannelService:
         self.__event_system = EventSystem()
         self.__event_system.set_mediator(DelayedEventMediator)
         self.__inner_service.event_system = self.__event_system
-
-        epoch_pool = EpochPool()
-        invoke_pool = InvokePool()
-        signer = ChannelProperty().peer_auth
-        block_factory = BlockFactory(
-            epoch_pool_with_app=epoch_pool,
-            tx_queue=self.__tx_queue,
-            blockchain=self.block_manager.blockchain,
-            tx_versioner=TransactionVersioner(),
-            invoke_pool=invoke_pool,
-            signer=signer
-        )
-        vote_factory = BlockVoteFactory(
-            invoke_result_pool=invoke_pool,
-            signer=signer
-        )
         self.__consensus_runner = ConsensusRunner(
-            ChannelProperty().peer_address,
             self.__event_system,
-            block_factory,
-            vote_factory,
+            self.__tx_queue,
             self.__broadcast_scheduler,
             self.__block_manager
         )
-
-        # last_block: Block = self.block_manager.blockchain.last_block
-        block: Block = self._generate_genesis_block()
-        self.update_nid()
-
-        invoke_pool.genesis_invoke(block)
-        initial_epoches = [
-            LoopchainEpoch(num=0, voters=()),
-            LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))
-        ]
-
-        event = InitializeEvent(
-            commit_id=block.header.prev_hash,
-            epoch_pool=initial_epoches,
-            data_pool=[block],
-            vote_pool=[]
-        )
-        event.deterministic = False
-
-        self.__consensus_runner.start(event)
-
-    def _generate_genesis_block(self):
-        tx_versioner = TransactionVersioner()
-        signer = ChannelProperty().peer_auth
-
-        block_builder = BlockBuilder.new(BlockHeader.version, tx_versioner)
-        block_builder.peer_id = ExternalAddress.empty()
-        block_builder.fixed_timestamp = 0
-        block_builder.prev_votes = []
-        block_builder.prev_state_hash = Hash32.empty()
-
-        tx = self._generate_genesis_tx(tx_versioner)
-        block_builder.transactions[tx.hash] = tx
-
-        block_builder.height = 0
-        block_builder.prev_hash = Hash32.empty()
-        block_builder.signer = None
-
-        peer_id = ExternalAddress.fromhex_address(signer.address)
-        block_builder.validators_hash = ChannelProperty().crep_root_hash
-        block_builder.next_validators = [peer_id]
-
-        block_builder.epoch = 0
-        block_builder.round = 0
-
-        return block_builder.build()
-
-    def _generate_genesis_tx(self, tx_versioner):
-        genesis_data_path = conf.CHANNEL_OPTION[ChannelProperty().name]["genesis_data_path"]
-        utils.logger.spam(f"Try to load a file of initial genesis block from ({genesis_data_path})")
-        with open(genesis_data_path, encoding="utf-8") as json_file:
-            tx_info = json.load(json_file)["transaction_data"]
-            nid = tx_info["nid"]
-            ChannelProperty().nid = nid
-
-        tx_builder = TransactionBuilder.new("genesis", "", tx_versioner)
-        nid = tx_info.get("nid")
-        self.block_manager.blockchain.put_nid(nid)
-        tx_builder.nid = int(nid, 16) if nid else None
-        tx_builder.accounts = tx_info["accounts"]
-        tx_builder.message = tx_info["message"]
-
-        return tx_builder.build(False)
+        await self.__consensus_runner.start(self)
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")

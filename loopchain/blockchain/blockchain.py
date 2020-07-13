@@ -1,7 +1,5 @@
 """Block chain class with authorized blocks only"""
-
 import json
-import pickle
 import threading
 import time
 import traceback
@@ -11,7 +9,7 @@ from enum import Enum
 from functools import lru_cache
 from os import linesep
 from types import MappingProxyType
-from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
+from typing import Union, List, cast, Tuple, Sequence, Mapping
 
 from pkg_resources import parse_version
 
@@ -20,7 +18,7 @@ from loopchain import utils
 from loopchain.baseservice import ScoreResponse, ObjectManager
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.lru_cache import lru_cache as valued_only_lru_cache
-from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
+from loopchain.blockchain.blocks import BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.peer_loader import PeerLoader
@@ -60,10 +58,12 @@ class BlockChain:
     NID_KEY = b'NID_KEY'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
+    LAST_CANDIDATE_KEY = b'last_candidate_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
 
     # Additional information of the block is generated when the add_block phase of the consensus is reached.
     CONFIRM_INFO_KEY = b'confirm_info_key'
+    CANDIDATE_CONFIRM_INFO_KEY = b'candidate_confirm_info_key'
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
@@ -114,10 +114,10 @@ class BlockChain:
     def my_made_block_count(self) -> int:
         return self.__made_block_counter[ChannelProperty().peer_address]
 
-    def made_block_count_reached_max(self, block: Block) -> bool:
+    def made_block_count_reached_max(self, block: 'Block') -> bool:
         return self.__made_block_counter[block.header.peer_id] == (conf.MAX_MADE_BLOCK_COUNT - 1)
 
-    def _increase_made_block_count(self, block: Block) -> None:
+    def _increase_made_block_count(self, block: 'Block') -> None:
         """This is must called before changing self.__last_block!
 
         :param block:
@@ -160,7 +160,7 @@ class BlockChain:
         if not self._keep_order_in_penalty() or is_switched_role:
             self.__made_block_counter.clear()
 
-    def get_first_leader_of_next_reps(self, block: Block) -> str:
+    def get_first_leader_of_next_reps(self, block: 'Block') -> str:
         utils.logger.spam(
             f"in get_next_leader new reps leader is "
             f"{self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]}")
@@ -186,7 +186,7 @@ class BlockChain:
             utils.logger.debug(f"rep({rep}) not in reps({[str(rep) for rep in reps]})")
             return None
 
-    def get_expected_generator(self, new_block: Block) -> Optional[ExternalAddress]:
+    def get_expected_generator(self, new_block: 'Block') -> Optional[ExternalAddress]:
         """get expected generator to vote unconfirmed block
 
         :return: expected generator's id by made block count.
@@ -217,11 +217,11 @@ class BlockChain:
         return self.__total_tx
 
     @property
-    def last_block(self) -> Block:
+    def last_block(self) -> 'Block':
         return self.__last_block
 
     @property
-    def latest_block(self) -> Block:
+    def latest_block(self) -> 'Block':
         return self.last_unconfirmed_block or self.__last_block
 
     @property
@@ -262,7 +262,7 @@ class BlockChain:
 
             return self.check_rollback_possible(target_block, prev_block)
 
-    def __remove_block_up_to_target(self, target_block: Block):
+    def __remove_block_up_to_target(self, target_block: 'Block'):
         """CAUTION! This method is called recursively.
 
         :param target_block:
@@ -384,7 +384,7 @@ class BlockChain:
 
         return None
 
-    def get_prev_block(self, block: Block) -> Block:
+    def get_prev_block(self, block: 'Block') -> 'Block':
         """get prev block by given block
 
         :param block: Block
@@ -402,6 +402,12 @@ class BlockChain:
             prev_block = self.find_block_by_hash32(prev_hash) or self.last_block
 
         return prev_block
+
+    def is_block_in_db(self, block_hash: Hash32) -> bool:
+        try:
+            return self._blockchain_store.get(block_hash.hex().encode("UTF-8")) is not None
+        except KeyError:
+            return False
 
     def find_block_by_hash(self, block_hash: Union[str, Hash32]):
         """find block in DB by block hash.
@@ -555,7 +561,7 @@ class BlockChain:
     #  However, this message does not include voting.
     #  You need to change it and remove the default None parameter here.
     def add_block(self,
-                  block: Block,
+                  block: 'Block',
                   confirm_info=None,
                   need_to_write_tx_info=True,
                   need_to_score_invoke=True,
@@ -576,7 +582,7 @@ class BlockChain:
 
             return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke, force_write_block)
 
-    def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True,
+    def __add_block(self, block: 'Block', confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True,
                     force_write_block=False):
         with self.__add_block_lock:
             channel_service = ObjectManager().channel_service
@@ -661,7 +667,7 @@ class BlockChain:
             block_height_bytes
         )
 
-    def __write_block_data(self, block: Block, confirm_info, receipts, next_prep):
+    def __write_block_data(self, block: 'Block', confirm_info, receipts, next_prep):
         # a condition for the exception case of genesis block.
         next_total_tx = self.__total_tx
         if block.header.height > 0:
@@ -704,6 +710,7 @@ class BlockChain:
             if isinstance(confirm_info, list):
                 votes_class = Votes.get_block_votes_class(block.header.version)
                 confirm_info = json.dumps(votes_class.serialize_votes(confirm_info))
+
             if isinstance(confirm_info, str):
                 confirm_info = confirm_info.encode('utf-8')
             batch.put(
@@ -910,7 +917,7 @@ class BlockChain:
 
         return results
 
-    def confirm_prev_block(self, current_block: Block):
+    def confirm_prev_block(self, current_block: 'Block'):
         """confirm prev unconfirmed block by votes in current block
 
         :param current_block: Next unconfirmed block what has votes for prev unconfirmed block.
@@ -1019,7 +1026,7 @@ class BlockChain:
 
         utils.logger.spam(f"add_genesis_block({self.__channel_name}/nid({nid}))")
 
-    def block_dumps(self, block: Union[Block, "Data"]) -> bytes:
+    def block_dumps(self, block: Union['Block', "Data"]) -> bytes:
         block_version = self.__block_versioner.get_version(block.header.height)
         block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
         block_serialized = block_serializer.serialize(block)
@@ -1036,7 +1043,7 @@ class BlockChain:
         block_dumped = zlib.compress(block_dumped)
         return block_dumped
 
-    def block_loads(self, block_dumped: bytes) -> Block:
+    def block_loads(self, block_dumped: bytes) -> 'Block':
         block_dumped = zlib.decompress(block_dumped)
         block_json = block_dumped.decode(encoding=conf.PEER_DATA_ENCODING)
         block_serialized = json.loads(block_json)
@@ -1116,7 +1123,7 @@ class BlockChain:
         else:
             return self.score_invoke
 
-    def genesis_invoke(self, block: Block, prev_block_=None) -> Tuple[Block, dict]:
+    def genesis_invoke(self, block: 'Block', prev_block_=None) -> Tuple['Block', dict]:
         method = "icx_sendTransaction"
         transactions = []
         for tx in block.body.transactions.values():
@@ -1166,7 +1173,7 @@ class BlockChain:
         self.__invoke_results[new_block.header.hash] = (tx_receipts, None)
         return new_block, tx_receipts
 
-    def _process_next_prep_legacy(self, _block: Block, block_builder: BlockBuilder, reps: list, next_prep: dict):
+    def _process_next_prep_legacy(self, _block: 'Block', block_builder: BlockBuilder, reps: list, next_prep: dict):
         next_leader = _block.header.next_leader
 
         if next_prep:
@@ -1190,7 +1197,7 @@ class BlockChain:
         block_builder.next_reps = next_preps
         block_builder.next_reps_hash = next_preps_hash
 
-    def _process_next_prep(self, _block: Block, block_builder: BlockBuilder, reps: list, next_prep: dict):
+    def _process_next_prep(self, _block: 'Block', block_builder: BlockBuilder, reps: list, next_prep: dict):
         if next_prep:
             # P-Rep list has been changed
             utils.logger.debug(f"_process_next_prep() current_height({_block.header.height}),"
@@ -1218,10 +1225,10 @@ class BlockChain:
         block_builder.next_reps_hash = next_preps_hash
 
     def score_invoke(self,
-                     _block: Block,
-                     prev_block: Block,
+                     _block: 'Block',
+                     prev_block: 'Block',
                      is_block_editable: bool = False,
-                     is_unrecorded_block: bool = False) -> Tuple[Block, dict]:
+                     is_unrecorded_block: bool = False) -> Tuple['Block', dict]:
         method = "icx_sendTransaction"
         transactions = []
 
