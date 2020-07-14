@@ -3,6 +3,7 @@ from collections import namedtuple
 from typing import List, Union
 
 from loopchain.blockchain.types import Hash32
+
 BlockVersion = namedtuple("BlockVersion", ("height", "name"))
 
 
@@ -31,6 +32,14 @@ class BlockVersioner:
             raise RuntimeError(f"There is no block version for the height. height: {height}")
         else:
             return version.name
+
+    def get_start_height(self, target_version: str) -> int:
+        try:
+            version = next(version for version in reversed(self._versions) if version.name == target_version)
+        except StopIteration:
+            raise RuntimeError(f"There is no block version. version: {target_version}")
+        else:
+            return version.height
 
     def get_height(self, block_dumped: Union[str, dict]):
         if isinstance(block_dumped, str):
