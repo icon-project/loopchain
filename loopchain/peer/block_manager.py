@@ -686,19 +686,7 @@ class BlockManager:
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
-
-            if "1.0" in conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {}).keys():
-                lft_start_height = conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {})["1.0"]-1
-
-                if max_height > lft_start_height:
-                    util.logger.info(f"MaxHeight({max_height}) is block version 1.0. \
-                        So, Maxheight set max height of 0.5 ({lft_start_height}).")
-                    max_height = lft_start_height
-
-                if unconfirmed_block_height > lft_start_height:
-                    util.logger.info(f"Unconfirmed Height({max_height}_ is block version 1.0. \
-                        So, Unconfirmed Height set max height of 0.5 ({lft_start_height}).")
-                    unconfirmed_block_height = lft_start_height
+            max_height, unconfirmed_block_height = self._limit_height_until_v1_0(max_height, unconfirmed_block_height)
 
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
@@ -729,6 +717,25 @@ class BlockManager:
                 self.__channel_service.state_machine.start_lft()
             else:
                 self.__channel_service.state_machine.complete_sync()
+
+    def _limit_height_until_v1_0(self, max_height: int, unconfirmed_block_height: int) -> Tuple[int, int]:
+        block_versioner = self.blockchain.block_versioner
+        try:
+            height_before_lft: int = block_versioner.get_start_height("1.0") - 1
+        except RuntimeError as e:
+            util.logger.info(f"Block Version 1.0 Not Found. Skip updating BlockSync request height: {e}")
+        else:
+            if max_height > height_before_lft:
+                util.logger.info(f"MaxHeight({max_height}) is block version 1.0. \
+                        So, Maxheight set max height of 0.5 ({height_before_lft}).")
+                max_height = height_before_lft
+
+            if unconfirmed_block_height > height_before_lft:
+                util.logger.info(f"Unconfirmed Height({max_height}_ is block version 1.0. \
+                        So, Unconfirmed Height set max height of 0.5 ({height_before_lft}).")
+                unconfirmed_block_height = height_before_lft
+        finally:
+            return max_height, unconfirmed_block_height
 
     def get_next_leader(self) -> Optional[str]:
         """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
