@@ -662,25 +662,26 @@ class BlockChain:
 
         # loop all tx in block
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        tx_queue = self.__tx_queue
 
-        for index, tx in enumerate(block.body.transactions.values()):
-            receipt = receipts[index]
-            tx_hash = tx.hash.hex()
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
-            tx_info = {
-                'block_hash': block.header.hash.hex(),
-                'block_height': block.header.height,
-                'tx_index': hex(index),
-                'transaction': tx_serializer.to_db_data(tx),
-                'result': receipt
-            }
+        if receipts:
+            tx_queue = self.__tx_queue
+            for index, tx in enumerate(block.body.transactions.values()):
+                receipt = receipts[index]
+                tx_hash = tx.hash.hex()
+                tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
+                tx_info = {
+                    'block_hash': block.header.hash.hex(),
+                    'block_height': block.header.height,
+                    'tx_index': hex(index),
+                    'transaction': tx_serializer.to_db_data(tx),
+                    'result': receipt
+                }
 
-            write_target.put(
-                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
+                write_target.put(
+                    tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
+                    json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
 
-            tx_queue.pop(tx_hash, None)
+                tx_queue.pop(tx_hash, None)
 
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
