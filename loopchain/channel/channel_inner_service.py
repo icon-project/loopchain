@@ -637,9 +637,7 @@ class ChannelInnerTask:
             f"hash({unconfirmed_block.header.hash.hex()})")
 
         if self._channel_service.state_machine.state == "Consensus":
-            from lft.consensus.events import ReceiveDataEvent
-            event = ReceiveDataEvent(unconfirmed_block)
-            self._channel_service.consensus_runner.event_system.simulator.raise_event(event)
+            self._channel_service.consensus_runner.receive_data(unconfirmed_block)
             return
 
         if self._channel_service.state_machine.state not in \
@@ -726,8 +724,8 @@ class ChannelInnerTask:
             )
             if self._event_system:
                 util.logger.notice(f'loopchain 3.x has event_system!')
-                e = ReceiveVoteEvent(vote)
-                self._event_system.simulator.raise_event(e)
+                self._channel_service.consensus_runner.receive_vote(vote)
+
             elif parse_version(vote.version) < parse_version("1.0"):
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)

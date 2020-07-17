@@ -1,10 +1,12 @@
 """Consensus (lft) execution and event handling"""
+import asyncio
 import json
 from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
+from lft.consensus.events import ReceiveVoteEvent, ReceiveDataEvent
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
 
@@ -53,6 +55,12 @@ class ConsensusRunner(EventRegister):
             self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory
         )
 
+        self._received_vote_height_history = dict()
+        self._received_data_height_history = dict()
+
+        self._last_write_block_height = 0
+        self._round_setting()
+
     async def start(self, channel_service):
         event = await self._create_initialize_event(channel_service)
         self.event_system.start(blocking=False)
@@ -84,6 +92,7 @@ class ConsensusRunner(EventRegister):
             last_candidate_votes = self._find_votes_by_hash(candidate_block.header.hash)
             initial_votes.extend(last_block_votes)
             initial_votes.extend(last_candidate_votes)
+            self._last_write_block_height = last_commit_block.header.height
 
         else:  # Need to create Genesis Block
             candidate_block: Block = self._generate_genesis_block()
@@ -169,7 +178,11 @@ class ConsensusRunner(EventRegister):
         )
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
+        utils.logger.notice(f"_on_round_end_event")
+
+        utils.logger.notice(f"Round is OK....?{round_end_event.is_success}")
         await self._write_block(round_end_event)
+        # await self._round_setting()
         await self._round_start(round_end_event)
 
     # FIXME: Temporary
@@ -200,6 +213,8 @@ class ConsensusRunner(EventRegister):
                 blockchain.add_block(
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
+
+                self._last_write_block_height = block.header.height
 
     def _write_candidate_info(self, candidate_block: 'Block', candidate_votes: Sequence[BlockVote]):
         """Write candidate info in batch."""
@@ -261,6 +276,21 @@ class ConsensusRunner(EventRegister):
         return Block.deserialize(block_serialized)
 
     # FIXME: Temporary
+    def _round_setting(self):
+        print("setting......")
+        # current block.
+        # event raising check.
+        # utils.logger.notice(f"YS..... Debug.......call max_height information")
+        # if self._last_write_block_height > 0:
+        max_height, unconfirmed_block_height, peer_stubs = self._block_manager.get_network_information()
+        utils.logger.notice(f"YS....... max_height :{max_height}, last_added_block : {self._last_write_block_height}")
+        # 차후 p2p를 통해서 heartbeat에서 가져올 수 있는 정보.
+        # if self._last_write_block_height < max_height-2:
+        #     utils.logger.notice(f"YS..... Debug.......{max_height} / {self._last_write_block_height}")
+
+        # utils.logger.notice(f"YS..... Debug.......end.... {max_height}")
+
+    # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
         voters = self._get_next_validators(event.commit_id)
         epoch1 = LoopchainEpoch(num=1, voters=voters)
@@ -298,3 +328,34 @@ class ConsensusRunner(EventRegister):
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
         return json.dumps(vote_dumped)
+
+    def receive_vote(self, vote):
+        vote_height_info = vote.block_height
+        if vote_height_info in self._received_vote_height_history.keys():
+            self._received_vote_height_history[vote_height_info].append(vote)
+        else:
+            self._received_vote_height_history[vote_height_info] = list()
+            self._received_vote_height_history[vote_height_info].append(vote)
+
+        if self._last_write_block_height+1 in self._received_vote_height_history.keys():
+            while self._received_vote_height_history[vote_height_info]:
+                vote_info = self._received_vote_height_history[vote_height_info].pop()
+                e = ReceiveVoteEvent(vote_info)
+                self.event_system.simulator.raise_event(e)
+
+    def receive_data(self, unconfirmed_block):
+        data_height_info = unconfirmed_block.header.height
+        if not data_height_info in self._received_data_height_history.keys():
+            self._received_data_height_history[data_height_info] = unconfirmed_block
+
+        if self._last_write_block_height+1 in self._received_data_height_history.keys():
+            block_info = self._received_data_height_history[self._last_write_block_height+1]
+            event = ReceiveDataEvent(block_info)
+            self.event_system.simulator.raise_event(event)
+            del(self._received_data_height_history[self._last_write_block_height+1])
+
+        if self._last_write_block_height+2 in self._received_data_height_history.keys():
+            block_info = self._received_data_height_history[self._last_write_block_height+2]
+            event = ReceiveDataEvent(block_info)
+            self.event_system.simulator.raise_event(event)
+            del(self._received_data_height_history[self._last_write_block_height+2])

@@ -23,6 +23,7 @@ service PeerService {
 message StatusRequest {
     required string request = 1;
     optional string channel = 2;
+    optional string peer = 3;
 }
 
 message StatusReply {

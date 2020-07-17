@@ -682,10 +682,26 @@ class BlockManager:
         util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
         return False
 
+    def get_network_information(self):
+        return self.__get_peer_stub_list()
+
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+
+            if "1.0" in conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {}).keys():
+                lft_start_height = conf.CHANNEL_OPTION[self.channel_name].get("block_versions", {})["1.0"]-1
+
+                if max_height > lft_start_height:
+                    util.logger.info(f"MaxHeight({max_height}) is block version 1.0. \
+                        So, Maxheight set max height of 0.5 ({lft_start_height}).")
+                    max_height = lft_start_height
+
+                if unconfirmed_block_height > lft_start_height:
+                    util.logger.info(f"Unconfirmed Height({max_height}_ is block version 1.0. \
+                        So, Unconfirmed Height set max height of 0.5 ({lft_start_height}).")
+                    unconfirmed_block_height = lft_start_height
 
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
@@ -716,6 +732,7 @@ class BlockManager:
                 self.__channel_service.state_machine.start_lft()
             else:
                 self.__channel_service.state_machine.complete_sync()
+
 
     def get_next_leader(self) -> Optional[str]:
         """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
@@ -781,6 +798,7 @@ class BlockManager:
             reps_hash = ChannelProperty().crep_root_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
         target_list = list(rep_targets.values())
+
         for target in target_list:
             if target == peer_target:
                 continue
@@ -790,11 +808,15 @@ class BlockManager:
             channel = GRPCHelper().create_client_channel(target)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
+                util.logger.notice(f"YS Debug...... {target} call....")
                 response = stub.GetStatus(loopchain_pb2.StatusRequest(
                     request='block_sync',
                     channel=self.__channel_name,
+                    peer=peer_target
                 ), conf.GRPC_TIMEOUT_SHORT)
                 target_block_height = max(response.block_height, response.unconfirmed_block_height)
+
+                peer_stubs.append((target, stub))
 
                 if target_block_height > my_height:
                     peer_stubs.append((target, stub))

@@ -62,6 +62,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         :param context:
         :return:
         """
+        utils.logger.notice(f"YS.... Debug..... request {request}, context: {context.peer()}")
         channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
 
         try:
@@ -72,7 +73,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         status_data: typing.Optional[dict] = None
         if request.request == 'block_sync':
             try:
+                utils.logger.notice(f"YS.... Debug..... {context.peer()} status call start")
                 status_data = typing.cast(dict, channel_stub.sync_task().get_status())
+                utils.logger.notice(f"YS.... Debug..... {context.peer()} status call end")
             except BaseException as e:
                 utils.logger.error(f"Peer GetStatus(block_sync) Exception : {e}")
         else:
@@ -90,6 +93,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             "score": StubCollection().icon_score_stubs.get(channel_name)
         }
 
+        utils.logger.notice(f"YS.... Debug..... {context.peer()} mq call start")
         mq_status_data = {}
         mq_down = False
         for key, stub in stubs.items():
@@ -113,6 +117,9 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         if mq_down:
             reason = status_code.get_status_reason(status_code.Service.mq_down)
             status_data["status"] = "Service is offline: " + reason
+        utils.logger.notice(f"YS.... Debug..... {context.peer()} mq call start")
+
+        utils.logger.notice(f"YS.... Debug..... request {request}, context: {context.peer()}..... END")
 
         return loopchain_pb2.StatusReply(
             status=json.dumps(status_data),
