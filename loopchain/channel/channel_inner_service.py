@@ -23,8 +23,9 @@ from loopchain.blockchain.types import Hash32
 from loopchain.blockchain.votes import Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
-from loopchain.protos import message_code
+from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
 from loopchain.qos.qos_controller import QosController, QosCountControl
+from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -600,6 +601,32 @@ class ChannelInnerTask:
     @message_queue_task(priority=0)
     async def make_essential_backup(self, block_height):
         return await BackupManager().make_backup(self._blockchain, block_height)
+
+    @message_queue_task(priority=255)
+    async def block_height_request(self, request_from: str):
+        """Handle BlockHeightRequest.
+
+        Responses last height of this node.
+        """
+        last_block = self._channel_service.block_manager.blockchain.last_block
+        height: int = last_block.header.height
+        response_type = loopchain_pb2.HeightResponse(
+            peer=ChannelProperty().peer_target,
+            channel=ChannelProperty().name,
+            height=height
+        )
+
+        channel = GRPCHelper().create_client_channel(request_from)
+        stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+        stub.BlockHeightResponse(response_type, conf.GRPC_TIMEOUT_SHORT)
+
+    @message_queue_task(priority=255)
+    async def block_height_response(self, peer: str, height: int):
+        """Handle BlockHeightResponse.
+
+        Triggers to update last height of the target node.
+        """
+        self._channel_service.consensus_runner.update_status(peer, height)
 
     @message_queue_task
     def get_tx_info(self, tx_hash):
