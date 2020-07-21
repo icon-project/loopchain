@@ -124,7 +124,7 @@ attributes = {
 
     Type.Rollback:
         Attribute("--rollback", action='store_true',
-                  help="rollback behind to 1 block(max 10 blocks is possible to rollback")
+                  help="rollback behind to 1 block(rollback can be up to 10 blocks)")
 }
 
 command_values: Dict[Type, str] = {}

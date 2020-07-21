@@ -19,7 +19,7 @@
  $ sudo ln -s /var/lib/snapd/snap /snap
  ```
 
- _Either log out and back in again, or restart your system, to ensure snap’s paths are updated correctly._
+ _Either logout and back in again, or restart your system, to ensure snap’s paths are updated correctly._
 
 ## loopchain installation
 

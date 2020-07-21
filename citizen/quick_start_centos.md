@@ -57,11 +57,9 @@ Python 3.7.x
 
 ## Install loopchain packages
 ```
-$ pip3 install ./whl/iconcommons*.whl \
-&& pip3 install ./whl/iconrpcserver*.whl \
+$ pip3 install ./whl/iconrpcserver*.whl \
 && pip3 install ./whl/iconservice*.whl \
-&& pip3 install ./whl/loopchain*.whl \
-&& pip3 install ./whl/earlgrey*.whl
+&& pip3 install ./whl/loopchain*.whl
 ```
 
 > install `icon_rc` to your $PATH directory. for example, `/usr/local/bin`
