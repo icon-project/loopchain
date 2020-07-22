@@ -142,18 +142,18 @@ def get_stub_to_server(target, stub_class, ssl_auth_type: conf.SSLAuthType = con
 
 
 def normalize_request_url(url_input, version=None, channel=None):
-
     if url_input and 'http://' in url_input:
         url_input = url_input.split("http://")[1]
 
+    use_https = 'https://' in url_input
     if not url_input:  # ex) '' => http://localhost:9000/api/v3
         url = generate_url_from_params(version=version, channel=channel)
-    elif 'https://' in url_input and url_input.count(':') == 1:  # ex) https://testwallet.icon.foundation
+    elif use_https and url_input.count(':') == 1:  # ex) https://testwallet.icon.foundation
         url = generate_url_from_params(dns=url_input.split("https://")[1],
                                        version=version,
                                        use_https=True,
                                        channel=channel)
-    elif 'https://' in url_input and url_input.count(':') == 2:  # ex) https://127.0.0.1:9000
+    elif use_https and url_input.count(':') == 2:  # ex) https://127.0.0.1:9000
         ip_port = url_input.split("https://")[1]
         url = generate_url_from_params(ip=ip_port.split(':')[0],
                                        port=ip_port.split(':')[1],
@@ -170,7 +170,6 @@ def normalize_request_url(url_input, version=None, channel=None):
     elif url_input.count('.') == 3 and url_input.replace(".", "").isdigit():  # ex) 127.0.0.1
         url = generate_url_from_params(ip=url_input, version=version, channel=channel)
     else:  # ex) testwallet.icon.foundation => https://testwallet.icon.foundation/api/v3
-        use_https = 'https://' in url_input
         url = generate_url_from_params(dns=url_input, version=version, use_https=use_https, channel=channel)
 
     return url
