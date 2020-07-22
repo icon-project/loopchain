@@ -1,5 +1,4 @@
 """Channel Inner Service."""
-
 import json
 import multiprocessing as mp
 import signal
@@ -13,10 +12,10 @@ from pkg_resources import parse_version
 
 from loopchain import configure as conf
 from loopchain import utils as util
-from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
-                                   ScoreResponse)
+from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import BlockSerializer
+from loopchain.blockchain.backup_manager import BackupManager
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
@@ -598,6 +597,10 @@ class ChannelInnerTask:
 
         return status_data
 
+    @message_queue_task(priority=0)
+    async def make_essential_backup(self, block_height):
+        return await BackupManager().make_backup(self._blockchain, block_height)
+
     @message_queue_task
     def get_tx_info(self, tx_hash):
         tx = self._tx_queue.get(tx_hash, None)
@@ -726,7 +729,6 @@ class ChannelInnerTask:
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
             if self._event_system:
-                util.logger.notice(f'loopchain 3.x has event_system!')
                 e = ReceiveVoteEvent(vote)
                 self._event_system.simulator.raise_event(e)
             else:

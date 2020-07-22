@@ -27,8 +27,8 @@ class BlockSerializer(ABC):
         raise NotImplementedError
 
     def deserialize(self, block_dumped: dict) -> 'Block':
-        if block_dumped['version'] != self.version:
-            raise BlockVersionNotMatch(block_dumped['version'], self.version,
+        if block_dumped.get('version') != self.version:
+            raise BlockVersionNotMatch(block_dumped.get('version'), self.version,
                                        "The block of this version cannot be deserialized by the serializer.")
         return self._deserialize(block_dumped)
 

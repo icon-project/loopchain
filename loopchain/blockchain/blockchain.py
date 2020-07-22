@@ -1,4 +1,4 @@
-"""Block chain class with authorized blocks only"""
+"""Block chain class with authorized blocks only and consensus essential data."""
 import json
 import threading
 import time
@@ -57,7 +57,6 @@ class BlockChain:
 
     NID_KEY = b'NID_KEY'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
-    LAST_BLOCK_KEY = b'last_block_key'
     LAST_CANDIDATE_KEY = b'last_candidate_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
 
@@ -65,7 +64,10 @@ class BlockChain:
     CONFIRM_INFO_KEY = b'confirm_info_key'
     CANDIDATE_CONFIRM_INFO_KEY = b'candidate_confirm_info_key'
     PREPS_KEY = b'preps_key'
-    INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
+    LAST_BLOCK_HEIGHT = b'invoke_result_block_height_key'  # don't modify string value. It recorded in block db.
+
+    START_BLOCK_HEIGHT = b'start_block_height'
+    SYNCED_BLOCK_HEIGHT = b'synced_block_height'
 
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None, tx_queue=None):
         # last block in block db
@@ -296,6 +298,26 @@ class BlockChain:
     def rollback(self, target_block):
         self.__remove_block_up_to_target(target_block)
 
+    def get_synced_block_height(self):
+        try:  # If blockchain_store from backup.
+            synced_block_height_bytes = self._blockchain_store.get(BlockChain.SYNCED_BLOCK_HEIGHT)
+            synced_block_height = int.from_bytes(synced_block_height_bytes, byteorder='big')
+        except KeyError:  # Origin blockchain_store.
+            synced_block_height = self.__last_block.header.height
+        return synced_block_height
+
+    def get_block(self, block_hash, block_height):
+        try:
+            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
+            block = block_serializer.deserialize(json.loads(block_dump))
+        except KeyError:
+            block = self.__block_manager.block_request_by_citizen(block_height)
+            if block.header.hash.hex() != block_hash:
+                block = None
+        return block
+
     def rebuild_made_block_count(self):
         """rebuild leader's made block count
 
@@ -310,10 +332,7 @@ class BlockChain:
             if block_height <= 0:
                 return
 
-            block_dump = self._blockchain_store.get(block_hash.encode(encoding='UTF-8'))
-            block_version = self.__block_versioner.get_version(block_height)
-            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
-            block = block_serializer.deserialize(json.loads(block_dump))
+            block = self.get_block(block_hash, block_height)
 
             if self.__last_block.header.peer_id != block.header.peer_id:
                 break
@@ -369,7 +388,12 @@ class BlockChain:
         return total_tx
 
     def _rebuild_transaction_count_from_cached(self):
-        tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
+        block_height_encoded = self.__last_block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+        try:
+            tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY + block_height_encoded)
+        except KeyError:
+            tx_count_bytes = self._blockchain_store.get(BlockChain.TRANSACTION_COUNT_KEY)
+
         return int.from_bytes(tx_count_bytes, byteorder='big')
 
     def __find_block_by_key(self, key):
@@ -638,32 +662,33 @@ class BlockChain:
 
         # loop all tx in block
         logging.debug("try add all tx in block to block db, block hash: " + block.header.hash.hex())
-        tx_queue = self.__tx_queue
 
-        for index, tx in enumerate(block.body.transactions.values()):
-            receipt = receipts[index]
-            tx_hash = tx.hash.hex()
-            tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
-            tx_info = {
-                'block_hash': block.header.hash.hex(),
-                'block_height': block.header.height,
-                'tx_index': hex(index),
-                'transaction': tx_serializer.to_db_data(tx),
-                'result': receipt
-            }
+        if receipts:
+            tx_queue = self.__tx_queue
+            for index, tx in enumerate(block.body.transactions.values()):
+                receipt = receipts[index]
+                tx_hash = tx.hash.hex()
+                tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self.__tx_versioner)
+                tx_info = {
+                    'block_hash': block.header.hash.hex(),
+                    'block_height': block.header.height,
+                    'tx_index': hex(index),
+                    'transaction': tx_serializer.to_db_data(tx),
+                    'result': receipt
+                }
 
-            write_target.put(
-                tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
-                json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
+                write_target.put(
+                    tx_hash.encode(encoding=conf.HASH_KEY_ENCODING),
+                    json.dumps(tx_info).encode(encoding=conf.PEER_DATA_ENCODING))
 
-            tx_queue.pop(tx_hash, None)
+                tx_queue.pop(tx_hash, None)
 
         # save_invoke_result_block_height
         bit_length = block.header.height.bit_length()
         byte_length = (bit_length + 7) // 8
         block_height_bytes = block.header.height.to_bytes(byte_length, byteorder='big')
         write_target.put(
-            BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY,
+            BlockChain.LAST_BLOCK_HEIGHT,
             block_height_bytes
         )
 
@@ -680,18 +705,14 @@ class BlockChain:
         block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
+        block_height_encoded = block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
 
         batch = self._blockchain_store.WriteBatch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
-        batch.put(BlockChain.LAST_BLOCK_KEY, block_hash_encoded)
-        batch.put(BlockChain.TRANSACTION_COUNT_KEY, next_total_tx_bytes)
-        batch.put(
-            BlockChain.BLOCK_HEIGHT_KEY +
-            block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big'),
-            block_hash_encoded)
+        batch.put(BlockChain.TRANSACTION_COUNT_KEY + block_height_encoded, next_total_tx_bytes)
+        batch.put(BlockChain.BLOCK_HEIGHT_KEY + block_height_encoded, block_hash_encoded)
 
-        if receipts:
-            self._write_tx(block, receipts, batch)
+        self._write_tx(block, receipts, batch)
 
         if next_prep:
             block_prover = BlockProver.new(
@@ -777,7 +798,7 @@ class BlockChain:
         elif score_last_block_height == next_height + 1:
             try:
                 invoke_result_block_height_bytes = \
-                    self._blockchain_store.get(BlockChain.INVOKE_RESULT_BLOCK_HEIGHT_KEY)
+                    self._blockchain_store.get(BlockChain.LAST_BLOCK_HEIGHT)
                 invoke_result_block_height = int.from_bytes(invoke_result_block_height_bytes, byteorder='big')
 
                 if invoke_result_block_height == next_height:
@@ -981,10 +1002,14 @@ class BlockChain:
     def _init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
         try:
-            last_block_key = self._blockchain_store.get(BlockChain.LAST_BLOCK_KEY, verify_checksums=True)
+            block_height = int.from_bytes(self._blockchain_store.get(BlockChain.LAST_BLOCK_HEIGHT), byteorder='big')
+            last_block_key = self._blockchain_store.get(
+                BlockChain.BLOCK_HEIGHT_KEY +
+                block_height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+            )
         except KeyError:
             last_block_key = None
-        logging.debug("LAST BLOCK KEY : %s", last_block_key)
+        utils.logger.debug(f"LAST BLOCK KEY : {last_block_key}")
 
         if last_block_key:
             block_dump = self._blockchain_store.get(last_block_key)
