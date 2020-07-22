@@ -35,12 +35,12 @@ class BackupManager:
         if type(block_height) == str:
             block_height = int(block_height)
 
-        __db_name = f"backup_db_{block_height}"
+        db_name = f"backup_db_{block_height}"
 
-        db_dirname = f'db_{__db_name}'
+        db_dirname = f'db_{db_name}'
         store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, db_dirname)
 
-        backup_store = utils.init_default_key_value_store(__db_name, __db_name)
+        backup_store = utils.init_default_key_value_store(db_name, db_name)
         origin_store = blockchain.blockchain_store
         backup_block: 'Block' = blockchain.find_block_by_height(block_height)
         self.write_tx(backup_block, backup_store, origin_store)
