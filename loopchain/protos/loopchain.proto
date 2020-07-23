@@ -18,6 +18,11 @@ service PeerService {
     rpc AddTxList (TxSendList) returns (CommonReply) {}
     // broadcast vote on proposed block
     rpc VoteUnconfirmedBlock (BlockVote) returns (CommonReply) {}
+
+    // exchange height info
+    rpc BlockHeightRequest (HeightRequest) returns (CommonReply) {}
+    rpc BlockHeightResponse (PeerHeight) returns (CommonReply) {}
+    rpc BlockRequest (PeerHeight) returns (CommonReply) {}
 }
 
 message StatusRequest {
@@ -48,6 +53,17 @@ message BlockSyncReply {
     optional bytes confirm_info = 4;
     optional bytes block = 5;
     required int32 unconfirmed_block_height = 6;
+}
+
+message HeightRequest {
+    required string peer = 1;
+    required string channel = 2; // channel ID for multichain network
+}
+
+message PeerHeight {
+    required string peer = 1;
+    required string channel = 2; // channel ID for multichain network
+    required int32 height = 3;
 }
 
 // Peer send Block by AnnounceUnconfirmedBlock
