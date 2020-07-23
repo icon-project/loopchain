@@ -1,10 +1,14 @@
 """Consensus (lft) execution and event handling"""
-import json
+import json, asyncio, time
 from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
+
+from loopchain import configure as conf
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
+from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
+
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
 from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
@@ -18,6 +22,8 @@ from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
+
+from loopchain.channel.channel_property import ChannelProperty
 
 if TYPE_CHECKING:
     from loopchain.baseservice import BroadcastScheduler
@@ -54,7 +60,24 @@ class ConsensusRunner(EventRegister):
             self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory
         )
 
+        self._loop = asyncio.get_event_loop()
+
+        self._last_block_height = 0
+        self._height_info_other_nodes = dict()
+        self._data_info_other_nodes = dict()
+        self._vote_info_other_nodes = dict()
+        self._target_list = self._block_manager.get_target_list()
+        self._max_height_in_nodes = 0
+        self._sync_mode = False
+
+        self._request_history_list = dict()
+        self._target_idx = 0
+
     async def start(self, channel_service):
+        self._loop.create_task(self.lft_start(channel_service))
+        self._loop.create_task(self.sync_start())
+
+    async def lft_start(self, channel_service):
         event = await self._create_initialize_event(channel_service)
         self.event_system.start(blocking=False)
         self.event_system.simulator.raise_event(event)
@@ -204,6 +227,7 @@ class ConsensusRunner(EventRegister):
                 blockchain.add_block(
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
+                self._last_block_height = block.header.height
 
     def _invoke_if_not(self, block: "Block"):
         try:
