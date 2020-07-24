@@ -93,8 +93,8 @@ class TestHeightCommunication:
 
         # WHEN The node got response against BlockHeightRequest
         with ThreadPoolExecutor() as executor:
-            req_type = PeerHeight(channel=CHANNEL_NAME)
-            executor.submit(outer_service.BlockHeightResponse, req_type, "context")
+            peer_height = PeerHeight(channel=CHANNEL_NAME)
+            executor.submit(outer_service.BlockHeightResponse, peer_height, "context")
             await asyncio.sleep(.5)
 
         # THEN The node triggers correspond func

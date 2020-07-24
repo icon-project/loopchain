@@ -608,9 +608,8 @@ class ChannelInnerTask:
 
         Responses last height of this node.
         """
-        last_block = self._channel_service.block_manager.blockchain.last_block
-        height: int = last_block.header.height
-        response_type = loopchain_pb2.HeightResponse(
+        height: int = self._channel_service.block_manager.blockchain.last_block.header.height
+        peer_height = loopchain_pb2.PeerHeight(
             peer=ChannelProperty().peer_target,
             channel=ChannelProperty().name,
             height=height
@@ -618,7 +617,7 @@ class ChannelInnerTask:
 
         channel = GRPCHelper().create_client_channel(request_from)
         stub = loopchain_pb2_grpc.PeerServiceStub(channel)
-        stub.BlockHeightResponse(response_type, conf.GRPC_TIMEOUT_SHORT)
+        stub.BlockHeightResponse(peer_height, conf.GRPC_TIMEOUT_SHORT)
 
     @message_queue_task(priority=255)
     async def block_height_response(self, peer: str, height: int):
