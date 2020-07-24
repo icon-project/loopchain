@@ -151,6 +151,19 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
+    def BlockRequest(self, request: PeerHeight, context):
+        """Handle BlockRequest."""
+
+        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        channel_stub = StubCollection().channel_stubs[channel]
+
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().block_request(peer=request.peer, height=request.height),
+            self.peer_service.inner_service.loop
+        )
+
+        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
+
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
         utils.logger.info(f"ComplainLeader {request.complain_vote}")

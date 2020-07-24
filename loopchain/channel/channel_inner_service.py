@@ -33,6 +33,7 @@ if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
     from lft.event import EventSystem
     from loopchain.blockchain.blockchain import BlockChain
+    from loopchain.blockchain.blocks.v1_0 import Block as Block_V1_0
 
 
 class ChannelTxCreatorInnerTask:
@@ -626,6 +627,24 @@ class ChannelInnerTask:
         Triggers to update last height of the target node.
         """
         self._channel_service.consensus_runner.update_status(peer, height)
+
+    @message_queue_task(priority=255)
+    async def block_request(self, peer: str, height: int):
+        """Handle BlockRequest.
+
+        Triggers to reply target block by AnnounceUnconfirmedBlock
+
+        Note that BlockRequest allows only Block 1.0+
+        """
+        blockchain = self._channel_service.block_manager.blockchain
+        block: Block_V1_0 = blockchain.find_block_by_height(height)
+
+        block_dumped = self._channel_service.block_manager.blockchain.block_dumps(block)
+        block_send = loopchain_pb2.BlockSend(block=block_dumped, round_=block.header.round, channel=ChannelProperty().name)
+
+        channel = GRPCHelper().create_client_channel(peer)
+        stub = loopchain_pb2_grpc.PeerServiceStub(channel)
+        stub.AnnounceUnconfirmedBlock(block_send, conf.GRPC_TIMEOUT_SHORT)
 
     @message_queue_task
     def get_tx_info(self, tx_hash):
