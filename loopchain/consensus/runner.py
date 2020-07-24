@@ -273,6 +273,10 @@ class ConsensusRunner(EventRegister):
         mediator = self.event_system.get_mediator(DelayedEventMediator)
         mediator.execute(0.5, round_start_event)
 
+    def update_status(self, peer: str, height: int):
+        # TODO: Update height info
+        pass
+
     _handler_prototypes = {
         BroadcastDataEvent: _on_event_broadcast_data,
         BroadcastVoteEvent: _on_event_broadcast_vote,

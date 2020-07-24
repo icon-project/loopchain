@@ -13,7 +13,10 @@ from loopchain.baseservice import ObjectManager
 from loopchain.baseservice.lru_cache import lru_cache
 from loopchain.blockchain import ChannelStatusError
 from loopchain.peer import status_code
-from loopchain.protos import loopchain_pb2_grpc, message_code, ComplainLeaderRequest, loopchain_pb2
+from loopchain.protos import (
+    loopchain_pb2_grpc, message_code, loopchain_pb2,
+    ComplainLeaderRequest, HeightRequest, PeerHeight
+)
 from loopchain.utils.message_queue import StubCollection
 
 
@@ -121,6 +124,32 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             unconfirmed_block_height=status_data["unconfirmed_block_height"],
             is_leader_complaining=status_data['leader_complaint'],
             peer_id=status_data['peer_id'])
+
+    def BlockHeightRequest(self, request: HeightRequest, context):
+        """Handle BlockHeightRequest."""
+
+        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        channel_stub = StubCollection().channel_stubs[channel]
+
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().block_height_request(request.peer),
+            self.peer_service.inner_service.loop
+        )
+
+        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
+
+    def BlockHeightResponse(self, request: PeerHeight, context):
+        """Handle BlockHeightResponse."""
+
+        channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
+        channel_stub = StubCollection().channel_stubs[channel]
+
+        asyncio.run_coroutine_threadsafe(
+            channel_stub.async_task().block_height_response(peer=request.peer, height=request.height),
+            self.peer_service.inner_service.loop
+        )
+
+        return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
     def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
