@@ -629,7 +629,7 @@ class ChannelInnerTask:
         self._channel_service.consensus_runner.update_status(peer, height)
 
     @message_queue_task(priority=255)
-    async def block_request(self, peer: str, height: int):
+    async def block_request(self, request_from: str, height: int):
         """Handle BlockRequest.
 
         Triggers to reply target block by AnnounceUnconfirmedBlock
@@ -640,9 +640,11 @@ class ChannelInnerTask:
         block: Block_V1_0 = blockchain.find_block_by_height(height)
 
         block_dumped = self._channel_service.block_manager.blockchain.block_dumps(block)
-        block_send = loopchain_pb2.BlockSend(block=block_dumped, round_=block.header.round, channel=ChannelProperty().name)
+        block_send = loopchain_pb2.BlockSend(
+            block=block_dumped, round_=block.header.round, channel=ChannelProperty().name
+        )
 
-        channel = GRPCHelper().create_client_channel(peer)
+        channel = GRPCHelper().create_client_channel(request_from)
         stub = loopchain_pb2_grpc.PeerServiceStub(channel)
         stub.AnnounceUnconfirmedBlock(block_send, conf.GRPC_TIMEOUT_SHORT)
 

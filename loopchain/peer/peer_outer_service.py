@@ -158,7 +158,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         channel_stub = StubCollection().channel_stubs[channel]
 
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().block_request(peer=request.peer, height=request.height),
+            channel_stub.async_task().block_request(request_from=request.peer, height=request.height),
             self.peer_service.inner_service.loop
         )
 
