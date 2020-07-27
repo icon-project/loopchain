@@ -66,12 +66,19 @@ class ConsensusRunner(EventRegister):
         self._height_info_other_nodes = dict()
         self._data_info_other_nodes = dict()
         self._vote_info_other_nodes = dict()
-        self._target_list = self._block_manager.get_target_list()
         self._max_height_in_nodes = 0
         self._sync_mode = False
 
         self._request_history_list = dict()
         self._target_idx = 0
+        self._stub_list = list()
+
+    async def _management_stub(self, status: str = 'init'):
+        self._target_list = self._block_manager.get_target_list()
+        for target in self._target_list:
+            util.logger.debug(f"try to target({target})")
+            channel = GRPCHelper().create_client_channel(target)
+            self._stub_list.append(loopchain_pb2_grpc.PeerServiceStub(channel))
 
     async def start(self, channel_service):
         self._loop.create_task(self.lft_start(channel_service))
