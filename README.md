@@ -3,6 +3,8 @@
 [![loopchain](https://img.shields.io/badge/ICON-Consensus-blue?logoColor=white&logo=icon&labelColor=31B8BB)](https://shields.io)
 [![loopchain](https://snapcraft.io/loopchain/badge.svg)](https://snapcraft.io/loopchain)
 
+![Citizen Sync](https://github.com/icon-project/loopchain/workflows/Citizen%20Sync/badge.svg)
+
  Loopchain is a high-performance Blockchain Consensus & Network engine of ICON project.
 
  In order to run a loopchain node, you need to install [ICON Service]
@@ -146,7 +148,7 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 [Reward Calculator]: https://github.com/icon-project/rewardcalculator
 [virtualenv]: https://virtualenv.pypa.io/en/stable/
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
-[install loopchain via snap]: https://snapcraft.io/loopchain
+[install loopchain via snap]: citizen/quick_start_snap.md
 
 <!--Relative links-->
 [Run Citizen Node on ICON Testnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network

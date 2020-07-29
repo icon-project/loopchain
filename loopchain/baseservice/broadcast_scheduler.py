@@ -1,16 +1,3 @@
-# Copyright 2018 ICON Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """gRPC broadcast thread"""
 
 import abc
@@ -22,23 +9,18 @@ import signal
 import threading
 import time
 from concurrent import futures
-from enum import Enum
 from functools import partial
 
 import grpc
 from grpc._channel import _Rendezvous
 
 from loopchain import configure as conf, utils as util
-from loopchain.baseservice import StubManager, ObjectManager, CommonThread, BroadcastCommand, \
-    TimerService, Timer
+from loopchain.baseservice import (StubManager, ObjectManager, CommonThread, BroadcastCommand,
+                                   TimerService, Timer)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.baseservice.tx_item_helper import TxItem
+from loopchain.baseservice.tx_message import TxItem, TxMessagesQueue
+from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2_grpc, loopchain_pb2
-
-
-class PeerThreadStatus(Enum):
-    normal = 0
-    leader_complained = 1
 
 
 class _Broadcaster:
@@ -50,8 +32,6 @@ class _Broadcaster:
         self.__self_target = self_target
 
         self.__audience = {}  # self.__audience[peer_target] = stub_manager
-        self.__thread_variables = dict()
-        self.__thread_variables[self.THREAD_VARIABLE_PEER_STATUS] = PeerThreadStatus.normal
 
         if conf.IS_BROADCAST_ASYNC:
             self.__broadcast_run = self.__broadcast_run_async
@@ -66,12 +46,10 @@ class _Broadcaster:
         }
 
         self.__broadcast_with_self_target_methods = {
-            "AddTx",
-            "AddTxList",
-            "BroadcastVote"
+            "AddTxList"
         }
 
-        self.stored_tx = queue.Queue()
+        self.tx_messages_queue: TxMessagesQueue = TxMessagesQueue()
 
         self.__timer_service = TimerService()
 
@@ -230,48 +208,23 @@ class _Broadcaster:
         # util.logger.debug("BroadcastThread method param: " + str(broadcast_method_param))
         self.__broadcast_run(broadcast_method_name, broadcast_method_param, **broadcast_method_kwparam)
 
-    def __make_tx_list_message(self):
-        tx_list = []
-        tx_list_size = 0
-        tx_list_count = 0
-        remains = False
-        while not self.stored_tx.empty():
-            stored_tx_item = self.stored_tx.get()
-            tx_list_size += len(stored_tx_item)
-            tx_list_count += 1
-            if tx_list_size >= conf.MAX_TX_SIZE_IN_BLOCK or tx_list_count >= conf.MAX_TX_COUNT_IN_ADDTX_LIST:
-                self.stored_tx.put(stored_tx_item)
-                remains = True
-                break
-            tx_list.append(stored_tx_item.get_tx_message())
+    def __send_tx_by_timer(self, **kwargs):
+        # Send multiple tx
+        tx_messages = self.tx_messages_queue.pop()
+
         message = loopchain_pb2.TxSendList(
             channel=self.__channel,
-            tx_list=tx_list
+            tx_list=tx_messages.get_messages()
         )
 
-        return remains, message
-
-    def __send_tx_by_timer(self, **kwargs):
-        # util.logger.spam(f"broadcast_scheduler:__send_tx_by_timer")
-        if self.__thread_variables[self.THREAD_VARIABLE_PEER_STATUS] == PeerThreadStatus.leader_complained:
-            logging.warning("Leader is complained your tx just stored in queue by temporally: "
-                            + str(self.stored_tx.qsize()))
-        else:
-            # Send single tx for test
-            # stored_tx_item = self.stored_tx.get()
-            # self.__broadcast_run("AddTx", stored_tx_item.get_tx_message())
-
-            # Send multiple tx
-            remains, message = self.__make_tx_list_message()
-            self.__broadcast_run("AddTxList", message)
-            if remains:
-                self.__send_tx_in_timer()
+        self.__broadcast_run("AddTxList", message)
+        if not self.tx_messages_queue.empty():
+            self.__send_tx_in_timer()
 
     def __send_tx_in_timer(self, tx_item=None):
-        # util.logger.spam(f"broadcast_scheduler:__send_tx_in_timer")
         duration = 0
         if tx_item:
-            self.stored_tx.put(tx_item)
+            self.tx_messages_queue.append(tx_item)
             duration = conf.SEND_TX_LIST_DURATION
 
         if TimerService.TIMER_KEY_ADD_TX not in self.__timer_service.timer_list:
@@ -284,8 +237,6 @@ class _Broadcaster:
                     callback_kwargs={}
                 )
             )
-        else:
-            pass
 
     def __handler_create_tx(self, create_tx_param):
         # logging.debug(f"Broadcast create_tx....")
@@ -388,7 +339,7 @@ class BroadcastScheduler(metaclass=abc.ABCMeta):
         if reps_hash and reps_hash != self.__audience_reps_hash:
             self._update_audience(reps_hash)
         elif not self.__audience_reps_hash:
-            self._update_audience(ObjectManager().channel_service.peer_manager.crep_root_hash)
+            self._update_audience(ChannelProperty().crep_root_hash)
 
         kwargs = {}
         if retry_times is not None:
@@ -494,7 +445,8 @@ class _BroadcastSchedulerMp(BroadcastScheduler):
         def _signal_handler(signal_num, frame):
             signal.signal(signal.SIGTERM, original_sigterm_handler)
             signal.signal(signal.SIGINT, original_sigint_handler)
-            logging.error(f"BroadcastScheduler process({channel}) has been received signal({signal_num})")
+            logging.error(f"BroadcastScheduler process({channel}) has been received "
+                          f"signal({repr(signal.Signals(signal_num))})")
             broadcast_queue.put((None, None))
             broadcaster.stop()
 

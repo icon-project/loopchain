@@ -18,8 +18,6 @@ import logging
 import signal
 import traceback
 
-from earlgrey import MessageQueueService
-
 from loopchain import configure as conf
 from loopchain import utils
 from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory, ObjectManager, CommonSubprocess,
@@ -27,12 +25,12 @@ from loopchain.baseservice import (BroadcastScheduler, BroadcastSchedulerFactory
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import AnnounceNewBlockError, WritePrecommitStateError
 from loopchain.blockchain.types import ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.types import Hash32
 from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
-from loopchain.peermanager import PeerManager
 from loopchain.protos import loopchain_pb2
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.utils import loggers, command_arguments
@@ -41,17 +39,16 @@ from loopchain.utils.message_queue import StubCollection
 
 
 class ChannelService:
-    def __init__(self, channel_name, amqp_target, amqp_key):
+    def __init__(self, channel_name, amqp_target, amqp_key, rollback=False):
         self.__block_manager: BlockManager = None
         self.__score_container: CommonSubprocess = None
         self.__score_info: dict = None
         self.__peer_auth: Signer = None
-        self.__peer_manager: PeerManager = None
         self.__broadcast_scheduler: BroadcastScheduler = None
         self.__rs_client: RestClient = None
-        self.__consensus = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self._rollback: bool = rollback
 
         loggers.get_preset().channel_name = channel_name
         loggers.get_preset().update_logger()
@@ -64,6 +61,7 @@ class ChannelService:
 
         ChannelProperty().name = channel_name
         ChannelProperty().amqp_target = amqp_target
+        ChannelProperty().crep_root_hash = Hash32.fromhex(conf.CHANNEL_OPTION[channel_name].get('crep_root_hash'))
 
         StubCollection().amqp_key = amqp_key
         StubCollection().amqp_target = amqp_target
@@ -92,10 +90,6 @@ class ChannelService:
         return self.__rs_client
 
     @property
-    def peer_manager(self):
-        return self.__peer_manager
-
-    @property
     def broadcast_scheduler(self):
         return self.__broadcast_scheduler
 
@@ -120,18 +114,19 @@ class ChannelService:
             await StubCollection().create_peer_stub()
 
             results = await StubCollection().peer_stub.async_task().get_node_info_detail()
-            await self.init(**results)
+            self._init_properties(**results)
 
+            await self._init()
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
             logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
-        loop = MessageQueueService.loop
-        # loop.set_debug(True)
-        loop.create_task(_serve())
-        loop.add_signal_handler(signal.SIGINT, self.close)
-        loop.add_signal_handler(signal.SIGTERM, self.close)
+        loop = self.__inner_service.loop
+        serve_coroutine = _serve() if not self._rollback else self._serve_manual_rollback()
+        loop.create_task(serve_coroutine)
+        loop.add_signal_handler(signal.SIGINT, self.close, signal.SIGINT)
+        loop.add_signal_handler(signal.SIGTERM, self.close, signal.SIGTERM)
 
         try:
             loop.run_forever()
@@ -139,44 +134,87 @@ class ChannelService:
             traceback.print_exception(type(e), e, e.__traceback__)
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
+            self._cancel_tasks(loop)
+            self._cleanup()
             loop.close()
 
-            self.cleanup()
+    async def _serve_manual_rollback(self):
+        """Initialize minimum channel resources and manual rollback
 
-    def close(self):
+        :return: None
+        """
+        await StubCollection().create_peer_stub()
+
+        results = await StubCollection().peer_stub.async_task().get_node_info_detail()
+        self._init_properties(**results)
+
+        self.__init_block_manager()
+        await self.__init_score_container()
+        await self.__inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
+        await asyncio.sleep(0.01)   # sleep to complete peer service initialization
+
+        message = self._manual_rollback()
+        self.shutdown_peer(message=message)
+
+    def _manual_rollback(self) -> str:
+        logging.debug("_manual_rollback() start manual rollback")
+        if self.block_manager.blockchain.block_height >= 0:
+            self.block_manager.rebuild_block()
+
+        if self.block_manager.request_rollback():
+            message = "rollback finished"
+        else:
+            message = "rollback cancelled"
+
+        logging.debug("_manual_rollback() end manual rollback")
+        return message
+
+    def close(self, signum=None):
+        logging.info(f"close() signum = {repr(signum)}")
         if self.__inner_service:
             self.__inner_service.cleanup()
-            logging.info("Cleanup ChannelInnerService.")
 
-        MessageQueueService.loop.stop()
+        self.__inner_service.loop.stop()
 
-    def cleanup(self):
-        logging.info("Cleanup Channel Resources.")
+    @staticmethod
+    def _cancel_tasks(loop):
+        for task in asyncio.Task.all_tasks(loop):
+            if task.done():
+                continue
+            task.cancel()
+            try:
+                loop.run_until_complete(task)
+            except asyncio.CancelledError as e:
+                logging.info(f"_cancel_tasks() task : {task}, error : {e}")
 
-        if self.__block_manager:
-            self.__block_manager.stop()
-            self.__block_manager = None
-            logging.info("Cleanup BlockManager.")
+    def _cleanup(self):
+        logging.info("_cleanup() Channel Resources.")
+
+        if self.__timer_service.is_run():
+            self.__timer_service.stop()
+            self.__timer_service.wait()
+            logging.info("_cleanup() TimerService.")
 
         if self.__score_container:
             self.__score_container.stop()
             self.__score_container.wait()
             self.__score_container = None
-            logging.info("Cleanup ScoreContainer.")
+            logging.info("_cleanup() ScoreContainer.")
 
         if self.__broadcast_scheduler:
             self.__broadcast_scheduler.stop()
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
-            logging.info("Cleanup BroadcastScheduler.")
+            logging.info("_cleanup() BroadcastScheduler.")
 
-        if self.__timer_service.is_run():
-            self.__timer_service.stop()
-            self.__timer_service.wait()
-            logging.info("Cleanup TimerService.")
+        if self.__block_manager:
+            self.__block_manager.stop()
+            self.__block_manager = None
+            logging.info("_cleanup() BlockManager.")
 
-    async def init(self, **kwargs):
-        """Initialize Channel Service
+    @staticmethod
+    def _init_properties(**kwargs):
+        """Initialize properties
 
         :param kwargs: takes (peer_id, peer_port, peer_target, rest_target)
         within parameters
@@ -193,7 +231,11 @@ class ChannelService:
         ChannelProperty().node_type = conf.NodeType.CitizenNode
         ChannelProperty().rs_target = None
 
-        self.__peer_manager = PeerManager()
+    async def _init(self):
+        """Initialize channel resources
+
+        :return: None
+        """
         await self.__init_peer_auth()
         self.__init_broadcast_scheduler()
         self.__init_block_manager()
@@ -204,7 +246,7 @@ class ChannelService:
 
     async def evaluate_network(self):
         await self._init_rs_client()
-        self.__peer_manager.load_peers()
+        self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         self.__ready_to_height_sync()
         self.__state_machine.block_sync()
@@ -237,7 +279,7 @@ class ChannelService:
                 epoch.reps_hash)
         else:
             reps = self.__block_manager.blockchain.find_preps_addresses_by_roothash(
-                self.__peer_manager.crep_root_hash)
+                ChannelProperty().crep_root_hash)
 
         if ChannelProperty().peer_address in reps:
             return conf.NodeType.CommunityNode
@@ -259,7 +301,7 @@ class ChannelService:
         self.__inner_service.update_sub_services_properties(node_type=ChannelProperty().node_type.value)
 
     def switch_role(self):
-        self.peer_manager.update_all_peers()
+        self.__block_manager.blockchain.reset_leader_made_block_count(need_check_switched_role=True)
         if self._is_role_switched():
             self.__state_machine.switch_role()
 
@@ -278,14 +320,17 @@ class ChannelService:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
     def __init_block_manager(self):
-        logging.debug(f"__load_block_manager_each channel({ChannelProperty().name})")
+        logging.debug(f"__init_block_manager() : channel({ChannelProperty().name})")
+
+        channel_name = ChannelProperty().name
+        develop = command_arguments.command_values.get(command_arguments.Type.Develop, False)
+        store_id = f"{ChannelProperty().peer_port}_{channel_name}" if develop else channel_name
         try:
             self.__block_manager = BlockManager(
-                name="loopchain.peer.BlockManager",
                 channel_service=self,
                 peer_id=ChannelProperty().peer_id,
-                channel_name=ChannelProperty().name,
-                store_identity=ChannelProperty().peer_target
+                channel_name=channel_name,
+                store_id=store_id
             )
         except KeyValueStoreError as e:
             utils.exit_and_msg("KeyValueStoreError(" + str(e) + ")")
@@ -379,8 +424,7 @@ class ChannelService:
             logging.debug("genesis block was already generated")
             return
 
-        reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(
-            self.peer_manager.crep_root_hash)
+        reps = self.block_manager.blockchain.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         self.__block_manager.blockchain.generate_genesis_block(reps)
 
     async def subscribe_to_parent(self):
@@ -411,14 +455,14 @@ class ChannelService:
                 block_height=self.__block_manager.blockchain.block_height,
                 event=subscribe_event
             ),
-            loop=MessageQueueService.loop
+            loop=self.__inner_service.loop
         )
         task.add_done_callback(_handle_exception)
 
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
-        logging.debug(f"channel_service:shutdown_peer")
+        logging.debug(f"shutdown_peer() kwargs = {kwargs}")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):
@@ -438,7 +482,7 @@ class ChannelService:
 
         try:
             dump = peer_manager.dump()
-            key_value_store = self.__block_manager.get_key_value_store()
+            key_value_store = self.__block_manager.blockchain.blockchain_store
             key_value_store.put(level_db_key_name, dump)
         except AttributeError as e:
             logging.warning("Fail Save Peer_list: " + str(e))
@@ -542,12 +586,6 @@ class ChannelService:
             raise WritePrecommitStateError(precommit_result['error'])
 
         self.__block_manager.pop_old_block_hashes(block.header.height)
-        return True
-
-    def score_remove_precommit_state(self, block: Block):
-        invoke_fail_info = json.dumps({"block_height": block.height, "block_hash": block.block_hash})
-        stub = StubCollection().score_stubs[ChannelProperty().name]
-        stub.sync_task().remove_precommit_state(invoke_fail_info)
         return True
 
     def callback_leader_complain_timeout(self):

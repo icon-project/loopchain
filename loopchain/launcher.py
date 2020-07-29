@@ -18,7 +18,6 @@
 import argparse
 import json
 import logging
-import os
 import time
 
 from loopchain import configure as conf
@@ -116,7 +115,7 @@ def start_as_channel(args):
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
 
-    ChannelService(channel, amqp_target, amqp_key).serve()
+    ChannelService(channel, amqp_target, amqp_key, rollback=args.rollback).serve()
 
 
 def start_as_rest_server(args):
@@ -155,10 +154,16 @@ def start_as_score(args):
     from iconcommons.icon_config import IconConfig
     from iconcommons.logger import Logger
 
+    port = args.port or conf.PORT_PEER
     channel = args.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
     amqp_target = args.amqp_target or conf.AMQP_TARGET
     amqp_key = args.amqp_key or conf.AMQP_KEY
     conf_path = conf.CONF_PATH_ICONSERVICE_DEV
+
+    if args.develop:
+        db_suffix = f"{port}_{channel}"
+    else:
+        db_suffix = channel
 
     if args.radio_station_target == conf.URL_CITIZEN_TESTNET:
         conf_path = conf.CONF_PATH_ICONSERVICE_TESTNET
@@ -171,11 +176,10 @@ def start_as_score(args):
 
     additional_conf = {
         "log": {
-            "filePath": f"./log/{network_type}/{channel}/iconservice_{amqp_key}.log"
+            "filePath": f"./log/{network_type}/{db_suffix}/iconservice.log"
         },
-        "iissDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.iiss_{amqp_key}_{channel}",
-        "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{amqp_key}_{channel}",
-        "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{amqp_key}_{channel}",
+        "scoreRootPath": conf.DEFAULT_STORAGE_PATH + f"/.score_{db_suffix}",
+        "stateDbRootPath": conf.DEFAULT_STORAGE_PATH + f"/.statedb_{db_suffix}",
         "channel": channel,
         "amqpKey": amqp_key,
         "amqpTarget": amqp_target

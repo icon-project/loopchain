@@ -40,9 +40,8 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice==1.6.1
-	$(PIP_INSTALL) iconcommons==1.1.2
-	$(PIP_INSTALL) iconrpcserver==1.4.9
+	$(PIP_INSTALL) iconservice==1.7.0
+	$(PIP_INSTALL) iconrpcserver==1.5.0
 	$(PIP_INSTALL) tbears
 
 ## pip install packages
@@ -51,7 +50,6 @@ install: $(INSTALL_REQUIRES)
 
 requires-dev:
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-service.git@develop
-	$(PIP_INSTALL) git+https://github.com/icon-project/icon-commons.git@master
 	$(PIP_INSTALL) git+https://github.com/icon-project/icon-rpc-server.git@develop
 
 ## pip install packages for develop

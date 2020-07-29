@@ -14,7 +14,7 @@
 """loopchain main peer service.
 It has secure outer service for p2p consensus and status monitoring.
 And also has insecure inner service for inner process modules."""
-
+import asyncio
 import getpass
 import logging
 import multiprocessing
@@ -123,7 +123,7 @@ class PeerService:
             password = getpass.getpass(f"Input your keystore password: ")
         signer = Signer.from_prikey_file(prikey_file, password)
         self._make_peer_id(signer.address)
-        self._node_key = signer.private_key.private_key
+        self._node_key = signer.get_private_secret()
 
     def _make_peer_id(self, address):
         self._peer_id = address
@@ -220,25 +220,32 @@ class PeerService:
             loop.run_forever()
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
+            self._cleanup(loop)
             loop.close()
 
-        # process monitor must stop monitoring before any subprocess stop
-        # Monitor().stop()
-
         logging.info("Peer Service Ended.")
-        if self._rest_service is not None:
-            self._rest_service.stop()
 
     def close(self):
-        async def _close():
-            for channel_stub in StubCollection().channel_stubs.values():
-                await channel_stub.async_task().stop("Close")
+        self._inner_service.loop.stop()
 
-            self.p2p_server_stop()
-            loop.stop()
+    def _cleanup(self, loop):
+        logging.info("_cleanup() Peer Resources.")
+        for task in asyncio.Task.all_tasks(loop):
+            if task.done():
+                continue
+            task.cancel()
+            try:
+                loop.run_until_complete(task)
+            except asyncio.CancelledError as e:
+                logging.info(f"_cleanup() task : {task}, error : {e}")
 
-        loop = self._inner_service.loop
-        loop.create_task(_close())
+        self.p2p_server_stop()
+        logging.info("_cleanup() p2p server.")
+
+        if self._rest_service is not None:
+            self._rest_service.stop()
+            self._rest_service.wait()
+            logging.info("_cleanup() Rest Service.")
 
     async def serve_channels(self):
         for i, channel_name in enumerate(self._channel_infos):
@@ -252,7 +259,8 @@ class PeerService:
                 command_arguments.Type.AMQPTarget,
                 command_arguments.Type.AMQPKey,
                 command_arguments.Type.ConfigurationFilePath,
-                command_arguments.Type.RadioStationTarget
+                command_arguments.Type.RadioStationTarget,
+                command_arguments.Type.Rollback
             )
 
             service = CommonSubprocess(args)

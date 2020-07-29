@@ -29,7 +29,7 @@ utils.loggers.update_preset()
 class TestKeyValueStore(unittest.TestCase):
 
     def setUp(self):
-        self.store_types = ['dict', 'leveldb', 'plyvel']
+        self.store_types = ['dict', 'plyvel']
         test_util.print_testname(self._testMethodName)
 
     def tearDown(self):
@@ -196,74 +196,6 @@ class TestKeyValueStore(unittest.TestCase):
             cancelable_batch = None
 
             store.destroy_store()
-
-    def test_key_value_store_verify_compatibility(self):
-        test_items = self._get_test_items(5)
-
-        leveldb_store = self._new_store(
-            "file://./key_value_store_test_verify_leveldb_and_plyvel",
-            store_type=KeyValueStore.STORE_TYPE_LEVELDB,
-            create_if_missing=True
-        )
-
-        for key, value in test_items.items():
-            leveldb_store.put(key, value)
-
-        plyvel_store = KeyValueStore.new(
-            "file://./key_value_store_test_verify_leveldb_and_plyvel",
-            store_type=KeyValueStore.STORE_TYPE_PLYVEL,
-            create_if_missing=False
-        )
-
-        leveldb_bin = bytes()
-        for key, value in leveldb_store.Iterator():
-            utils.logger.spam(f"leveldb iterator: key={key}, value={value}")
-            self.assertEqual(value, plyvel_store.get(bytes(key)))
-            leveldb_bin += key + value
-
-        plyvel_bin = bytes()
-        for key, value in plyvel_store.Iterator():
-            plyvel_bin += key + value
-
-        utils.logger.debug(f"leveldb binary: {leveldb_bin}")
-        utils.logger.debug(f"plyvel binary: {plyvel_bin}")
-        self.assertEqual(leveldb_bin, plyvel_bin)
-
-        plyvel_store.close()
-        leveldb_store.destroy_store()
-
-    @unittest.skip
-    def test_key_value_store_verify_compatibility_with_existent_store(self):
-        leveldb_store = KeyValueStore.new(
-            "file://./existent_db",
-            store_type=KeyValueStore.STORE_TYPE_LEVELDB,
-            create_if_missing=False
-        )
-
-        plyvel_store = KeyValueStore.new(
-            "file://./existent_db_copy",
-            store_type=KeyValueStore.STORE_TYPE_PLYVEL,
-            create_if_missing=False
-        )
-
-        leveldb_count = 0
-        for key, value in leveldb_store.Iterator():
-            plyvel_value = plyvel_store.get(bytes(key))
-            self.assertEqual(value, plyvel_value)
-            leveldb_count += 1
-            if (leveldb_count % 1000000) == 0:
-                utils.logger.spam(f"leveldb count={leveldb_count}")
-
-        plyvel_count = 0
-        for key, value in plyvel_store.Iterator():
-            leveldb_value = leveldb_store.get(key)
-            self.assertEqual(value, leveldb_value)
-            plyvel_count += 1
-            if (plyvel_count % 1000000) == 0:
-                utils.logger.spam(f"plyvel count={plyvel_count}")
-
-        self.assertEqual(leveldb_count, plyvel_count)
-        utils.logger.debug(f"count leveldb={leveldb_count}, plyvel={plyvel_count}")
 
 
 if __name__ == '__main__':

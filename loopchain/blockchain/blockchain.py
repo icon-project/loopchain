@@ -3,6 +3,7 @@
 import json
 import pickle
 import threading
+import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -10,7 +11,6 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
-import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -21,13 +21,15 @@ from loopchain.baseservice.lru_cache import lru_cache as valued_only_lru_cache
 from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, BlockHeader, v0_1a
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
+from loopchain.blockchain.peer_loader import PeerLoader
 from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
-from loopchain.blockchain.types import Hash32, ExternalAddress, TransactionStatusInQueue
+from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes import Votes
 from loopchain.blockchain.votes.v0_1a import BlockVotes
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.configure_default import NodeType
 from loopchain.store.key_value_store import KeyValueStore, KeyValueStoreWriteBatch
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -53,7 +55,6 @@ class BlockChain:
     """Block chain with only committed blocks."""
 
     NID_KEY = b'NID_KEY'
-    PRECOMMIT_BLOCK_KEY = b'PRECOMMIT_BLOCK'
     TRANSACTION_COUNT_KEY = b'TRANSACTION_COUNT'
     LAST_BLOCK_KEY = b'last_block_key'
     BLOCK_HEIGHT_KEY = b'block_height_key'
@@ -63,10 +64,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
 
-    def __init__(self, channel_name=None, store_id=None, block_manager=None):
-        if channel_name is None:
-            channel_name = conf.LOOPCHAIN_DEFAULT_CHANNEL
-
+    def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
         # last block in block db
         self.__last_block = None
         self.__made_block_counter = MadeBlockCounter()
@@ -77,8 +75,9 @@ class BlockChain:
         self.__peer_id = ChannelProperty().peer_id
         self.__block_manager: BlockManager = block_manager
 
-        store_id = f"{store_id}_{channel_name}"
-        self._blockchain_store, self._blockchain_store_path = utils.init_default_key_value_store(store_id)
+        # FIXME : old_store_id is temporary code to rename dbpath
+        old_store_id = f"{ChannelProperty().peer_target}_{channel_name}"
+        self._blockchain_store = utils.init_default_key_value_store(old_store_id, store_id)
 
         # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
         self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
@@ -137,11 +136,22 @@ class BlockChain:
         utils.logger.debug(f"_keep_order_in_penalty() : keep_order = {keep_order}")
         return keep_order
 
-    def reset_leader_made_block_count(self, is_switched_role: bool = False):
+    def reset_leader_made_block_count(self, need_check_switched_role: bool = False):
         """Clear all made_block_counter
 
         :return:
         """
+        if need_check_switched_role:
+            if self.__last_block.header.prep_changed_reason == NextRepsChangeReason.NoChange:
+                utils.logger.debug(f"There is no change in reps.")
+                return
+
+            new_reps = self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
+            new_node_type = NodeType.CommunityNode if ChannelProperty().peer_address in new_reps else NodeType.CitizenNode
+            is_switched_role = new_node_type != ChannelProperty().node_type
+        else:
+            is_switched_role = False
+
         utils.logger.debug(f"reset_leader_made_block_count() : made_block_count = {self.__made_block_counter}")
         if not self._keep_order_in_penalty() or is_switched_role:
             self.__made_block_counter.clear()
@@ -218,11 +228,12 @@ class BlockChain:
     def tx_versioner(self):
         return self.__tx_versioner
 
-    def get_blockchain_store(self):
+    @property
+    def blockchain_store(self) -> KeyValueStore:
         return self._blockchain_store
 
     def close_blockchain_store(self):
-        print(f"close blockchain_store = {self._blockchain_store}")
+        logging.info(f"close_blockchain_store() : {self._blockchain_store}")
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
@@ -285,7 +296,7 @@ class BlockChain:
 
                 return self.__remove_block_up_to_target(target_block)
 
-    def roll_back(self, target_block):
+    def rollback(self, target_block):
         self.__remove_block_up_to_target(target_block)
 
     def rebuild_made_block_count(self):
@@ -498,8 +509,7 @@ class BlockChain:
             if not roothash:
                 raise AttributeError
         except AttributeError:
-            # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
+            roothash = ChannelProperty().crep_root_hash
         return roothash
 
     @staticmethod
@@ -510,7 +520,7 @@ class BlockChain:
                 raise AttributeError
         except AttributeError:
             # TODO: Re-locate roothash under BlockHeader or somewhere, without use ObjectManager
-            roothash = ObjectManager().channel_service.peer_manager.crep_root_hash
+            roothash = ChannelProperty().crep_root_hash
         return roothash
 
     def find_preps_ids_by_header(self, header: BlockHeader) -> Sequence[str]:
@@ -565,16 +575,6 @@ class BlockChain:
                     not self.prevent_next_block_mismatch(block.header.height):
                 return True
 
-            peer_id = ChannelProperty().peer_id
-            utils.apm_event(peer_id, {
-                'event_type': 'TotalTx',
-                'peer_id': peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': self.__channel_name,
-                'data': {
-                    'block_hash': block.header.hash.hex(),
-                    'total_tx': self.total_tx}})
-
             return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
     def __add_block(self, block: Block, confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True):
@@ -612,15 +612,6 @@ class BlockChain:
                 f"HASH : {block.header.hash.hex()} , "
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
-
-            utils.apm_event(self.__peer_id, {
-                'event_type': 'AddBlock',
-                'peer_id': self.__peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': self.__channel_name,
-                'data': {
-                    'block_height': self.__last_block.header.height
-                }})
 
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
@@ -795,25 +786,6 @@ class BlockChain:
                                f"loopchain({next_height})/score({score_last_block_height})")
             return True
 
-    def __precommit_tx(self, precommit_block):
-        """ change status of transactions in a precommit block
-        :param block:
-        """
-        # loop all tx in block
-        logging.debug("try to change status to precommit in queue, block hash: " + precommit_block.header.hash.hex())
-        tx_queue = self.__block_manager.get_tx_queue()
-        # utils.logger.spam(f"blockchain:__precommit_tx::tx_queue : {tx_queue}")
-
-        for tx in precommit_block.body.transactions.values():
-            tx_hash = tx.hash.hex()
-            if tx_queue.get_item_in_status(TransactionStatusInQueue.normal, TransactionStatusInQueue.normal):
-                try:
-                    tx_queue.set_item_status(tx_hash, TransactionStatusInQueue.precommited_to_block)
-                    # utils.logger.spam(
-                    #     f"blockchain:__precommit_tx::{tx_hash}'s status : {tx_queue.get_item_status(tx_hash)}")
-                except KeyError as e:
-                    logging.warning(f"blockchain:__precommit_tx::KeyError:There is no tx by hash({tx_hash})")
-
     def _write_tx_by_address(self, tx: 'Transaction', batch):
         if tx.type() == "base":
             return
@@ -835,9 +807,6 @@ class BlockChain:
             next_index = 0
 
         return tx_list, next_index
-
-    def get_precommit_block(self):
-        return self.__find_block_by_key(BlockChain.PRECOMMIT_BLOCK_KEY)
 
     def find_nid(self):
         try:
@@ -956,32 +925,6 @@ class BlockChain:
         block, invoke_results = self.genesis_invoke(block)
         self.add_block(block)
 
-    def put_precommit_block(self, precommit_block: Block):
-        # write precommit block to DB
-        logging.debug(
-            f"blockchain:put_precommit_block ({self.__channel_name}), hash ({precommit_block.header.hash.hex()})")
-        if self.__last_block.header.height < precommit_block.header.height:
-            self.__precommit_tx(precommit_block)
-            utils.logger.spam(f"blockchain:put_precommit_block:confirmed_transaction_list")
-
-            block_serializer = BlockSerializer.new(precommit_block.header.version, self.__tx_versioner)
-            block_serialized = block_serializer.serialize(precommit_block)
-            block_serialized = json.dumps(block_serialized)
-            block_serialized = block_serialized.encode('utf-8')
-            results = self._blockchain_store.put(BlockChain.PRECOMMIT_BLOCK_KEY, block_serialized)
-
-            utils.logger.spam(f"result of to write to db ({results})")
-            logging.info(f"ADD BLOCK PRECOMMIT HEIGHT : {precommit_block.header.height} , "
-                         f"HASH : {precommit_block.header.hash.hex()}, CHANNEL : {self.__channel_name}")
-        else:
-            results = None
-            logging.debug(f"blockchain:put_precommit_block::this precommit block is not validate. "
-                          f"the height of precommit block must be bigger than the last block."
-                          f"(last block:{self.__last_block.header.height}/"
-                          f"precommit block:{precommit_block.header.height})")
-
-        return results
-
     def put_nid(self, nid: str):
         """
         write nid to DB
@@ -1077,6 +1020,13 @@ class BlockChain:
 
             logging.debug("restore from last block hash(" + str(self.__last_block.header.hash.hex()) + ")")
             logging.debug("restore from last block height(" + str(self.__last_block.header.height) + ")")
+
+    def init_crep_reps(self) -> None:
+        if not self.is_roothash_exist_in_db(ChannelProperty().crep_root_hash):
+            reps_hash, reps = PeerLoader.load()
+            utils.logger.info(f"Initial Loaded Reps: {reps}")
+            if not self.is_roothash_exist_in_db(reps_hash):
+                self.write_preps(reps_hash, reps)
 
     def generate_genesis_block(self, reps: List[ExternalAddress]):
         tx_info = None
@@ -1232,8 +1182,7 @@ class BlockChain:
         }
         block_builder.state_hash = Hash32(bytes.fromhex(response['stateRootHash']))
         block_builder.receipts = tx_receipts
-        block_builder.reps = self.find_preps_addresses_by_roothash(
-            ObjectManager().channel_service.peer_manager.crep_root_hash)
+        block_builder.reps = self.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         if block.header.peer_id and block.header.peer_id.hex_hx() == ChannelProperty().peer_id:
             block_builder.signer = ChannelProperty().peer_auth
         else:
@@ -1260,9 +1209,6 @@ class BlockChain:
                 next_leader = ExternalAddress.empty()
 
             next_preps_hash = Hash32.fromhex(next_prep["rootHash"], ignore_prefix=True)
-
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
             # P-Rep list has no changes
             next_leader = _block.header.next_leader
@@ -1290,9 +1236,6 @@ class BlockChain:
 
             next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
             next_preps_hash = None  # to rebuild next_reps_hash
-
-            ObjectManager().channel_service.peer_manager.reset_all_peers(
-                next_prep["rootHash"], next_prep['preps'], update_now=False)
         else:
             # P-Rep list has no changes
             next_leader = _block.header.next_leader

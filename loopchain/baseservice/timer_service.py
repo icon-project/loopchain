@@ -47,7 +47,7 @@ class Timer:
         self.target = kwargs.get("target")
         self.duration = kwargs.get("duration")
         self.is_run_at_start: bool = kwargs.get("is_run_at_start", False)
-        self._is_repeat: bool = kwargs.get("is_repeat", False)
+        self._is_repeat: bool = kwargs.get("is_repeat", False)  # TODO: is it needed? `repeat_timeout` is enough.
 
         # only works If is_repeat=True. 0 means no timeout.
         self._repeat_timeout: int = kwargs.get("repeat_timeout", 0)
@@ -66,9 +66,12 @@ class Timer:
 
     @property
     def is_repeat(self) -> bool:
-        if self._is_repeat and \
-                (self._repeat_timeout == 0 or
-                 (time.time() - self.__repeat_start_time < self._repeat_timeout)):
+        if not self._is_repeat:
+            return False
+
+        is_repeatable_forever = self._repeat_timeout == 0
+        is_repeat_time_remains = time.time() - self.__repeat_start_time < self._repeat_timeout
+        if is_repeatable_forever or is_repeat_time_remains:
             return True
 
         return False

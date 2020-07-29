@@ -22,11 +22,11 @@ from typing import List, Optional, NamedTuple, Sequence, Iterator, Dict
 from urllib.parse import urlparse
 
 import requests
-from aiohttp import ClientSession
-from jsonrpcclient import HTTPClient, Request
-from jsonrpcclient.aiohttp_client import aiohttpClient
+from jsonrpcclient.clients.aiohttp_client import AiohttpClient, ClientSession
+from jsonrpcclient.clients.http_client import HTTPClient
+from jsonrpcclient.requests import Request
+from jsonrpcclient.response import Response
 from loopchain import utils, configure as conf
-
 
 _RestMethod = namedtuple("_RestMethod", "version name params")
 
@@ -153,7 +153,12 @@ class RestClient:
         url = self._create_jsonrpc_url(target, method)
         http_client = HTTPClient(url)
         request = self._create_jsonrpc_params(method, params)
-        return http_client.send(request, timeout=timeout)
+
+        response: Response = http_client.send(request, timeout=timeout)
+        if isinstance(response.data, list):
+            raise NotImplementedError(f"Received batch response. Data: {response.data}")
+        else:
+            return response.data.result
 
     async def _call_async_rest(self, target: str, method: RestMethod, timeout):
         url = self._create_rest_url(target, method)
@@ -164,13 +169,18 @@ class RestClient:
                                    timeout=timeout) as response:
                 return await response.json()
 
-    async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout):
-        # 'aioHttpClient' does not support 'timeout'
+    async def _call_async_jsonrpc(self, target: str, method: RestMethod, params: Optional[NamedTuple], timeout: int):
         url = self._create_jsonrpc_url(target, method)
         async with ClientSession() as session:
-            http_client = aiohttpClient(session, url)
+            http_client = AiohttpClient(session, url, timeout=timeout)
             request = self._create_jsonrpc_params(method, params)
-            return await http_client.send(request)
+
+            response: Response = await http_client.send(request)
+
+        if isinstance(response.data, list):
+            raise NotImplementedError(f"Received batch response. Data: {response.data}")
+        else:
+            return response.data.result
 
     def create_url(self, target: str, method: RestMethod):
         if method.value.version == conf.ApiVersion.v1:
@@ -206,5 +216,5 @@ class RestClient:
             if "from_" in params:
                 params["from"] = params.pop("from_")
 
-        return Request(method.value.name, params) if params else Request(method.value.name)
+        return Request(method.value.name, **params) if params else Request(method.value.name)
 

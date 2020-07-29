@@ -21,26 +21,21 @@ import os
 import re
 import signal
 import socket
-import timeit
+import sys
+import time
 import traceback
+from binascii import unhexlify
 from contextlib import closing
 from decimal import Decimal
 from pathlib import Path
 from subprocess import PIPE, Popen, TimeoutExpired
 from typing import Tuple, Union
 
-import sys
-import time
 import verboselogs
-from binascii import unhexlify
-from fluent import event
 
 from loopchain import configure as conf
-from loopchain.protos import message_code
 from loopchain.store.key_value_store import KeyValueStoreError, KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
-
-apm_event = None
 
 logger = verboselogs.VerboseLogger("dev")
 
@@ -144,70 +139,6 @@ def get_stub_to_server(target, stub_class, ssl_auth_type: conf.SSLAuthType = con
         logging.warning(f"Connect to Server Error(get_stub_to_server): {e}")
 
     return stub, channel
-
-
-def request_server_in_time(stub_method, message, time_out_seconds=None):
-    """서버로 gRPC 메시지를 타임아웃 설정안에서 반복 요청한다.
-
-    :param stub_method: gRPC stub.method
-    :param message: gRPC proto message
-    :param time_out_seconds: time out seconds
-    :return: gRPC response
-    """
-    if time_out_seconds is None:
-        time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
-    start_time = timeit.default_timer()
-    duration = timeit.default_timer() - start_time
-
-    while duration < time_out_seconds:
-        try:
-            return stub_method(message, conf.GRPC_TIMEOUT)
-        except Exception as e:
-            logging.warning("retry request_server_in_time: " + str(e))
-            logging.debug("duration(" + str(duration)
-                          + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                          + ") timeout(" + str(time_out_seconds) + ")")
-
-        # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
-        time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-        duration = timeit.default_timer() - start_time
-
-    return None
-
-
-def request_server_wait_response(stub_method, message, time_out_seconds=None):
-    """서버로 gRPC 메시지를 타임아웃 설정안에서 응답이 올때까지 반복 요청한다.
-
-    :param stub_method: gRPC stub.method
-    :param message: gRPC proto message
-    :param time_out_seconds: time out seconds
-    :return: gRPC response
-    """
-
-    if time_out_seconds is None:
-        time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
-    start_time = timeit.default_timer()
-    duration = timeit.default_timer() - start_time
-
-    while duration < time_out_seconds:
-        try:
-            response = stub_method(message, conf.GRPC_TIMEOUT)
-
-            if hasattr(response, "response_code") and response.response_code == message_code.Response.success:
-                return response
-            elif hasattr(response, "status") and response.status != "":
-                return response
-        except Exception as e:
-            logging.warning("retry request_server_in_time: " + str(e))
-            logging.debug("duration(" + str(duration)
-                          + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                          + ") timeout(" + str(time_out_seconds) + ")")
-
-        # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
-        time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-        duration = timeit.default_timer() - start_time
-
-    return None
 
 
 def normalize_request_url(url_input, version=None, channel=None):
@@ -458,23 +389,53 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
+def rename_db_dir(old_store_name: str, store_name: str):
+    """Rename db directory
+    This method is temporary implementation for remove 'ip:port' in db directory name
+    Ths method is useless after rename all nodes done.
+
+    :param old_store_name: old store name
+    :param store_name: new store name
+    :return:
+    """
+    storage_path = Path(conf.DEFAULT_STORAGE_PATH)
+    if os.path.exists(storage_path / store_name):
+        return
+
+    src_path = storage_path / old_store_name
+    dst_path = storage_path / store_name
+    if os.path.exists(src_path):
+        try:
+            logger.info(f"rename_db_dir() : src = {src_path}, dst = {dst_path}")
+            os.rename(src_path, dst_path)
+        except OSError as e:
+            logger.error(f"rename_db_dir() : error = {e}")
+            raise e
+
+
+def init_default_key_value_store(old_store_id: str, store_id: str) -> KeyValueStore:
     """init default key value store
 
-    :param store_identity: identity for store
+    :param old_store_id: old identity of key-value store
+    :param store_id: new identity of key-value store
     :return: KeyValueStore, store_path
     """
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, 'db_' + store_identity)
-    logger.spam(f"utils:init_default_key_value_store ({store_identity})")
+    db_dirname = f'db_{store_id}'
+
+    # FIXME : remove rename_db_dir() after all applied, maybe next release
+    rename_db_dir(f"db_{old_store_id}", db_dirname)
+
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, db_dirname)
+    logger.info(f"init_default_key_value_store() store_id={store_id}")
 
     retry_count = 0
     store = None
+    uri = f"file://{store_path}"
     while store is None and retry_count < conf.MAX_RETRY_CREATE_DB:
         try:
-            uri = f"file://{store_path}"
             store = KeyValueStore.new(uri, create_if_missing=True)
         except KeyValueStoreError as e:
             logging.error(f"KeyValueStoreError: {e}")
@@ -486,15 +447,7 @@ def init_default_key_value_store(store_identity) -> Tuple[KeyValueStore, str]:
         logging.error("Fail! Create key value store")
         raise KeyValueStoreError(f"Fail to create key value store. path={store_path}")
 
-    return store, store_path
-
-
-def no_send_apm_event(peer_id, event_param):
-    pass
-
-
-def send_apm_event(peer_id, event_param):
-    event.Event(peer_id, event_param)
+    return store
 
 
 # ------------------- data utils ----------------------------
@@ -525,9 +478,3 @@ def create_invoke_result_specific_case(confirmed_transaction_list, invoke_result
     for tx in confirmed_transaction_list:
         invoke_results[tx.tx_hash] = invoke_result
     return invoke_results
-
-
-if not conf.MONITOR_LOG:
-    apm_event = no_send_apm_event
-else:
-    apm_event = send_apm_event

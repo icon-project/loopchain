@@ -19,8 +19,7 @@ from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, Blockchain
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
 from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
-                                            TransactionOutOfTimeBound, NotInReps,
-                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
+                                            NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
 from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
     ScoreInvokeError
@@ -30,10 +29,10 @@ from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
 from loopchain.blockchain.votes import Vote, Votes
 from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.jsonrpc import GenericJsonRpcServerError
 from loopchain.peer import status_code
 from loopchain.peer.consensus_siever import ConsensusSiever
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.store.key_value_store import KeyValueStore
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
@@ -49,25 +48,22 @@ class BlockManager:
     MAINNET = "cf43b3fd45981431a0e64f79d07bfcf703e064b73b802c5f32834eec72142190"
     TESTNET = "885b8021826f7e741be7f53bb95b48221e9ab263f377e997b2e47a7b8f4a2a8b"
 
-    def __init__(self, name: str, channel_service, peer_id, channel_name, store_identity):
+    def __init__(self, channel_service: 'ChannelService', peer_id: str, channel_name: str, store_id: str):
         self.__channel_service: ChannelService = channel_service
         self.__channel_name = channel_name
-        self.__pre_validate_strategy = self.__pre_validate
         self.__peer_id = peer_id
 
         self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                      default_item_status=TransactionStatusInQueue.normal)
-        self.blockchain = BlockChain(channel_name, store_identity, self)
+        self.blockchain = BlockChain(channel_name, store_id, self)
         self.__peer_type = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
         self.__block_height_sync_bad_targets = {}
         self.__block_height_sync_lock = threading.Lock()
-        self.__block_height_thread_pool = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
+        self.__block_height_thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
         self.__block_height_future: Future = None
-        self.__precommit_block: Block = None
         self.set_peer_type(loopchain_pb2.PEER)
-        self.name = name
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
@@ -98,17 +94,6 @@ class BlockManager:
     def consensus_algorithm(self):
         return self.__consensus_algorithm
 
-    @property
-    def precommit_block(self):
-        return self.__precommit_block
-
-    @precommit_block.setter
-    def precommit_block(self, block):
-        self.__precommit_block = block
-
-    def get_key_value_store(self) -> KeyValueStore:
-        return self.blockchain.get_blockchain_store()
-
     def set_peer_type(self, peer_type):
         self.__peer_type = peer_type
 
@@ -129,24 +114,11 @@ class BlockManager:
         """
         return self.blockchain.total_tx
 
-    def pre_validate(self, tx: Transaction):
-        return self.__pre_validate_strategy(tx)
-
-    def __pre_validate(self, tx: Transaction):
-        if tx.hash.hex() in self.__tx_queue:
-            raise TransactionDuplicatedHashError(tx)
-
-        if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
-            raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
-
-    def __pre_validate_pass(self, tx: Transaction):
-        pass
-
     def broadcast_send_unconfirmed_block(self, block_: Block, round_: int):
         """broadcast unconfirmed block for getting votes form reps
         """
         last_block: Block = self.blockchain.last_block
-        if (self.__channel_service.state_machine.state != "BlockGenerate" and 
+        if (self.__channel_service.state_machine.state != "BlockGenerate" and
                 last_block.header.height > block_.header.height):
             util.logger.debug(
                 f"Last block has reached a sufficient height. Broadcast will stop! ({block_.header.hash.hex()})")
@@ -159,7 +131,7 @@ class BlockManager:
             else:
                 self._send_unconfirmed_block(block_, block_.header.reps_hash, round_)
         else:
-            self._send_unconfirmed_block(block_, self.__channel_service.peer_manager.crep_root_hash, round_)
+            self._send_unconfirmed_block(block_, ChannelProperty().crep_root_hash, round_)
 
     def _send_unconfirmed_block(self, block_: Block, target_reps_hash, round_: int):
         util.logger.debug(
@@ -632,11 +604,16 @@ class BlockManager:
 
         return my_height, max_height
 
-    def __request_roll_back(self):
+    def request_rollback(self) -> bool:
+        """Request block data rollback behind to 1 block
+
+        :return: if rollback success return True, else return False
+        """
         target_block = self.blockchain.find_block_by_hash32(self.blockchain.last_block.header.prev_hash)
         if not self.blockchain.check_rollback_possible(target_block):
-            util.logger.warning(f"The request cannot be rolled back to the target block({target_block}).")
-            return
+            util.logger.warning(f"request_rollback() The request cannot be "
+                                f"rolled back to the target block({target_block}).")
+            return False
 
         request_origin = {
             'blockHeight': target_block.header.height,
@@ -646,17 +623,22 @@ class BlockManager:
         request = convert_params(request_origin, ParamType.roll_back)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
 
-        util.logger.debug(f"Rollback request({request})")
+        util.logger.debug(f"request_roll_back() Rollback request({request})")
         response: dict = cast(dict, stub.sync_task().rollback(request))
-        response_to_json_query(response)
-
-        result_height = response.get("blockHeight")
-        if hex(target_block.header.height) == result_height:
-            util.logger.info(f"Rollback Success")
-            self.blockchain.roll_back(target_block)
-            self.rebuild_block()
+        try:
+            response_to_json_query(response)
+        except GenericJsonRpcServerError as e:
+            util.logger.warning(f"request_rollback() response error = {e}")
         else:
-            util.logger.warning(f"{response}")
+            result_height = response.get("blockHeight")
+            if hex(target_block.header.height) == result_height:
+                util.logger.info(f"request_rollback() Rollback Success. result height = {result_height}")
+                self.blockchain.rollback(target_block)
+                self.rebuild_block()
+                return True
+
+        util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
+        return False
 
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
@@ -679,7 +661,7 @@ class BlockManager:
                                                   max_height)
         except exception.PreviousBlockMismatch as e:
             util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
-            self.__request_roll_back()
+            self.request_rollback()
             self.__start_block_height_sync_timer(is_run_at_start=True)
         except Exception as e:
             util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
@@ -700,8 +682,7 @@ class BlockManager:
         if block.header.prep_changed_reason is NextRepsChangeReason.TermEnd:
             next_leader = self.blockchain.get_first_leader_of_next_reps(block)
         elif self.blockchain.made_block_count_reached_max(block):
-            reps_hash = (block.header.revealed_next_reps_hash
-                         or ObjectManager().channel_service.peer_manager.crep_root_hash)
+            reps_hash = block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
             reps = self.blockchain.find_preps_addresses_by_roothash(reps_hash)
             next_leader = self.blockchain.get_next_rep_string_in_reps(block.header.peer_id, reps)
 
@@ -751,7 +732,7 @@ class BlockManager:
         if self.blockchain.last_block:
             reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
         else:
-            reps_hash = self.__channel_service.peer_manager.crep_root_hash
+            reps_hash = ChannelProperty().crep_root_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
         target_list = list(rep_targets.values())
         for target in target_list:
@@ -785,11 +766,15 @@ class BlockManager:
         util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
 
     def stop(self):
-        # for reuse key value store when restart channel.
-        self.blockchain.close_blockchain_store()
+        self.__block_height_thread_pool.shutdown()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
+
+        # close store(aka. leveldb) after cleanup all threads
+        # because hard crashes may occur.
+        # https://plyvel.readthedocs.io/en/latest/api.html#DB.close
+        self.blockchain.close_blockchain_store()
 
     def add_complain(self, vote: LeaderVote):
         util.logger.spam(f"add_complain vote({vote})")
@@ -832,8 +817,7 @@ class BlockManager:
             channel=self.channel_name
         )
 
-        reps_hash = (self.blockchain.last_block.header.revealed_next_reps_hash or
-                     self.__channel_service.peer_manager.crep_root_hash)
+        reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
         rep_id = leader_vote.rep.hex_hx()
         target = self.blockchain.find_preps_targets_by_roothash(reps_hash)[rep_id]
 
@@ -913,9 +897,7 @@ class BlockManager:
         vote_dumped = json.dumps(vote_serialized)
         block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
 
-        target_reps_hash = block.header.reps_hash
-        if not target_reps_hash:
-            target_reps_hash = self.__channel_service.peer_manager.crep_root_hash
+        target_reps_hash = block.header.reps_hash or ChannelProperty().crep_root_hash
 
         self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "VoteUnconfirmedBlock",

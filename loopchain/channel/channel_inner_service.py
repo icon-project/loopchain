@@ -5,7 +5,6 @@ import multiprocessing as mp
 import signal
 from asyncio import Condition
 from collections import namedtuple
-from concurrent.futures import ThreadPoolExecutor
 from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
@@ -179,11 +178,11 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
                                                tx_versioner=tx_versioner)
 
         def _on_signal(signal_num):
-            logging.error(f"Channel TX Creator has been received signal({signal_num})")
+            logging.error(f"Channel TX Creator has been received signal({repr(signal_num)})")
             service.stop()
 
-        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
-        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, signal.SIGTERM)
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, signal.SIGINT)
 
         service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
@@ -278,11 +277,11 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
             service.loop.stop()
 
         def _on_signal(signal_num):
-            logging.error(f"Channel TX Receiver has been received signal({signal_num})")
+            logging.error(f"Channel TX Receiver has been received signal({repr(signal_num)})")
             asyncio.run_coroutine_threadsafe(_stop_loop(), service.loop)
 
-        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, (signal.SIGTERM,))
-        service.loop.add_signal_handler(signal.SIGINT, _on_signal, (signal.SIGINT,))
+        service.loop.add_signal_handler(signal.SIGTERM, _on_signal, signal.SIGTERM)
+        service.loop.add_signal_handler(signal.SIGINT, _on_signal, signal.SIGINT)
 
         service.serve(connection_attempts=conf.AMQP_CONNECTION_ATTEMPTS,
                       retry_delay=conf.AMQP_RETRY_DELAY, exclusive=True)
@@ -386,8 +385,6 @@ class ChannelInnerTask:
         self._block_manager = None
         self._blockchain = None
 
-        self._thread_pool = ThreadPoolExecutor(1, "ChannelInnerThread")
-
         # Citizen
         CitizenInfo = namedtuple("CitizenInfo", "peer_id target connected_time")
         self._CitizenInfo = CitizenInfo
@@ -468,12 +465,6 @@ class ChannelInnerTask:
                 continue
 
             self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'tx_hash': tx.hash.hex()}})
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -600,71 +591,6 @@ class ChannelInnerTask:
         status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data
-
-    @message_queue_task
-    def create_tx(self, data):
-        tx = Transaction()
-        score_id = ""
-        score_version = ""
-
-        try:
-            score_info = self._channel_service.score_info
-            score_id = score_info[message_code.MetaParams.ScoreInfo.score_id]
-            score_version = score_info[message_code.MetaParams.ScoreInfo.score_version]
-        except KeyError as e:
-            logging.debug(f"CreateTX : load score info fail\n"
-                          f"cause : {e}")
-
-        send_tx_type = self._channel_service.get_channel_option()["send_tx_type"]
-        tx.init_meta(ChannelProperty().peer_id, score_id, score_version, ChannelProperty().name, send_tx_type)
-        tx.put_data(data)
-        tx.sign_hash(ChannelProperty().peer_auth)
-
-        self._channel_service.broadcast_scheduler.schedule_job(BroadcastCommand.CREATE_TX, tx)
-
-        try:
-            data_log = json.loads(data)
-        except Exception as e:
-            data_log = {'tx_hash': tx.tx_hash}
-
-        util.apm_event(ChannelProperty().peer_id, {
-            'event_type': 'CreateTx',
-            'peer_id': ChannelProperty().peer_id,
-            'peer_name': conf.PEER_NAME,
-            'channel_name': ChannelProperty().name,
-            'tx_hash': tx.tx_hash,
-            'data': data_log})
-
-        return tx.tx_hash
-
-    @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx(self, request) -> None:
-        tx_json = request.tx_json
-
-        tx_versioner = self._blockchain.tx_versioner
-        tx_version, tx_type = tx_versioner.get_version(tx_json)
-
-        ts = TransactionSerializer.new(tx_version, tx_type, tx_versioner)
-        tx = ts.from_(tx_json)
-
-        tv = TransactionVerifier.new(tx_version, tx_type, tx_versioner)
-        tv.verify(tx)
-
-        if tx is not None:
-            self._block_manager.add_tx_obj(tx)
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'AddTx',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'tx_hash': tx.tx_hash}})
-
-        if not conf.ALLOW_MAKE_EMPTY_BLOCK:
-            self._channel_service.start_leader_complain_timer_if_tx_exists()
-
-    @message_queue_task
-    def get_tx(self, tx_hash):
-        return self._block_manager.get_tx(tx_hash)
 
     @message_queue_task
     def get_tx_info(self, tx_hash):
@@ -796,13 +722,6 @@ class ChannelInnerTask:
             response_code = message_code.Response.success
             logging.debug('invoke_result : ' + invoke_result_str)
 
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'GetInvokeResult',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {'invoke_result': invoke_result, 'tx_hash': tx_hash}})
-
             if 'code' in invoke_result:
                 if invoke_result['code'] == ScoreResponse.NOT_EXIST:
                     logging.debug(f"get invoke result NOT_EXIST tx_hash({tx_hash})")
@@ -814,15 +733,7 @@ class ChannelInnerTask:
             return response_code, invoke_result_str
         except BaseException as e:
             logging.error(f"get invoke result error : {e}")
-            util.apm_event(ChannelProperty().peer_id, {
-                'event_type': 'Error',
-                'peer_id': ChannelProperty().peer_id,
-                'peer_name': conf.PEER_NAME,
-                'channel_name': ChannelProperty().name,
-                'data': {
-                    'error_type': 'InvokeResultError',
-                    'code': message_code.Response.fail,
-                    'message': f"get invoke result error : {e}"}})
+
             return message_code.Response.fail, None
 
     @message_queue_task
@@ -903,18 +814,6 @@ class ChannelInnerTask:
             fail_response_code = message_code.Response.fail_wrong_block_hash
 
         return block, block_hash, bytes(confirm_info), fail_response_code
-
-    @message_queue_task
-    def get_precommit_block(self, last_block_height: int):
-        precommit_block = self._blockchain.get_precommit_block()
-
-        if precommit_block is None:
-            return message_code.Response.fail, "there is no precommit block.", b""
-        if precommit_block.height != last_block_height + 1:
-            return message_code.Response.fail, "need block height sync.", b""
-
-        block_dumped = self._blockchain.block_dumps(precommit_block)
-        return message_code.Response.success, "success", block_dumped
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
@@ -1020,6 +919,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
         self._task.cleanup_sub_services()
+        logging.info("Cleanup ChannelInnerService.")
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):

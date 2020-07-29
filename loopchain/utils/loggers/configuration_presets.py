@@ -78,12 +78,8 @@ def update_preset(update_logger=True):
     preset.log_file_rotate_backup_count = conf.LOG_FILE_ROTATE_BACKUP_COUNT
     preset.log_file_rotate_interval = conf.LOG_FILE_ROTATE_INTERVAL
     preset.log_file_rotate_max_bytes = conf.LOG_FILE_ROTATE_MAX_BYTES
-    preset.log_file_rotate_utf = conf.LOG_FILE_ROTATE_UTC
+    preset.log_file_rotate_utc = conf.LOG_FILE_ROTATE_UTC
     preset.log_file_rotate_when = conf.LOG_FILE_ROTATE_WHEN
-
-    preset.log_monitor = conf.MONITOR_LOG
-    preset.log_monitor_host = conf.MONITOR_LOG_HOST
-    preset.log_monitor_port = conf.MONITOR_LOG_PORT
 
     if preset is develop:
         preset.log_level = conf.LOOPCHAIN_DEVELOP_LOG_LEVEL

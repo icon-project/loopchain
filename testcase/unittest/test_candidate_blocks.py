@@ -80,7 +80,7 @@ class TestCandidateBlocks(unittest.TestCase):
         block0 = self.__get_test_block()
         block0.header.__dict__['height'] = -1
         block = self.__get_test_block()
-        blockchain = BlockChain('icon_dex', '', self)
+        blockchain = BlockChain('icon_dex', 'icon_dex', self)
         blockchain.__dict__['_BlockChain__last_block'] = block0
         candidate_blocks = CandidateBlocks(blockchain)
 
