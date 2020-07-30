@@ -775,15 +775,11 @@ class ChannelInnerTask:
             util.logger.debug(
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
-<<<<<<< HEAD
 
             if is_version_1_0 and self._channel_service.consensus_runner:
                 util.logger.notice(f'loopchain 3.x has event_system!')
-=======
-            if self._event_system:
->>>>>>> bcf4ec4... [LC-1032] add data and vote pool for sync state
                 self._channel_service.consensus_runner.receive_vote(vote)
-            else:
+           else:
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)
 

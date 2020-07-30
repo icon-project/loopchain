@@ -25,6 +25,9 @@ from loopchain.protos import loopchain_pb2
 
 from loopchain.channel.channel_property import ChannelProperty
 
+from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
+from loopchain.tools.grpc_helper import GRPCHelper
+
 if TYPE_CHECKING:
     from loopchain.baseservice import BroadcastScheduler
     from loopchain.baseservice.aging_cache import AgingCache
@@ -73,14 +76,14 @@ class ConsensusRunner(EventRegister):
         self._target_idx = 0
         self._stub_list = list()
 
-    async def _management_stub(self, status: str = 'init'):
+    def _management_stub(self, status: str = 'init'):
         self._target_list = self._block_manager.get_target_list()
         for target in self._target_list:
-            util.logger.debug(f"try to target({target})")
             channel = GRPCHelper().create_client_channel(target)
             self._stub_list.append(loopchain_pb2_grpc.PeerServiceStub(channel))
 
     async def start(self, channel_service):
+        self._management_stub()
         self._loop.create_task(self.lft_start(channel_service))
         self._loop.create_task(self.sync_start())
 
@@ -349,10 +352,96 @@ class ConsensusRunner(EventRegister):
         vote_dumped: dict = vote.serialize()["!data"]
         return json.dumps(vote_dumped)
 
-    def receive_vote(self, vote: 'BlockVote'):
-        event = ReceiveVoteEvent(vote)
-        self.event_system.simulator.raise_event(event)
+   def receive_vote(self, vote):
+        vote_height_info = vote.block_height
+        if not vote_height_info in self._vote_info_other_nodes.keys():
+            self._vote_info_other_nodes[vote_height_info] = list()
 
-    def receive_data(self, unconfirmed_block: 'Block'):
-        event = ReceiveDataEvent(unconfirmed_block)
-        self.event_system.simulator.raise_event(event)
+        self._max_height_in_nodes = max(self._max_height_in_nodes, vote_height_info)
+
+        if abs(self._last_block_height-vote_height_info) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+            self._vote_info_other_nodes[vote_height_info].append(vote)
+
+    def receive_data(self, unconfirmed_block):
+        data_height_info = unconfirmed_block.header.height
+        if not data_height_info in self._data_info_other_nodes.keys():
+            self._data_info_other_nodes[data_height_info] = list()
+
+        self._max_height_in_nodes = max(self._max_height_in_nodes, data_height_info)
+
+        if abs(self._last_block_height-data_height_info) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+            self._data_info_other_nodes[data_height_info].append(unconfirmed_block)
+
+    def update_sync_info(self, height):
+        if self._max_height_in_nodes < height:
+            self._max_height_in_nodes = height
+
+        self._sync_mode = self._last_block_height < self._max_height_in_nodes
+
+    async def sync_start(self):
+        while True:
+            # await _request_height()
+            await self._request_block()
+            await self._raise_event()
+
+    async def _request_height(self):
+        peer_stub = self._stub_list[self._target]
+
+        response = peer_stub.BlockHeightRequest(loopchain_pb2.HeightRequest(
+            peer=ChannelProperty().peer_target,
+            channel=self._block_manager.channel_name
+        ), conf.GRPC_TIMEOUT)
+
+    async def _request_block(self):
+        def _request(idx, height):
+            utils.logger.notice(f"Request..... height: {height}")
+            peer_stub = self._stub_list[idx]
+
+            response = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
+                peer=ChannelProperty().peer_target,
+                channel=self._block_manager.channel_name,
+                height=height
+            ), conf.GRPC_TIMEOUT)
+
+        utils.logger.notice(f"current_height :{self._last_block_height}, max_height:{self._max_height_in_nodes}")
+        max_loop = self._max_height_in_nodes-3
+        if self._last_block_height < max_loop:
+            for i in range(1, min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, max_loop-self._last_block_height)):
+                request_height = self._last_block_height + i
+                if request_height in self._request_history_list.keys():
+                    # request 의 시간이 5초가 지나갔으면, 재 요청이 필요하다.
+                    if time.time()-self._request_history_list[request_height][1] > 5:
+                        retry_target_idx = self._request_history_list[request_height][0]
+                        # request
+                        _request(retry_target_idx, request_height)
+                        self._request_history_list[request_height] = [retry_target_idx, time.time()]
+                else:
+                    # request
+                    _request(self._target_idx, request_height)
+                    self._request_history_list[request_height] = list()
+                    self._request_history_list[request_height] = [self._target_idx, time.time()]
+
+                    self._target_idx += 1
+                    self._target_idx = self._target_idx % len(self._stub_list)
+
+                await asyncio.sleep(0)
+
+    async def _raise_event(self):
+        for i in range(1,3):
+            height_key = self._last_block_height+i
+            if height_key in self._data_info_other_nodes.keys():
+                block_info = self._data_info_other_nodes[height_key].pop()
+                event = ReceiveDataEvent(block_info)
+                self.event_system.simulator.raise_event(event)
+                del(self._data_info_other_nodes[height_key])
+
+            await asyncio.sleep(0)
+            if height_key in self._vote_info_other_nodes.keys():
+                while self._vote_info_other_nodes[height_key]:
+                    vote_info = self._vote_info_other_nodes[height_key].pop()
+                    e = ReceiveVoteEvent(vote_info)
+                    self.event_system.simulator.raise_event(e)
+
+                del(self._vote_info_other_nodes[height_key])
+            await asyncio.sleep(0)
+
