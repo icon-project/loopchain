@@ -403,7 +403,6 @@ class ConsensusRunner(EventRegister):
                 height=height
             ), conf.GRPC_TIMEOUT)
 
-        utils.logger.notice(f"current_height :{self._last_block_height}, max_height:{self._max_height_in_nodes}")
         max_loop = self._max_height_in_nodes-3
         if self._last_block_height < max_loop:
             for i in range(1, min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, max_loop-self._last_block_height)):
@@ -427,9 +426,10 @@ class ConsensusRunner(EventRegister):
                 await asyncio.sleep(0)
 
     async def _raise_event(self):
-        for i in range(1,3):
+        for i in range(1,4):
             height_key = self._last_block_height+i
             if height_key in self._data_info_other_nodes.keys():
+                utils.logger.notice(f"{height_key} data Raise Event")
                 block_info = self._data_info_other_nodes[height_key].pop()
                 event = ReceiveDataEvent(block_info)
                 self.event_system.simulator.raise_event(event)
@@ -439,6 +439,8 @@ class ConsensusRunner(EventRegister):
             if height_key in self._vote_info_other_nodes.keys():
                 while self._vote_info_other_nodes[height_key]:
                     vote_info = self._vote_info_other_nodes[height_key].pop()
+                    utils.logger.notice(f"{height_key} vote Raise Event")
+
                     e = ReceiveVoteEvent(vote_info)
                     self.event_system.simulator.raise_event(e)
 
