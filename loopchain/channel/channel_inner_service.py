@@ -774,8 +774,10 @@ class ChannelInnerTask:
             util.logger.debug(
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
-            if self._event_system:
-                self._channel_service.consensus_runner.receive_vote(vote)
+
+            if is_version_1_0:
+                if self._channel_service.consensus_runner:
+                    self._channel_service.consensus_runner.receive_vote(vote)
             else:
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)
