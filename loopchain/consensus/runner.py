@@ -1,6 +1,6 @@
 """Consensus (lft) execution and event handling"""
 import json
-from typing import TYPE_CHECKING, Sequence, Iterator, cast
+from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
@@ -107,7 +107,6 @@ class ConsensusRunner(EventRegister):
 
     def _generate_genesis_block(self):
         tx_versioner = self._block_manager.blockchain.tx_versioner
-        signer = ChannelProperty().peer_auth
 
         block_builder = BlockBuilder.new(BlockHeader.version, tx_versioner)
         block_builder.peer_id = ExternalAddress.empty()
@@ -122,9 +121,10 @@ class ConsensusRunner(EventRegister):
         block_builder.prev_hash = Hash32.empty()
         block_builder.signer = None
 
-        peer_id = ExternalAddress.fromhex_address(signer.address)
-        block_builder.validators_hash = ChannelProperty().crep_root_hash
-        block_builder.next_validators = [peer_id]
+        validators_hash = ChannelProperty().crep_root_hash
+        block_builder.validators_hash = validators_hash
+        validators = self._block_manager.blockchain.find_preps_by_roothash(validators_hash)
+        block_builder.next_validators = self._convert_to_external_address(validators)
 
         block_builder.epoch = 0
         block_builder.round = 0
@@ -262,7 +262,8 @@ class ConsensusRunner(EventRegister):
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
-        epoch1 = LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,))
+        voters = self._get_next_validators(event.commit_id)
+        epoch1 = LoopchainEpoch(num=1, voters=voters)
         next_round = event.round_num + 1
 
         round_start_event = RoundStartEvent(
@@ -282,6 +283,21 @@ class ConsensusRunner(EventRegister):
         BroadcastVoteEvent: _on_event_broadcast_vote,
         RoundEndEvent: _on_round_end_event
     }
+
+    def _get_next_validators(self, block_hash: Hash32) -> List[ExternalAddress]:
+        blockchain = self._block_manager.blockchain
+
+        if block_hash == Hash32.empty():  # On Genesis Block
+            validators = blockchain.find_preps_by_roothash(ChannelProperty().crep_root_hash)
+        else:
+            block: Block = blockchain.find_block_by_hash32(block_hash)
+            validators_hash = block.header.next_validators_hash
+            validators = blockchain.find_preps_by_roothash(validators_hash)
+
+        return self._convert_to_external_address(validators)
+
+    def _convert_to_external_address(self, validators: List[dict]) -> List[ExternalAddress]:
+        return [ExternalAddress.fromhex_address(validator["id"]) for validator in validators]
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]

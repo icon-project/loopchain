@@ -1072,10 +1072,16 @@ class BlockChain:
         block_dumped = zlib.decompress(block_dumped)
         block_json = block_dumped.decode(encoding=conf.PEER_DATA_ENCODING)
         block_serialized = json.loads(block_json)
-        block_height = self.__block_versioner.get_height(block_serialized)
-        block_version = self.__block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
-        return block_serializer.deserialize(block_serialized)
+        try:
+            block_height = self.__block_versioner.get_height(block_serialized)
+            block_version = self.__block_versioner.get_version(block_height)
+            block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
+            block = block_serializer.deserialize(block_serialized)
+        except Exception as e:
+            utils.logger.critical(f"Exception while block loads: {e}")
+            raise
+
+        return block
 
     def get_transaction_proof(self, tx_hash: Hash32):
         try:

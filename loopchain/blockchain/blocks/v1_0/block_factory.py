@@ -157,7 +157,7 @@ class BlockFactory(DataFactory):
             prev_hash=_hash,
             height=-1,
             timestamp=utils.get_time_stamp(),
-            peer_id=self._signer.address,
+            peer_id=proposer_id,
             signature="",
             epoch=epoch_num,
             round=round_num,
