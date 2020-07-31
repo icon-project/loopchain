@@ -16,7 +16,7 @@ jobs:
         echo "::set-env name=PR_PATH::https://github.com/${GITHUB_REPOSITORY}/pull/${pr_num}"
 
     - name: Setup Python
-      uses: actions/setup-python@v1
+      uses: actions/setup-python@v2
       with:
         python-version: 3.7
 

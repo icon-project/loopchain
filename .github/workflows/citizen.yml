@@ -42,18 +42,24 @@ jobs:
         cd -
         icon_rc -version
 
-    - name: Install Loopchain
+    - if: ${{ github.base_ref == 'master' }}
+      name: Install Loopchain master
+      run: |
+        pwd
+        make install
+
+    - if: ${{ github.base_ref != 'master' }}
+      name: Install Loopchain develop
       run: |
         pwd
         make develop
-
     - name: Generate-key
       run: |
-        sed "23 a\  \"PRIVATE_PASSWORD\": \"${pwd}\"," -i conf/mainnet/loopchain_conf.json
+        sed "23 a\  \"PRIVATE_PASSWORD\": \"${PWD}\"," -i conf/mainnet/loopchain_conf.json
         cat conf/mainnet/loopchain_conf.json
 
-        pip install tbears
-        tbears keystore -p ${pwd} my_keystore.json
+        python -c "import os; from iconsdk.wallet.wallet import KeyWallet; \
+          KeyWallet.create().store('my_keystore.json', os.getenv('PWD'))"
       env:
         pwd: Most_safest_pw_in_the_wor1d
 
