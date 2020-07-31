@@ -457,7 +457,7 @@ class TestInvokePool:
         monkeypatch.setattr(InvokeRequest, "from_block", MagicMock())
 
         # WHEN I call invoke
-        invoke_data = invoke_pool.invoke(block=block)
+        invoke_data = invoke_pool.invoke(block=block, tx_versioner=TransactionVersioner())
 
         # THEN params should be expected
         assert invoke_data.epoch_num == TestInvokePool.epoch_num
@@ -479,7 +479,7 @@ class TestInvokePool:
         icon_stub.sync_task().invoke.return_value = icon_invoke
 
         # WHEN I call invoke
-        invoke_data = invoke_pool.invoke(block=block)
+        invoke_data = invoke_pool.invoke(block=block, tx_versioner=TransactionVersioner())
 
         # THEN params should be expected
         assert invoke_data.epoch_num == TestInvokePool.epoch_num
@@ -498,7 +498,7 @@ class TestInvokePool:
             invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)
 
         # WHEN I call invoke
-        invoke_pool.invoke(block=block)
+        invoke_pool.invoke(block=block, tx_versioner=TransactionVersioner())
 
         # THEN I can fetch that message by the given epoch and round
         assert invoke_pool.get_invoke_data(epoch_num=TestInvokePool.epoch_num, round_num=TestInvokePool.round_num)

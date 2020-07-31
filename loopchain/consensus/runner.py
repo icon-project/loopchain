@@ -78,7 +78,7 @@ class ConsensusRunner(EventRegister):
             initial_epoches.append(curr_epoch)
 
             candidate_block: Block = self.find_candidate_block_by_height(last_commit_block.header.height+1)
-            self._invoke_pool.invoke(candidate_block)
+            self._invoke_pool.invoke(candidate_block, blockchain.tx_versioner)
             initial_blocks.append(candidate_block)
 
             last_block_votes = self._find_votes_by_hash(last_commit_block.header.hash)
