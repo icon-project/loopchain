@@ -101,7 +101,7 @@ class InvokeRequest:
             return []
 
     @classmethod
-    def from_block(cls, block: 'Block'):
+    def from_block(cls, block: 'Block', tx_versioner: 'TransactionVersioner'):
         header: 'BlockHeader' = block.header
         body: 'BlockBody' = block.body
 
@@ -113,7 +113,7 @@ class InvokeRequest:
             prev_block_hash=header.prev_hash,
             timestamp=header.timestamp,
             prev_votes=body.prev_votes,
-            tx_versioner=TransactionVersioner(),
+            tx_versioner=tx_versioner,
             is_block_editable=True
         )
 
@@ -272,10 +272,10 @@ class InvokePool(MessagePool):
 
         return PreInvokeResponse.new(pre_invoke_result)
 
-    def invoke(self, block: 'Block') -> InvokeData:
+    def invoke(self, block: 'Block', tx_versioner: 'TransactionVersioner') -> InvokeData:
         """Originated from `Blockchain.score_invoke`."""
 
-        invoke_request = InvokeRequest.from_block(block=block)
+        invoke_request = InvokeRequest.from_block(block=block, tx_versioner=tx_versioner)
 
         icon_service = StubCollection().icon_score_stubs[ChannelProperty().name]  # FIXME SINGLETON!
         invoke_result_dict: dict = icon_service.sync_task().invoke(invoke_request.serialize())

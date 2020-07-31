@@ -30,7 +30,7 @@ class BlockVerifier(DataVerifier):
         self._verify_common(prev_data, data)
         self._verify_transactions(data)
         self._verify_signature(data)
-        self._invoke_pool.invoke(data)
+        self._invoke_pool.invoke(data, self._tx_versioner)
 
     def _verify_version(self, block: 'Block'):
         if block.header.version != self.version:
