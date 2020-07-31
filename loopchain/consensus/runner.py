@@ -124,7 +124,7 @@ class ConsensusRunner(EventRegister):
         validators_hash = ChannelProperty().crep_root_hash
         block_builder.validators_hash = validators_hash
         validators = self._block_manager.blockchain.find_preps_by_roothash(validators_hash)
-        block_builder.next_validators = self._convert_to_external_addr(validators)
+        block_builder.next_validators = self._convert_to_external_address(validators)
 
         block_builder.epoch = 0
         block_builder.round = 0
@@ -294,9 +294,9 @@ class ConsensusRunner(EventRegister):
             validators_hash = block.header.next_validators_hash
             validators = blockchain.find_preps_by_roothash(validators_hash)
 
-        return self._convert_to_external_addr(validators)
+        return self._convert_to_external_address(validators)
 
-    def _convert_to_external_addr(self, validators: List[dict]) -> List[ExternalAddress]:
+    def _convert_to_external_address(self, validators: List[dict]) -> List[ExternalAddress]:
         return [ExternalAddress.fromhex_address(validator["id"]) for validator in validators]
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
