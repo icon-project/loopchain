@@ -40,9 +40,9 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice==1.7.0
-	$(PIP_INSTALL) iconrpcserver==1.5.0
-	$(PIP_INSTALL) tbears
+	$(PIP_INSTALL) iconservice~=1.7.0
+	$(PIP_INSTALL) iconrpcserver~=1.5.0
+	$(PIP_INSTALL) iconsdk~=1.3.0
 
 ## pip install packages
 install: $(INSTALL_REQUIRES)
@@ -64,7 +64,8 @@ generate-proto:
 ## Generate a key
 generate-key:
 	@file="my_keystore.json"; $(RM) $${file} > /dev/null; \
-	tbears keystore $${file}; \
+	python -c "import getpass; from iconsdk.wallet.wallet import KeyWallet; \
+		KeyWallet.create().store('$${file}', getpass.getpass('Input your keystore password: '))"; \
 	cat $${file}
 
 ## Check loopchain & gunicorn & rabbitmq processes
