@@ -1077,9 +1077,6 @@ class BlockChain:
             block_version = self.__block_versioner.get_version(block_height)
             block_serializer = BlockSerializer.new(block_version, self.__tx_versioner)
             block = block_serializer.deserialize(block_serialized)
-        except AttributeError:  # no serializer above v1.0
-            from loopchain.blockchain.blocks.v1_0 import Block as Block_V1_0
-            block = Block_V1_0._deserialize(**block_serialized)
         except Exception as e:
             utils.logger.critical(f"Exception while block loads: {e}")
             raise
