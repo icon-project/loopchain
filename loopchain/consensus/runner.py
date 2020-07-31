@@ -67,7 +67,7 @@ class ConsensusRunner(EventRegister):
         last_commit_block: Block = blockchain.last_block
 
         if last_commit_block:  # Not Genesis Block
-            commit_id = last_commit_block.header.hash
+            commit_id = last_commit_block.header.hash   # Could be Unrecorded Block (0.5)
             initial_blocks.append(last_commit_block)
 
             curr_epoch = LoopchainEpoch(
