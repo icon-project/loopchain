@@ -85,7 +85,7 @@ class TestBlockFactory:
         assert block.is_none()
 
     @pytest.mark.asyncio
-    async def test_create_none_data(self, block_factory: v1_0.BlockFactory):
+    async def test_create_lazy_data(self, block_factory: v1_0.BlockFactory):
         # WHEN I create lazy block
         epoch_num = 1
         round_num = 1

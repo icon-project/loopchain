@@ -40,15 +40,15 @@ prev_block_hash = Hash32.fromhex("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 @pytest.fixture
 def invoke_pool():
-    def _invoke(block, **kwargs):
+    def _invoke(block, tx_versioner):
         invoke_data = InvokeData(
-            epoch_num=kwargs.get('epoch_num', epoch_num),
-            round_num=kwargs.get('round_num', round_num),
+            epoch_num=epoch_num,
+            round_num=round_num,
             height=block.header.height,
             receipts=[],
             validators_hash=block.header.validators_hash,
-            state_root_hash=kwargs.get('state_hash', state_hash),
-            next_validators_origin=kwargs.get('next_validators_origin', next_validators_origin)
+            state_root_hash=state_hash,
+            next_validators_origin=next_validators_origin
         )
         return invoke_data
 
@@ -235,8 +235,7 @@ class TestVerifyTransactions(_TestVerifierBase):
 
 
 @pytest.mark.asyncio
-class TestSample:
-
+class TestVerifyBlock:
     async def test_verify(self, block_verifier, create_block):
         prev_block = create_block()
         block = create_block(prev_block)

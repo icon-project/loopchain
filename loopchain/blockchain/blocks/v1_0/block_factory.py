@@ -146,12 +146,12 @@ class BlockFactory(DataFactory):
             block_builder.transactions[tx.hash] = tx
 
     def create_none_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        return self._create_unreal_data(epoch_num, round_num, _hash=Block.NoneData)
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.NoneData)
 
     def create_lazy_data(self, epoch_num: int, round_num: int, proposer_id: bytes) -> Block:
-        return self._create_unreal_data(epoch_num, round_num, _hash=Block.LazyData)
+        return self._create_unreal_data(epoch_num, round_num, proposer_id, _hash=Block.LazyData)
 
-    def _create_unreal_data(self, epoch_num: int, round_num: int, _hash: Hash32):
+    def _create_unreal_data(self, epoch_num: int, round_num: int, proposer_id: bytes, _hash: Hash32):
         header = BlockHeader(
             hash=_hash,
             prev_hash=_hash,
