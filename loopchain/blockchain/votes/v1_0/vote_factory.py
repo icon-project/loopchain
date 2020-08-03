@@ -72,7 +72,7 @@ class BlockVoteFactory(VoteFactory):
     def create_none_vote(self, epoch_num: int, round_num: int) -> BlockVote:
         timestamp = utils.get_time_stamp()
         signature = self._get_signature(
-            height=-1,
+            height=0,
             voter_id=self._voter_id,
             commit_id=BlockVote.NoneVote,
             data_id=BlockVote.NoneVote,
@@ -85,7 +85,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
-            height=-1,
+            height=0,
             receipt_hash=BlockVote.NoneVote,
             state_hash=BlockVote.NoneVote,
             next_validators_hash=BlockVote.NoneVote,
@@ -114,7 +114,7 @@ class BlockVoteFactory(VoteFactory):
         )
 
         return BlockVote(
-            height=-1,
+            height=0,
             receipt_hash=BlockVote.LazyVote,
             state_hash=BlockVote.LazyVote,
             next_validators_hash=BlockVote.LazyVote,

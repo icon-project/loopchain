@@ -17,7 +17,6 @@ import urllib.parse
 
 import plyvel
 
-from loopchain.blockchain.transactions import TransactionVersioner
 from loopchain.store.key_value_store import KeyValueStoreError
 from loopchain.store.key_value_store import KeyValueStoreWriteBatch, KeyValueStoreCancelableWriteBatch, KeyValueStore
 from loopchain.store.key_value_store import _validate_args_bytes, _validate_args_bytes_without_first
@@ -93,8 +92,6 @@ class KeyValueStorePlyvel(KeyValueStore):
             raise ValueError(f"Support file path URI only (ex. file:///xxx/xxx). uri={uri}")
         self._path = f"{(uri_obj.netloc if uri_obj.netloc else '')}{uri_obj.path}"
         self._db = self._new_db(self._path, **kwargs)
-
-        self.__tx_versioner = TransactionVersioner()
 
     @_error_convert
     def _new_db(self, path, **kwargs) -> plyvel.DB:

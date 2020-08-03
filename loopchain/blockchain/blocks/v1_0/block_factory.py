@@ -60,7 +60,7 @@ class BlockFactory(DataFactory):
         block_builder.prev_votes = prev_votes
 
         pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.prepare_invoke(
-            block_height=data_number-1,
+            block_height=data_number,
             block_hash=prev_id
         )
         self._add_tx_to_block(block_builder, pre_invoke_response.added_transactions)
@@ -132,8 +132,7 @@ class BlockFactory(DataFactory):
                 # FIXME: To cut the dependencies with `Blockchain`, implement related methods into db store.
                 tv.verify(tx, blockchain=self._blockchain)
             except Exception as e:
-                utils.logger.warning(
-                    f"tx hash invalid. tx: {tx} exception: {e}", exc_info=e)
+                utils.logger.warning(f"tx hash invalid. tx: {tx} exception: {e}", exc_info=e)
             else:
                 block_builder.transactions[tx.hash] = tx
                 block_tx_size += tx.size(tx_versioner)

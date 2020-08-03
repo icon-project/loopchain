@@ -56,17 +56,6 @@ class BlockBuilder(BaseBlockBuilder):
         for receipt in self._prev_receipts:
             receipt.pop("blockHash", None)
 
-    def reset_cache(self):
-        self.block = None
-        self.hash = None
-        self.prev_votes_hash = None
-        self.transactions_hash = None
-        self.prev_state_hash = None
-        self.prev_receipts_hash = None
-        self.validators_hash = None
-        self.prev_logs_bloom = None
-        self._timestamp = None
-
     def build(self) -> 'Block':
         self.build_peer_id()
         self.build_hash()

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Union
-from loopchain.blockchain import ExternalAddress
+from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.transactions import Transaction as BaseTransition
 
 

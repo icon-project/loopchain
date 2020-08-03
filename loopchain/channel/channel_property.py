@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Optional
 from loopchain.components import SingletonMetaClass
 
 if TYPE_CHECKING:
-    from loopchain.blockchain import ExternalAddress
+    from loopchain.blockchain.types import ExternalAddress
 
 
 class ChannelProperty(metaclass=SingletonMetaClass):
