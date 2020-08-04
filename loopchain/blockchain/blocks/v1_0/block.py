@@ -64,8 +64,8 @@ class BlockBody(BaseBlockBody):
 
 
 class Block(Data):
-    NoneData = bytes(16)
-    LazyData = bytes([255] * 16)
+    NoneData = Hash32.fromhex("0x0000000000000000000000000000000000000000000000000000000000000000")
+    LazyData = Hash32.fromhex("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
 
     def __init__(self, header, body):
         self._header: BlockHeader = header
