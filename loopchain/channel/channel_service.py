@@ -50,7 +50,6 @@ class ChannelService:
 
         channel_queue_name = conf.CHANNEL_QUEUE_NAME_FORMAT.format(channel_name=channel_name, amqp_key=amqp_key)
         self.__inner_service = ChannelInnerService(
-            self.__event_system,
             amqp_target, channel_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, channel_service=self,
             tx_queue=self.__tx_queue
         )

@@ -397,7 +397,6 @@ class ChannelInnerTask:
         self._citizens: Dict[str, CitizenInfo] = dict()
         self._citizen_condition_new_block: Condition = None
         self._citizen_condition_unregister: Condition = None
-        self._event_system: EventSystem = None
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
@@ -687,9 +686,7 @@ class ChannelInnerTask:
             f"hash({unconfirmed_block.header.hash.hex()})")
 
         if self._channel_service.state_machine.state == "Consensus":
-            from lft.consensus.events import ReceiveDataEvent
-            event = ReceiveDataEvent(unconfirmed_block)
-            self._channel_service.consensus_runner.event_system.simulator.raise_event(event)
+            self._channel_service.consensus_runner.receive_data(unconfirmed_block)
             return
 
         if self._channel_service.state_machine.state not in \
@@ -760,7 +757,8 @@ class ChannelInnerTask:
         else:
             height: str = vote_serialized.get("blockHeight")  # FIXME
             version = self._blockchain.block_versioner.get_version(int(height, 16))
-            if parse_version(version) == parse_version("1.0"):
+            is_version_1_0 = (parse_version(version) == parse_version("1.0"))
+            if is_version_1_0:
                 from loopchain.blockchain.votes import v1_0
                 vote = v1_0.BlockVote._deserialize(**vote_serialized)
                 vote_round = vote.round_num
@@ -774,9 +772,10 @@ class ChannelInnerTask:
             util.logger.debug(
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
-            if self._event_system:
-                e = ReceiveVoteEvent(vote)
-                self._event_system.simulator.raise_event(e)
+
+            if is_version_1_0 and self._channel_service.consensus_runner:
+                util.logger.notice(f'loopchain 3.x has event_system!')
+                self._channel_service.consensus_runner.receive_vote(vote)
             else:
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)
@@ -954,20 +953,10 @@ class ChannelInnerTask:
 class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
-    def __init__(self, event_system, amqp_target, route_key, username=None, password=None, **task_kwargs):
+    def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
-        self._task._event_system: 'EventSystem' = event_system
-
-    @property
-    def event_system(self) -> 'EventSystem':
-        # FIXME: Possible removal property after 3.0 - no more dynamic assignment of EventSystem on ChannelInnerTask.
-        return self._task._event_system
-
-    @event_system.setter
-    def event_system(self, es: 'EventSystem'):
-        self._task._event_system = es
 
     def _callback_connection_lost_callback(self, connection: RobustConnection):
         util.exit_and_msg("MQ Connection lost.")
