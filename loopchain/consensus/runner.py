@@ -262,7 +262,16 @@ class ConsensusRunner(EventRegister):
 
     # FIXME: Temporary
     async def _round_start(self, event: RoundEndEvent):
-        voters = self._get_next_validators(event.commit_id)
+        if event.is_success:
+            commit_id = event.commit_id
+        elif self._block_manager.blockchain.last_block:
+            # Normal failed
+            commit_id = self._block_manager.blockchain.last_block.header.hash
+        else:
+            # Genesis failed
+            commit_id = Hash32.empty()
+
+        voters = self._get_next_validators(commit_id)
         epoch1 = LoopchainEpoch(num=1, voters=voters)
         next_round = event.round_num + 1
 
