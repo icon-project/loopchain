@@ -7,6 +7,7 @@ from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
+from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block, BlockFactory, BlockBuilder, BlockHeader
@@ -315,3 +316,11 @@ class ConsensusRunner(EventRegister):
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
         return json.dumps(vote_dumped)
+
+    def receive_vote(self, vote:'BlockVote'):
+        event = ReceiveVoteEvent(vote)
+        self.event_system.simulator.raise_event(event)
+
+    def receive_data(self, unconfirmed_block: 'Block'):
+        event = ReceiveDataEvent(unconfirmed_block)
+        self.event_system.simulator.raise_event(event)
