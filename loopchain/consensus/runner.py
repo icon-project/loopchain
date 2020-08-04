@@ -91,8 +91,11 @@ class ConsensusRunner(EventRegister):
 
             self._invoke_pool.genesis_invoke(candidate_block)
             initial_blocks.append(candidate_block)
+
             initial_epoches.append(LoopchainEpoch(num=0, voters=()))
-            initial_epoches.append(LoopchainEpoch(num=1, voters=(ChannelProperty().peer_address,)))
+            voters = blockchain.find_preps_by_roothash(ChannelProperty().crep_root_hash)
+            voters = tuple([ExternalAddress.fromhex(voter["id"]) for voter in voters])
+            initial_epoches.append(LoopchainEpoch(num=1, voters=voters))
             commit_id = candidate_block.header.prev_hash
 
         event = InitializeEvent(
