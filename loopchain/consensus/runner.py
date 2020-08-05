@@ -93,8 +93,7 @@ class ConsensusRunner(EventRegister):
             initial_blocks.append(candidate_block)
 
             initial_epoches.append(LoopchainEpoch(num=0, voters=()))
-            voters = blockchain.find_preps_by_roothash(ChannelProperty().crep_root_hash)
-            voters = blockchain.convert_to_external_address(voters)
+            voters = blockchain.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
             initial_epoches.append(LoopchainEpoch(num=1, voters=voters))
             commit_id = candidate_block.header.prev_hash
 
@@ -126,8 +125,7 @@ class ConsensusRunner(EventRegister):
 
         validators_hash = ChannelProperty().crep_root_hash
         block_builder.validators_hash = validators_hash
-        validators = self._block_manager.blockchain.find_preps_by_roothash(validators_hash)
-        block_builder.next_validators = self._block_manager.blockchain.convert_to_external_address(validators)
+        block_builder.next_validators = self._block_manager.blockchain.find_preps_addresses_by_roothash(validators_hash)
 
         block_builder.epoch = 0
         block_builder.round = 0
@@ -300,13 +298,13 @@ class ConsensusRunner(EventRegister):
         blockchain = self._block_manager.blockchain
 
         if block_hash == Hash32.empty():  # On Genesis Block
-            validators = blockchain.find_preps_by_roothash(ChannelProperty().crep_root_hash)
+            validators = blockchain.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
         else:
             block: Block = blockchain.find_block_by_hash32(block_hash)
             validators_hash = block.header.next_validators_hash
-            validators = blockchain.find_preps_by_roothash(validators_hash)
+            validators = blockchain.find_preps_addresses_by_roothash(validators_hash)
 
-        return blockchain.convert_to_external_address(validators)
+        return validators
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]

@@ -564,9 +564,6 @@ class BlockChain:
         else:
             return json.loads(preps_dumped)
 
-    def convert_to_external_address(self, validators: List[dict]) -> List[ExternalAddress]:
-        return [ExternalAddress.fromhex_address(validator["id"]) for validator in validators]
-
     @valued_only_lru_cache(maxsize=4, valued_returns_only=True)
     def is_roothash_exist_in_db(self, roothash: Hash32) -> Optional[bool]:
         try:
