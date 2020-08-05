@@ -298,13 +298,12 @@ class ConsensusRunner(EventRegister):
         blockchain = self._block_manager.blockchain
 
         if block_hash == Hash32.empty():  # On Genesis Block
-            validators = blockchain.find_preps_addresses_by_roothash(ChannelProperty().crep_root_hash)
+            validators_hash = ChannelProperty().crep_root_hash
         else:
             block: Block = blockchain.find_block_by_hash32(block_hash)
             validators_hash = block.header.next_validators_hash
-            validators = blockchain.find_preps_addresses_by_roothash(validators_hash)
 
-        return validators
+        return blockchain.find_preps_addresses_by_roothash(validators_hash)
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
