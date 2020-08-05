@@ -94,7 +94,7 @@ class ConsensusRunner(EventRegister):
 
             initial_epoches.append(LoopchainEpoch(num=0, voters=()))
             voters = blockchain.find_preps_by_roothash(ChannelProperty().crep_root_hash)
-            voters = tuple([ExternalAddress.fromhex(voter["id"]) for voter in voters])
+            voters = blockchain.convert_to_external_address(voters)
             initial_epoches.append(LoopchainEpoch(num=1, voters=voters))
             commit_id = candidate_block.header.prev_hash
 
@@ -127,7 +127,7 @@ class ConsensusRunner(EventRegister):
         validators_hash = ChannelProperty().crep_root_hash
         block_builder.validators_hash = validators_hash
         validators = self._block_manager.blockchain.find_preps_by_roothash(validators_hash)
-        block_builder.next_validators = self._convert_to_external_address(validators)
+        block_builder.next_validators = self._block_manager.blockchain.convert_to_external_address(validators)
 
         block_builder.epoch = 0
         block_builder.round = 0
@@ -306,10 +306,7 @@ class ConsensusRunner(EventRegister):
             validators_hash = block.header.next_validators_hash
             validators = blockchain.find_preps_by_roothash(validators_hash)
 
-        return self._convert_to_external_address(validators)
-
-    def _convert_to_external_address(self, validators: List[dict]) -> List[ExternalAddress]:
-        return [ExternalAddress.fromhex_address(validator["id"]) for validator in validators]
+        return blockchain.convert_to_external_address(validators)
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
