@@ -145,8 +145,8 @@ def normalize_request_url(url_input, version=None, channel=None):
     if url_input and 'http://' in url_input:
         url_input = url_input.split("http://")[1]
 
-    use_https = 'https://' in url_input
-    if not url_input:  # ex) '' => http://localhost:9000/api/v3
+    use_https = 'https://' in url_input if url_input else False
+    if not url_input:  # ex) '' => http://127.0.0.1:9000/api/v3/icon_dex
         url = generate_url_from_params(version=version, channel=channel)
     elif use_https and url_input.count(':') == 1:  # ex) https://testwallet.icon.foundation
         url = generate_url_from_params(dns=url_input.split("https://")[1],
