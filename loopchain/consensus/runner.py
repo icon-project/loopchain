@@ -75,8 +75,6 @@ class ConsensusRunner(EventRegister):
         self._target_idx = 0
         self._stub_list = list()
 
-        self._is_round_started = False
-
     def _management_stub(self, status: str = 'init'):
         self._target_list = self._block_manager.get_target_list()
         for target in self._target_list:
@@ -205,7 +203,6 @@ class ConsensusRunner(EventRegister):
         )
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
-        self._is_round_started = False
         await self._write_block(round_end_event)
         await self._round_start(round_end_event)
 
@@ -329,7 +326,6 @@ class ConsensusRunner(EventRegister):
         round_start_event.deterministic = False
         mediator = self.event_system.get_mediator(DelayedEventMediator)
         mediator.execute(0.5, round_start_event)
-        self._is_round_started = True
 
     def update_status(self, peer: str, height: int):
         # TODO: Update height info
@@ -370,7 +366,7 @@ class ConsensusRunner(EventRegister):
         data_height_info = unconfirmed_block.header.height
         self._max_height_in_nodes = max(data_height_info, self._max_height_in_nodes)
 
-        diff_height_info = abs(self._last_block_height-data_height_info)
+        diff_height_info = abs(self._last_block_height-self._max_height_in_nodes)
         if diff_height_info < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
             if not data_height_info in self._data_info_other_nodes.keys():
                 self._data_info_other_nodes[data_height_info] = list()
@@ -383,7 +379,7 @@ class ConsensusRunner(EventRegister):
 
     async def sync_start(self):
         while True:
-            # await _request_height()
+            # await self._request_height()
             await self._request_block()
             await self._raise_event()
 
@@ -425,10 +421,6 @@ class ConsensusRunner(EventRegister):
 
     async def _raise_event(self):
         for i in range(1, 3):
-            if not self._is_round_started:
-                await asyncio.sleep(0)
-                continue
-
             height_key = self._last_block_height+i
             if height_key in self._vote_info_other_nodes.keys():
                 while self._vote_info_other_nodes[height_key]:
