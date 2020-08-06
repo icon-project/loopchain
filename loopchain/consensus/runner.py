@@ -197,10 +197,17 @@ class ConsensusRunner(EventRegister):
                     epoch_num=candidate_block.header.epoch,
                     round_num=candidate_block.header.round
                 )
+                self._invoke_if_not(block)
                 self._write_candidate_info(candidate_block, candidate_votes)
                 blockchain.add_block(
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
+
+    def _invoke_if_not(self, block: "Block"):
+        try:
+            self._invoke_pool.get_invoke_data(block.header.epoch, block.header.round)
+        except KeyError:
+            self._invoke_pool.invoke(block)
 
     def _write_candidate_info(self, candidate_block: 'Block', candidate_votes: Sequence[BlockVote]):
         """Write candidate info in batch."""
