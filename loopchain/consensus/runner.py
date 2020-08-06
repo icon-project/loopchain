@@ -151,6 +151,8 @@ class ConsensusRunner(EventRegister):
         return tx_builder.build(False)
 
     async def _on_event_broadcast_data(self, event: BroadcastDataEvent):
+        self._block_manager.blockchain.try_update_last_unconfirmed_block(event.data)
+
         target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
         self._block_manager.send_unconfirmed_block(
             block_=event.data,
