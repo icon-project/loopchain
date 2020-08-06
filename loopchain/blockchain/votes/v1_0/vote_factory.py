@@ -102,7 +102,7 @@ class BlockVoteFactory(VoteFactory):
         timestamp = util.get_time_stamp()
         signature = self._get_signature(
             height=0,
-            voter_id=self._voter_id,
+            voter_id=voter_id,
             commit_id=BlockVote.LazyVote,
             data_id=BlockVote.LazyVote,
             epoch_num=epoch_num,
@@ -120,7 +120,7 @@ class BlockVoteFactory(VoteFactory):
             next_validators_hash=BlockVote.LazyVote,
             data_id=BlockVote.LazyVote,
             commit_id=BlockVote.LazyVote,
-            voter_id=self._voter_id,
+            voter_id=voter_id,
             timestamp=timestamp,
             epoch_num=epoch_num,
             round_num=round_num,
