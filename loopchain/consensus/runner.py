@@ -170,6 +170,8 @@ class ConsensusRunner(EventRegister):
             round_=event.data.round_num
         )
 
+        self._syncer.update_current_height_info(event.data.header.height)
+
     async def _on_event_broadcast_vote(self, event: BroadcastVoteEvent):
         vote_dumped = self._vote_dumps(event.vote)
         block_vote = loopchain_pb2.BlockVote(vote=vote_dumped, channel=ChannelProperty().name)
@@ -183,6 +185,7 @@ class ConsensusRunner(EventRegister):
         )
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
+        self._syncer.update_raise_time()
         await self._write_block(round_end_event)
         await self._round_start(round_end_event)
 

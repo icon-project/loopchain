@@ -21,17 +21,22 @@ class Syncer:
                  _max_height_in_nodes: int = 0):
         self._block_manager = block_manager
         self._event_system: 'EventSystem' = event_system
-        self._last_block_height = 0
+        self._last_block_height = last_block_height
         self._height_info_other_nodes = dict()
         self._data_info_other_nodes: Dict[int, list] = dict()
         self._vote_info_other_nodes: Dict[int, list] = dict()
-        self._max_height_in_nodes = 0
+        self._max_height_in_nodes = _max_height_in_nodes
 
         self._request_history_list = dict()
         self._target_idx = 0
         self._stub_list = list()
         self._round_start_tiemer = time.time()
         self.management_stub()
+
+        self._raise_height = self._last_block_height
+        self._raised_time = time.time()
+        self._raised_request_time = 0
+        self._need_request = True
 
     def management_stub(self, status: str = 'init'):
         self._target_list = self._block_manager.get_target_list()
@@ -88,6 +93,10 @@ class Syncer:
                     self._target_idx = (self._target_idx+1) % len(self._stub_list)
 
                 await asyncio.sleep(0)
+        elif self._need_request and time.time() - max(self._raised_request_time, self._raised_time) > 10:
+            self._raised_request_time = time.time()
+            for idx in range(len(self._stub_list)):
+                _request(idx, self._raise_height)
 
     def receive_vote(self, vote: 'BlockVote'):
         height = vote.block_height
@@ -116,21 +125,30 @@ class Syncer:
                     self.receive_vote(vote)
 
     async def _raise_event(self):
-        for i in range(1, 3):
-            height = self._last_block_height+i
-            if height in self._data_info_other_nodes.keys():
-                block_info = self._data_info_other_nodes[height].pop()
-                event = ReceiveDataEvent(block_info)
+        if self._raise_height in self._data_info_other_nodes.keys():
+            block_info = self._data_info_other_nodes[self._raise_height].pop()
+            event = ReceiveDataEvent(block_info)
+            self._event_system.simulator.raise_event(event)
+            del(self._data_info_other_nodes[self._raise_height])
+
+        await asyncio.sleep(0)
+        if self._raise_height in self._vote_info_other_nodes.keys():
+            while self._vote_info_other_nodes[self._raise_height]:
+                vote_info = self._vote_info_other_nodes[self._raise_height].pop()
+                event = ReceiveVoteEvent(vote_info)
                 self._event_system.simulator.raise_event(event)
-                del(self._data_info_other_nodes[height])
 
-            await asyncio.sleep(0)
-            if height in self._vote_info_other_nodes.keys():
-                while self._vote_info_other_nodes[height]:
-                    vote_info = self._vote_info_other_nodes[height].pop()
-                    event = ReceiveVoteEvent(vote_info)
-                    self._event_system.simulator.raise_event(event)
+            del(self._vote_info_other_nodes[self._raise_height])
 
-                del(self._vote_info_other_nodes[height])
+        await asyncio.sleep(0)
 
-            await asyncio.sleep(0)
+    def update_raise_time(self):
+        self._raise_height += 1
+        self._raised_time = time.time()
+        self._need_request = True
+
+    def update_current_height_info(self, height: int):
+        if height == self._raise_height:
+            self._need_request = False
+        else:
+            self._need_request = True
