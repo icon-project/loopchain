@@ -22,7 +22,6 @@ class Syncer:
         self._block_manager = block_manager
         self._event_system: 'EventSystem' = event_system
         self._last_block_height = 0
-        self._height_info_other_nodes = dict()
         self._data_info_other_nodes: Dict[int, list] = dict()
         self._vote_info_other_nodes: Dict[int, list] = dict()
         self._max_height_in_nodes = 0
@@ -30,7 +29,6 @@ class Syncer:
         self._request_history_list = dict()
         self._target_idx = 0
         self._stub_list = list()
-        self._round_start_tiemer = time.time()
         self.management_stub()
 
     def management_stub(self, status: str = 'init'):
@@ -134,3 +132,14 @@ class Syncer:
                 del(self._vote_info_other_nodes[height])
 
             await asyncio.sleep(0)
+
+        fail_height = 0
+        if fail_height in self._vote_info_other_nodes.keys():
+            while self._vote_info_other_nodes[fail_height]:
+                vote_info = self._vote_info_other_nodes[fail_height].pop()
+                event = ReceiveVoteEvent(vote_info)
+                self._event_system.simulator.raise_event(event)
+
+            del(self._vote_info_other_nodes[fail_height])
+
+        await asyncio.sleep(0)
