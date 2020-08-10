@@ -608,7 +608,7 @@ class ChannelInnerTask:
 
         Responses last height of this node.
         """
-        height: int = self._channel_service.block_manager.blockchain.last_block.header.height
+        height: int = self._channel_service.block_manager.blockchain.latest_block.header.height
         peer_height = loopchain_pb2.PeerHeight(
             peer=ChannelProperty().peer_target,
             channel=ChannelProperty().name,
@@ -636,7 +636,9 @@ class ChannelInnerTask:
         Note that BlockRequest allows only Block 1.0+
         """
         blockchain = self._channel_service.block_manager.blockchain
-        block: Block_V1_0 = blockchain.find_block_by_height(height)
+        block: Optional[Block_V1_0] = blockchain.find_block_by_height(height)
+        if not block:
+            return  # Requester should handle this case.
 
         block_dumped = self._channel_service.block_manager.blockchain.block_dumps(block)
         block_send = loopchain_pb2.BlockSend(
@@ -686,6 +688,7 @@ class ChannelInnerTask:
             f"hash({unconfirmed_block.header.hash.hex()})")
 
         if self._channel_service.state_machine.state == "Consensus":
+            self._blockchain.try_update_last_unconfirmed_block(unconfirmed_block)
             self._channel_service.consensus_runner.receive_data(unconfirmed_block)
             return
 

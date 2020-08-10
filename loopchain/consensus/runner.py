@@ -151,12 +151,13 @@ class ConsensusRunner(EventRegister):
         return tx_builder.build(False)
 
     async def _on_event_broadcast_data(self, event: BroadcastDataEvent):
-        target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
-        self._block_manager.send_unconfirmed_block(
-            block_=event.data,
-            target_reps_hash=target_reps_hash,
-            round_=event.data.round_num
-        )
+        if self._block_manager.blockchain.try_update_last_unconfirmed_block(event.data):
+            target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
+            self._block_manager.send_unconfirmed_block(
+                block_=event.data,
+                target_reps_hash=target_reps_hash,
+                round_=event.data.round_num
+            )
 
     async def _on_event_broadcast_vote(self, event: BroadcastVoteEvent):
         vote_dumped = self._vote_dumps(event.vote)

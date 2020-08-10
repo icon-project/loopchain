@@ -460,7 +460,7 @@ class BlockChain:
         """
         return self.__find_block_by_key(block_hash.hex().encode(encoding='UTF-8'))
 
-    def find_block_by_height(self, block_height):
+    def find_block_by_height(self, block_height) -> Optional['Block']:
         """find block in DB by its height
 
         :param block_height: int,
@@ -1442,3 +1442,11 @@ class BlockChain:
             self.__add_tx_to_block(block_builder)
 
         return block_builder
+
+    def try_update_last_unconfirmed_block(self, unconfirmed_block: 'Block') -> bool:
+        """Note that the method expects an input as Block 1.0+"""
+        if not self.__last_block or unconfirmed_block.header.height == self.__last_block.header.height + 2:
+            self.last_unconfirmed_block = unconfirmed_block
+            return True
+
+        return False
