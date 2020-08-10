@@ -14,6 +14,7 @@ from loopchain.blockchain.types import BloomFilter, Hash32, TransactionStatusInQ
 from loopchain.crypto.signature import Signer
 
 if TYPE_CHECKING:
+    from loopchain.blockchain import BlockChain
     from loopchain.blockchain.votes.v1_0.vote import BlockVote
     from loopchain.blockchain.invoke_result import InvokePool, PreInvokeResponse
     from loopchain.baseservice.aging_cache import AgingCache
@@ -35,7 +36,7 @@ class BlockFactory(DataFactory):
 
         self._tx_queue: 'AgingCache' = tx_queue
         self._invoke_pool: 'InvokePool' = invoke_pool
-        self._blockchain = blockchain  # TODO: Will be replaced as DB Component
+        self._blockchain: 'BlockChain' = blockchain  # TODO: Will be replaced as DB Component
 
         # From BlockBuilder
         self._signer: Signer = signer
@@ -73,7 +74,10 @@ class BlockFactory(DataFactory):
         block_builder.validators_hash = pre_invoke_response.validators_hash
 
         if prev_votes:
-            prev_vote = prev_votes[0]  # FIXME
+            try:
+                prev_vote = next(vote for vote in prev_votes if vote.is_real())
+            except StopIteration:
+                raise RuntimeError("Something wrong...") from StopIteration
             block_builder.prev_state_hash = prev_vote.state_hash
             block_builder.receipts = prev_vote.receipt_hash
             block_builder.next_validators_hash = prev_vote.next_validators_hash
