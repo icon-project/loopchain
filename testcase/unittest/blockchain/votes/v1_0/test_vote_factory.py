@@ -1,8 +1,10 @@
 import os
 from typing import Callable
+from unittest.mock import MagicMock
 
 import pytest
 
+from loopchain.blockchain import BlockChain
 from loopchain.blockchain.invoke_result import InvokeData, InvokePool
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
@@ -12,7 +14,7 @@ from loopchain.crypto.signature import Signer
 class TestVoteFactory:
     @pytest.fixture
     def invoke_pool(self) -> InvokePool:
-        return InvokePool()
+        return InvokePool(MagicMock(BlockChain))
 
     @pytest.fixture
     def mock_verify(self, icon_invoke) -> Callable[[InvokePool, int, int], InvokeData]:
