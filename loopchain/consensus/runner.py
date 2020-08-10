@@ -31,11 +31,11 @@ class ConsensusRunner(EventRegister):
                  event_system: 'EventSystem',
                  tx_queue: 'AgingCache',
                  broadcast_scheduler: 'BroadcastScheduler',
-                 block_manager):
+                 block_manager: 'BlockManager'):
         super().__init__(event_system.simulator)
 
         self._block_manager: 'BlockManager' = block_manager
-        self._invoke_pool: InvokePool = InvokePool()
+        self._invoke_pool: InvokePool = InvokePool(block_manager.blockchain)
         self.broadcast_scheduler = broadcast_scheduler
         self.event_system = event_system
         self._block_factory: 'BlockFactory' = BlockFactory(

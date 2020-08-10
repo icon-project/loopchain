@@ -244,6 +244,10 @@ class InvokeData(Message):
 
 
 class InvokePool(MessagePool):
+    def __init__(self, blockchain):
+        super(InvokePool, self).__init__()
+        self._blockchain = blockchain
+
     def get_invoke_data(self, epoch_num: int, round_num: int) -> InvokeData:
         id_ = f"{epoch_num}_{round_num}".encode()
 
@@ -277,7 +281,18 @@ class InvokePool(MessagePool):
         )
         self.add_message(invoke_data)
 
+        self._process_invoke_results_legacy(block, invoke_result_dict)
+
         return invoke_data
+
+    def _process_invoke_results_legacy(self, block: 'Block', invoke_result_dict: dict):
+        """Temporary"""
+
+        tx_receipts = invoke_result_dict["txResults"]
+        for tx_receipt in tx_receipts:
+            tx_receipt["blockHash"] = block.header.hash.hex()
+
+        self._blockchain.invoke_results[block.header.hash] = (tx_receipts, None)
 
     def genesis_invoke(self, block: 'Block') -> InvokeData:
         method = "icx_sendTransaction"

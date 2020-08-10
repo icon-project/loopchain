@@ -606,6 +606,10 @@ class BlockChain:
 
             return self.__add_block(block, confirm_info, need_to_write_tx_info, need_to_score_invoke, force_write_block)
 
+    @property
+    def invoke_results(self):
+        return self.__invoke_results
+
     def __add_block(self, block: 'Block', confirm_info, need_to_write_tx_info=True, need_to_score_invoke=True,
                     force_write_block=False):
         with self.__add_block_lock:
