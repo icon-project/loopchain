@@ -1443,7 +1443,10 @@ class BlockChain:
 
         return block_builder
 
-    def try_update_last_unconfirmed_block(self, unconfirmed_block: 'Block'):
+    def try_update_last_unconfirmed_block(self, unconfirmed_block: 'Block') -> bool:
         """Note that the method expects an input as Block 1.0+"""
         if not self.__last_block or unconfirmed_block.header.height == self.__last_block.header.height + 2:
             self.last_unconfirmed_block = unconfirmed_block
+            return True
+
+        return False
