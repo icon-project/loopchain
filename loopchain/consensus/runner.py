@@ -21,8 +21,6 @@ from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2
 
-from loopchain.channel.channel_property import ChannelProperty
-
 from loopchain.consensus.syncer import Syncer
 
 if TYPE_CHECKING:
@@ -61,7 +59,11 @@ class ConsensusRunner(EventRegister):
         )
 
         self._loop = asyncio.get_event_loop()
-        self._syncer: 'Syncer' = Syncer(block_manager, event_system)
+        last_block_height = 0
+        if self._block_manager.blockchain.last_block:
+            last_block_height = self._block_manager.blockchain.last_block.header.height
+
+        self._syncer: 'Syncer' = Syncer(block_manager, event_system, last_block_height)
 
     async def start(self, channel_service):
         self._loop.create_task(self.lft_start(channel_service))
@@ -232,7 +234,6 @@ class ConsensusRunner(EventRegister):
                     block=block, confirm_info=confirm_info, need_to_score_invoke=False, force_write_block=True
                 )
 
-                # 최초 initialize 할 때 height 정보를 가져와서 기록할 수 있어야한다.
                 self._syncer.last_block_height = block.header.height
 
     def _invoke_if_not(self, block: "Block"):

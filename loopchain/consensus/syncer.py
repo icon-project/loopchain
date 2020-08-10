@@ -1,4 +1,5 @@
-import time, asyncio
+import time
+import asyncio
 from typing import TYPE_CHECKING
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block
@@ -13,18 +14,18 @@ from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager
 
+
 class Syncer:
     def __init__(self,
                  block_manager: 'BlockManager',
                  event_system: 'EventSystem',
-                 last_block_height: int = 0,
-                 _max_height_in_nodes: int = 0):
+                 last_block_height: int = 0):
         self._block_manager = block_manager
         self._event_system: 'EventSystem' = event_system
-        self._last_block_height = 0
+        self._last_block_height = last_block_height
         self._data_info_other_nodes: Dict[int, list] = dict()
         self._vote_info_other_nodes: Dict[int, list] = dict()
-        self._max_height_in_nodes = 0
+        self._max_height_in_nodes = last_block_height
 
         self._request_history_list = dict()
         self._target_idx = 0
@@ -92,11 +93,10 @@ class Syncer:
         self._max_height_in_nodes = max(height, self._max_height_in_nodes)
 
         if abs(self._last_block_height-height) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
-            if not height in self._vote_info_other_nodes.keys():
+            if height not in self._vote_info_other_nodes.keys():
                 self._vote_info_other_nodes[height] = list()
 
             self._vote_info_other_nodes[height].append(vote)
-
 
     def receive_data(self, block_data: 'Block'):
         height = block_data.header.height
@@ -104,7 +104,7 @@ class Syncer:
 
         diff_height_info = abs(self._last_block_height-self._max_height_in_nodes)
         if diff_height_info < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
-            if not height in self._data_info_other_nodes.keys():
+            if height not in self._data_info_other_nodes.keys():
                 self._data_info_other_nodes[height] = list()
 
             self._data_info_other_nodes[height].append(block_data)
