@@ -59,6 +59,7 @@ class ConsensusRunner(EventRegister):
 
         self._is_broadcasting: bool = False
         self._is_voting: bool = False
+        self._curr_round: int = 0
 
         last_block_height = -1
         if self._block_manager.blockchain.last_block:
@@ -202,7 +203,9 @@ class ConsensusRunner(EventRegister):
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
         self._is_broadcasting, self._is_voting = False, False
         await self._write_block(round_end_event)
-        await self._round_start(round_end_event)
+        if self._curr_round <= round_end_event.round_num:
+            # Avoid redundant round start
+            await self._round_start(round_end_event)
 
     # FIXME: Temporary
     async def _write_block(self, round_end_event: RoundEndEvent):
@@ -314,11 +317,11 @@ class ConsensusRunner(EventRegister):
 
         voters = self._get_next_validators(commit_id)
         epoch1 = LoopchainEpoch(num=1, voters=voters)
-        next_round = event.round_num + 1
+        self._curr_round = event.round_num + 1
 
         round_start_event = RoundStartEvent(
             epoch=epoch1,
-            round_num=next_round
+            round_num=self._curr_round
         )
         round_start_event.deterministic = False
         mediator = self.event_system.get_mediator(DelayedEventMediator)
