@@ -17,14 +17,13 @@ class Syncer:
     def __init__(self,
                  block_manager: 'BlockManager',
                  event_system: 'EventSystem',
-                 last_block_height: int = 0,
-                 _max_height_in_nodes: int = 0):
+                 last_block_height: int = 0):
         self._block_manager = block_manager
         self._event_system: 'EventSystem' = event_system
-        self._last_block_height = 0
+        self._last_block_height = last_block_height
         self._data_info_other_nodes: Dict[int, list] = dict()
         self._vote_info_other_nodes: Dict[int, list] = dict()
-        self._max_height_in_nodes = 0
+        self._max_height_in_nodes = last_block_height
 
         self._request_history_list = dict()
         self._target_idx = 0
