@@ -638,7 +638,7 @@ class ChannelInnerTask:
         blockchain = self._channel_service.block_manager.blockchain
         block: Optional[Block_V1_0] = blockchain.find_block_by_height(height)
         if not block:
-            return  # FIXME: Ignore response? or Send client to failure message?
+            return  # Requester should handle this case.
 
         block_dumped = self._channel_service.block_manager.blockchain.block_dumps(block)
         block_send = loopchain_pb2.BlockSend(
