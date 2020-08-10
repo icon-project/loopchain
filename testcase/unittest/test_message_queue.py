@@ -145,7 +145,7 @@ class TestMessageQueue(unittest.TestCase):
         route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
             channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
 
-        service = ChannelInnerService("", conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
+        service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
         service._callback_connection_lost_callback = lambda conn: None
 
         stub = ChannelInnerStub(conf.AMQP_TARGET, route_key)
@@ -159,7 +159,7 @@ class TestMessageQueue(unittest.TestCase):
                 result = await stub.async_task().hello()
                 self.assertEqual(result, 'channel_hello')
 
-                bad_service = ChannelInnerService("", conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
+                bad_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
                 with self.assertRaises(ChannelClosed):
                     await bad_service.connect()
 
@@ -181,7 +181,7 @@ class TestMessageQueue(unittest.TestCase):
 
             route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
                 channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
-            channel_inner_service = ChannelInnerService("", conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
+            channel_inner_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None, tx_queue=None)
             channel_inner_service ._callback_connection_lost_callback = lambda conn: None
             await channel_inner_service.connect()
 
