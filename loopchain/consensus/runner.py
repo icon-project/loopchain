@@ -53,7 +53,8 @@ class ConsensusRunner(EventRegister):
             signer=ChannelProperty().peer_auth
         )
         self.consensus = Consensus(
-            self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory
+            self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory,
+            10, 10
         )
 
         self._loop = asyncio.get_event_loop()
