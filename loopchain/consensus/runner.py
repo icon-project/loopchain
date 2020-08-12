@@ -60,7 +60,7 @@ class ConsensusRunner(EventRegister):
         self._is_broadcasting: bool = False
         self._is_voting: bool = False
 
-        last_block_height = 0
+        last_block_height = -1
         if self._block_manager.blockchain.last_block:
             last_block_height = self._block_manager.blockchain.last_block.header.height
 
