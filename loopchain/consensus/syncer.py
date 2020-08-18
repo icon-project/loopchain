@@ -1,14 +1,15 @@
-import time
 import asyncio
+import time
 from typing import TYPE_CHECKING, Dict
-from loopchain import utils, configure as conf
-from loopchain.blockchain.blocks.v1_0 import Block
-from loopchain.blockchain.votes.v1_0 import BlockVote
-from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
-from loopchain.tools.grpc_helper import GRPCHelper
-from loopchain.channel.channel_property import ChannelProperty
 
 from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
+
+from loopchain import configure as conf
+from loopchain.blockchain.blocks.v1_0 import Block
+from loopchain.blockchain.votes.v1_0 import BlockVote
+from loopchain.channel.channel_property import ChannelProperty
+from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.tools.grpc_helper import GRPCHelper
 
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager

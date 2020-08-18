@@ -1,7 +1,6 @@
 """Consensus (lft) execution and event handling"""
 import asyncio
 import json
-import time
 from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
 from lft.consensus import Consensus
@@ -18,9 +17,8 @@ from loopchain.blockchain.transactions import TransactionBuilder
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import loopchain_pb2
-
 from loopchain.consensus.syncer import Syncer
+from loopchain.protos import loopchain_pb2
 
 if TYPE_CHECKING:
     from loopchain.baseservice import BroadcastScheduler

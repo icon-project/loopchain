@@ -7,15 +7,14 @@ from collections import namedtuple
 from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
-from lft.consensus.events import ReceiveVoteEvent
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.blockchain.backup_manager import BackupManager
+from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
@@ -31,7 +30,6 @@ from loopchain.utils.message_queue import StubCollection
 if TYPE_CHECKING:
     from loopchain.baseservice.aging_cache import AgingCache
     from loopchain.channel.channel_service import ChannelService
-    from lft.event import EventSystem
     from loopchain.blockchain.blockchain import BlockChain
     from loopchain.blockchain.blocks.v1_0 import Block as Block_V1_0
 
