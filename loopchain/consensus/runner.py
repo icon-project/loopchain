@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
-from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
 

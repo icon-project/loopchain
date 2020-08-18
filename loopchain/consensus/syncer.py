@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block
 from loopchain.blockchain.votes.v1_0 import BlockVote
@@ -8,11 +8,11 @@ from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.channel.channel_property import ChannelProperty
 
-from lft.event import EventSystem
 from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager
+    from lft.event import EventSystem
 
 
 class Syncer:
@@ -30,9 +30,10 @@ class Syncer:
         self._request_history_list = dict()
         self._target_idx = 0
         self._stub_list = list()
+        self._target_list = list()
         self.management_stub()
 
-    def management_stub(self, status: str = 'init'):
+    def management_stub(self):
         self._target_list = self._block_manager.get_target_list()
         for target in self._target_list:
             channel = GRPCHelper().create_client_channel(target)
@@ -48,23 +49,14 @@ class Syncer:
 
     async def sync_start(self):
         while True:
-            # await self._request_height()
             await self._request_block()
             await self._raise_event()
-
-    async def _request_height(self):
-        peer_stub = self._stub_list[self._target]
-
-        response = peer_stub.BlockHeightRequest(loopchain_pb2.HeightRequest(
-            peer=ChannelProperty().peer_target,
-            channel=self._block_manager.channel_name
-        ), conf.GRPC_TIMEOUT)
 
     async def _request_block(self):
         def _request(idx: int, height: int):
             peer_stub = self._stub_list[idx]
 
-            response = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
+            _ = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
                 peer=ChannelProperty().peer_target,
                 channel=self._block_manager.channel_name,
                 height=height
@@ -109,11 +101,21 @@ class Syncer:
 
             self._data_info_other_nodes[height].append(block_data)
 
+            """ Check Sync mode
+
+            If height make diffrent 3 value between to written block height and to received block height,
+            It information is to responded for Synchronize.
+            So It need to raise to divide Block information and Vote Information.
+            """
             if 3 < diff_height_info:
                 for vote in block_data.prev_votes:
                     self.receive_vote(vote)
 
     async def _raise_event(self):
+        """ LFT is two step event.
+
+        It need to raise event two block information after to written block height.
+        """
         for i in range(1, 3):
             height = self._last_block_height+i
             if height in self._data_info_other_nodes.keys():
