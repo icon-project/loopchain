@@ -59,7 +59,7 @@ class Syncer:
 
             _ = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
                 peer=ChannelProperty().peer_target,
-                channel=self._block_manager.channel_name,
+                channel=ChannelProperty().name,
                 height=height
             ), conf.GRPC_TIMEOUT)
 
