@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 
 class Syncer:
-    def __init__(self,
-                 block_manager: 'BlockManager',
-                 event_system: 'EventSystem'):
+    def __init__(self, block_manager: 'BlockManager', event_system: 'EventSystem'):
         self._block_manager = block_manager
         self.__blockchain = self._block_manager.blockchain
         self._event_system: 'EventSystem' = event_system
@@ -60,19 +58,22 @@ class Syncer:
                 height=height
             ), conf.GRPC_TIMEOUT)
 
-        max_loop = self._max_height_in_nodes-3
-        if self._last_block_height < max_loop:
-            for i in range(1, min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, max_loop-self._last_block_height)):
+        """ Sync mode check
+
+        LFT is two step process. So It need to wait for a height of at least 2.
+        """
+        goal_height_for_sync = self._max_height_in_nodes-conf.ROUND_STEP
+        if self._last_block_height < goal_height_for_sync:
+            for i in range(1, min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, goal_height_for_sync-self._last_block_height)):
                 height = self._last_block_height + i
                 if height in self._request_history_list.keys():
                     during_request_time = time.time()-self._request_history_list[height][1]
-                    if during_request_time > conf.WAIT_SUB_PROCESS_RETRY_TIMES:
+                    if during_request_time > conf.LFT_SYNC_REQUEST_WAIT:
                         retry_target_idx = self._request_history_list[height][0]
                         _request(retry_target_idx, height)
                         self._request_history_list[height] = [retry_target_idx, time.time()]
                 else:
                     _request(self._target_idx, height)
-                    self._request_history_list[height] = list()
                     self._request_history_list[height] = [self._target_idx, time.time()]
                     self._target_idx = (self._target_idx+1) % len(self._stub_list)
 
@@ -114,7 +115,7 @@ class Syncer:
 
         It need to raise event two block information after to written block height.
         """
-        for i in range(1, 3):
+        for i in range(1, conf.ROUND_STEP):
             height = self._last_block_height+i
             if height in self._data_info_other_nodes.keys():
                 block_info = self._data_info_other_nodes[height].pop()
@@ -136,5 +137,8 @@ class Syncer:
         await asyncio.sleep(0)
 
         if self.__blockchain.last_block is not None:
-            last_block = self.__blockchain.last_block
-            self._last_block_height = max(self._last_block_height, last_block.header.height)
+            committed_height = self.__blockchain.last_block.header.height
+            if self._last_block_height < committed_height:
+                self._last_block_height = committed_height
+                if committed_height in self._request_history_list.keys():
+                    del(self._request_history_list[committed_height])
