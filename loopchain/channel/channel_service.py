@@ -20,6 +20,7 @@ from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus.runner import ConsensusRunner
+from loopchain.consensus.syncer import Syncer
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2
@@ -42,6 +43,7 @@ class ChannelService:
         self._rollback: bool = rollback
         self.__consensus_runner = None
         self.__event_system = None
+        self.__syncer = None
         self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                      default_item_status=TransactionStatusInQueue.normal)
 
@@ -109,6 +111,10 @@ class ChannelService:
     @property
     def consensus_runner(self) -> ConsensusRunner:
         return self.__consensus_runner
+
+    @property
+    def syncer(self) -> Syncer:
+        return self.__syncer
 
     def serve(self):
         async def _serve():
@@ -182,7 +188,14 @@ class ChannelService:
             self.__broadcast_scheduler,
             self.__block_manager
         )
+
+        self.__syncer = Syncer(
+            self.__block_manager,
+            self.__event_system,
+        )
+
         await self.__consensus_runner.start(self)
+        await self.__syncer.sync_start()
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")
@@ -348,7 +361,6 @@ class ChannelService:
                 channel_service=self,
                 channel_name=channel_name,
                 store_id=store_id,
-                event_system=self.__event_system,
                 tx_queue=self.__tx_queue
             )
         except KeyValueStoreError as e:

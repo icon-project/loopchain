@@ -1,15 +1,14 @@
-import asyncio
 import time
+import asyncio
 from typing import TYPE_CHECKING, Dict
-
-from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
-
-from loopchain import configure as conf
+from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block
 from loopchain.blockchain.votes.v1_0 import BlockVote
-from loopchain.channel.channel_property import ChannelProperty
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
 from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.channel.channel_property import ChannelProperty
+
+from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager
@@ -19,34 +18,32 @@ if TYPE_CHECKING:
 class Syncer:
     def __init__(self,
                  block_manager: 'BlockManager',
-                 event_system: 'EventSystem',
-                 last_block_height: int = 0):
+                 event_system: 'EventSystem'):
         self._block_manager = block_manager
+        self.__blockchain = self._block_manager.blockchain
         self._event_system: 'EventSystem' = event_system
-        self._last_block_height = last_block_height
         self._data_info_other_nodes: Dict[int, list] = dict()
         self._vote_info_other_nodes: Dict[int, list] = dict()
-        self._max_height_in_nodes = last_block_height
-
         self._request_history_list = dict()
         self._target_idx = 0
         self._stub_list = list()
-        self._target_list = list()
+
+        self._last_block_height = -1
+        if self.__blockchain.last_block:
+            self._last_block_height = self.__blockchain.last_block.header.height
+
+        self._max_height_in_nodes = self._last_block_height
         self.management_stub()
 
     def management_stub(self):
-        self._target_list = self._block_manager.get_target_list()
-        for target in self._target_list:
+        target_list = self._block_manager.get_target_list()
+        for target in target_list:
             channel = GRPCHelper().create_client_channel(target)
             self._stub_list.append(loopchain_pb2_grpc.PeerServiceStub(channel))
 
     @property
     def last_block_height(self):
         return self._last_block_height
-
-    @last_block_height.setter
-    def last_block_height(self, height: int):
-        self._last_block_height = height
 
     async def sync_start(self):
         while True:
@@ -59,7 +56,7 @@ class Syncer:
 
             _ = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
                 peer=ChannelProperty().peer_target,
-                channel=ChannelProperty().name,
+                channel=self._block_manager.channel_name,
                 height=height
             ), conf.GRPC_TIMEOUT)
 
@@ -136,13 +133,8 @@ class Syncer:
 
             await asyncio.sleep(0)
 
-        fail_height = 0
-        if fail_height in self._vote_info_other_nodes.keys():
-            while self._vote_info_other_nodes[fail_height]:
-                vote_info = self._vote_info_other_nodes[fail_height].pop()
-                event = ReceiveVoteEvent(vote_info)
-                self._event_system.simulator.raise_event(event)
-
-            del(self._vote_info_other_nodes[fail_height])
-
         await asyncio.sleep(0)
+
+        if self.__blockchain.last_block is not None:
+            last_block = self.__blockchain.last_block
+            self._last_block_height = max(self._last_block_height, last_block.header.height)
