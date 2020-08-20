@@ -225,7 +225,6 @@ CITIZEN_ASYNC_RESULT_MAX_SIZE = 10_000_000  # dictionary Length
 CITIZEN_ASYNC_REQUEST_RETRY_TIMES = 20
 CITIZEN_ASYNC_REQUEST_WAIT = 3  # seconds
 LFT_SYNC_REQUEST_WAIT = 5  # seconds
-ROUND_STEP = 3  # integer
 
 
 class NodeFunction(IntEnum):

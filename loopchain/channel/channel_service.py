@@ -20,7 +20,6 @@ from loopchain.channel.channel_inner_service import ChannelInnerService
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.channel.channel_statemachine import ChannelStateMachine
 from loopchain.consensus.runner import ConsensusRunner
-from loopchain.consensus.syncer import Syncer
 from loopchain.crypto.signature import Signer
 from loopchain.peer import BlockManager
 from loopchain.protos import loopchain_pb2
@@ -43,7 +42,6 @@ class ChannelService:
         self._rollback: bool = rollback
         self.__consensus_runner = None
         self.__event_system = None
-        self.__syncer = None
         self.__tx_queue = AgingCache(max_age_seconds=conf.MAX_TX_QUEUE_AGING_SECONDS,
                                      default_item_status=TransactionStatusInQueue.normal)
 
@@ -112,10 +110,6 @@ class ChannelService:
     def consensus_runner(self) -> ConsensusRunner:
         return self.__consensus_runner
 
-    @property
-    def syncer(self) -> Syncer:
-        return self.__syncer
-
     def serve(self):
         async def _serve():
             await StubCollection().create_peer_stub()
@@ -179,23 +173,13 @@ class ChannelService:
         return message
 
     async def start_lft(self):
-        self.__event_system = EventSystem()
-        self.__event_system.set_mediator(DelayedEventMediator)
-        self.__inner_service.event_system = self.__event_system
         self.__consensus_runner = ConsensusRunner(
-            self.__event_system,
             self.__tx_queue,
             self.__broadcast_scheduler,
             self.__block_manager
         )
 
-        self.__syncer = Syncer(
-            self.__block_manager,
-            self.__event_system,
-        )
-
         await self.__consensus_runner.start(self)
-        await self.__syncer.sync_start()
 
     def close(self, signum=None):
         logging.info(f"close() signum = {repr(signum)}")

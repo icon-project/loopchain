@@ -1,13 +1,13 @@
 """A management class for blockchain."""
 import asyncio
+from collections import defaultdict
+
 import json
 import threading
 import traceback
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Union
-
 from pkg_resources import parse_version
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Union
 
 import loopchain.utils as util
 from loopchain import configure as conf
@@ -796,8 +796,9 @@ class BlockManager:
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
         target_list = list()
 
-        self.__block_height_sync_bad_targets = {k: v for k, v in self.__block_height_sync_bad_targets.items()
-                                        if v > self.blockchain.block_height}
+        self.__block_height_sync_bad_targets = {
+            k: v for k, v in self.__block_height_sync_bad_targets.items() if v > self.blockchain.block_height
+        }
         util.logger.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
         peer_target = ChannelProperty().peer_target
         for target in list(rep_targets.values()):
@@ -1034,7 +1035,6 @@ class BlockManager:
                 self.consensus_algorithm.vote(vote)
 
     async def vote_as_peer(self, unconfirmed_block: 'Data', round_: int):
-        util.logger.notice(f"vote as peer loopchain2.x")
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(

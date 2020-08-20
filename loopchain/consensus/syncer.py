@@ -1,18 +1,22 @@
-import time
 import asyncio
+
+import time
+from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 from typing import TYPE_CHECKING, Dict
-from loopchain import utils, configure as conf
+
+from loopchain import configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block
 from loopchain.blockchain.votes.v1_0 import BlockVote
-from loopchain.protos import message_code, loopchain_pb2, loopchain_pb2_grpc
-from loopchain.tools.grpc_helper import GRPCHelper
 from loopchain.channel.channel_property import ChannelProperty
-
-from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
+from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc
+from loopchain.tools.grpc_helper import GRPCHelper
 
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager
     from lft.event import EventSystem
+
+RAISE_EVENT_INTERVAL = 3  # integer
+NONE_VOTE_HEIGHT = 0  # integer
 
 
 class Syncer:
@@ -20,28 +24,29 @@ class Syncer:
         self._block_manager = block_manager
         self.__blockchain = self._block_manager.blockchain
         self._event_system: 'EventSystem' = event_system
-        self._data_info_other_nodes: Dict[int, list] = dict()
-        self._vote_info_other_nodes: Dict[int, list] = dict()
-        self._request_history_list = dict()
-        self._target_idx = 0
-        self._stub_list = list()
-
-        self._last_block_height = -1
-        if self.__blockchain.last_block:
-            self._last_block_height = self.__blockchain.last_block.header.height
-
-        self._max_height_in_nodes = self._last_block_height
+        self._data_info_other_nodes: Dict[int, list] = {}
+        self._vote_info_other_nodes: Dict[int, list] = {}
+        self._request_history_list = {}
+        self._target_index = 0
+        self._stub_list = []
+        self._max_height_in_nodes = self.__blockchain.block_height
         self.management_stub()
 
-    def management_stub(self):
+        if self.__blockchain.last_block:
+            reps_hash = self.__blockchain.get_reps_hash_by_header(self.__blockchain.last_block.header)
+        else:
+            reps_hash = ChannelProperty().crep_root_hash
+        self._rep_targets = self.__blockchain.find_preps_targets_by_roothash(reps_hash)
+
+    def management_stub(self, status="init"):
+        if "update" == status:
+            self._stub_list = []
+            self._target_index = 0
+
         target_list = self._block_manager.get_target_list()
         for target in target_list:
             channel = GRPCHelper().create_client_channel(target)
             self._stub_list.append(loopchain_pb2_grpc.PeerServiceStub(channel))
-
-    @property
-    def last_block_height(self):
-        return self._last_block_height
 
     async def sync_start(self):
         while True:
@@ -49,43 +54,48 @@ class Syncer:
             await self._raise_event()
 
     async def _request_block(self):
-        def _request(idx: int, height: int):
-            peer_stub = self._stub_list[idx]
+        def _request(index: int, height: int):
+            peer_stub = self._stub_list[index]
 
-            _ = peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
+            peer_stub.BlockRequest(loopchain_pb2.PeerHeight(
                 peer=ChannelProperty().peer_target,
                 channel=self._block_manager.channel_name,
                 height=height
             ), conf.GRPC_TIMEOUT)
 
-        """ Sync mode check
+        # Sync mode check
+        # LFT is two step process. So It need to wait for a height of at least 2.
+        gap = self._max_height_in_nodes-self.__blockchain.block_height
+        if gap < RAISE_EVENT_INTERVAL:
+            return
 
-        LFT is two step process. So It need to wait for a height of at least 2.
-        """
-        goal_height_for_sync = self._max_height_in_nodes-conf.ROUND_STEP
-        if self._last_block_height < goal_height_for_sync:
-            for i in range(1, min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, goal_height_for_sync-self._last_block_height)):
-                height = self._last_block_height + i
+        goal = min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, self._max_height_in_nodes-RAISE_EVENT_INTERVAL)
+        for i in range(1, goal):
+            height = self.__blockchain.block_height + i
+            try:
                 if height in self._request_history_list.keys():
                     during_request_time = time.time()-self._request_history_list[height][1]
                     if during_request_time > conf.LFT_SYNC_REQUEST_WAIT:
-                        retry_target_idx = self._request_history_list[height][0]
-                        _request(retry_target_idx, height)
-                        self._request_history_list[height] = [retry_target_idx, time.time()]
+                        retry_target_index = (self._request_history_list[height][0] + 1) % len(self._stub_list)
+                        _request(retry_target_index, height)
+                        self._request_history_list[height] = [retry_target_index, time.time()]
                 else:
-                    _request(self._target_idx, height)
-                    self._request_history_list[height] = [self._target_idx, time.time()]
-                    self._target_idx = (self._target_idx+1) % len(self._stub_list)
+                    _request(self._target_index, height)
+                    self._request_history_list[height] = [self._target_index, time.time()]
+                    self._target_index = (self._target_index+1) % len(self._stub_list)
 
-                await asyncio.sleep(0)
+            except IndexError:
+                self._target_index = 0
+
+            await asyncio.sleep(0)
 
     def receive_vote(self, vote: 'BlockVote'):
         height = vote.block_height
         self._max_height_in_nodes = max(height, self._max_height_in_nodes)
 
-        if abs(self._last_block_height-height) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+        if abs(self.__blockchain.block_height-height) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
             if height not in self._vote_info_other_nodes.keys():
-                self._vote_info_other_nodes[height] = list()
+                self._vote_info_other_nodes[height] = []
 
             self._vote_info_other_nodes[height].append(vote)
 
@@ -93,52 +103,58 @@ class Syncer:
         height = block_data.header.height
         self._max_height_in_nodes = max(height, self._max_height_in_nodes)
 
-        diff_height_info = abs(self._last_block_height-self._max_height_in_nodes)
+        diff_height_info = abs(self.__blockchain.block_height-self._max_height_in_nodes)
         if diff_height_info < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
             if height not in self._data_info_other_nodes.keys():
-                self._data_info_other_nodes[height] = list()
+                self._data_info_other_nodes[height] = []
 
             self._data_info_other_nodes[height].append(block_data)
 
-            """ Check Sync mode
-
-            If height make diffrent 3 value between to written block height and to received block height,
-            It information is to responded for Synchronize.
-            So It need to raise to divide Block information and Vote Information.
-            """
-            if 3 < diff_height_info:
+            # Check Sync mode
+            # If height make different 3 value between to written block height and to received block height,
+            # It information is to responded for Synchronize.
+            # So It need to raise to divide Block information and Vote Information.
+            if RAISE_EVENT_INTERVAL < diff_height_info:
                 for vote in block_data.prev_votes:
                     self.receive_vote(vote)
 
     async def _raise_event(self):
-        """ LFT is two step event.
+        def __raise_vote(height: int):
+            while self._vote_info_other_nodes[height]:
+                vote_info = self._vote_info_other_nodes[height].pop()
+                event = ReceiveVoteEvent(vote_info)
+                self._event_system.simulator.raise_event(event)
 
-        It need to raise event two block information after to written block height.
-        """
-        for i in range(1, conf.ROUND_STEP):
-            height = self._last_block_height+i
+            del self._vote_info_other_nodes[height]
+
+        # LFT is two step event.
+        # It need to raise event two block information after to written block height.
+        for i in range(1, RAISE_EVENT_INTERVAL):
+            height = self.__blockchain.block_height+i
             if height in self._data_info_other_nodes.keys():
                 block_info = self._data_info_other_nodes[height].pop()
                 event = ReceiveDataEvent(block_info)
                 self._event_system.simulator.raise_event(event)
-                del(self._data_info_other_nodes[height])
+                del self._data_info_other_nodes[height]
 
             await asyncio.sleep(0)
-            if height in self._vote_info_other_nodes.keys():
-                while self._vote_info_other_nodes[height]:
-                    vote_info = self._vote_info_other_nodes[height].pop()
-                    event = ReceiveVoteEvent(vote_info)
-                    self._event_system.simulator.raise_event(event)
 
-                del(self._vote_info_other_nodes[height])
+            if height in self._vote_info_other_nodes.keys():
+                __raise_vote(height)
+
+            if NONE_VOTE_HEIGHT in self._vote_info_other_nodes.keys():
+                __raise_vote(NONE_VOTE_HEIGHT)
 
             await asyncio.sleep(0)
 
         await asyncio.sleep(0)
 
-        if self.__blockchain.last_block is not None:
-            committed_height = self.__blockchain.last_block.header.height
-            if self._last_block_height < committed_height:
-                self._last_block_height = committed_height
-                if committed_height in self._request_history_list.keys():
-                    del(self._request_history_list[committed_height])
+        if self.__blockchain.block_height in self._request_history_list:
+            del self._request_history_list[self.__blockchain.block_height]
+
+        last_block = self.__blockchain.last_block
+        if last_block is not None:
+            current_rep_targets = self.__blockchain.get_reps_hash_by_header(last_block.header)
+            if self._rep_targets != current_rep_targets:
+                self.management_stub(status="update")
+                self._rep_targets = current_rep_targets
