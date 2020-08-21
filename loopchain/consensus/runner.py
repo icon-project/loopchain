@@ -318,8 +318,7 @@ class ConsensusRunner(EventRegister):
             # Genesis failed
             commit_id = Hash32.empty()
 
-        voters = self._get_next_validators(commit_id)
-        epoch1 = LoopchainEpoch(num=1, voters=voters)
+        epoch1 = self._create_epoch(event.epoch_num, commit_id)
         self._curr_round = event.round_num + 1
         self._update_first_height_when_epoch_changed(event)
 
@@ -372,16 +371,24 @@ class ConsensusRunner(EventRegister):
         RoundEndEvent: _on_round_end_event
     }
 
-    def _get_next_validators(self, block_hash: Hash32) -> List[ExternalAddress]:
+    def _create_epoch(self, curr_epoch: int, block_hash: Hash32) -> LoopchainEpoch:
         blockchain = self._block_manager.blockchain
 
         if block_hash == Hash32.empty():  # On Genesis Block
-            validators_hash = ChannelProperty().crep_root_hash
+            next_validators_hash = ChannelProperty().crep_root_hash
+            new_epoch = 1
         else:
             block: Block = blockchain.find_block_by_hash32(block_hash)
-            validators_hash = block.header.next_validators_hash
+            next_validators_hash = block.header.next_validators_hash
 
-        return blockchain.find_preps_addresses_by_roothash(validators_hash)
+            if block.header.validators_hash == next_validators_hash:
+                new_epoch = curr_epoch
+            else:
+                new_epoch = curr_epoch + 1
+
+        next_validators = blockchain.find_preps_addresses_by_roothash(next_validators_hash)
+
+        return LoopchainEpoch(num=new_epoch, voters=next_validators)
 
     def _vote_dumps(self, vote: 'BlockVote') -> bytes:
         vote_dumped: dict = vote.serialize()["!data"]
