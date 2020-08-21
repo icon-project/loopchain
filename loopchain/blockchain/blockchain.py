@@ -683,10 +683,12 @@ class BlockChain:
 
                 tx_queue.pop(tx_hash, None)
 
-        # save_invoke_result_block_height
-        bit_length = block.header.height.bit_length()
-        byte_length = (bit_length + 7) // 8
-        block_height_bytes = block.header.height.to_bytes(byte_length, byteorder='big')
+    @staticmethod
+    def _get_block_height_bytes(block):
+        return block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+
+    @staticmethod
+    def _update_last_block_height(block_height_bytes, write_target):
         write_target.put(
             BlockChain.LAST_BLOCK_HEIGHT,
             block_height_bytes
@@ -705,7 +707,7 @@ class BlockChain:
         block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
         block_serialized = json.dumps(block_serializer.serialize(block))
         block_hash_encoded = block.header.hash.hex().encode(encoding='UTF-8')
-        block_height_encoded = block.header.height.to_bytes(conf.BLOCK_HEIGHT_BYTES_LEN, byteorder='big')
+        block_height_encoded = self._get_block_height_bytes(block)
 
         batch = self._blockchain_store.WriteBatch()
         batch.put(block_hash_encoded, block_serialized.encode("utf-8"))
@@ -713,6 +715,7 @@ class BlockChain:
         batch.put(BlockChain.BLOCK_HEIGHT_KEY + block_height_encoded, block_hash_encoded)
 
         self._write_tx(block, receipts, batch)
+        self._update_last_block_height(block_height_encoded, batch)
 
         if next_prep:
             block_prover = BlockProver.new(
@@ -783,7 +786,11 @@ class BlockChain:
                 invoke_block, receipts = \
                     self.get_invoke_func(invoke_block_height)(invoke_block, prev_invoke_block)
 
-                self._write_tx(invoke_block, receipts)
+                batch = self._blockchain_store.WriteBatch()
+                self._write_tx(invoke_block, receipts, batch)
+                self._update_last_block_height(self._get_block_height_bytes(invoke_block), batch)
+                batch.write()
+
                 try:
                     ObjectManager().channel_service.score_write_precommit_state(invoke_block)
                 except Exception as e:
