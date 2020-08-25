@@ -77,7 +77,7 @@ class BlockFactory(DataFactory):
             try:
                 prev_vote = next(vote for vote in prev_votes if vote.is_real())
             except StopIteration:
-                raise RuntimeError("Something wrong...") from StopIteration
+                raise RuntimeError("Unverified prev votes.") from StopIteration
             block_builder.prev_state_hash = prev_vote.state_hash
             block_builder.receipts = prev_vote.receipt_hash
             block_builder.next_validators_hash = prev_vote.next_validators_hash
