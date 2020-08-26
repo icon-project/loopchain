@@ -1,9 +1,11 @@
+import os
 from collections import OrderedDict
 from typing import List, Callable, cast
 from unittest.mock import MagicMock
 
 import pytest
 
+from loopchain.blockchain import BlockChain
 from loopchain.blockchain.blocks import BlockBuilder
 from loopchain.blockchain.blocks.v1_0 import Block, BlockHeader, BlockBody
 from loopchain.blockchain.invoke_result import InvokeRequest, InvokeData, InvokePool, PreInvokeResponse
@@ -382,7 +384,7 @@ class TestInvokePool:
 
     @pytest.fixture
     def invoke_pool(self):
-        return InvokePool()
+        return InvokePool(blockchain=MagicMock(BlockChain))
 
     @pytest.fixture(autouse=True)
     def mock_channel_name(self):
@@ -416,6 +418,7 @@ class TestInvokePool:
         header.height = TestInvokePool.height
         header.epoch = TestInvokePool.epoch_num
         header.round = TestInvokePool.round_num
+        header.hash = Hash32(os.urandom(32))
         header.validators_hash = TestInvokePool.current_validators_hash
 
         body = cast(BlockBody, MagicMock(BlockBody))
