@@ -33,11 +33,6 @@ class _Broadcaster:
 
         self.__audience = {}  # self.__audience[peer_target] = stub_manager
 
-        if conf.IS_BROADCAST_ASYNC:
-            self.__broadcast_run = self.__broadcast_run_async
-        else:
-            self.__broadcast_run = self.__broadcast_run_sync
-
         self.__handler_map = {
             BroadcastCommand.CREATE_TX: self.__handler_create_tx,
             BroadcastCommand.UPDATE_AUDIENCE: self.__handler_update_audience,
@@ -98,7 +93,7 @@ class _Broadcaster:
             elif isinstance(result, futures.Future):
                 exception = result.exception()
 
-            logging.warning(f"__broadcast_run_async fail({result})\n"
+            logging.warning(f"__broadcast_run fail({result})\n"
                             f"cause by: {exception}\n"
                             f"peer_target({peer_target})\n"
                             f"method_name({method_name})\n"
@@ -126,7 +121,7 @@ class _Broadcaster:
         except KeyError as e:
             logging.debug(f"broadcast_thread:__call_async_to_target ({peer_target}) not in audience. ({e})")
 
-    def __broadcast_run_async(self, method_name, method_param, retry_times=None, timeout=None):
+    def __broadcast_run(self, method_name, method_param, retry_times=None, timeout=None):
         """call gRPC interface of audience
 
         :param method_name: gRPC interface
@@ -142,36 +137,6 @@ class _Broadcaster:
         for target in self.__get_broadcast_targets(method_name):
             # util.logger.debug(f"method_name({method_name}), peer_target({target})")
             self.__call_async_to_target(target, method_name, method_param, True, retry_times, timeout)
-
-    def __broadcast_run_sync(self, method_name, method_param, retry_times=None, timeout=None):
-        """call gRPC interface of audience
-
-        :param method_name: gRPC interface
-        :param method_param: gRPC message
-        """
-        # logging.debug(f"broadcast({method_name}) sync... ({len(self.__audience)})")
-
-        if timeout is None:
-            timeout = conf.GRPC_TIMEOUT_BROADCAST_RETRY
-
-        retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-
-        for target in self.__get_broadcast_targets(method_name):
-            try:
-                stub_manager: StubManager = self.__audience[target]
-                if stub_manager is None:
-                    logging.debug(f"broadcast_thread:__broadcast_run_sync Failed to connect to ({target}).")
-                    continue
-
-                response = stub_manager.call_in_times(method_name=method_name,
-                                                      message=method_param,
-                                                      timeout=timeout,
-                                                      retry_times=retry_times)
-                if response is None:
-                    logging.warning(f"broadcast_thread:__broadcast_run_sync fail ({method_name}) "
-                                    f"target({target}) ")
-            except KeyError as e:
-                logging.debug(f"broadcast_thread:__broadcast_run_sync ({target}) not in audience. ({e})")
 
     def __handler_send_to_single_target(self, param):
         method_name = param[0]
