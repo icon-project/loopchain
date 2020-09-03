@@ -58,7 +58,7 @@ class ConsensusRunner(EventRegister):
         self._loop = asyncio.get_event_loop()
 
         self._is_broadcasting: bool = False
-        self._is_voting: bool = True
+        self._is_voting: bool = False
 
     async def start(self, channel_service):
         event = await self._create_initialize_event(channel_service)
