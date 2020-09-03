@@ -1,10 +1,8 @@
 """stub wrapper for gRPC stub.
 This object has own channel information and support re-generation of gRPC stub."""
-
 import datetime
 import logging
 import time
-import timeit
 
 import grpc
 from grpc._channel import _Rendezvous
@@ -14,7 +12,6 @@ from loopchain import configure as conf
 
 
 class StubManager:
-
     def __init__(self, target, stub_type, ssl_auth_type=conf.SSLAuthType.none):
         self.__target = target
         self.__stub_type = stub_type
@@ -102,67 +99,3 @@ class StubManager:
         except Exception as e:
             logging.warning(f"gRPC call_async fail method_name({method_name}), message({message}): {e}, "
                             f"target({self.__target})")
-
-    def call_in_time(self, method_name, message, time_out_seconds=None, is_stub_reuse=True):
-        """Try gRPC call. If it fails try again until time out (seconds)
-
-        :param method_name:
-        :param message:
-        :param time_out_seconds:
-        :param is_stub_reuse:
-        :return:
-        """
-        if time_out_seconds is None:
-            time_out_seconds = conf.CONNECTION_RETRY_TIMEOUT
-        self.__make_stub(is_stub_reuse)
-
-        stub_method = getattr(self.__stub, method_name)
-
-        start_time = timeit.default_timer()
-        duration = timeit.default_timer() - start_time
-
-        while duration < time_out_seconds:
-            try:
-                return stub_method(message, conf.GRPC_TIMEOUT)
-            except Exception as e:
-                # logging.debug(f"retry request_server_in_time({method_name}): {e}")
-                logging.debug("duration(" + str(duration)
-                              + ") interval(" + str(conf.CONNECTION_RETRY_INTERVAL)
-                              + ") timeout(" + str(time_out_seconds) + ")")
-
-            # RETRY_INTERVAL 만큼 대기후 TIMEOUT 전이면 다시 시도
-            time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-            self.__make_stub(False)
-            duration = timeit.default_timer() - start_time
-
-        return None
-
-    def call_in_times(self, method_name, message,
-                      retry_times=None,
-                      is_stub_reuse=True,
-                      timeout=conf.GRPC_TIMEOUT):
-        """Try gRPC call. If it fails try again until "retry_times"
-
-        :param method_name:
-        :param message:
-        :param retry_times:
-        :param is_stub_reuse:
-        :param timeout:
-        :return:
-        """
-        retry_times = conf.BROADCAST_RETRY_TIMES if retry_times is None else retry_times
-
-        self.__make_stub(is_stub_reuse)
-        stub_method = getattr(self.__stub, method_name)
-
-        while retry_times > 0:
-            try:
-                return stub_method(message, timeout)
-            except Exception as e:
-                logging.debug(f"retry request_server_in_times({method_name}): {e}")
-
-            time.sleep(conf.CONNECTION_RETRY_INTERVAL)
-            self.__make_stub(False)
-            retry_times -= 1
-
-        return None
