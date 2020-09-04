@@ -1,13 +1,14 @@
 """Consensus (lft) execution and event handling"""
+import asyncio
 import json
 from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
+from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
-from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block, BlockFactory, BlockBuilder, BlockHeader
@@ -53,6 +54,11 @@ class ConsensusRunner(EventRegister):
         self.consensus = Consensus(
             self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory
         )
+
+        self._loop = asyncio.get_event_loop()
+
+        self._is_broadcasting: bool = False
+        self._is_voting: bool = False
 
     async def start(self, channel_service):
         event = await self._create_initialize_event(channel_service)
@@ -152,12 +158,18 @@ class ConsensusRunner(EventRegister):
 
     async def _on_event_broadcast_data(self, event: BroadcastDataEvent):
         if self._block_manager.blockchain.try_update_last_unconfirmed_block(event.data):
+            self._loop.create_task(self._repeat_broadcast_block(event.data))
+
+    async def _repeat_broadcast_block(self, block: "Block"):
+        self._is_broadcasting = True
+        while self._is_broadcasting:
             target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
             self._block_manager.send_unconfirmed_block(
-                block_=event.data,
+                block_=block,
                 target_reps_hash=target_reps_hash,
-                round_=event.data.round_num
+                round_=block.round_num
             )
+            await asyncio.sleep(conf.INTERVAL_BLOCKGENERATION)
 
     async def _on_event_broadcast_vote(self, event: BroadcastVoteEvent):
         vote_dumped = self._vote_dumps(event.vote)
@@ -165,13 +177,20 @@ class ConsensusRunner(EventRegister):
 
         target_reps_hash = ChannelProperty().crep_root_hash  # FIXME
 
-        self.broadcast_scheduler.schedule_broadcast(
-            "VoteUnconfirmedBlock",
-            block_vote,
-            reps_hash=target_reps_hash
-        )
+        self._loop.create_task(self._repeat_broadcast_vote(block_vote, target_reps_hash))
+
+    async def _repeat_broadcast_vote(self, block_vote: "BlockVote", target_reps_hash):
+        self._is_voting = True
+        while self._is_voting:
+            self.broadcast_scheduler.schedule_broadcast(
+                "VoteUnconfirmedBlock",
+                block_vote,
+                reps_hash=target_reps_hash
+            )
+            await asyncio.sleep(conf.INTERVAL_BLOCKGENERATION)
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
+        self._is_broadcasting, self._is_voting = False, False
         await self._write_block(round_end_event)
         await self._round_start(round_end_event)
 
