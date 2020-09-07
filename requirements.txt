@@ -15,4 +15,4 @@ verboselogs~=1.7.0
 websockets~=8.1.0
 yappi~=1.2.3
 eth-keyfile~=0.5.1
-lft @ git+https://github.com/icon-project/lft2.git@develop
+lft @ git+https://github.com/metalg0su/lft2.git@feature/LC-1049
