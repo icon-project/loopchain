@@ -768,23 +768,10 @@ class BlockManager:
             return max_height, unconfirmed_block_height, peer_stubs
 
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        self.__block_height_sync_bad_targets = {k: v for k, v in self.__block_height_sync_bad_targets.items()
-                                                if v > self.blockchain.block_height}
-        util.logger.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
-        peer_target = ChannelProperty().peer_target
         my_height = self.blockchain.block_height
+        target_list = self.get_target_list()
 
-        if self.blockchain.last_block:
-            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
-        else:
-            reps_hash = ChannelProperty().crep_root_hash
-        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
-        target_list = list(rep_targets.values())
         for target in target_list:
-            if target == peer_target:
-                continue
-            if target in self.__block_height_sync_bad_targets:
-                continue
             util.logger.debug(f"try to target({target})")
             channel = GRPCHelper().create_client_channel(target)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
@@ -804,6 +791,28 @@ class BlockManager:
                 util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
+
+    def get_target_list(self):
+        if self.blockchain.last_block:
+            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        else:
+            reps_hash = ChannelProperty().crep_root_hash
+        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
+        target_list = list()
+
+        self.__block_height_sync_bad_targets = {k: v for k, v in self.__block_height_sync_bad_targets.items()
+                                        if v > self.blockchain.block_height}
+        util.logger.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
+        peer_target = ChannelProperty().peer_target
+        for target in list(rep_targets.values()):
+            if target == peer_target:
+                continue
+            if target in self.__block_height_sync_bad_targets:
+                continue
+
+            target_list.append(target)
+
+        return target_list
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
