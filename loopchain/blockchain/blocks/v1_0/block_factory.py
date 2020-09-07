@@ -1,4 +1,3 @@
-import time
 from typing import TYPE_CHECKING, Sequence
 
 from lft.consensus.epoch import EpochPool
@@ -57,7 +56,7 @@ class BlockFactory(DataFactory):
         # Epoch.makeup_block
         block_builder = BlockBuilder.new(BlockHeader.version, self._tx_versioner)
         block_builder.peer_id = ExternalAddress.fromhex(self._signer.address)
-        block_builder.fixed_timestamp = int(time.time() * 1_000_000)
+        block_builder.fixed_timestamp = utils.get_time_stamp()
         block_builder.prev_votes = prev_votes
 
         pre_invoke_response: 'PreInvokeResponse' = self._invoke_pool.prepare_invoke(
@@ -88,7 +87,6 @@ class BlockFactory(DataFactory):
             block_builder.receipts = invoke_data.receipt_hash
             block_builder.next_validators_hash = invoke_data.next_validators_hash
         else:
-            from loopchain import utils
             utils.exit_and_msg("Not found prev_votes in candidate block. \nShutdown Loopchain Node...")
 
         block_builder.epoch = epoch_num

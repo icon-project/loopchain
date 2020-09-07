@@ -55,6 +55,8 @@ class ConsensusRunner(EventRegister):
             self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory,
             10, 10
         )
+        self._first_time_of_this_epoch = 0
+        self._first_height_of_this_epoch = 0
 
         self._loop = asyncio.get_event_loop()
 
@@ -319,6 +321,7 @@ class ConsensusRunner(EventRegister):
         voters = self._get_next_validators(commit_id)
         epoch1 = LoopchainEpoch(num=1, voters=voters)
         self._curr_round = event.round_num + 1
+        self._update_first_height_when_epoch_changed(event)
 
         round_start_event = RoundStartEvent(
             epoch=epoch1,
@@ -326,7 +329,38 @@ class ConsensusRunner(EventRegister):
         )
         round_start_event.deterministic = False
         mediator = self.event_system.get_mediator(DelayedEventMediator)
-        mediator.execute(0.5, round_start_event)
+        mediator.execute(self._get_waiting_time_until_next_round(commit_id), round_start_event)
+
+    def _update_first_height_when_epoch_changed(self, event: RoundEndEvent):
+        if event.epoch_num == 0:
+            return  # Epoch zero could be initialized epoch
+
+        if event.round_num == 1:  # FIXME First round should be zero
+            last_block = self._block_manager.blockchain.last_block
+            self._first_height_of_this_epoch = last_block.header.height
+            self._first_time_of_this_epoch = last_block.header.timestamp \
+                if last_block.header.timestamp else utils.get_time_stamp()  # Genesis has zero timestamp
+
+    def _get_waiting_time_until_next_round(self, commit_block_hash: Hash32) -> float:
+        if commit_block_hash == Hash32.empty():
+            # Genesis
+            return 0
+
+        last_block = self._block_manager.blockchain.last_block
+        unconfirmed_height = last_block.header.height + 2
+        height_diff: int = unconfirmed_height - self._first_height_of_this_epoch
+
+        each_generation_time = conf.INTERVAL_BLOCKGENERATION * 1_000_000
+        actual_curr_time = utils.get_time_stamp()
+        desired_curr_time = self._first_time_of_this_epoch + height_diff * each_generation_time
+        time_diff = actual_curr_time - desired_curr_time
+
+        if time_diff >= 0:
+            # Generating too slow. need to be faster
+            return 0
+
+        # generating too fast.
+        return abs(time_diff)/1_000_000
 
     def update_status(self, peer: str, height: int):
         # TODO: Update height info
