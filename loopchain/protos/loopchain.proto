@@ -5,7 +5,7 @@ syntax = "proto2";
 
 // Peer Outer Service for other Peers
 service PeerService {
-    // get status of Peer
+    // get status of Peer (Deprecated)
     rpc GetStatus (StatusRequest) returns (StatusReply) {}
     // Block Height sync assistant
     rpc BlockSync (BlockSyncRequest) returns (BlockSyncReply) {}
@@ -20,11 +20,13 @@ service PeerService {
     rpc VoteUnconfirmedBlock (BlockVote) returns (CommonReply) {}
 }
 
+// Deprecated
 message StatusRequest {
     required string request = 1;
     optional string channel = 2;
 }
 
+// Deprecated
 message StatusReply {
     required string status = 1;
     required int32 block_height = 2;

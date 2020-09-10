@@ -1,11 +1,12 @@
 """A management class for blockchain."""
 
 import json
+import re
 import threading
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Any
 
 from pkg_resources import parse_version
 
@@ -13,6 +14,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.baseservice.rest_client import RestClient
 from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception,
                                   NoConfirmInfo,
                                   BlockHeightMismatch, RoundMismatch)
@@ -643,7 +645,7 @@ class BlockManager:
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
-            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+            max_height, unconfirmed_block_height, peer_stubs = self._get_peer_stub_list()
 
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
@@ -703,7 +705,7 @@ class BlockManager:
         else:
             return block.header.next_leader.hex_hx()
 
-    def __get_peer_stub_list(self) -> Tuple[int, int, List[Tuple]]:
+    def _get_peer_stub_list(self) -> Tuple[int, int, List[Tuple[str, Any]]]:
         """It updates peer list for block manager refer to peer list on the loopchain network.
         This peer list is not same to the peer list of the loopchain network.
 
@@ -715,8 +717,9 @@ class BlockManager:
         unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rs_client = ObjectManager().channel_service.rs_client
+        rs_client: RestClient = self.__channel_service.rs_client
+
+        if not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             status_response = rs_client.call(RestMethod.Status)
             max_height = status_response['block_height']
             peer_stubs.append((rs_client.target, rs_client))
@@ -734,26 +737,33 @@ class BlockManager:
         else:
             reps_hash = ChannelProperty().crep_root_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
-        target_list = list(rep_targets.values())
-        for target in target_list:
-            if target == peer_target:
+
+        regex = re.compile(r":([0-9]{2,5})$")
+
+        def _converter(target) -> str:
+            port = int(regex.search(target).group(1))
+            new_port = f":{port + conf.PORT_DIFF_REST_SERVICE_CONTAINER}"
+            return regex.sub(new_port, target)
+
+        endpoints = {target: _converter(target) for target in rep_targets.values()}
+
+        for grpc_endpoint, rest_endpoint in endpoints.items():
+            if grpc_endpoint == peer_target:
                 continue
-            if target in self.__block_height_sync_bad_targets:
+            if grpc_endpoint in self.__block_height_sync_bad_targets:
                 continue
-            util.logger.debug(f"try to target({target})")
-            channel = GRPCHelper().create_client_channel(target)
+            util.logger.debug(f"try to grpc_endpoint({grpc_endpoint}), rest_endpoint : {rest_endpoint}")
+            channel = GRPCHelper().create_client_channel(grpc_endpoint)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
-                response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                    request='block_sync',
-                    channel=self.__channel_name,
-                ), conf.GRPC_TIMEOUT_SHORT)
-                target_block_height = max(response.block_height, response.unconfirmed_block_height)
+                client = RestClient(self.channel_name, rest_endpoint)
+                response: dict = client.call(RestMethod.Status)
+                target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
 
                 if target_block_height > my_height:
-                    peer_stubs.append((target, stub))
+                    peer_stubs.append((grpc_endpoint, stub))
                     max_height = max(max_height, target_block_height)
-                    unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
+                    unconfirmed_block_height = max(unconfirmed_block_height, response["unconfirmed_block_height"])
 
             except Exception as e:
                 util.logger.warning(f"This peer has already been removed from the block height target node. {e}")

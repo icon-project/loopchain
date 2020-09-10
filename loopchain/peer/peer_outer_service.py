@@ -57,6 +57,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     def GetStatus(self, request, context):
         """Request current status of Peer
+        TODO: GetStatus is deprecated, it should be removed after version 2.7.0
 
         :param request:
         :param context:
