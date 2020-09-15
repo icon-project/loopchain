@@ -249,6 +249,21 @@ class ChannelService:
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         self.__ready_to_height_sync()
+
+        if conf.RECOVERY_MODE:
+            self.__state_machine.recovery_mode()
+        else:
+            self.__state_machine.block_sync()
+
+    async def recovery_mode(self):
+        # TODO : waiting for 2f + 1 quorum
+        from loopchain.tools.recovery import Recovery
+        recovery = Recovery(ChannelProperty().name)
+        target_list = self.block_manager.get_target_list()
+        recovery.set_target_list(target_list)
+        await recovery.wait_recovery()
+
+        utils.logger.info("start block sync")
         self.__state_machine.block_sync()
 
     async def subscribe_network(self):

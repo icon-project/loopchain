@@ -22,6 +22,9 @@ else:
     sys.path.append(PATH_PROTO_BUFFERS_TEST)
 
 
+RECOVERY_MODE = False
+
+
 #############
 # LOGGING ###
 #############
@@ -34,7 +37,7 @@ LOOPCHAIN_LOG_LEVEL = os.getenv('LOOPCHAIN_LOG_LEVEL', 'DEBUG')
 LOOPCHAIN_DEVELOP_LOG_LEVEL = "SPAM"
 LOOPCHAIN_OTHER_LOG_LEVEL = "WARNING"
 LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_NAME} " \
-             "%(levelname)s %(filename)s(%(lineno)d) %(message)s"
+             "%(levelname)8s [%(filename)s(%(lineno)d) %(funcName)s()] %(message)s"
 
 LOG_OUTPUT_TYPE = LogOutputType.console | LogOutputType.file
 

@@ -770,6 +770,14 @@ class BlockManager:
 
         return max_height, unconfirmed_block_height, peer_stubs
 
+    def get_target_list(self) -> List[str]:
+        if self.blockchain.last_block:
+            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        else:
+            reps_hash = ChannelProperty().crep_root_hash
+        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
+        return list(rep_targets.values())
+
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)

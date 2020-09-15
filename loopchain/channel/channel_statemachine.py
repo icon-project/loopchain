@@ -26,6 +26,9 @@ class ChannelStateMachine(object):
                     ignore_invalid_triggers=True,
                     on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
+              State(name='RecoveryMode',
+                    ignore_invalid_triggers=True,
+                    on_enter='_recovery_mode_on_enter'),
               State(name='BlockSync',
                     ignore_invalid_triggers=True,
                     on_enter='_blocksync_on_enter',
@@ -36,7 +39,7 @@ class ChannelStateMachine(object):
                     on_exit='_subscribe_network_on_exit'),
               State(name='Watch',
                     ignore_invalid_triggers=True,
-                    on_enter='_watch_on_enter', 
+                    on_enter='_watch_on_enter',
                     on_exit='_watch_on_exit'),
               State(name='Vote',
                     ignore_invalid_triggers=True,
@@ -81,7 +84,13 @@ class ChannelStateMachine(object):
     def evaluate_network(self):
         pass
 
-    @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'Watch',
+    @statemachine.transition(source='EvaluateNetwork',
+                             dest='RecoveryMode',
+                             after='_do_recovery_mode')
+    def recovery_mode(self):
+        pass
+
+    @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'RecoveryMode', 'Watch',
                                      'Vote', 'BlockSync', 'BlockGenerate', 'LeaderComplain'),
                              dest='BlockSync',
                              after='_do_block_sync')
@@ -132,6 +141,9 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
+    def _do_recovery_mode(self):
+        self._run_coroutine_threadsafe(self.__channel_service.recovery_mode())
+
     def _do_vote(self, unconfirmed_block: Block, round_: int):
         if unconfirmed_block.header.is_unrecorded:
             try:
@@ -150,6 +162,9 @@ class ChannelStateMachine(object):
 
     def _blockheightsync_on_enter(self, *args, **kwargs):
         self.evaluate_network()
+
+    def _recovery_mode_on_enter(self, *args, **kwargs):
+        pass
 
     def _blocksync_on_enter(self, *args, **kwargs):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)
