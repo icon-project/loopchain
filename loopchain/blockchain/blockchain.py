@@ -613,6 +613,12 @@ class BlockChain:
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
 
+            # TODO : recovery mode change to disabled when N block added
+            if conf.RECOVERY_MODE and block.header.height > 0:
+                conf.RECOVERY_MODE = False
+                # FIXME : remove log
+                logging.debug(f"recovery mode disabled : {conf.RECOVERY_MODE}")
+
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
                 channel_service.reset_leader(new_leader_id=self.__block_manager.epoch.leader_id)
@@ -964,10 +970,14 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
+                    self.last_unconfirmed_block = current_block
+                    # TODO: NEED REVIEW - check this logic should be limited by below condition
+                    """
                     if ((current_block.header.complained and self.__block_manager.epoch.complained_result)
                             or self.last_block.header.prep_changed):
                         utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
                         self.last_unconfirmed_block = current_block
+                    """
                     return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "

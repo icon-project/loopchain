@@ -760,6 +760,10 @@ class BlockManager:
                 response: dict = client.call(RestMethod.Status)
                 target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
 
+                # only recovery_mode node should be included in block sync
+                if conf.RECOVERY_MODE and not response.get("recovery_mode", False):
+                    continue
+
                 if target_block_height > my_height:
                     peer_stubs.append((grpc_endpoint, stub))
                     max_height = max(max_height, target_block_height)
@@ -1007,6 +1011,7 @@ class BlockManager:
             f"height({unconfirmed_block.header.height}) "
             f"round({round_}) "
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+        util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)

@@ -590,6 +590,7 @@ class ChannelInnerTask:
         status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
+        status_data["recovery_mode"] = conf.RECOVERY_MODE
         status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data
