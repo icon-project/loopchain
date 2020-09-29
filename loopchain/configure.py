@@ -124,12 +124,14 @@ class Configure(metaclass=SingletonMetaClass):
         target_value = value
         if (isinstance(value, str) and len(value) > 0
                 and target_value_type is not str):
-            if re.match("^\d+?\.\d+?$", value) is not None:
+            if re.match(r"^\d+?\.\d+?$", value) is not None:
                 # print("float configure value")
                 try:
                     target_value = float(value)
                 except Exception as e:
                     print(f"this value can't convert to float! {value}: {e}")
+            elif re.match(r"([Tt]rue|[Ff]alse)", value):
+                target_value = json.loads(value.lower())
             elif value.isnumeric():
                 target_value = int(value)
 

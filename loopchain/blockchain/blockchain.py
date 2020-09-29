@@ -3,7 +3,6 @@
 import json
 import pickle
 import threading
-import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -11,6 +10,7 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -608,16 +608,18 @@ class BlockChain:
             self.__block_manager.new_epoch()
 
             logging.info(
-                f"ADD BLOCK HEIGHT : {block.header.height} , "
-                f"HASH : {block.header.hash.hex()} , "
+                f"ADD BLOCK HEIGHT : {block.header.height}, "
+                f"VERSION : {block.header.version}, "
+                f"HASH : {block.header.hash.hex()}, "
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
 
-            # TODO : recovery mode change to disabled when N block added
-            if conf.RECOVERY_MODE and block.header.height > 0:
-                conf.RECOVERY_MODE = False
-                # FIXME : remove log
-                logging.debug(f"recovery mode disabled : {conf.RECOVERY_MODE}")
+            if conf.RECOVERY_MODE:
+                from loopchain.tools.recovery import Recovery
+                utils.logger.debug(f"release recovery_mode block height : {Recovery.release_block_height()}")
+                if block.header.height >= Recovery.release_block_height():
+                    conf.RECOVERY_MODE = False
+                    logging.info(f"recovery mode released at {block.header.height}")
 
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
