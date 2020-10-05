@@ -262,7 +262,7 @@ class ChannelService:
         # waiting for quorum(2f + 1) in recovery mode
         await recovery.fill_quorum()
 
-        self.state_machine.block_sync()
+        self.state_machine.recovery_block_sync()
 
     async def subscribe_network(self):
         await self._select_node_type()

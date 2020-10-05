@@ -760,8 +760,9 @@ class BlockManager:
                 response: dict = client.call(RestMethod.Status)
                 target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
 
-                # only recovery_mode node should be included in block sync
-                if conf.RECOVERY_MODE and not response.get("recovery_mode", False):
+                recovery = response.get("recovery", {})
+                # only recovery_mode node should be included in block sync when running by recovery_mode
+                if conf.RECOVERY_MODE and not recovery.get("mode", False):
                     continue
 
                 if target_block_height > my_height:

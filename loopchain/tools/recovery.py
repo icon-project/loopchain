@@ -1,4 +1,4 @@
-"""Recovery mode"""
+"""Recovery module"""
 
 import asyncio
 import logging
@@ -17,7 +17,7 @@ class Recovery:
         self.min_quorum: int = 0
         self.endpoints: List[str] = []
 
-    def set_target_list(self, target_list: List[str]):
+    def set_target_list(self, target_list: List[str]) -> None:
         regex = re.compile(r":([0-9]{2,5})$")
         for target in target_list:
             port = regex.search(target).group(1)
@@ -28,14 +28,22 @@ class Recovery:
         fault: int = int((len(self.endpoints) - 1) / 3)
         self.min_quorum: int = fault * 2 + 1
 
-    async def _fetch_recovery_mode(self, endpoint: str) -> bool:
+    async def _fetch_recovery(self, endpoint: str) -> bool:
         client = RestClient(self._channel_name, endpoint)
         response: Dict[str, Any] = await client.call_async(RestMethod.Status)
-        logging.info(f"{response}")
-        Recovery._highest_block_height = max(Recovery._highest_block_height, response.get("block_height", 0))
-        logging.debug(f"highest_block_height: {Recovery._highest_block_height}")
 
-        return response.get("recovery_mode", False)
+        recovery = response.get("recovery", {})
+        recovery_mode = recovery.get("mode", False)
+        if recovery_mode:
+            if response.get("state") == "RecoveryMode":
+                block_height = response.get("block_height", 0)
+            else:
+                block_height = recovery.get("highest_block_height", 0)
+
+            Recovery._highest_block_height = max(Recovery._highest_block_height, block_height)
+            logging.debug(f"highest_block_height: {Recovery._highest_block_height}")
+
+        return recovery_mode
 
     async def fill_quorum(self) -> None:
         """Loop target list, check node count which is greater than 2f in recovery_mode
@@ -44,9 +52,8 @@ class Recovery:
         """
 
         while True:
-            results = await asyncio.gather(*[self._fetch_recovery_mode(endpoint) for endpoint in self.endpoints],
+            results = await asyncio.gather(*[self._fetch_recovery(endpoint) for endpoint in self.endpoints],
                                            return_exceptions=True)
-            logging.debug(f"status results : {results}")
 
             # to filter exceptions
             results = [result for result in results if isinstance(result, bool)]
@@ -60,5 +67,9 @@ class Recovery:
             await asyncio.sleep(conf.RECOVERY_CHECK_INTERVAL)
 
     @classmethod
-    def release_block_height(cls):
+    def get_highest_block_height(cls) -> int:
+        return cls._highest_block_height
+
+    @classmethod
+    def release_block_height(cls) -> int:
         return cls._highest_block_height + conf.RELEASE_RECOVERY_BLOCK_COUNT

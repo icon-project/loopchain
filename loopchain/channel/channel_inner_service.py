@@ -569,6 +569,7 @@ class ChannelInnerTask:
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
+        from loopchain.tools.recovery import Recovery
         status_data["nid"] = ChannelProperty().nid
         status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
@@ -590,7 +591,10 @@ class ChannelInnerTask:
         status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
-        status_data["recovery_mode"] = conf.RECOVERY_MODE
+        status_data["recovery"] = {
+            "mode": conf.RECOVERY_MODE,
+            "highest_block_height": Recovery.get_highest_block_height()
+        }
         status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data

@@ -90,7 +90,13 @@ class ChannelStateMachine(object):
     def recovery_mode(self):
         pass
 
-    @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'RecoveryMode', 'Watch',
+    @statemachine.transition(source='RecoveryMode',
+                             dest='BlockSync',
+                             after='_do_block_sync')
+    def recovery_block_sync(self):
+        pass
+
+    @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'Watch',
                                      'Vote', 'BlockSync', 'BlockGenerate', 'LeaderComplain'),
                              dest='BlockSync',
                              after='_do_block_sync')
