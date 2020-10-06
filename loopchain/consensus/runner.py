@@ -32,7 +32,10 @@ class ConsensusRunner(EventRegister):
                  tx_queue: 'AgingCache',
                  broadcast_scheduler: 'BroadcastScheduler',
                  block_manager: 'BlockManager'):
-        super().__init__(event_system.simulator)
+
+        self.event_system = EventSystem()
+        self.event_system.set_mediator(DelayedEventMediator)
+        super().__init__(self.event_system.simulator)
 
         self._block_manager: 'BlockManager' = block_manager
         self._invoke_pool: InvokePool = InvokePool(block_manager.blockchain)
@@ -52,6 +55,10 @@ class ConsensusRunner(EventRegister):
         self.consensus = Consensus(
             self.event_system, ChannelProperty().peer_address, self._block_factory, self._vote_factory
         )
+
+        self._loop = asyncio.get_event_loop()
+        self._is_broadcasting: bool = False
+        self._is_voting: bool = False
 
         self.__syncer = Syncer(
             self._block_manager,
