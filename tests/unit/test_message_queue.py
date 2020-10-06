@@ -3,7 +3,7 @@ import logging
 import multiprocessing
 import unittest
 
-from aio_pika.pika.exceptions import ChannelClosed
+from aio_pika.exceptions import ChannelClosed
 from earlgrey import MessageQueueStub, MessageQueueService, MessageQueueType, message_queue_task
 
 from loopchain import configure as conf
@@ -98,10 +98,10 @@ class TestMessageQueue(unittest.TestCase):
         route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
 
         service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
-        service._callback_connection_lost_callback = lambda conn: None
+        service._callback_connection_close = lambda conn: None
 
         stub = PeerInnerStub(conf.AMQP_TARGET, route_key)
-        stub._callback_connection_lost_callback = lambda conn: None
+        stub._callback_connection_close = lambda conn: None
 
         async def _run():
             try:
@@ -129,10 +129,10 @@ class TestMessageQueue(unittest.TestCase):
             channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
 
         service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
-        service._callback_connection_lost_callback = lambda conn: None
+        service._callback_connection_close = lambda conn: None
 
         stub = ChannelInnerStub(conf.AMQP_TARGET, route_key)
-        stub._callback_connection_lost_callback = lambda conn: None
+        stub._callback_connection_close = lambda conn: None
 
         async def _run():
             try:
@@ -159,13 +159,13 @@ class TestMessageQueue(unittest.TestCase):
         async def _run():
             route_key = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=conf.AMQP_KEY)
             peer_inner_service = PeerInnerService(conf.AMQP_TARGET, route_key, peer_service=None)
-            peer_inner_service._callback_connection_lost_callback = lambda conn: None
+            peer_inner_service._callback_connection_close = lambda conn: None
             await peer_inner_service.connect()
 
             route_key = conf.CHANNEL_QUEUE_NAME_FORMAT.format(
                 channel_name=conf.LOOPCHAIN_DEFAULT_CHANNEL, amqp_key=conf.AMQP_KEY)
             channel_inner_service = ChannelInnerService(conf.AMQP_TARGET, route_key, channel_service=None)
-            channel_inner_service ._callback_connection_lost_callback = lambda conn: None
+            channel_inner_service ._callback_connection_close = lambda conn: None
             await channel_inner_service.connect()
 
             StubCollection().amqp_target = conf.AMQP_TARGET
