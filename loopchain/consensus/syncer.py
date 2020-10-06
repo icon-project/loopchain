@@ -72,7 +72,7 @@ class Syncer:
         goal = min(conf.CITIZEN_ASYNC_RESULT_MAX_SIZE+1, self._max_height_in_nodes-RAISE_EVENT_INTERVAL)
         for i in range(1, goal):
             height = self.__blockchain.block_height + i
-            if height in self._request_history_list.keys():
+            if height in self._request_history_list:
                 during_request_time = time.time()-self._request_history_list[height][1]
                 if during_request_time > conf.LFT_SYNC_REQUEST_WAIT:
                     retry_target_index = (self._request_history_list[height][0] + 1) % len(self._stub_list)
@@ -90,7 +90,7 @@ class Syncer:
             await asyncio.sleep(0)
 
     def _append_block_if_not_exists(self, height: int, dict_info: Dict, data_object):
-        if height not in dict_info.keys():
+        if height not in dict_info:
             dict_info[height] = []
 
         dict_info[height].append(data_object)
@@ -113,7 +113,7 @@ class Syncer:
             # Check Sync mode
             # If height make different 3 value between to written block height and to received block height,
             # It information is to responded for Synchronize.
-            # So It need to raise to divide Block information and Vote Information.
+            # So It need to raise to dilast_block.header.heightvide Block information and Vote Information.
             if RAISE_EVENT_INTERVAL < diff_height_info:
                 for vote in block_data.prev_votes:
                     self.receive_vote(vote)
@@ -131,7 +131,7 @@ class Syncer:
         # It need to raise event two block information after to written block height.
         for i in range(1, RAISE_EVENT_INTERVAL):
             height = self.__blockchain.block_height+i
-            if height in self._data_info_other_nodes.keys():
+            if height in self._data_info_other_nodes:
                 block_info = self._data_info_other_nodes[height].pop()
                 event = ReceiveDataEvent(block_info)
                 self._event_system.simulator.raise_event(event)
@@ -139,10 +139,10 @@ class Syncer:
 
             await asyncio.sleep(0)
 
-            if height in self._vote_info_other_nodes.keys():
+            if height in self._vote_info_other_nodes:
                 self._raise_vote(height)
 
-            if NONE_VOTE_HEIGHT in self._vote_info_other_nodes.keys():
+            if NONE_VOTE_HEIGHT in self._vote_info_other_nodes:
                 self._raise_vote(NONE_VOTE_HEIGHT)
 
             await asyncio.sleep(0)
