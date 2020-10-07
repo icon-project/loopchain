@@ -1,14 +1,13 @@
 """Consensus (lft) execution and event handling"""
 import asyncio
-import json
-from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
+import json
 from lft.consensus import Consensus
 from lft.consensus.epoch import EpochPool
 from lft.consensus.events import BroadcastDataEvent, BroadcastVoteEvent, InitializeEvent, RoundEndEvent, RoundStartEvent
-from lft.consensus.events import ReceiveDataEvent, ReceiveVoteEvent
 from lft.event import EventSystem, EventRegister
 from lft.event.mediators import DelayedEventMediator
+from typing import TYPE_CHECKING, Sequence, Iterator, cast, List
 
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks.v1_0 import Block, BlockFactory, BlockBuilder, BlockHeader
@@ -18,6 +17,7 @@ from loopchain.blockchain.transactions import TransactionBuilder
 from loopchain.blockchain.types import ExternalAddress, Hash32
 from loopchain.blockchain.votes.v1_0 import BlockVote, BlockVoteFactory
 from loopchain.channel.channel_property import ChannelProperty
+from loopchain.consensus.syncer import Syncer
 from loopchain.protos import loopchain_pb2
 
 if TYPE_CHECKING:
@@ -29,16 +29,17 @@ if TYPE_CHECKING:
 
 class ConsensusRunner(EventRegister):
     def __init__(self,
-                 event_system: 'EventSystem',
                  tx_queue: 'AgingCache',
                  broadcast_scheduler: 'BroadcastScheduler',
                  block_manager: 'BlockManager'):
-        super().__init__(event_system.simulator)
+
+        self.event_system = EventSystem()
+        self.event_system.set_mediator(DelayedEventMediator)
+        super().__init__(self.event_system.simulator)
 
         self._block_manager: 'BlockManager' = block_manager
         self._invoke_pool: InvokePool = InvokePool(block_manager.blockchain)
         self.broadcast_scheduler = broadcast_scheduler
-        self.event_system = event_system
         self._block_factory: 'BlockFactory' = BlockFactory(
             epoch_pool_with_app=EpochPool(),
             tx_queue=tx_queue,
@@ -56,11 +57,19 @@ class ConsensusRunner(EventRegister):
         )
 
         self._loop = asyncio.get_event_loop()
-
         self._is_broadcasting: bool = False
         self._is_voting: bool = False
 
+        self.__syncer = Syncer(
+            self._block_manager,
+            self.event_system,
+        )
+
     async def start(self, channel_service):
+        asyncio.create_task(self.lft_start(channel_service))
+        asyncio.create_task(self.__syncer.sync_start())
+
+    async def lft_start(self, channel_service):
         event = await self._create_initialize_event(channel_service)
         self.event_system.start(blocking=False)
         self.event_system.simulator.raise_event(event)
@@ -191,11 +200,12 @@ class ConsensusRunner(EventRegister):
 
     async def _on_round_end_event(self, round_end_event: RoundEndEvent):
         self._is_broadcasting, self._is_voting = False, False
+        self._is_round_started = False
         await self._write_block(round_end_event)
         await self._round_start(round_end_event)
 
     # FIXME: Temporary
-    async def _write_block(self, round_end_event):
+    async def _write_block(self, round_end_event: RoundEndEvent):
         """Write Block 1.0. (Temporary)
 
         Note that RoundEndEvent can be raised when the node restarted. Avoid rewriting block which is committed.
@@ -338,9 +348,7 @@ class ConsensusRunner(EventRegister):
         return json.dumps(vote_dumped)
 
     def receive_vote(self, vote: 'BlockVote'):
-        event = ReceiveVoteEvent(vote)
-        self.event_system.simulator.raise_event(event)
+        self.__syncer.receive_vote(vote)
 
     def receive_data(self, unconfirmed_block: 'Block'):
-        event = ReceiveDataEvent(unconfirmed_block)
-        self.event_system.simulator.raise_event(event)
+        self.__syncer.receive_data(unconfirmed_block)

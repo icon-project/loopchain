@@ -1,21 +1,20 @@
 """Channel Inner Service."""
-import json
 import multiprocessing as mp
-import signal
 from asyncio import Condition
 from collections import namedtuple
-from typing import Union, Dict, List, Tuple
 
+import json
+import signal
 from earlgrey import *
-from lft.consensus.events import ReceiveVoteEvent
 from pkg_resources import parse_version
+from typing import Union, Dict, List, Tuple
 
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory, ScoreResponse
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
-from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.blockchain.backup_manager import BackupManager
+from loopchain.blockchain.blocks import BlockSerializer
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.transactions import (Transaction, TransactionSerializer, TransactionVerifier,
                                                TransactionVersioner)
@@ -31,7 +30,6 @@ from loopchain.utils.message_queue import StubCollection
 if TYPE_CHECKING:
     from loopchain.baseservice.aging_cache import AgingCache
     from loopchain.channel.channel_service import ChannelService
-    from lft.event import EventSystem
     from loopchain.blockchain.blockchain import BlockChain
     from loopchain.blockchain.blocks.v1_0 import Block as Block_V1_0
 
@@ -776,9 +774,10 @@ class ChannelInnerTask:
                 f"Peer vote to: {vote.block_height}({vote_round}) {vote_block_hash} from {voter}"
             )
 
-            if is_version_1_0 and self._channel_service.consensus_runner:
-                util.logger.notice(f'loopchain 3.x has event_system!')
-                self._channel_service.consensus_runner.receive_vote(vote)
+            if is_version_1_0:
+                if self._channel_service.consensus_runner:
+                    util.logger.notice(f'loopchain 3.x has event_system!')
+                    self._channel_service.consensus_runner.receive_vote(vote)
             else:
                 util.logger.notice(f'loopchain 2.x has no event_system!')
                 self._block_manager.candidate_blocks.add_vote(vote)

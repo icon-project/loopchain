@@ -173,15 +173,12 @@ class ChannelService:
         return message
 
     async def start_lft(self):
-        self.__event_system = EventSystem()
-        self.__event_system.set_mediator(DelayedEventMediator)
-        self.__inner_service.event_system = self.__event_system
         self.__consensus_runner = ConsensusRunner(
-            self.__event_system,
             self.__tx_queue,
             self.__broadcast_scheduler,
             self.__block_manager
         )
+
         await self.__consensus_runner.start(self)
 
     def close(self, signum=None):
@@ -348,7 +345,6 @@ class ChannelService:
                 channel_service=self,
                 channel_name=channel_name,
                 store_id=store_id,
-                event_system=self.__event_system,
                 tx_queue=self.__tx_queue
             )
         except KeyValueStoreError as e:
