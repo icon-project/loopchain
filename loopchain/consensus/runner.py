@@ -59,6 +59,7 @@ class ConsensusRunner(EventRegister):
         self._loop = asyncio.get_event_loop()
         self._is_broadcasting: bool = False
         self._is_voting: bool = False
+        self._curr_round: int = 0
 
         self.__syncer = Syncer(
             self._block_manager,
@@ -202,7 +203,9 @@ class ConsensusRunner(EventRegister):
         self._is_broadcasting, self._is_voting = False, False
         self._is_round_started = False
         await self._write_block(round_end_event)
-        await self._round_start(round_end_event)
+        if self._curr_round <= round_end_event.round_num:
+            # Avoid redundant round start
+            await self._round_start(round_end_event)
 
     # FIXME: Temporary
     async def _write_block(self, round_end_event: RoundEndEvent):
@@ -312,11 +315,11 @@ class ConsensusRunner(EventRegister):
 
         voters = self._get_next_validators(commit_id)
         epoch1 = LoopchainEpoch(num=1, voters=voters)
-        next_round = event.round_num + 1
+        self._curr_round = event.round_num + 1
 
         round_start_event = RoundStartEvent(
             epoch=epoch1,
-            round_num=next_round
+            round_num=self._curr_round
         )
         round_start_event.deterministic = False
         mediator = self.event_system.get_mediator(DelayedEventMediator)
