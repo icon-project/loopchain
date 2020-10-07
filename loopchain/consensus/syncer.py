@@ -113,7 +113,7 @@ class Syncer:
             # Check Sync mode
             # If height make different 3 value between to written block height and to received block height,
             # It information is to responded for Synchronize.
-            # So It need to raise to dilast_block.header.heightvide Block information and Vote Information.
+            # So It need to raise to divide Block of last_block.header.height information and Vote Information.
             if RAISE_EVENT_INTERVAL < diff_height_info:
                 for vote in block_data.prev_votes:
                     self.receive_vote(vote)
