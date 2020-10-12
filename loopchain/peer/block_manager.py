@@ -77,6 +77,10 @@ class BlockManager:
         self._sync_peer_target: Dict[int, str] = dict()
         self._request_limit_event: Optional[asyncio.Event] = None
 
+        # block confirm event to add block sequentially
+        self.confirm_event: asyncio.Event = asyncio.Event()
+        self.confirm_event.set()
+
     @property
     def channel_name(self):
         return self.__channel_name
@@ -931,7 +935,7 @@ class BlockManager:
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
                 client = RestClient(self.channel_name, rest_endpoint)
-                response: dict = client.call(RestMethod.Status)
+                response: dict = client.call(RestMethod.Status, timeout=conf.REST_TIMEOUT)
                 target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
 
                 recovery = response.get("recovery", {})
@@ -1110,13 +1114,16 @@ class BlockManager:
         if my_height < (unconfirmed_header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})"
+            )
 
         is_rep = ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote)
         if is_rep and my_height == unconfirmed_header.height - 2 and not self.blockchain.last_unconfirmed_block:
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height}), "
+                f"last_unconfirmed_block({self.blockchain.last_unconfirmed_block})"
+            )
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_header.height:
@@ -1188,18 +1195,27 @@ class BlockManager:
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
         util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
+        exc = None
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
+            exc = e
         except RoundMismatch as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
             util.logger.warning(e)
+            exc = e
         except UnrecordedBlock as e:
             util.logger.info(e)
+            exc = e
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            await self._vote(unconfirmed_block, round_)
-        else:
+            exc = e
+        finally:
+            if self.confirm_event and not self.confirm_event.is_set():
+                self.confirm_event.set()
+                util.logger.debug(f"confirm_event set as {self.confirm_event.is_set()}")
+
+        if exc is None or isinstance(exc, DuplicationUnconfirmedBlock):
             await self._vote(unconfirmed_block, round_)
