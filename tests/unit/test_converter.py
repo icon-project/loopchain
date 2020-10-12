@@ -1,7 +1,7 @@
 import json
 import logging
-
 import unittest
+
 from loopchain.utils import loggers
 from loopchain.utils.icon_service import convert_params, ParamType
 from tests.unit import test_util

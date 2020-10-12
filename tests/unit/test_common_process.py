@@ -3,9 +3,10 @@
 import logging
 import multiprocessing
 import threading
+import unittest
+
 import time
 
-import unittest
 from loopchain import configure as conf
 from loopchain.baseservice import CommonProcess
 from loopchain.baseservice import CommonThread

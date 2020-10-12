@@ -2,8 +2,8 @@
 
 import logging
 import os
-
 import unittest
+
 from loopchain import configure as conf
 from loopchain.blockchain import BlockChain
 from loopchain.blockchain.blocks import Block

@@ -4,8 +4,8 @@ import copy
 import hashlib
 import json
 import logging
-
 import unittest
+
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32
 from loopchain.crypto.hashing import build_hash_generator
