@@ -564,6 +564,7 @@ class ChannelService:
         utils.logger.spam(f"reset_leader target({leader_peer_target}), complained={complained}")
 
         if complained:
+            self.stop_leader_complain_timer()
             self.__block_manager.blockchain.reset_leader_made_block_count()
             self.__block_manager.epoch.new_round(new_leader_id)
 
