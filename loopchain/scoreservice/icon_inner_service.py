@@ -63,5 +63,5 @@ class IconScoreInnerTask:
 class IconScoreInnerStub(MessageQueueStub[IconScoreInnerTask]):
     TaskType = IconScoreInnerTask
 
-    def _callback_connection_close(self, exc: Exception):
-        exit_and_msg(msg=f"MQ [IconScoreInnerStub] connection closed. {exc}")
+    def _callback_connection_close(self, sender, exc: Exception, *args, **kwargs):
+        exit_and_msg(msg=f"MQ [IconScoreInnerStub] connection closed. sender = {sender}, exc = {exc}")
