@@ -18,6 +18,8 @@ import importlib
 import json
 import logging
 import re
+from typing import Any
+
 import pkg_resources
 
 import loopchain
@@ -118,14 +120,13 @@ class Configure(metaclass=SingletonMetaClass):
             # checking for environment variable of system
         return configure_type, target_value
 
-    def __check_value_condition(self, target_value_type, value):
-        # turn configure value to int or float after some condition check.
+    def __check_value_condition(self, target_value_type, value) -> Any:
+        # turn configure value to bool, int or float after some condition check.
         # cast type string to original type if it exists in the globals().
-        target_value = value
+        target_value: Any = value
         if (isinstance(value, str) and len(value) > 0
                 and target_value_type is not str):
             if re.match(r"^\d+?\.\d+?$", value) is not None:
-                # print("float configure value")
                 try:
                     target_value = float(value)
                 except Exception as e:
@@ -134,6 +135,9 @@ class Configure(metaclass=SingletonMetaClass):
                 target_value = json.loads(value.lower())
             elif value.isnumeric():
                 target_value = int(value)
+        elif isinstance(value, str) and len(value) == 0:
+            # use default value when value is empty string
+            target_value = None
 
         return target_value
 
