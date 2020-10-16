@@ -622,7 +622,7 @@ class ChannelInnerTask:
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_dumped, round_: int) -> None:
+    async def announce_unconfirmed_block(self, block_dumped, round_: int, from_recovery: bool = False) -> None:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
@@ -636,6 +636,10 @@ class ChannelInnerTask:
             f"height({unconfirmed_block.header.height})\n"
             f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
+
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore unconfirmed bock from not recovery node in Recovery Mode")
+            return
 
         if self._channel_service.state_machine.state not in \
                 ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):

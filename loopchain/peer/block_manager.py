@@ -142,11 +142,27 @@ class BlockManager:
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+        send_kwargs = {"block": block_dumped, "round_": round_, "channel": self.__channel_name}
+
+        release_recovery_mode = False
+        if conf.RECOVERY_MODE:
+            from loopchain.tools.recovery import Recovery
+            if self.blockchain.block_height <= Recovery.release_block_height():
+                util.logger.info(f"broadcast block({block_.header.height}) from recovery node")
+                send_kwargs.update({"from_recovery": True})
+
+            if self.blockchain.block_height >= Recovery.release_block_height():
+                release_recovery_mode = True
+
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(**send_kwargs),
             reps_hash=target_reps_hash
         )
+
+        if release_recovery_mode:
+            conf.RECOVERY_MODE = False
+            util.logger.info(f"recovery mode released at {self.blockchain.block_height}")
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
@@ -510,23 +526,6 @@ class BlockManager:
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __confirm_prev_block_by_sync(self, block_):
-        prev_block = self.blockchain.last_unconfirmed_block
-        confirm_info = block_.body.confirm_prev_block
-
-        util.logger.debug(f"confirm_prev_block_by_sync :: height({prev_block.header.height})")
-
-        block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
-        block_verifier.invoke_func = self.blockchain.get_invoke_func(prev_block.header.height)
-
-        reps_getter = self.blockchain.find_preps_addresses_by_roothash
-        block_verifier.verify_loosely(prev_block,
-                                      self.blockchain.last_block,
-                                      self.blockchain,
-                                      reps_getter=reps_getter)
-        return self.blockchain.add_block(prev_block, confirm_info)
-
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
@@ -732,20 +731,14 @@ class BlockManager:
         peer_target = ChannelProperty().peer_target
         my_height = self.blockchain.block_height
 
-        if self.blockchain.last_block:
-            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
-        else:
-            reps_hash = ChannelProperty().crep_root_hash
-        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
-
-        regex = re.compile(r":([0-9]{2,5})$")
+        port_pattern = re.compile(r":([0-9]{2,5})$")
 
         def _converter(target) -> str:
-            port = int(regex.search(target).group(1))
+            port = int(port_pattern.search(target).group(1))
             new_port = f":{port + conf.PORT_DIFF_REST_SERVICE_CONTAINER}"
-            return regex.sub(new_port, target)
+            return port_pattern.sub(new_port, target)
 
-        endpoints = {target: _converter(target) for target in rep_targets.values()}
+        endpoints = {target: _converter(target) for target in self.get_target_list()}
 
         for grpc_endpoint, rest_endpoint in endpoints.items():
             if grpc_endpoint == peer_target:

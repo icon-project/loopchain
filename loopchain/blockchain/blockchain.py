@@ -617,7 +617,8 @@ class BlockChain:
             if conf.RECOVERY_MODE:
                 from loopchain.tools.recovery import Recovery
                 utils.logger.debug(f"release recovery_mode block height : {Recovery.release_block_height()}")
-                if block.header.height >= Recovery.release_block_height():
+                if (channel_service.state_machine.state in ('Vote', 'BlockSync')
+                        and block.header.height >= Recovery.release_block_height()):
                     conf.RECOVERY_MODE = False
                     logging.info(f"recovery mode released at {block.header.height}")
 
@@ -948,6 +949,20 @@ class BlockChain:
 
         return results
 
+    def _reset_last_unconfirmed_block(self, current_block):
+        if current_block.header.complained and self.__block_manager.epoch.complained_result:
+            utils.logger.debug("reset last_unconfirmed_block by complain block")
+            self.last_unconfirmed_block = current_block
+        elif self.last_block.header.prep_changed:
+            utils.logger.debug("reset last_unconfirmed_block by prep changed")
+            self.last_unconfirmed_block = current_block
+        elif conf.RECOVERY_MODE and self.last_unconfirmed_block is None:
+            utils.logger.debug("reset last_unconfirmed_block by recovery_mode")
+            self.last_unconfirmed_block = current_block
+        else:
+            utils.logger.debug(f"keep last_unconfirmed_block: {self.last_unconfirmed_block.header}, "
+                               f"current_block: {current_block.header}")
+
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
@@ -972,14 +987,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    self.last_unconfirmed_block = current_block
-                    # TODO: NEED REVIEW - check this logic should be limited by below condition
-                    """
-                    if ((current_block.header.complained and self.__block_manager.epoch.complained_result)
-                            or self.last_block.header.prep_changed):
-                        utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
-                        self.last_unconfirmed_block = current_block
-                    """
+                    self._reset_last_unconfirmed_block(current_block)
                     return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "

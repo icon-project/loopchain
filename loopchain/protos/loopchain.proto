@@ -57,6 +57,7 @@ message BlockSend {
     required bytes block = 1;
     required int32 round_ = 2;
     optional string channel = 3; // channel ID for multichain network
+    optional bool from_recovery = 4;
 }
 
 // elect new Leader Message

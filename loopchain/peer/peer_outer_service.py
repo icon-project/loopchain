@@ -162,8 +162,11 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         except AttributeError:
             round_ = 0
 
+        utils.logger.warning(f"request.from_recovery : {request.from_recovery!r}")
+        from_recovery = request.from_recovery if request.from_recovery else False
+
         asyncio.run_coroutine_threadsafe(
-            channel_stub.async_task().announce_unconfirmed_block(request.block, round_),
+            channel_stub.async_task().announce_unconfirmed_block(request.block, round_, from_recovery),
             self.peer_service.inner_service.loop
         )
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
