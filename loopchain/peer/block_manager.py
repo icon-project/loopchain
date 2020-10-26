@@ -142,7 +142,14 @@ class BlockManager:
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
-        send_kwargs = {"block": block_dumped, "round_": round_, "channel": self.__channel_name}
+        send_kwargs = {
+            "block": block_dumped,
+            "round_": round_,
+            "channel": self.__channel_name,
+            "peer_id": block_.header.peer_id.hex_hx(),
+            "height": block_.header.height,
+            "hash": block_.header.hash.hex()
+        }
 
         release_recovery_mode = False
         if conf.RECOVERY_MODE:
@@ -407,6 +414,10 @@ class BlockManager:
 
         if response.response_code == message_code.Response.fail_no_confirm_info:
             raise NoConfirmInfo(f"The peer has not confirm_info of the block by height({block_height}).")
+        elif response.response_code in (message_code.Response.fail_not_enough_data,
+                                        message_code.Response.fail_wrong_block_hash):
+            raise exception.BlockError(f"Received block is invalid: "
+                                       f"response_message={message_code.get_response_msg(response.response_code)}")
         else:
             try:
                 block = self.blockchain.block_loads(response.block)

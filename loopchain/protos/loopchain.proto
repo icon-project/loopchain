@@ -38,7 +38,7 @@ message StatusReply {
 
 // For Block Sync
 message BlockSyncRequest {
-    optional string block_hash = 1;
+    optional string OBSOLETE_block_hash = 1;
     optional int32 block_height = 2;
     optional string channel = 3; // channel ID for multichain network
 }
@@ -58,6 +58,9 @@ message BlockSend {
     required int32 round_ = 2;
     optional string channel = 3; // channel ID for multichain network
     optional bool from_recovery = 4;
+    optional string peer_id = 5;
+    optional int32 height = 6;
+    optional string hash = 7;
 }
 
 // elect new Leader Message

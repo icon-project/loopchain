@@ -14,10 +14,13 @@
 """gRPC helper for security"""
 
 import logging
-from concurrent import futures
+from typing import TYPE_CHECKING
 
 from loopchain.components import SingletonMetaClass
 from loopchain.tools.grpc_helper.grpc_connector import *
+
+if TYPE_CHECKING:
+    from concurrent.futures import ThreadPoolExecutor
 
 
 class GRPCHelper(metaclass=SingletonMetaClass):
@@ -32,25 +35,17 @@ class GRPCHelper(metaclass=SingletonMetaClass):
             conf.SSLAuthType.mutual: GRPCConnectorMutual
         }
 
-        self.__keys = GRPCSecureKeyCollection()
+        self._default_compression = grpc.Compression.Deflate
 
-    def start_outer_server(self, port: str = None) -> grpc.Server:
-        outer_server = grpc.server(futures.ThreadPoolExecutor(conf.MAX_WORKERS, "GRPCOuterThread"))
+        self._keys = GRPCSecureKeyCollection()
+
+    def start_outer_server(self, threadpool: 'ThreadPoolExecutor', port: str = None) -> grpc.Server:
+        outer_server = grpc.server(threadpool, compression=self._default_compression)
         target_host = f'[::]:{port}'
         self.add_server_port(outer_server, target_host)
         logging.debug(f"outer target host = {target_host}")
 
         return outer_server
-
-    def start_inner_server(self, port: str = None) -> grpc.Server:
-        inner_service_port = f'{int(port) + conf.PORT_DIFF_INNER_SERVICE}'
-
-        inner_server = grpc.server(futures.ThreadPoolExecutor(conf.MAX_WORKERS, "GRPCInnerThread"))
-        target_host = conf.INNER_SERVER_BIND_IP + ':' + inner_service_port
-        self.add_server_port(inner_server, target_host, conf.SSLAuthType.none)
-        logging.debug(f"inner target host = {target_host}")
-
-        return inner_server
 
     def add_server_port(self, server, host, ssl_auth_type: conf.SSLAuthType=None, key_load_type: conf.KeyLoadType=None):
         """
@@ -67,10 +62,10 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         if key_load_type is None:
             key_load_type = conf.GRPC_SSL_KEY_LOAD_TYPE
 
-        self.__keys.reset(ssl_auth_type, key_load_type)
+        self._keys.reset(ssl_auth_type, key_load_type)
 
         connector: GRPCConnector = self.__connectors[ssl_auth_type]
-        connector.add_server_port(self.__keys, server, host, ssl_auth_type)
+        connector.add_server_port(self._keys, server, host, ssl_auth_type)
         server.start()
 
         logging.info(f"Server now listen: {host}, secure level : {str(ssl_auth_type)}")
@@ -89,10 +84,15 @@ class GRPCHelper(metaclass=SingletonMetaClass):
         if key_load_type is None:
             key_load_type = conf.GRPC_SSL_KEY_LOAD_TYPE
 
-        self.__keys.reset(ssl_auth_type, key_load_type)
+        self._keys.reset(ssl_auth_type, key_load_type)
 
         connector: GRPCConnector = self.__connectors[ssl_auth_type]
-        channel = connector.create_client_channel(self.__keys, host, ssl_auth_type)
+        channel = connector.create_client_channel(
+            self._keys,
+            host,
+            ssl_auth_type,
+            compression=self._default_compression
+        )
 
         logging.info(f"Client Channel : {host}, secure level : {str(ssl_auth_type)}")
 
