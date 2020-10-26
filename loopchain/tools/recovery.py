@@ -26,7 +26,7 @@ class Recovery:
             self.endpoints.append(endpoint)
 
         fault: int = int((len(self.endpoints) - 1) / 3)
-        self.min_quorum: int = fault * 2 + 1
+        self.min_quorum: int = 2 * fault + 2
 
     async def _fetch_recovery(self, endpoint: str) -> bool:
         client = RestClient(self._channel_name, endpoint)

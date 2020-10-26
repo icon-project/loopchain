@@ -27,8 +27,7 @@ class ChannelStateMachine(object):
                     on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
               State(name='RecoveryMode',
-                    ignore_invalid_triggers=True,
-                    on_enter='_recovery_mode_on_enter'),
+                    ignore_invalid_triggers=True),
               State(name='BlockSync',
                     ignore_invalid_triggers=True,
                     on_enter='_blocksync_on_enter',
@@ -168,9 +167,6 @@ class ChannelStateMachine(object):
 
     def _blockheightsync_on_enter(self, *args, **kwargs):
         self.evaluate_network()
-
-    def _recovery_mode_on_enter(self, *args, **kwargs):
-        pass
 
     def _blocksync_on_enter(self, *args, **kwargs):
         self.__channel_service.block_manager.update_service_status(status_code.Service.block_height_sync)

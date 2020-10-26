@@ -162,7 +162,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         except AttributeError:
             round_ = 0
 
-        utils.logger.warning(f"request.from_recovery : {request.from_recovery!r}")
+        utils.logger.debug(f"request.from_recovery : {request.from_recovery!r}")
         from_recovery = request.from_recovery if request.from_recovery else False
 
         asyncio.run_coroutine_threadsafe(
