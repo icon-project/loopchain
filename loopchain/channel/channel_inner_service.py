@@ -638,7 +638,7 @@ class ChannelInnerTask:
             f"hash({unconfirmed_block.header.hash.hex()})")
 
         if conf.RECOVERY_MODE and not from_recovery:
-            util.logger.info("ignore unconfirmed bock from not recovery node in Recovery Mode")
+            util.logger.info("ignore unconfirmed block from not recovery node in Recovery Mode")
             return
 
         if self._channel_service.state_machine.state not in \

@@ -257,9 +257,8 @@ class ChannelService:
 
     async def recovery_mode(self):
         from loopchain.tools.recovery import Recovery
-        recovery = Recovery(ChannelProperty().name)
+        recovery = Recovery(ChannelProperty().name, self.block_manager.blockchain.block_height)
         recovery.set_target_list(self.block_manager.get_target_list())
-        # waiting for quorum(2f + 1) in recovery mode
         await recovery.fill_quorum()
 
         self.state_machine.recovery_block_sync()
