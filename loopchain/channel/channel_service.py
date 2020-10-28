@@ -251,9 +251,13 @@ class ChannelService:
         self.__ready_to_height_sync()
 
         if conf.RECOVERY_MODE:
-            self.state_machine.recovery_mode()
-        else:
-            self.state_machine.block_sync()
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                self.state_machine.recovery_mode()
+                return
+
+            conf.RECOVERY_MODE = False
+
+        self.state_machine.block_sync()
 
     async def recovery_mode(self):
         from loopchain.tools.recovery import Recovery
