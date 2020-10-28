@@ -654,18 +654,18 @@ class ChannelInnerTask:
         try:
             self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid as e:
-            util.logger.warning(f"ConfirmInfoInvalid {e}")
+            util.logger.warning(f"{e!r}")
         except ConfirmInfoInvalidNeedBlockSync as e:
-            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
+            util.logger.warning(f"{e!r}")
             if self._channel_service.state_machine.state == "BlockGenerate" and (
                     self._block_manager.consensus_algorithm and self._block_manager.consensus_algorithm.is_running):
                 self._block_manager.consensus_algorithm.stop()
             else:
                 self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
-            util.logger.warning(f"ConfirmInfoInvalidAddedBlock {e}")
+            util.logger.warning(f"{e!r}")
         except NotReadyToConfirmInfo as e:
-            util.logger.warning(f"NotReadyToConfirmInfo {e}")
+            util.logger.warning(f"{e!r}")
         else:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 

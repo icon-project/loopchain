@@ -252,14 +252,14 @@ class ChannelService:
 
         if conf.RECOVERY_MODE:
             if self.is_support_node_function(conf.NodeFunction.Vote):
-                self.state_machine.recovery_mode()
+                self.state_machine.recovery()
                 return
 
             conf.RECOVERY_MODE = False
 
         self.state_machine.block_sync()
 
-    async def recovery_mode(self):
+    async def recovery(self):
         from loopchain.tools.recovery import Recovery
         recovery = Recovery(ChannelProperty().name, self.block_manager.blockchain.block_height)
         recovery.set_target_list(self.block_manager.get_target_list())

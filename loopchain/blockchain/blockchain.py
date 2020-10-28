@@ -960,7 +960,8 @@ class BlockChain:
             utils.logger.debug("reset last_unconfirmed_block by recovery_mode")
             self.last_unconfirmed_block = current_block
         else:
-            utils.logger.debug(f"keep last_unconfirmed_block: {self.last_unconfirmed_block.header}, "
+            block_header = self.last_unconfirmed_block.header if self.last_unconfirmed_block else None
+            utils.logger.debug(f"keep last_unconfirmed_block: {block_header}, "
                                f"current_block: {current_block.header}")
 
     def confirm_prev_block(self, current_block: Block):

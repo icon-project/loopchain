@@ -26,7 +26,7 @@ class ChannelStateMachine(object):
                     ignore_invalid_triggers=True,
                     on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
-              State(name='RecoveryMode',
+              State(name='Recovery',
                     ignore_invalid_triggers=True),
               State(name='BlockSync',
                     ignore_invalid_triggers=True,
@@ -84,12 +84,12 @@ class ChannelStateMachine(object):
         pass
 
     @statemachine.transition(source='EvaluateNetwork',
-                             dest='RecoveryMode',
-                             after='_do_recovery_mode')
-    def recovery_mode(self):
+                             dest='Recovery',
+                             after='_do_recovery')
+    def recovery(self):
         pass
 
-    @statemachine.transition(source='RecoveryMode',
+    @statemachine.transition(source='Recovery',
                              dest='BlockSync',
                              after='_do_block_sync')
     def recovery_block_sync(self):
@@ -146,8 +146,8 @@ class ChannelStateMachine(object):
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
-    def _do_recovery_mode(self):
-        self._run_coroutine_threadsafe(self.__channel_service.recovery_mode())
+    def _do_recovery(self):
+        self._run_coroutine_threadsafe(self.__channel_service.recovery())
 
     def _do_vote(self, unconfirmed_block: Block, round_: int):
         if unconfirmed_block.header.is_unrecorded:

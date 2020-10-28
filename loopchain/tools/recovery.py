@@ -38,7 +38,7 @@ class Recovery:
         result.update({"state": response.get("state", None)})
 
         if result.get("mode", False):
-            if result.get("state") == "RecoveryMode":
+            if result.get("state") == "Recovery":
                 block_height = response.get("block_height", 0)
             else:
                 block_height = result.get("highest_block_height", 0)
@@ -57,7 +57,6 @@ class Recovery:
         """
 
         while True:
-            waiting_recovery = 0
             Recovery._highest_block_height = 0
             main_highest_block_height = 0
             recovery_quorum = 0
@@ -70,9 +69,6 @@ class Recovery:
             for result in results:
                 if result.get("mode", False):
                     Recovery._highest_block_height = max(Recovery._highest_block_height, result.get("block_height", 0))
-                    if result.get("state") == "RecoveryMode":
-                        waiting_recovery += 1
-
                     recovery_quorum += 1
                 else:
                     main_highest_block_height = max(main_highest_block_height, result.get("main_block_height", 0))
@@ -86,8 +82,6 @@ class Recovery:
             logging.debug(f"highest_block_height: {Recovery._highest_block_height}")
             logging.info(f"recovery_mode quorum : {recovery_quorum}")
             if recovery_quorum > self._min_quorum:
-                if waiting_recovery > 1:
-                    await asyncio.sleep(conf.RECOVERY_CHECK_INTERVAL + 1)
                 return
 
             await asyncio.sleep(conf.RECOVERY_CHECK_INTERVAL)
