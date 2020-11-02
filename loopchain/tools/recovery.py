@@ -27,28 +27,26 @@ class Recovery:
             endpoint = target.replace(port, new_port)
             self._endpoints.append(endpoint)
 
-        fault: int = int((len(self._endpoints) - 1) / 3)
+        fault: int = (len(self._endpoints) - 1) // 3
         self._min_quorum: int = 2 * fault + 1
 
     async def _fetch_recovery(self, endpoint: str) -> Dict[str, Union[bool, int]]:
         client = RestClient(self._channel_name, endpoint)
         response: Dict[str, Any] = await client.call_async(RestMethod.Status)
 
-        result = response.get("recovery", {}).copy()
-        result.update({"state": response.get("state", None)})
+        recovery_result = response.get("recovery", {}).copy()
+        recovery_result["state"] = response.get("state", None)
 
-        if result.get("mode", False):
-            if result.get("state") == "Recovery":
-                block_height = response.get("block_height", 0)
+        if recovery_result.get("mode", False):
+            if recovery_result.get("state") == "Recovery":
+                recovery_result["block_height"] = response.get("block_height", 0)
             else:
-                block_height = result.get("highest_block_height", 0)
-
-            result.update({"block_height": block_height})
+                recovery_result["block_height"] = recovery_result.get("highest_block_height", 0)
         else:
-            result.update({"main_block_height": response.get("block_height", 0)})
+            recovery_result["main_block_height"] = response.get("block_height", 0)
 
-        logging.debug(f"result: {result}")
-        return result
+        logging.debug(f"recovery_result: {recovery_result}")
+        return recovery_result
 
     async def fill_quorum(self) -> None:
         """Loop target list, check node quorum which is greater than 2f + 1 in recovery_mode
