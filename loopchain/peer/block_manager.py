@@ -7,7 +7,7 @@ import threading
 import traceback
 from collections import defaultdict, OrderedDict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Union, Set, Coroutine
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, Union, Set, Coroutine, Any, cast
 
 from pkg_resources import parse_version
 
@@ -73,8 +73,8 @@ class BlockManager:
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
 
-        self.request_result_for_async: Dict[int, asyncio.Future] = dict()
-        self.peer_target_for_async = dict()
+        self._request_result_for_async: Dict[int, asyncio.Future] = dict()
+        self._peer_target_for_async: Dict[int, str] = dict()
 
     @property
     def channel_name(self):
@@ -404,7 +404,7 @@ class BlockManager:
 
         while max_height > block_height or request_coros:
             request_height = block_height + 1
-            if len(self.request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+            if len(self._request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
                 request_coros[request_height] = self.__block_request_by_citizen(request_height, max_height)
                 block_height = request_height
             else:
@@ -423,10 +423,10 @@ class BlockManager:
                         _block, _max_height, _unconfirmed_block_height, _, response_code = request_result
                         util.logger.debug(f"block_height({_block.header.height}) received")
 
-                        result_future: asyncio.Future = self.request_result_for_async.get(_block.header.height, None)
+                        result_future: asyncio.Future = self._request_result_for_async.get(_block.header.height, None)
                         if result_future is None:
                             result_future = asyncio.get_event_loop().create_future()
-                            self.request_result_for_async[_block.header.height] = result_future
+                            self._request_result_for_async[_block.header.height] = result_future
                         result_future.set_result(request_result)
 
                         max_block_height = max(_max_height, _unconfirmed_block_height)
@@ -463,13 +463,13 @@ class BlockManager:
 
         while max_height > block_height:
             block_height += 1
-            self.peer_target_for_async[block_height], peer_stub = peer_stubs[peer_index]
-            util.logger.debug(f"peer_index : {peer_index}, target : {self.peer_target_for_async[block_height]}")
+            self._peer_target_for_async[block_height], peer_stub = peer_stubs[peer_index]
+            util.logger.debug(f"peer_index : {peer_index}, target : {self._peer_target_for_async[block_height]}")
             try:
-                result_future = self.request_result_for_async.get(block_height, None)
+                result_future = self._request_result_for_async.get(block_height, None)
                 if result_future is None:
                     result_future = asyncio.get_event_loop().create_future()
-                    self.request_result_for_async[block_height] = result_future
+                    self._request_result_for_async[block_height] = result_future
 
                 # FIXME : block_request to asyncio_loop.run_in_executor
                 request_result = self.__block_request_by_voter(block_height, peer_stub)
@@ -668,15 +668,15 @@ class BlockManager:
                 break
 
             sync_height = my_height + 1
-            result_future = self.request_result_for_async.get(sync_height, None)
+            result_future = self._request_result_for_async.get(sync_height, None)
             if result_future is None:
                 result_future = asyncio.get_event_loop().create_future()
-                self.request_result_for_async[sync_height] = result_future
+                self._request_result_for_async[sync_height] = result_future
 
             block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = (
                 await result_future
             )
-            del self.request_result_for_async[sync_height]
+            del self._request_result_for_async[sync_height]
 
             if response_code == message_code.Response.success:
                 util.logger.debug(f"try add block height: {block.header.height}")
@@ -719,13 +719,13 @@ class BlockManager:
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
                     else:
-                        if sync_height in self.peer_target_for_async:
-                            peer_target = self.peer_target_for_async[sync_height]
+                        if sync_height in self._peer_target_for_async:
+                            peer_target = self._peer_target_for_async[sync_height]
                             self.__block_height_sync_bad_targets[peer_target] = max_block_height
                         raise
                 else:
-                    if sync_height in self.peer_target_for_async:
-                        del self.peer_target_for_async[sync_height]
+                    if sync_height in self._peer_target_for_async:
+                        del self._peer_target_for_async[sync_height]
                     my_height = sync_height
             else:
                 if len(peer_stubs) == 1:
