@@ -22,6 +22,12 @@ else:
     sys.path.append(PATH_PROTO_BUFFERS_TEST)
 
 
+# RECOVERY MODE
+RECOVERY_MODE: bool = False
+RECOVERY_CHECK_INTERVAL: int = 5   # sec
+RELEASE_RECOVERY_BLOCK_COUNT: int = 5
+
+
 #############
 # LOGGING ###
 #############
@@ -324,7 +330,7 @@ CHANNEL_OPTION = {
 }
 
 PRIVATE_PATH = ""
-PRIVATE_PASSWORD = None
+PRIVATE_PASSWORD = ""
 
 # KMS
 KMS_AGENT_PASSWORD = ""

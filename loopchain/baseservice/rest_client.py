@@ -47,10 +47,13 @@ class RestMethod(Enum):
 
 
 class RestClient:
-    def __init__(self, channel=None):
-        self._target: str = None
+    def __init__(self, channel=None, target=None):
+        self._target: Optional[str] = None
         self._latest_targets: Iterator[Dict] = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
+
+        if target:
+            self._set_target(target)
 
     async def init(self, endpoints: List[str]):
         self._latest_targets = await self._select_fastest_endpoints(endpoints)

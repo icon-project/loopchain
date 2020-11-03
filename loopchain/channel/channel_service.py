@@ -249,7 +249,23 @@ class ChannelService:
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         self.__ready_to_height_sync()
-        self.__state_machine.block_sync()
+
+        if conf.RECOVERY_MODE:
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                self.state_machine.recovery()
+                return
+
+            conf.RECOVERY_MODE = False
+
+        self.state_machine.block_sync()
+
+    async def recovery(self):
+        from loopchain.tools.recovery import Recovery
+        recovery = Recovery(ChannelProperty().name, self.block_manager.blockchain.block_height)
+        recovery.set_target_list(self.block_manager.get_target_list())
+        await recovery.fill_quorum()
+
+        self.state_machine.recovery_block_sync()
 
     async def subscribe_network(self):
         await self._select_node_type()

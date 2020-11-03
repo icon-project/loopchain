@@ -1,11 +1,12 @@
 """A management class for blockchain."""
 
 import json
+import re
 import threading
 import traceback
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Any
 
 from pkg_resources import parse_version
 
@@ -13,6 +14,7 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
+from loopchain.baseservice.rest_client import RestClient
 from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception,
                                   NoConfirmInfo,
                                   BlockHeightMismatch, RoundMismatch)
@@ -140,11 +142,27 @@ class BlockManager:
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+        send_kwargs = {"block": block_dumped, "round_": round_, "channel": self.__channel_name}
+
+        release_recovery_mode = False
+        if conf.RECOVERY_MODE:
+            from loopchain.tools.recovery import Recovery
+            if self.blockchain.block_height <= Recovery.release_block_height():
+                util.logger.info(f"broadcast block({block_.header.height}) from recovery node")
+                send_kwargs.update({"from_recovery": True})
+
+            if self.blockchain.block_height >= Recovery.release_block_height():
+                release_recovery_mode = True
+
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(**send_kwargs),
             reps_hash=target_reps_hash
         )
+
+        if release_recovery_mode:
+            conf.RECOVERY_MODE = False
+            util.logger.info(f"recovery mode released at {self.blockchain.block_height}")
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
@@ -508,23 +526,6 @@ class BlockManager:
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __confirm_prev_block_by_sync(self, block_):
-        prev_block = self.blockchain.last_unconfirmed_block
-        confirm_info = block_.body.confirm_prev_block
-
-        util.logger.debug(f"confirm_prev_block_by_sync :: height({prev_block.header.height})")
-
-        block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
-        block_verifier.invoke_func = self.blockchain.get_invoke_func(prev_block.header.height)
-
-        reps_getter = self.blockchain.find_preps_addresses_by_roothash
-        block_verifier.verify_loosely(prev_block,
-                                      self.blockchain.last_block,
-                                      self.blockchain,
-                                      reps_getter=reps_getter)
-        return self.blockchain.add_block(prev_block, confirm_info)
-
     def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
         """Extracted func from __block_height_sync.
         It has block request loop with peer_stubs for block height sync.
@@ -643,7 +644,7 @@ class BlockManager:
     def __block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
-            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
+            max_height, unconfirmed_block_height, peer_stubs = self._get_peer_stub_list()
 
             if self.blockchain.last_unconfirmed_block is not None:
                 self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
@@ -703,7 +704,7 @@ class BlockManager:
         else:
             return block.header.next_leader.hex_hx()
 
-    def __get_peer_stub_list(self) -> Tuple[int, int, List[Tuple]]:
+    def _get_peer_stub_list(self) -> Tuple[int, int, List[Tuple[str, Any]]]:
         """It updates peer list for block manager refer to peer list on the loopchain network.
         This peer list is not same to the peer list of the loopchain network.
 
@@ -715,8 +716,9 @@ class BlockManager:
         unconfirmed_block_height = -1
         peer_stubs = []     # peer stub list for block height synchronization
 
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rs_client = ObjectManager().channel_service.rs_client
+        rs_client: RestClient = self.__channel_service.rs_client
+
+        if not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
             status_response = rs_client.call(RestMethod.Status)
             max_height = status_response['block_height']
             peer_stubs.append((rs_client.target, rs_client))
@@ -729,36 +731,50 @@ class BlockManager:
         peer_target = ChannelProperty().peer_target
         my_height = self.blockchain.block_height
 
-        if self.blockchain.last_block:
-            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
-        else:
-            reps_hash = ChannelProperty().crep_root_hash
-        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
-        target_list = list(rep_targets.values())
-        for target in target_list:
-            if target == peer_target:
+        port_pattern = re.compile(r":([0-9]{2,5})$")
+
+        def _converter(target) -> str:
+            port = int(port_pattern.search(target).group(1))
+            new_port = f":{port + conf.PORT_DIFF_REST_SERVICE_CONTAINER}"
+            return port_pattern.sub(new_port, target)
+
+        endpoints = {target: _converter(target) for target in self.get_target_list()}
+
+        for grpc_endpoint, rest_endpoint in endpoints.items():
+            if grpc_endpoint == peer_target:
                 continue
-            if target in self.__block_height_sync_bad_targets:
+            if grpc_endpoint in self.__block_height_sync_bad_targets:
                 continue
-            util.logger.debug(f"try to target({target})")
-            channel = GRPCHelper().create_client_channel(target)
+            util.logger.debug(f"try to grpc_endpoint({grpc_endpoint}), rest_endpoint : {rest_endpoint}")
+            channel = GRPCHelper().create_client_channel(grpc_endpoint)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
-                response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                    request='block_sync',
-                    channel=self.__channel_name,
-                ), conf.GRPC_TIMEOUT_SHORT)
-                target_block_height = max(response.block_height, response.unconfirmed_block_height)
+                client = RestClient(self.channel_name, rest_endpoint)
+                response: dict = client.call(RestMethod.Status)
+                target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
+
+                recovery = response.get("recovery", {})
+                # only recovery_mode node should be included in block sync when running by recovery_mode
+                if conf.RECOVERY_MODE and not recovery.get("mode", False):
+                    continue
 
                 if target_block_height > my_height:
-                    peer_stubs.append((target, stub))
+                    peer_stubs.append((grpc_endpoint, stub))
                     max_height = max(max_height, target_block_height)
-                    unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
+                    unconfirmed_block_height = max(unconfirmed_block_height, response["unconfirmed_block_height"])
 
             except Exception as e:
                 util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
 
         return max_height, unconfirmed_block_height, peer_stubs
+
+    def get_target_list(self) -> List[str]:
+        if self.blockchain.last_block:
+            reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
+        else:
+            reps_hash = ChannelProperty().crep_root_hash
+        rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
+        return list(rep_targets.values())
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
@@ -989,6 +1005,7 @@ class BlockManager:
             f"height({unconfirmed_block.header.height}) "
             f"round({round_}) "
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+        util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)

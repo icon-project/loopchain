@@ -569,6 +569,7 @@ class ChannelInnerTask:
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
+        from loopchain.tools.recovery import Recovery
         status_data["nid"] = ChannelProperty().nid
         status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
@@ -590,6 +591,10 @@ class ChannelInnerTask:
         status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
+        status_data["recovery"] = {
+            "mode": conf.RECOVERY_MODE,
+            "highest_block_height": Recovery.get_highest_block_height()
+        }
         status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data
@@ -617,7 +622,7 @@ class ChannelInnerTask:
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_dumped, round_: int) -> None:
+    async def announce_unconfirmed_block(self, block_dumped, round_: int, from_recovery: bool = False) -> None:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
@@ -632,6 +637,10 @@ class ChannelInnerTask:
             f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
 
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore unconfirmed block from not recovery node in Recovery Mode")
+            return
+
         if self._channel_service.state_machine.state not in \
                 ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):
             util.logger.debug(f"Can't add unconfirmed block in state({self._channel_service.state_machine.state}).")
@@ -645,18 +654,18 @@ class ChannelInnerTask:
         try:
             self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid as e:
-            util.logger.warning(f"ConfirmInfoInvalid {e}")
+            util.logger.warning(f"{e!r}")
         except ConfirmInfoInvalidNeedBlockSync as e:
-            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
+            util.logger.warning(f"{e!r}")
             if self._channel_service.state_machine.state == "BlockGenerate" and (
                     self._block_manager.consensus_algorithm and self._block_manager.consensus_algorithm.is_running):
                 self._block_manager.consensus_algorithm.stop()
             else:
                 self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
-            util.logger.warning(f"ConfirmInfoInvalidAddedBlock {e}")
+            util.logger.warning(f"{e!r}")
         except NotReadyToConfirmInfo as e:
-            util.logger.warning(f"NotReadyToConfirmInfo {e}")
+            util.logger.warning(f"{e!r}")
         else:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 

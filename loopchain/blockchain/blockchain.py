@@ -3,7 +3,6 @@
 import json
 import pickle
 import threading
-import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -11,6 +10,7 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -608,10 +608,19 @@ class BlockChain:
             self.__block_manager.new_epoch()
 
             logging.info(
-                f"ADD BLOCK HEIGHT : {block.header.height} , "
-                f"HASH : {block.header.hash.hex()} , "
+                f"ADD BLOCK HEIGHT : {block.header.height}, "
+                f"VERSION : {block.header.version}, "
+                f"HASH : {block.header.hash.hex()}, "
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
+
+            if conf.RECOVERY_MODE:
+                from loopchain.tools.recovery import Recovery
+                utils.logger.debug(f"release recovery_mode block height : {Recovery.release_block_height()}")
+                if (channel_service.state_machine.state in ('Vote', 'BlockSync')
+                        and block.header.height >= Recovery.release_block_height()):
+                    conf.RECOVERY_MODE = False
+                    logging.info(f"recovery mode released at {block.header.height}")
 
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
@@ -940,6 +949,21 @@ class BlockChain:
 
         return results
 
+    def _reset_last_unconfirmed_block(self, current_block):
+        if current_block.header.complained and self.__block_manager.epoch.complained_result:
+            utils.logger.debug("reset last_unconfirmed_block by complain block")
+            self.last_unconfirmed_block = current_block
+        elif self.last_block.header.prep_changed:
+            utils.logger.debug("reset last_unconfirmed_block by prep changed")
+            self.last_unconfirmed_block = current_block
+        elif conf.RECOVERY_MODE and self.last_unconfirmed_block is None:
+            utils.logger.debug("reset last_unconfirmed_block by recovery_mode")
+            self.last_unconfirmed_block = current_block
+        else:
+            block_header = self.last_unconfirmed_block.header if self.last_unconfirmed_block else None
+            utils.logger.debug(f"keep last_unconfirmed_block: {block_header}, "
+                               f"current_block: {current_block.header}")
+
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
@@ -964,10 +988,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if ((current_block.header.complained and self.__block_manager.epoch.complained_result)
-                            or self.last_block.header.prep_changed):
-                        utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
-                        self.last_unconfirmed_block = current_block
+                    self._reset_last_unconfirmed_block(current_block)
                     return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
