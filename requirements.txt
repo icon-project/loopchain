@@ -7,7 +7,7 @@ jsonrpcclient[aiohttp]~=3.3.5
 jsonrpcserver~=4.1.2
 plyvel~=1.2.0
 requests~=2.23.0
-cryptography~=2.8.0
+cryptography~=3.2.1
 coincurve~=13.0.0
 setproctitle~=1.1.10
 transitions==0.6.8
