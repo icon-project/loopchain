@@ -378,6 +378,8 @@ class BlockChain:
     def __find_block_by_key(self, key):
         try:
             block_bytes = self._blockchain_store.get(key)
+            if block_bytes == b'':
+                raise PrunedHashDataError()
             block_dumped = json.loads(block_bytes)
             block_height = self.__block_versioner.get_height(block_dumped)
             block_version = self.__block_versioner.get_version(block_height)
@@ -894,6 +896,8 @@ class BlockChain:
         try:
             tx_info = self._blockchain_store.get(
                 tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
+            if tx_info == b'':
+                raise PrunedHashDataError()
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:

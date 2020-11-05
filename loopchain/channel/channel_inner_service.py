@@ -620,6 +620,10 @@ class ChannelInnerTask:
                 logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
+            except PrunedHashDataError as e:
+                logging.debug(f"Prune Hash Data ({tx_hash}), {e}")
+                response_code = message_code.Response.pruned_hash_data
+                return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def announce_unconfirmed_block(self, block_dumped, round_: int, from_recovery: bool = False) -> None:
@@ -742,6 +746,10 @@ class ChannelInnerTask:
                     response_code = message_code.Response.fail_tx_not_invoked
 
             return response_code, invoke_result_str
+        except PrunedHashDataError as e:
+            logging.debug(f"Prune Hash Data ({tx_hash}), {e}")
+            response_code = message_code.Response.pruned_hash_data
+            return response_code, None
         except BaseException as e:
             logging.error(f"get invoke result error : {e}")
 
@@ -807,23 +815,25 @@ class ChannelInnerTask:
         block = None
         confirm_info = b''
         fail_response_code = None
-        if block_hash:
-            block = self._blockchain.find_block_by_hash(block_hash)
-            if block is None:
+        try:
+            if block_hash:
+                block = self._blockchain.find_block_by_hash(block_hash)
+                if block is None:
+                    fail_response_code = message_code.Response.fail_wrong_block_hash
+                    confirm_info = bytes()
+                else:
+                    confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
+            elif block_height != -1:
+                block = self._blockchain.find_block_by_height(block_height)
+                if block is None:
+                    fail_response_code = message_code.Response.fail_wrong_block_height
+                    confirm_info = bytes()
+                else:
+                    confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
+            else:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
-                confirm_info = bytes()
-            else:
-                confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
-        elif block_height != -1:
-            block = self._blockchain.find_block_by_height(block_height)
-            if block is None:
-                fail_response_code = message_code.Response.fail_wrong_block_height
-                confirm_info = bytes()
-            else:
-                confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
-        else:
-            fail_response_code = message_code.Response.fail_wrong_block_hash
-
+        except PrunedHashDataError as e:
+            fail_response_code = message_code.Response.pruned_hash_data
         return block, block_hash, bytes(confirm_info), fail_response_code
 
     @message_queue_task

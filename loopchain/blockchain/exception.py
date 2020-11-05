@@ -270,3 +270,7 @@ class TransactionInvalidNidError(TransactionInvalidError):
         return \
             f"{super().__str__()}" \
             f"expected_nid: {self.expected_nid}"
+
+
+class PrunedHashDataError(MessageCodeError):
+    message_code = message_code.Response.pruned_hash_data
