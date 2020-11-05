@@ -400,22 +400,24 @@ class BlockManager:
     async def _citizen_request(self, block_height: int, max_height: int):
         request_coros: OrderedDict[int, Coroutine[int, int, RequestResult]] = OrderedDict()
         request_successes: Set[int] = set()
+        request_height = block_height
         retry_time = 0
 
-        while max_height > block_height or request_coros:
-            request_height = block_height + 1
-            if len(self._request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
-                request_coros[request_height] = self.__block_request_by_citizen(request_height, max_height)
-                block_height = request_height
-            else:
-                await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAIT)
-                continue
+        while True:
+            if max_height > request_height:
+                request_height += 1
+                # FIXME: Does needed dictionary size limit?
+                if len(self._request_result_for_async) < conf.CITIZEN_ASYNC_RESULT_MAX_SIZE:
+                    request_coros[request_height] = self.__block_request_by_citizen(request_height, max_height)
+                else:
+                    await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAIT)
+                    continue
 
-            if request_height == max_height or len(request_coros) == conf.CITIZEN_REQUEST_SIZE_CONCURRENTLY:
+            if max_height <= request_height or len(request_coros) == conf.CITIZEN_REQUEST_SIZE_CONCURRENTLY:
                 util.logger.debug(f"request heights: {request_coros.keys()}, size: {len(request_coros)}")
                 for done_future in asyncio.as_completed(request_coros.values()):
                     try:
-                        request_result = await done_future
+                        request_result: RequestResult = await done_future
                     except Exception as e:
                         util.logging.exception(f"sync request failed caused by {e!r}")
                         response_code = message_code.Response.fail
@@ -438,7 +440,6 @@ class BlockManager:
 
                     if response_code != message_code.Response.success:
                         retry_time += 1
-                        await asyncio.sleep(conf.CITIZEN_ASYNC_REQUEST_WAIT)
 
                 request_failed = set(request_coros.keys()) - request_successes
                 if retry_time > conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
@@ -449,6 +450,9 @@ class BlockManager:
                 # retry request at failed heights
                 for retry_height in request_failed:
                     request_coros[retry_height] = self.__block_request_by_citizen(retry_height, max_height)
+
+            if request_height >= max_height and not request_coros:
+                break
 
     async def _block_request(self, peer_stubs: List[Tuple], block_height: int, max_height: int):
         """request block by gRPC
@@ -661,7 +665,7 @@ class BlockManager:
         :param max_height:
         :return: last_block_height, unconfirmed_block_height, max_height
         """
-        sync_thread_pool = ThreadPoolExecutor(1)
+        asyncio.get_event_loop().set_default_executor(ThreadPoolExecutor(1))
 
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
@@ -697,7 +701,7 @@ class BlockManager:
                     else:
                         # TODO : If possible, change add_block_by_sync to coroutine
                         await asyncio.get_event_loop().run_in_executor(
-                            sync_thread_pool,
+                            None,
                             self.__add_block_by_sync,
                             block,
                             confirm_info
@@ -710,11 +714,9 @@ class BlockManager:
                         self.__rebuild_nid(genesis_block)
                 except KeyError as e:
                     util.logger.exception(f"during block height sync: {e!r}")
-                    sync_thread_pool.shutdown(wait=False)
                     raise
                 except Exception as e:
                     util.logger.warning(f"fail block height sync: {e!r}")
-                    sync_thread_pool.shutdown(wait=False)
 
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
@@ -729,10 +731,7 @@ class BlockManager:
                     my_height = sync_height
             else:
                 if len(peer_stubs) == 1:
-                    sync_thread_pool.shutdown(wait=False)
                     raise ConnectionError
-
-        sync_thread_pool.shutdown(wait=False)
 
         return (self.blockchain.block_height,
                 unconfirmed_block_height,
