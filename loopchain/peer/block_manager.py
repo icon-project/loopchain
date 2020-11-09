@@ -415,7 +415,7 @@ class BlockManager:
         if response.response_code == message_code.Response.fail_no_confirm_info:
             raise NoConfirmInfo(f"The peer has not confirm_info of the block by height({block_height}).")
         elif response.response_code in (message_code.Response.fail_not_enough_data,
-                                        message_code.Response.fail_wrong_block_hash):
+                                        message_code.Response.fail_wrong_block_height):
             raise exception.BlockError(f"Received block is invalid: "
                                        f"response_message={message_code.get_response_msg(response.response_code)}")
         else:
