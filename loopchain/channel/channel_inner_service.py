@@ -621,8 +621,8 @@ class ChannelInnerTask:
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
             except PrunedHashDataError as e:
-                logging.warning(f"tx_hash({tx_hash}), {e!r}")
-                response_code = message_code.Response.pruned_hash_data
+                logging.warning(f"{e!r}")
+                response_code = e.message_code
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
@@ -747,8 +747,8 @@ class ChannelInnerTask:
 
             return response_code, invoke_result_str
         except PrunedHashDataError as e:
-            logging.warning(f"tx_hash({tx_hash}), {e!r}")
-            response_code = message_code.Response.pruned_hash_data
+            logging.warning(f"{e!r}")
+            response_code = e.message_code
             return response_code, None
         except BaseException as e:
             logging.error(f"get invoke result error : {e}")
@@ -833,8 +833,8 @@ class ChannelInnerTask:
             else:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
         except PrunedHashDataError as e:
-            logging.warning(f"block_hash({block_hash}), {e!r}")
-            fail_response_code = message_code.Response.pruned_hash_data
+            logging.warning(f"{e!r}")
+            fail_response_code = e.message_code
         return block, block_hash, bytes(confirm_info), fail_response_code
 
     @message_queue_task
