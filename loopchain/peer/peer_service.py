@@ -27,7 +27,7 @@ import grpc
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import CommonSubprocess, ObjectManager, RestService
+from loopchain.baseservice import CommonSubprocess, RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2_grpc
@@ -61,8 +61,6 @@ class PeerService:
 
         self._channel_services = {}
         self._rest_service = None
-
-        ObjectManager().peer_service = self
 
     @property
     def inner_service(self):
