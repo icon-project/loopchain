@@ -270,3 +270,15 @@ class TransactionInvalidNidError(TransactionInvalidError):
         return \
             f"{super().__str__()}" \
             f"expected_nid: {self.expected_nid}"
+
+
+class PrunedHashDataError(MessageCodeError):
+    message_code = message_code.Response.pruned_hash_data
+
+    def __init__(self, prefix: str, _hash: bytes, message=""):
+        super().__init__(message)
+        self._prefix: str = prefix
+        self._hash = _hash
+
+    def __repr__(self):
+        return f"Pruned {self._prefix} ({self._hash}), code: {self.message_code}"

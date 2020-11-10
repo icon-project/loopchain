@@ -40,6 +40,8 @@ class Response:
     fail_score_invoke = -200
     fail_score_invoke_result = -201
 
+    pruned_hash_data = -300
+
     fail_no_peer_info_in_rs = -800
     timeout_exceed = -900
     not_treat_message_code = -999
@@ -150,7 +152,10 @@ responseCodeMap = {
         (Response.timeout_exceed, "timeout exceed"),
 
     Response.fail_illegal_params:
-        (Response.fail_illegal_params, "fail_illegal_params")
+        (Response.fail_illegal_params, "fail_illegal_params"),
+
+    Response.pruned_hash_data:
+        (Response.pruned_hash_data, "Pruned Hash Data")
 }
 
 
