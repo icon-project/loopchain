@@ -27,4 +27,3 @@ class ObjectManager(metaclass=SingletonMetaClass):
 
     peer_service: 'PeerService' = None
     channel_service: 'ChannelService' = None
-    rest_proxy_service = None

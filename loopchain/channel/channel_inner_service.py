@@ -630,13 +630,11 @@ class ChannelInnerTask:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
-            traceback.print_exc()
-            logging.error(f"announce_unconfirmed_block: {e}")
+            logging.exception(f"announce_unconfirmed_block: {e}")
             return
 
         util.logger.debug(
-            f"announce_unconfirmed_block \n"
-            f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
+            f"peer_id({unconfirmed_block.header.peer_id.hex_hx()})\n"
             f"height({unconfirmed_block.header.height})\n"
             f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
@@ -674,12 +672,10 @@ class ChannelInnerTask:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task
-    def block_sync(self, block_hash, block_height):
+    def block_sync(self, block_height):
         response_code = None
         block: Block = None
-        if block_hash != "":
-            block = self._blockchain.find_block_by_hash(block_hash)
-        elif block_height != -1:
+        if block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
         else:
             response_code = message_code.Response.fail_not_enough_data
@@ -691,7 +687,7 @@ class ChannelInnerTask:
 
         if block is None:
             if response_code is None:
-                response_code = message_code.Response.fail_wrong_block_hash
+                response_code = message_code.Response.fail_wrong_block_height
             return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
