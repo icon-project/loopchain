@@ -228,10 +228,6 @@ class BlockChain:
     def tx_versioner(self):
         return self.__tx_versioner
 
-    @property
-    def blockchain_store(self) -> KeyValueStore:
-        return self._blockchain_store
-
     def close_blockchain_store(self):
         logging.info(f"close_blockchain_store() : {self._blockchain_store}")
         if self._blockchain_store:

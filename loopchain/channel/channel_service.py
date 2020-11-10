@@ -489,20 +489,6 @@ class ChannelService:
         """
         self.__block_manager.set_peer_type(peer_type)
 
-    def save_peer_manager(self, peer_manager):
-        """Save peer_list to leveldb
-
-        :param peer_manager:
-        """
-        level_db_key_name = str.encode(conf.LEVEL_DB_KEY_FOR_PEER_LIST)
-
-        try:
-            dump = peer_manager.dump()
-            key_value_store = self.__block_manager.blockchain.blockchain_store
-            key_value_store.put(level_db_key_name, dump)
-        except AttributeError as e:
-            logging.warning("Fail Save Peer_list: " + str(e))
-
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
         leader_id = self.__block_manager.get_next_leader()
