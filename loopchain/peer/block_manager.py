@@ -1,12 +1,13 @@
 """A management class for blockchain."""
 
+import asyncio
 import json
 import re
 import threading
 import traceback
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast, Any
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, Union, Set, Coroutine, Any, cast
 
 from pkg_resources import parse_version
 
@@ -15,16 +16,14 @@ from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
 from loopchain.baseservice.rest_client import RestClient
-from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception,
-                                  NoConfirmInfo,
+from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception, NoConfirmInfo,
                                   BlockHeightMismatch, RoundMismatch)
 from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
-from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
-                                            NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
+from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, NotInReps,
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
 from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, ScoreInvokeError
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -41,6 +40,8 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+
+RequestResult = Tuple[Block, int, int, Union[List, bytes], int]
 
 
 class BlockManager:
@@ -71,6 +72,10 @@ class BlockManager:
         # old_block_hashes[height][new_block_hash] = old_block_hash
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
+
+        self._sync_request_result: Dict[int, asyncio.Future] = dict()
+        self._sync_peer_target: Dict[int, str] = dict()
+        self._request_limit_event: Optional[asyncio.Event] = None
 
     @property
     def channel_name(self):
@@ -386,27 +391,129 @@ class BlockManager:
 
             if need_to_sync:
                 self.__channel_service.stop_leader_complain_timer()
-                self.__block_height_future = self.__block_height_thread_pool.submit(self.__block_height_sync)
+                self.__block_height_future = self.__block_height_thread_pool.submit(self._block_height_sync)
                 self.__block_height_future.add_done_callback(_print_exception)
             else:
                 util.logger.warning('Tried block_height_sync. But failed. The thread is already running')
 
             return need_to_sync, self.__block_height_future
 
-    def __block_request(self, peer_stub, block_height):
-        """request block by gRPC or REST
+    async def _citizen_request(self, block_height: int, max_height: int):
+        request_coros: OrderedDict[int, Coroutine[int, int, RequestResult]] = OrderedDict()
+        request_successes: Set[int] = set()
+        request_height = block_height
+        retry_time = 0
 
-        :param peer_stub:
+        while True:
+            if max_height > request_height:
+                request_height += 1
+                request_coros[request_height] = self.__block_request_by_citizen(request_height, max_height)
+
+            if max_height <= request_height or len(request_coros) == conf.CITIZEN_REQUEST_SIZE_CONCURRENTLY:
+                util.logger.debug(f"request heights: {request_coros.keys()}, size: {len(request_coros)}")
+                for done_future in asyncio.as_completed(request_coros.values()):
+                    try:
+                        request_result: RequestResult = await done_future
+                    except Exception as e:
+                        util.logging.exception(f"sync request failed caused by {e!r}")
+                        response_code = message_code.Response.fail
+                    else:
+                        _block, _max_height, _unconfirmed_block_height, _, response_code = request_result
+                        util.logger.debug(f"block_height({_block.header.height}) received")
+
+                        result_future: asyncio.Future = self._sync_request_result.get(_block.header.height, None)
+                        if result_future is None:
+                            result_future = asyncio.get_event_loop().create_future()
+                            self._sync_request_result[_block.header.height] = result_future
+                        result_future.set_result(request_result)
+
+                        max_block_height = max(_max_height, _unconfirmed_block_height)
+                        if max_height < max_block_height:
+                            max_height = max_block_height
+                            util.logger.debug(f"new max_height : {max_height}")
+
+                        request_successes.add(_block.header.height)
+
+                    if response_code != message_code.Response.success:
+                        retry_time += 1
+
+                request_failed = set(request_coros.keys()) - request_successes
+                if retry_time > conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
+                    util.exit_and_msg(f"These heights({request_failed}) can't get Block Information.")
+
+                request_coros.clear()
+
+                # retry request at failed heights
+                for retry_height in request_failed:
+                    request_coros[retry_height] = self.__block_request_by_citizen(retry_height, max_height)
+
+                if len(self._sync_request_result) >= conf.SYNC_REQUEST_RESULT_MAX_SIZE:
+                    util.logger.debug(f"waiting on sync request size: {len(self._sync_request_result)}")
+                    self._request_limit_event.clear()
+                    await self._request_limit_event.wait()
+
+            if request_height >= max_height and not request_coros:
+                break
+
+    async def _block_request(self, peer_stubs: List[Tuple], block_height: int, max_height: int):
+        """request block by gRPC
+
+        :param peer_stubs:
         :param block_height:
-        :return block, max_block_height, confirm_info, response_code
+        :return
         """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            return self.__block_request_by_voter(block_height, peer_stub)
-        else:
-            # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height)
 
-    def __block_request_by_voter(self, block_height, peer_stub):
+        peer_index = 0
+        origin_block_height = block_height
+
+        while max_height > block_height:
+            block_height += 1
+            self._sync_peer_target[block_height], peer_stub = peer_stubs[peer_index]
+            try:
+                result_future = self._sync_request_result.get(block_height, None)
+                if result_future is None:
+                    result_future = asyncio.get_event_loop().create_future()
+                    self._sync_request_result[block_height] = result_future
+
+                # FIXME : block_request to asyncio_loop.run_in_executor
+                request_result = self.__block_request_by_voter(block_height, peer_stub)
+                result_future.set_result(request_result)
+
+                _, _max_height, _unconfirmed_block_height, _, response_code = request_result
+                max_block_height = max(_max_height, _unconfirmed_block_height)
+                if max_height < max_block_height:
+                    max_height = max_block_height
+                    util.logger.debug(f"new max_height : {max_height}")
+
+            except NoConfirmInfo as e:
+                util.logger.warning(f"{e!r}")
+                response_code = message_code.Response.fail_no_confirm_info
+            except exception.BlockError:
+                util.exit_and_msg("Block Error Clear all block and restart peer.")
+                raise
+            except Exception as e:
+                util.logger.exception(f"There is a bad peer: {e!r}")
+                response_code = message_code.Response.fail
+
+            if response_code == message_code.Response.success:
+                if (len(peer_stubs) > 1 and
+                        (block_height - origin_block_height) % conf.SYNC_BLOCK_COUNT_PER_NODE == 0):
+                    peer_index = (peer_index + 1) % len(peer_stubs)
+
+                    if len(self._sync_request_result) < conf.SYNC_REQUEST_RESULT_MAX_SIZE:
+                        util.logger.debug(f"suspend on sync request size: {len(self._sync_request_result)}")
+                        await asyncio.sleep(0)
+                    else:
+                        util.logger.debug(f"waiting event on sync request size: {len(self._sync_request_result)}")
+                        self._request_limit_event.clear()
+                        await self._request_limit_event.wait()
+            else:
+                if len(peer_stubs) == 1:
+                    raise ConnectionError
+
+                peer_index = (peer_index + 1) % len(peer_stubs)
+
+    def __block_request_by_voter(self, block_height, peer_stub) -> RequestResult:
         response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
             block_height=block_height,
             channel=self.__channel_name
@@ -435,17 +542,18 @@ class BlockManager:
 
         return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
 
-    def __block_request_by_citizen(self, block_height):
+    async def __block_request_by_citizen(self, block_height: int, max_height: int) -> RequestResult:
         rs_client = ObjectManager().channel_service.rs_client
-        get_block_result = rs_client.call(
+        get_block_result = await rs_client.call_async(
             RestMethod.GetBlockByHeight,
             RestMethod.GetBlockByHeight.value.params(height=str(block_height))
         )
-        last_block = rs_client.call(RestMethod.GetLastBlock)
-        if not last_block:
-            raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
 
-        max_height = self.blockchain.block_versioner.get_height(last_block)
+        if max_height == block_height:
+            last_block_height = self._get_last_block_height(rs_client)
+            if last_block_height > max_height:
+                max_height = last_block_height
+
         block_version = self.blockchain.block_versioner.get_version(block_height)
         block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
         block = block_serializer.deserialize(get_block_result['block'])
@@ -457,6 +565,21 @@ class BlockManager:
         except json.JSONDecodeError:
             votes = votes_dumped
         return block, max_height, -1, votes, message_code.Response.success
+
+    def _get_last_block_height(self, rs_client):
+        retry_count = 0
+
+        max_height = -1
+        while retry_count < conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
+            last_block = rs_client.call(RestMethod.GetLastBlock)
+            if not last_block:
+                util.logging.warning("The Radiostation may not be ready. It will retry after a while.")
+                retry_count += 1
+            else:
+                max_height = self.blockchain.block_versioner.get_height(last_block)
+                break
+
+        return max_height
 
     def __start_block_height_sync_timer(self, is_run_at_start=False):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
@@ -537,41 +660,43 @@ class BlockManager:
             votes.verify()
         return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
 
-    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
-        """Extracted func from __block_height_sync.
-        It has block request loop with peer_stubs for block height sync.
+    async def _block_sync(self, peer_stubs: List, my_height: int, unconfirmed_block_height: int, max_height: int):
+        """It has block request loop with peer_stubs for block height sync.
 
         :param peer_stubs:
         :param my_height:
         :param unconfirmed_block_height:
         :param max_height:
-        :return: my_height, max_height
+        :return: last_block_height, unconfirmed_block_height, max_height
         """
-        peer_index = 0
+        asyncio.get_event_loop().set_default_executor(ThreadPoolExecutor(1))
 
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
 
-            peer_target, peer_stub = peer_stubs[peer_index]
-            util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
-            try:
-                block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    self.__block_request(peer_stub, my_height + 1)
-            except NoConfirmInfo as e:
-                util.logger.warning(f"{e}")
-                response_code = message_code.Response.fail_no_confirm_info
-            except Exception as e:
-                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
-                traceback.print_exc()
-                response_code = message_code.Response.fail
+            sync_height = my_height + 1
+            result_future = self._sync_request_result.get(sync_height, None)
+            if result_future is None:
+                result_future = asyncio.get_event_loop().create_future()
+                self._sync_request_result[sync_height] = result_future
+
+            block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = (
+                await result_future
+            )
+            del self._sync_request_result[sync_height]
+
+            if (not self._request_limit_event.is_set() and
+                    (len(self._sync_request_result) / conf.SYNC_REQUEST_RESULT_MAX_SIZE) <= 0.8):
+                self._request_limit_event.set()
+                util.logger.debug(f"request limit event set() at {len(self._sync_request_result)}")
 
             if response_code == message_code.Response.success:
                 util.logger.debug(f"try add block height: {block.header.height}")
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
                 if max_block_height > max_height:
-                    util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
+                    util.logger.debug(f"set max_height :{max_height} -> {max_block_height}")
                     max_height = max_block_height
                     if current_unconfirmed_block_height == max_block_height:
                         unconfirmed_block_height = current_unconfirmed_block_height
@@ -583,38 +708,83 @@ class BlockManager:
                             block, self.blockchain.find_preps_addresses_by_header(block.header))
                         self.blockchain.last_unconfirmed_block = block
                     else:
-                        self.__add_block_by_sync(block, confirm_info)
+                        # TODO : If possible, change add_block_by_sync to coroutine
+                        await asyncio.get_event_loop().run_in_executor(
+                            None,
+                            self.__add_block_by_sync,
+                            block,
+                            confirm_info
+                        )
 
                     if block.header.height == 0:
                         self.__rebuild_nid(block)
                     elif self.blockchain.find_nid() is None:
                         genesis_block = self.blockchain.find_block_by_height(0)
                         self.__rebuild_nid(genesis_block)
-
                 except KeyError as e:
-                    util.logger.error(f"{type(e)} during block height sync: {e, e.__traceback__}")
-                    raise
-                except exception.BlockError:
-                    util.exit_and_msg("Block Error Clear all block and restart peer.")
+                    util.logger.exception(f"during block height sync: {e!r}")
                     raise
                 except Exception as e:
-                    util.logger.warning(f"fail block height sync: {type(e), e}")
+                    util.logger.warning(f"fail block height sync: {e!r}")
 
                     if self.blockchain.last_block.header.hash != block.header.prev_hash:
                         raise exception.PreviousBlockMismatch
                     else:
-                        self.__block_height_sync_bad_targets[peer_target] = max_block_height
+                        if sync_height in self._sync_peer_target:
+                            peer_target = self._sync_peer_target[sync_height]
+                            self.__block_height_sync_bad_targets[peer_target] = max_block_height
                         raise
                 else:
-                    peer_index = (peer_index + 1) % len(peer_stubs)
-                    my_height += 1
+                    if sync_height in self._sync_peer_target:
+                        del self._sync_peer_target[sync_height]
+                    my_height = sync_height
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
 
-                peer_index = (peer_index + 1) % len(peer_stubs)
+        return (self.blockchain.block_height,
+                unconfirmed_block_height,
+                max_height)
 
-        return my_height, max_height
+    def _block_request_to_peers_in_sync(
+            self,
+            peer_stubs: List[Tuple],
+            my_height: int,
+            unconfirmed_block_height: int,
+            max_height: int
+    ):
+        """Extracted func from __block_height_sync.
+        It has block request loop with peer_stubs for block height sync.
+
+        :param peer_stubs:
+        :param my_height:
+        :param unconfirmed_block_height:
+        :param max_height:
+        """
+
+        util.logger.debug(f"sync start: my_height({my_height}), max_height({max_height})")
+
+        if self.__channel_service.is_support_node_function(conf.NodeFunction.Vote):
+            block_request_coroutine = self._block_request(peer_stubs, my_height, max_height)
+        else:
+            block_request_coroutine = self._citizen_request(my_height, max_height)
+
+        async def synchronizer():
+            self._request_limit_event = asyncio.Event(loop=asyncio.get_event_loop())
+            self._request_limit_event.set()
+
+            coroutines = [
+                block_request_coroutine,
+                self._block_sync(peer_stubs, my_height, unconfirmed_block_height, max_height)
+            ]
+
+            _, _sync_result = await asyncio.gather(*coroutines)
+            return _sync_result
+
+        my_height, unconfirmed_block_height, max_height = asyncio.run(synchronizer())
+        util.logger.debug(f"sync finished: current_height({my_height}), "
+                          f"unconfirmed block height({unconfirmed_block_height}), "
+                          f"max_height({max_height})")
 
     def request_rollback(self) -> bool:
         """Request block data rollback behind to 1 block
@@ -652,7 +822,7 @@ class BlockManager:
         util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
         return False
 
-    def __block_height_sync(self):
+    def _block_height_sync(self):
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             max_height, unconfirmed_block_height, peer_stubs = self._get_peer_stub_list()
@@ -662,15 +832,15 @@ class BlockManager:
             self.blockchain.last_unconfirmed_block = None
 
             my_height = self.blockchain.block_height
-            util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
+            util.logger.debug(f"my_height({my_height}), max_height({max_height})")
 
             # prevent_next_block_mismatch until last_block_height in block DB.
             # (excludes last_unconfirmed_block_height)
             self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
-            self.__block_request_to_peers_in_sync(peer_stubs,
-                                                  my_height,
-                                                  unconfirmed_block_height,
-                                                  max_height)
+            self._block_request_to_peers_in_sync(peer_stubs,
+                                                 my_height,
+                                                 unconfirmed_block_height,
+                                                 max_height)
         except exception.PreviousBlockMismatch as e:
             util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
             self.request_rollback()
