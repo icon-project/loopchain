@@ -40,9 +40,9 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice~=1.7.0
-	$(PIP_INSTALL) iconrpcserver~=1.5.0
-	$(PIP_INSTALL) iconsdk~=1.3.0
+	$(PIP_INSTALL) iconservice~=1.8.0
+	$(PIP_INSTALL) iconrpcserver~=1.6.0
+	$(PIP_INSTALL) iconsdk~=1.3.2
 
 ## pip install packages
 install: $(INSTALL_REQUIRES)
