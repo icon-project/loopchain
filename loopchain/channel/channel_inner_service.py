@@ -111,7 +111,7 @@ class ChannelTxCreatorInnerTask:
             traceback.print_exc()
         finally:
             if exception:
-                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
+                logging.warning(f"tx restore fail.\n\n"
                                 f"kwargs({kwargs})\n\n"
                                 f"tx({tx})\n\n"
                                 f"exception({exception})")
@@ -501,7 +501,7 @@ class ChannelInnerTask:
 
             confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)
 
-            logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
+            logging.debug(f"height({new_block.header.height}), to: {subscriber_id}")
             bs = BlockSerializer.new(new_block.header.version, self._blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
@@ -607,7 +607,7 @@ class ChannelInnerTask:
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self._blockchain.tx_versioner)
             tx_origin = tx_serializer.to_origin_data(tx)
 
-            logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
+            logging.info(f"tx_hash({tx_hash})")
             tx_info = dict()
             tx_info["transaction"] = tx_origin
             tx_info["tx_index"] = None
@@ -618,7 +618,7 @@ class ChannelInnerTask:
             try:
                 return message_code.Response.success, self._block_manager.get_tx_info(tx_hash)
             except KeyError as e:
-                logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
+                logging.error(f"tx_hash({tx_hash}) not found error({e!r})")
                 response_code = message_code.Response.fail_invalid_key_error
                 return response_code, None
             except PrunedHashDataError as e:
@@ -631,7 +631,7 @@ class ChannelInnerTask:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
-            logging.exception(f"announce_unconfirmed_block: {e}")
+            logging.exception(f"{e!r}")
             return
 
         util.logger.debug(
@@ -736,10 +736,10 @@ class ChannelInnerTask:
 
             if 'code' in invoke_result:
                 if invoke_result['code'] == ScoreResponse.NOT_EXIST:
-                    logging.debug(f"get invoke result NOT_EXIST tx_hash({tx_hash})")
+                    logging.debug(f"NOT_EXIST tx_hash({tx_hash})")
                     response_code = message_code.Response.fail_invalid_key_error
                 elif invoke_result['code'] == ScoreResponse.NOT_INVOKED:
-                    logging.info(f"get invoke result NOT_INVOKED tx_hash({tx_hash})")
+                    logging.info(f"NOT_INVOKED tx_hash({tx_hash})")
                     response_code = message_code.Response.fail_tx_not_invoked
 
             return response_code, invoke_result_str
@@ -748,7 +748,7 @@ class ChannelInnerTask:
             response_code = e.message_code
             return response_code, None
         except BaseException as e:
-            logging.error(f"get invoke result error : {e}")
+            logging.error(f"get invoke result error : {e!r}")
 
             return message_code.Response.fail, None
 
@@ -894,7 +894,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def stop(self, message):
-        logging.info(f"channel_inner_service:stop message({message})")
+        logging.info(f"message({message})")
         self._channel_service.close()
 
 

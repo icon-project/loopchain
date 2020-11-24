@@ -155,7 +155,7 @@ class Configure(metaclass=SingletonMetaClass):
                 version = pkg_resources.get_distribution(pkg_name).version
                 icon_versions[pkg_name] = version
             except pkg_resources.DistributionNotFound as e:
-                logging.warning(f"get '{pkg_name}' version error : {e}")
+                logging.warning(f"get '{pkg_name}' version error : {e!r}")
                 continue
 
         command_result = os.popen('icon_rc -version').read()

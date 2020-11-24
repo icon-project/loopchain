@@ -22,7 +22,7 @@ class CommonSubprocess:
     """run stand alone process as a subprocess
     """
     def __init__(self, process_args):
-        logging.debug("common_subprocess:CommonSubprocess init")
+        logging.debug("CommonSubprocess init")
         self.__process_args = process_args
         self.__is_run = False
         self.__subprocess: subprocess.Popen = None
@@ -41,16 +41,16 @@ class CommonSubprocess:
     def start(self):
         """start subprocess
         """
-        logging.debug("common_subprocess:CommonSubprocess start")
+        logging.debug("CommonSubprocess start")
         if not self.__is_run:
-            logging.debug("common_subprocess:CommonSubprocess run process")
+            logging.debug("CommonSubprocess run process")
             self.__subprocess = subprocess.Popen(self.__process_args)
             self.__is_run = True
 
     def stop(self):
         """stop subprocess
         """
-        logging.debug("common_subprocess:CommonSubprocess stop")
+        logging.debug("CommonSubprocess stop")
         if self.__is_run:
             self.__subprocess.terminate()
             self.__is_run = False
@@ -59,5 +59,5 @@ class CommonSubprocess:
     def wait(self):
         """wait subprocess
         """
-        logging.debug("common_subprocess:CommonSubprocess wait")
+        logging.debug("CommonSubprocess wait")
         self.__subprocess.wait()

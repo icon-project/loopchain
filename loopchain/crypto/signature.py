@@ -126,11 +126,11 @@ class Signer(SignVerifier):
                     data = data.split("0x")[1] if data.startswith("0x") else data
                     data = binascii.unhexlify(data)
                 except Exception as e:
-                    logging.error(f"hash data must hex string or bytes \n exception : {e}")
+                    logging.error(f"hash data must hex string or bytes \n exception : {e!r}")
                     return None
 
         if not isinstance(data, (bytes, bytearray)):
-            logging.error(f"data must be bytes \n")
+            logging.error(f"data must be bytes")
             return None
 
         hash_method = self.sha3_256 if not is_hash else None

@@ -83,7 +83,7 @@ class Epoch:
         self.complain_votes[self.round] = leader_votes
 
     def set_epoch_leader(self, leader_id, complained=False):
-        utils.logger.debug(f"Set Epoch leader height({self.height}) leader_id({leader_id})")
+        utils.logger.debug(f"height({self.height}) leader_id({leader_id})")
         self.leader_id = leader_id
         if complained and leader_id == ChannelProperty().peer_id:
             self.complained_result = complained
@@ -91,7 +91,7 @@ class Epoch:
             self.complained_result = None
 
     def add_complain(self, leader_vote: 'LeaderVote'):
-        utils.logger.debug(f"add_complain complain_leader_id({leader_vote.old_leader}), "
+        utils.logger.debug(f"complain_leader_id({leader_vote.old_leader}), "
                            f"new_leader_id({leader_vote.new_leader}), "
                            f"block_height({leader_vote.block_height}), "
                            f"round({leader_vote.round}), "
@@ -99,18 +99,18 @@ class Epoch:
         try:
             self.complain_votes[leader_vote.round].add_vote(leader_vote)
         except KeyError as e:
-            utils.logger.warning(f"{e}\nThere is no vote of {leader_vote.round} round.")
+            utils.logger.warning(f"{e!r}\nThere is no vote of {leader_vote.round} round.")
         except VoteError as e:
-            utils.logger.info(e)
+            utils.logger.info(f"{e!r}")
         except RuntimeError as e:
-            utils.logger.warning(e)
+            utils.logger.warning(f"{e!r}")
 
     def complain_result(self) -> Optional[str]:
         """return new leader id when complete complain leader.
 
         :return: new leader id or None
         """
-        utils.logger.debug(f"complain_result vote_result({self.complain_votes[self.round].get_summary()})")
+        utils.logger.debug(f"vote_result({self.complain_votes[self.round].get_summary()})")
         if self.complain_votes[self.round].is_completed():
             vote_result = self.complain_votes[self.round].get_result()
             return vote_result.hex_hx()

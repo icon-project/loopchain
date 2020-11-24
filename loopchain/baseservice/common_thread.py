@@ -25,7 +25,7 @@ class CommonThread:
     """
 
     def __init__(self):
-        logging.debug("common_thread:CommonThread init")
+        logging.debug("CommonThread init")
         self.__is_run = False
         self.__run_thread = None
 
@@ -57,7 +57,7 @@ class CommonThread:
     def wait(self):
         """쓰레드 종료를 기다린다.
         """
-        logging.debug("common_thread:CommonThread wait thread...")
+        logging.debug("CommonThread wait thread...")
         self.__run_thread.join()
 
     @abstractmethod

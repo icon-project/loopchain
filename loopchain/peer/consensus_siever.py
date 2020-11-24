@@ -99,7 +99,7 @@ class ConsensusSiever(ConsensusBase):
                 # to build temporary block (version >= 0.4)
                 block_builder.next_reps = []
         except AttributeError as e:
-            util.logger.info(f"block_version = {block_builder.version} : {e}")
+            util.logger.info(f"block_version = {block_builder.version} : {e!r}")
 
         return block_builder.build()
 
@@ -175,7 +175,7 @@ class ConsensusSiever(ConsensusBase):
             need_next_call = False
             try:
                 if complained_result or new_term:
-                    util.logger.spam("consensus block_builder.complained or new term")
+                    util.logger.spam("block_builder.complained or new term")
                     """
                     confirm_info = self._blockchain.find_confirm_info_by_hash(self._blockchain.last_block.header.hash)
                     if not confirm_info and self._blockchain.last_block.header.height > 0:
@@ -211,7 +211,7 @@ class ConsensusSiever(ConsensusBase):
                 if need_next_call:
                     return self.__block_generation_timer.call()
 
-            util.logger.spam(f"self._block_manager.epoch.leader_id: {self._block_manager.epoch.leader_id}")
+            util.logger.spam(f"epoch.leader_id: {self._block_manager.epoch.leader_id}")
             candidate_block = self.__build_candidate_block(block_builder)
             candidate_block, invoke_results = self._blockchain.score_invoke(
                 candidate_block, self._blockchain.latest_block,
@@ -281,7 +281,7 @@ class ConsensusSiever(ConsensusBase):
         try:
             prev_votes = self._block_manager.candidate_blocks.get_votes(block_hash, self._block_manager.epoch.round)
         except KeyError as e:
-            util.logger.spam(f"There is no block in candidates list: {e}")
+            util.logger.debug(f"There is no block in candidates list: {e!r}")
             prev_votes = None
 
         if prev_votes:
@@ -323,10 +323,10 @@ class ConsensusSiever(ConsensusBase):
             try:
                 prev_votes_serialized = json.loads(prev_votes_dumped)
             except json.JSONDecodeError as e:  # handle exception for old votes
-                util.logger.spam(f"{e}")
+                util.logger.debug(f"{e!r}")
                 prev_votes_list = []
             except TypeError as e:  # handle exception for not existing (NoneType) votes
-                util.logger.spam(f"{e}")
+                util.logger.debug(f"{e!r}")
                 prev_votes_list = []
             else:
                 version = self._blockchain.block_versioner.get_version(self._block_manager.epoch.height)

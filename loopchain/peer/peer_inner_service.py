@@ -38,7 +38,7 @@ class PeerInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     async def stop(self, message):
-        logging.info(f"peer_inner_service:stop")
+        logging.info(f"message={message}")
         for stub in StubCollection().channel_stubs.values():
             await stub.async_task().stop(message)
 
