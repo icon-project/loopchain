@@ -654,11 +654,6 @@ class ChannelInnerTask:
             util.logger.debug("BlockChain has not been initialized yet.")
             return
 
-        if not self._block_manager.confirm_event.is_set():
-            util.logger.debug(f"confirm_event waiting at unconfirmed BH({unconfirmed_block.header.height})")
-            await self._block_manager.confirm_event.wait()
-            util.logger.debug(f"confirm_event released at unconfirmed BH({unconfirmed_block.header.height})")
-
         try:
             self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid as e:
@@ -675,7 +670,6 @@ class ChannelInnerTask:
         except NotReadyToConfirmInfo as e:
             util.logger.warning(f"{e!r}")
         else:
-            self._block_manager.confirm_event.clear()
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task

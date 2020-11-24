@@ -77,10 +77,6 @@ class BlockManager:
         self._sync_peer_target: Dict[int, str] = dict()
         self._request_limit_event: Optional[asyncio.Event] = None
 
-        # block confirm event to add block sequentially
-        self.confirm_event: asyncio.Event = asyncio.Event()
-        self.confirm_event.set()
-
     @property
     def channel_name(self):
         return self.__channel_name
@@ -1149,7 +1145,7 @@ class BlockManager:
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
-    async def _vote(self, unconfirmed_block: Block, round_: int):
+    def _vote(self, unconfirmed_block: Block, round_: int):
         exc = None
         try:
             block_version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
@@ -1185,7 +1181,7 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-    async def vote_as_peer(self, unconfirmed_block: Block, round_: int):
+    def vote_as_peer(self, unconfirmed_block: Block, round_: int):
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(
@@ -1195,27 +1191,18 @@ class BlockManager:
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
         util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
-        exc = None
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(e)
-            exc = e
         except RoundMismatch as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
             util.logger.warning(e)
-            exc = e
         except UnrecordedBlock as e:
             util.logger.info(e)
-            exc = e
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            exc = e
-        finally:
-            if self.confirm_event and not self.confirm_event.is_set():
-                self.confirm_event.set()
-                util.logger.debug(f"confirm_event set as {self.confirm_event.is_set()}")
-
-        if exc is None or isinstance(exc, DuplicationUnconfirmedBlock):
-            await self._vote(unconfirmed_block, round_)
+            self._vote(unconfirmed_block, round_)
+        else:
+            self._vote(unconfirmed_block, round_)

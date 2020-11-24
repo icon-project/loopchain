@@ -158,8 +158,7 @@ class ChannelStateMachine(object):
             except InvalidUnconfirmedBlock as e:
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
-            self._run_coroutine_threadsafe(
-                self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
+            self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_)
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
