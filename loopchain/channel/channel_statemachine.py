@@ -152,15 +152,13 @@ class ChannelStateMachine(object):
     def _do_vote(self, unconfirmed_block: Block, round_: int):
         if unconfirmed_block.header.is_unrecorded:
             try:
-                self._run_coroutine_threadsafe(
-                    self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_))
+                self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_)
             except UnrecordedBlock as e:
                 util.logger.info(e)
             except InvalidUnconfirmedBlock as e:
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
-            self._run_coroutine_threadsafe(
-                self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
+            self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_)
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()

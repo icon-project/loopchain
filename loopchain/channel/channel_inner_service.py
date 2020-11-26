@@ -30,6 +30,7 @@ from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+    from loopchain.peer import BlockManager
 
 
 class ChannelTxCreatorInnerTask:
@@ -384,7 +385,7 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 class ChannelInnerTask:
     def __init__(self, channel_service: 'ChannelService'):
         self._channel_service = channel_service
-        self._block_manager = None
+        self._block_manager: 'BlockManager' = None
         self._blockchain = None
 
         # Citizen
@@ -405,7 +406,7 @@ class ChannelInnerTask:
             raise RuntimeError("Channel sub services need a loop")
         self.__loop_for_sub_services = loop
 
-        self._block_manager = self._channel_service.block_manager
+        self._block_manager: 'BlockManager' = self._channel_service.block_manager
         self._blockchain = self._channel_service.block_manager.blockchain
 
         tx_versioner = self._blockchain.tx_versioner

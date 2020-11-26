@@ -931,7 +931,7 @@ class BlockManager:
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
                 client = RestClient(self.channel_name, rest_endpoint)
-                response: dict = client.call(RestMethod.Status)
+                response: dict = client.call(RestMethod.Status, timeout=conf.REST_TIMEOUT)
                 target_block_height = max(response["block_height"], response["unconfirmed_block_height"])
 
                 recovery = response.get("recovery", {})
@@ -1110,13 +1110,16 @@ class BlockManager:
         if my_height < (unconfirmed_header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})"
+            )
 
         is_rep = ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote)
         if is_rep and my_height == unconfirmed_header.height - 2 and not self.blockchain.last_unconfirmed_block:
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height}), "
+                f"last_unconfirmed_block({self.blockchain.last_unconfirmed_block})"
+            )
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_header.height:
@@ -1142,7 +1145,7 @@ class BlockManager:
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
-    async def _vote(self, unconfirmed_block: Block, round_: int):
+    def _vote(self, unconfirmed_block: Block, round_: int):
         exc = None
         try:
             block_version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
@@ -1178,7 +1181,7 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-    async def vote_as_peer(self, unconfirmed_block: Block, round_: int):
+    def vote_as_peer(self, unconfirmed_block: Block, round_: int):
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(
@@ -1200,6 +1203,6 @@ class BlockManager:
             util.logger.info(e)
         except DuplicationUnconfirmedBlock as e:
             util.logger.debug(e)
-            await self._vote(unconfirmed_block, round_)
+            self._vote(unconfirmed_block, round_)
         else:
-            await self._vote(unconfirmed_block, round_)
+            self._vote(unconfirmed_block, round_)
