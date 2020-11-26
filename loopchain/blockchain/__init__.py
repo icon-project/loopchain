@@ -15,7 +15,6 @@
 
 from .blockchain import *
 from .exception import *
-from .score_base import *
 from .candidate_blocks import *
 from .epoch import *
 from .peer_loader import *

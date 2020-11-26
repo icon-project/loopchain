@@ -245,12 +245,12 @@ class BlockManager:
                     await rs_client.call_async(rest_method,
                                                rest_method.value.params(**raw_data))
                 except Exception as e:
-                    util.logger.warning(f"Relay failed. Tx({tx}), {e}")
+                    util.logger.warning(f"Relay failed. Tx({tx}), {e!r}")
                 else:
                     break
 
     def restore_tx_status(self, tx: Transaction):
-        util.logger.debug(f"restore_tx_status() tx : {tx}")
+        util.logger.debug(f"tx : {tx}")
         self.__tx_queue.set_item_status(tx.hash.hex(), TransactionStatusInQueue.normal)
 
     def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
@@ -620,7 +620,7 @@ class BlockManager:
             self.__consensus_algorithm.stop()
 
     def __add_block_by_sync(self, block_, confirm_info=None):
-        util.logger.debug(f"__add_block_by_sync :: height({block_.header.height}) hash({block_.header.hash})")
+        util.logger.debug(f"height({block_.header.height}) hash({block_.header.hash})")
 
         block_version = self.blockchain.block_versioner.get_version(block_.header.height)
         block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner, raise_exceptions=False)
@@ -696,7 +696,7 @@ class BlockManager:
 
                 max_block_height = max(max_block_height, current_unconfirmed_block_height)
                 if max_block_height > max_height:
-                    util.logger.debug(f"set max_height :{max_height} -> {max_block_height}")
+                    util.logger.debug(f"set max_height: {max_height} -> {max_block_height}")
                     max_height = max_block_height
                     if current_unconfirmed_block_height == max_block_height:
                         unconfirmed_block_height = current_unconfirmed_block_height
@@ -793,8 +793,7 @@ class BlockManager:
         """
         target_block = self.blockchain.find_block_by_hash32(self.blockchain.last_block.header.prev_hash)
         if not self.blockchain.check_rollback_possible(target_block):
-            util.logger.warning(f"request_rollback() The request cannot be "
-                                f"rolled back to the target block({target_block}).")
+            util.logger.warning(f"The request cannot be rollback to the target block({target_block}).")
             return False
 
         request_origin = {
@@ -805,21 +804,21 @@ class BlockManager:
         request = convert_params(request_origin, ParamType.roll_back)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
 
-        util.logger.debug(f"request_roll_back() Rollback request({request})")
+        util.logger.debug(f"Rollback request({request})")
         response: dict = cast(dict, stub.sync_task().rollback(request))
         try:
             response_to_json_query(response)
         except GenericJsonRpcServerError as e:
-            util.logger.warning(f"request_rollback() response error = {e}")
+            util.logger.warning(f"response error = {e}")
         else:
             result_height = response.get("blockHeight")
             if hex(target_block.header.height) == result_height:
-                util.logger.info(f"request_rollback() Rollback Success. result height = {result_height}")
+                util.logger.info(f"Rollback Success. result height = {result_height}")
                 self.blockchain.rollback(target_block)
                 self.rebuild_block()
                 return True
 
-        util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
+        util.logger.warning(f"Rollback Fail. response = {response}")
         return False
 
     def _block_height_sync(self):
@@ -842,12 +841,11 @@ class BlockManager:
                                                  unconfirmed_block_height,
                                                  max_height)
         except exception.PreviousBlockMismatch as e:
-            util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
+            util.logger.warning(f"There is a previous block hash mismatch! : {e!r}")
             self.request_rollback()
             self.__start_block_height_sync_timer(is_run_at_start=True)
         except Exception as e:
-            util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
-            traceback.print_exc()
+            util.logger.warning(f"exception during block_height_sync : {e!r}", exc_info=True)
             self.__start_block_height_sync_timer()
         else:
             util.logger.debug(f"block_height_sync is complete.")
@@ -873,7 +871,7 @@ class BlockManager:
         else:
             next_leader = self.__get_next_leader_by_block(block)
 
-        util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
+        util.logger.debug(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
 
     def __get_next_leader_by_block(self, block: Block) -> str:
@@ -926,7 +924,7 @@ class BlockManager:
                 continue
             if grpc_endpoint in self.__block_height_sync_bad_targets:
                 continue
-            util.logger.debug(f"try to grpc_endpoint({grpc_endpoint}), rest_endpoint : {rest_endpoint}")
+            util.logger.debug(f"try to grpc_endpoint({grpc_endpoint}), rest_endpoint({rest_endpoint})")
             channel = GRPCHelper().create_client_channel(grpc_endpoint)
             stub = loopchain_pb2_grpc.PeerServiceStub(channel)
             try:
@@ -945,7 +943,7 @@ class BlockManager:
                     unconfirmed_block_height = max(unconfirmed_block_height, response["unconfirmed_block_height"])
 
             except Exception as e:
-                util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
+                util.logger.warning(f"This peer has already been removed from the block height target node. {e!r}")
 
         return max_height, unconfirmed_block_height, peer_stubs
 
@@ -960,7 +958,7 @@ class BlockManager:
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
-        util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
+        util.logger.info(f"Epoch height({self.epoch.height}), leader({self.epoch.leader_id})")
 
     def stop(self):
         self.__block_height_thread_pool.shutdown()
@@ -974,7 +972,7 @@ class BlockManager:
         self.blockchain.close_blockchain_store()
 
     def add_complain(self, vote: LeaderVote):
-        util.logger.spam(f"add_complain vote({vote})")
+        util.logger.spam(f"vote({vote})")
 
         if not self.epoch:
             util.logger.debug(f"Epoch is not initialized.")
@@ -1070,7 +1068,6 @@ class BlockManager:
         )
 
         util.logger.debug(
-            f"leader complain "
             f"complained_leader_id({complained_leader_id}), "
             f"new_leader_id({new_leader_id})")
 
@@ -1080,7 +1077,9 @@ class BlockManager:
                                                                       reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
-        util.logger.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
+        util.logger.debug(f"height({block.header.height}), "
+                          f"block_hash({block.header.hash}), "
+                          f"is_validated({is_validated})")
         vote = Vote.get_block_vote_class(block.header.version).new(
             signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
@@ -1107,6 +1106,8 @@ class BlockManager:
     def verify_confirm_info(self, unconfirmed_block: Block):
         unconfirmed_header = unconfirmed_block.header
         my_height = self.blockchain.block_height
+        util.logger.info(f"my_height({my_height}), unconfirmed_block_height({unconfirmed_header.height})")
+
         if my_height < (unconfirmed_header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
@@ -1141,7 +1142,7 @@ class BlockManager:
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
@@ -1161,14 +1162,13 @@ class BlockManager:
                                   generator=self.blockchain.get_expected_generator(unconfirmed_block),
                                   reps_getter=reps_getter)
         except NotInReps as e:
-            util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
+            util.logger.debug(f"Not In Reps({e}) state({self.__channel_service.state_machine.state})")
         except BlockHeightMismatch as e:
             exc = e
-            util.logger.warning(f"Don't vote to the block of unexpected height.\n{e}")
+            util.logger.warning(f"Don't vote to the block of unexpected height. {e!r}")
         except Exception as e:
             exc = e
-            util.logger.error(e)
-            traceback.print_exc()
+            util.logger.exception(f"{e!r}")
         else:
             self.candidate_blocks.add_block(
                 unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
@@ -1185,7 +1185,6 @@ class BlockManager:
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(
-            f"in vote_as_peer "
             f"height({unconfirmed_block.header.height}) "
             f"round({round_}) "
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
@@ -1195,14 +1194,14 @@ class BlockManager:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
         except RoundMismatch as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
         except UnrecordedBlock as e:
-            util.logger.info(e)
+            util.logger.info(f"{e!r}")
         except DuplicationUnconfirmedBlock as e:
-            util.logger.debug(e)
+            util.logger.debug(f"{e!r}")
             self._vote(unconfirmed_block, round_)
         else:
             self._vote(unconfirmed_block, round_)

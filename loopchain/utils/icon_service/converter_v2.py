@@ -114,8 +114,7 @@ def _convert_value(value, value_type):
             return _convert_value_hex_hash_number(value)
 
     except BaseException as e:
-        traceback.print_exc()
-        logging.error(f"Error : {e}, value : {value_type}:{value}")
+        logging.error(f"Error : {e!r}, value : {value_type}:{value}")
 
     return value
 

@@ -154,7 +154,7 @@ class ChannelStateMachine(object):
             try:
                 self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_)
             except UnrecordedBlock as e:
-                util.logger.info(e)
+                util.logger.info(f"{e!r}")
             except InvalidUnconfirmedBlock as e:
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
@@ -218,11 +218,11 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
     def _leadercomplain_on_enter(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_enter")
+        util.logger.debug(f"on_enter")
         self.__channel_service.block_manager.leader_complain()
 
     def _leadercomplain_on_exit(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_exit")
+        util.logger.debug(f"on_exit")
 
     def _run_coroutine_threadsafe(self, coro):
         async def _run_with_handling_exception():

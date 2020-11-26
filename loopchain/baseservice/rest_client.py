@@ -121,10 +121,10 @@ class RestClient:
             else:
                 response = self._call_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {e!r}")
             raise
         else:
-            utils.logger.spam(f"REST call complete method_name({method.value.name})")
+            utils.logger.debug(f"REST call complete method_name({method.value.name})")
             return response
 
     async def call_async(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
@@ -139,7 +139,7 @@ class RestClient:
             logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
             raise
         else:
-            utils.logger.spam(f"REST call async complete method_name({method.value.name})")
+            utils.logger.debug(f"REST call async complete method_name({method.value.name})")
             return response
 
     def _call_rest(self, target: str, method: RestMethod, timeout):

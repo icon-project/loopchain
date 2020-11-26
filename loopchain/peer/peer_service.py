@@ -105,12 +105,12 @@ class PeerService:
         if self._threadpool:
             job_size = self._threadpool._work_queue.qsize()
             threads = len(self._threadpool._threads)
-            return f"threadpool pendings: {job_size} jobs, threads : {threads}"
+            return f"threadpool pendings: {job_size} jobs, threads: {threads}"
         else:
             return f"threadpool is {self._threadpool}"
 
     def _init_port(self, port):
-        # service 초기화 작업
+        # service initialize
         target_ip = utils.get_private_ip()
         self._peer_target = f"{target_ip}:{port}"
         self._peer_port = int(port)
@@ -144,7 +144,7 @@ class PeerService:
         logger_preset.peer_id = self.peer_id
         logger_preset.update_logger()
 
-        logging.info(f"run peer_id : {self._peer_id}")
+        logging.info(f"peer_id : {self._peer_id}")
 
     @staticmethod
     def _get_use_kms():
@@ -222,7 +222,7 @@ class PeerService:
             if event_for_init is not None:
                 event_for_init.set()
 
-            logging.info(f'peer_service: init complete peer: {self.peer_id}')
+            logging.info(f'init complete peer: {self.peer_id}')
 
         loop = self._inner_service.loop
         loop.create_task(_serve())
@@ -250,7 +250,7 @@ class PeerService:
             try:
                 loop.run_until_complete(task)
             except asyncio.CancelledError as e:
-                logging.info(f"task : {task}, error : {e}")
+                logging.info(f"task : {task}, error : {e!r}")
 
         self.p2p_server_stop()
         logging.info("p2p server.")

@@ -29,7 +29,7 @@ class StubManager:
     def __make_stub(self, is_stub_reuse=True):
         if util.datetime_diff_in_mins(self.__stub_update_time) >= conf.STUB_REUSE_TIMEOUT or \
                 not is_stub_reuse or self.__stub is None:
-            util.logger.spam(f"StubManager:__make_stub is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
+            util.logger.spam(f"is_stub_reuse({is_stub_reuse}) self.__stub({self.__stub})")
 
             self.__stub, self.__channel = util.get_stub_to_server(
                 self.__target, self.__stub_type, ssl_auth_type=self.__ssl_auth_type)
@@ -70,7 +70,7 @@ class StubManager:
             self.__update_last_succeed_time()
             return ret
         except Exception as e:
-            logging.warning(f"gRPC call fail method_name({method_name}), message({message}): {e}")
+            logging.warning(f"gRPC call fail method_name({method_name}), message({message}): {e!r}")
             if is_raise:
                 raise e
 

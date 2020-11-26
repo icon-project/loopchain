@@ -54,7 +54,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.channel_stubs[channel_name] = stub
 
-        logging.debug(f"ChannelTasks : {channel_name}, Queue : {queue_name}")
+        logging.debug(f"Channel : {channel_name}, Queue : {queue_name}")
         return stub
 
     async def create_channel_tx_creator_stub(self, channel_name):
@@ -66,7 +66,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         await stub.connect()
         self.channel_tx_creator_stubs[channel_name] = stub
 
-        logging.debug(f"ChannelTxCreatorTasks : {channel_name}, Queue : {queue_name}")
+        logging.debug(f"Channel : {channel_name}, Queue : {queue_name}")
         return stub
 
     async def create_channel_tx_receiver_stub(self, channel_name):
@@ -79,7 +79,7 @@ class StubCollection(metaclass=SingletonMetaClass):
         await stub.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY)
         self.channel_tx_receiver_stubs[channel_name] = stub
 
-        logging.debug(f"ChannelTxReceiverTasks : {channel_name}, Queue : {queue_name}")
+        logging.debug(f"Channel : {channel_name}, Queue : {queue_name}")
         return stub
 
     async def create_icon_score_stub(self, channel_name):

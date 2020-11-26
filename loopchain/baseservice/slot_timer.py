@@ -59,7 +59,7 @@ class SlotTimer:
         )
 
     def __timer_callback(self):
-        util.logger.spam(f"__timer_callback slot({self.__slot}) delayed({self.__delayed})")
+        util.logger.spam(f"slot({self.__slot}) delayed({self.__delayed})")
         self.__slot += 1
         if self.__delayed:
             self.__delayed = False
