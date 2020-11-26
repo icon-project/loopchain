@@ -75,9 +75,7 @@ class BlockChain:
         self.__peer_id = ChannelProperty().peer_id
         self.__block_manager: BlockManager = block_manager
 
-        # FIXME : old_store_id is temporary code to rename dbpath
-        old_store_id = f"{ChannelProperty().peer_target}_{channel_name}"
-        self._blockchain_store = utils.init_default_key_value_store(old_store_id, store_id)
+        self._blockchain_store = utils.init_default_key_value_store(store_id)
 
         # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
         self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)

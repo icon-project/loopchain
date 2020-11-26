@@ -389,46 +389,16 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def rename_db_dir(old_store_name: str, store_name: str):
-    """Rename db directory
-    This method is temporary implementation for remove 'ip:port' in db directory name
-    Ths method is useless after rename all nodes done.
-
-    :param old_store_name: old store name
-    :param store_name: new store name
-    :return:
-    """
-    storage_path = Path(conf.DEFAULT_STORAGE_PATH)
-    if os.path.exists(storage_path / store_name):
-        return
-
-    src_path = storage_path / old_store_name
-    dst_path = storage_path / store_name
-    if os.path.exists(src_path):
-        try:
-            logger.info(f"src = {src_path}, dst = {dst_path}")
-            os.rename(src_path, dst_path)
-        except OSError as e:
-            logger.error(f"error = {e!r}")
-            raise e
-
-
-def init_default_key_value_store(old_store_id: str, store_id: str) -> KeyValueStore:
+def init_default_key_value_store(store_id: str) -> KeyValueStore:
     """init default key value store
 
-    :param old_store_id: old identity of key-value store
     :param store_id: new identity of key-value store
     :return: KeyValueStore, store_path
     """
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    db_dirname = f'db_{store_id}'
-
-    # FIXME : remove rename_db_dir() after all applied, maybe next release
-    rename_db_dir(f"db_{old_store_id}", db_dirname)
-
-    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, db_dirname)
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, f'db_{store_id}')
     logger.info(f"store_id={store_id}")
 
     retry_count = 0
