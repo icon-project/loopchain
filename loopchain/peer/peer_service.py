@@ -22,8 +22,9 @@ import multiprocessing
 import signal
 import timeit
 from concurrent import futures
+from contextlib import suppress
 
-import grpc
+from grpc import aio as grpc_aio
 
 from loopchain import configure as conf
 from loopchain import utils
@@ -47,8 +48,7 @@ class PeerService:
         """
         self._peer_id = None
         self._node_key = bytes()
-        self._threadpool: futures.ThreadPoolExecutor = None
-        self._p2p_outer_server: grpc.Server = None
+        self._p2p_outer_server: grpc_aio.Server = None
         self._channel_infos = None
 
         self._peer_target = None
@@ -93,21 +93,6 @@ class PeerService:
     @property
     def node_key(self):
         return self._node_key
-
-    def p2p_server_stop(self):
-        self._p2p_outer_server.stop(None)
-
-        if self._threadpool:
-            self._threadpool.shutdown(wait=False)
-            logging.info("threadpool shutdown.")
-
-    def p2p_server_threadpool_status(self) -> str:
-        if self._threadpool:
-            job_size = self._threadpool._work_queue.qsize()
-            threads = len(self._threadpool._threads)
-            return f"threadpool pendings: {job_size} jobs, threads: {threads}"
-        else:
-            return f"threadpool is {self._threadpool}"
 
     def _init_port(self, port):
         # service initialize
@@ -165,10 +150,13 @@ class PeerService:
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
-    def run_p2p_server(self):
-        self._threadpool = futures.ThreadPoolExecutor(conf.MAX_WORKERS, "GRPCOuterThread")
-        self._p2p_outer_server = GRPCHelper().start_outer_server(self._threadpool, str(self._peer_port))
+    async def run_p2p_server(self):
+        self._p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
         loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self._p2p_outer_server)
+        await self._p2p_outer_server.start()
+
+    async def p2p_server_stop(self):
+        await self._p2p_outer_server.stop(None)
 
     def serve(self,
               port,
@@ -205,7 +193,6 @@ class PeerService:
         self._channel_infos = conf.CHANNEL_OPTION
 
         self._run_rest_services(port)
-        self.run_p2p_server()
 
         self._close_kms_helper()
 
@@ -213,6 +200,7 @@ class PeerService:
         logging.info(f"Start Peer Service at port: {port} start duration({stopwatch_duration})")
 
         async def _serve():
+            await self.run_p2p_server()
             await self.ready_tasks()
             await self._inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
@@ -243,17 +231,16 @@ class PeerService:
 
     def _cleanup(self, loop):
         logging.info("Peer Resources.")
+
+        loop.run_until_complete(self.p2p_server_stop())
+        logging.info("p2p server.")
+
         for task in asyncio.Task.all_tasks(loop):
             if task.done():
                 continue
             task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 loop.run_until_complete(task)
-            except asyncio.CancelledError as e:
-                logging.info(f"task : {task}, error : {e!r}")
-
-        self.p2p_server_stop()
-        logging.info("p2p server.")
 
         if self._rest_service is not None:
             self._rest_service.stop()
@@ -291,4 +278,3 @@ class PeerService:
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
-

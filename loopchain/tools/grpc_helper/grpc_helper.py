@@ -14,13 +14,11 @@
 """gRPC helper for security"""
 
 import logging
-from typing import TYPE_CHECKING
+
+from grpc import aio as grpc_aio
 
 from loopchain.components import SingletonMetaClass
 from loopchain.tools.grpc_helper.grpc_connector import *
-
-if TYPE_CHECKING:
-    from concurrent.futures import ThreadPoolExecutor
 
 
 class GRPCHelper(metaclass=SingletonMetaClass):
@@ -39,15 +37,19 @@ class GRPCHelper(metaclass=SingletonMetaClass):
 
         self._keys = GRPCSecureKeyCollection()
 
-    def start_outer_server(self, threadpool: 'ThreadPoolExecutor', port: str = None) -> grpc.Server:
-        outer_server = grpc.server(threadpool, compression=self._default_compression)
+    def start_outer_server(self, port: str = None) -> grpc_aio.Server:
+        outer_server = grpc_aio.server(compression=self._default_compression)
         target_host = f'[::]:{port}'
         self.add_server_port(outer_server, target_host)
         logging.debug(f"outer target host = {target_host}")
 
         return outer_server
 
-    def add_server_port(self, server, host, ssl_auth_type: conf.SSLAuthType=None, key_load_type: conf.KeyLoadType=None):
+    def add_server_port(self,
+                        server: grpc_aio.Server,
+                        host: str,
+                        ssl_auth_type: conf.SSLAuthType = None,
+                        key_load_type: conf.KeyLoadType = None):
         """
 
         :param server: grpc server object
@@ -66,7 +68,6 @@ class GRPCHelper(metaclass=SingletonMetaClass):
 
         connector: GRPCConnector = self.__connectors[ssl_auth_type]
         connector.add_server_port(self._keys, server, host, ssl_auth_type)
-        server.start()
 
         logging.info(f"Server now listen: {host}, secure level : {str(ssl_auth_type)}")
 
