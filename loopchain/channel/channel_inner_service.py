@@ -5,7 +5,7 @@ import multiprocessing as mp
 import signal
 from asyncio import Condition
 from collections import namedtuple
-from typing import Union, Dict, List, Tuple, Optional
+from typing import Union, Dict, List, Tuple
 
 from earlgrey import *
 from pkg_resources import parse_version
@@ -217,7 +217,7 @@ class ChannelTxReceiverInnerTask:
             pass
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx_list(self, request) -> tuple:
+    async def add_tx_list(self, request) -> tuple:
         if self.__nid is None:
             response_code = message_code.Response.fail
             message = "Node initialization is not completed."
@@ -673,7 +673,7 @@ class ChannelInnerTask:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task
-    def block_sync(self, block_height):
+    async def block_sync(self, block_height):
         response_code = None
         block: Block = None
         if block_height != -1:
@@ -702,7 +702,7 @@ class ChannelInnerTask:
                 unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block))
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def vote_unconfirmed_block(self, vote_dumped: str) -> None:
+    async def vote_unconfirmed_block(self, vote_dumped: str) -> None:
         try:
             vote_serialized = json.loads(vote_dumped)
         except json.decoder.JSONDecodeError:

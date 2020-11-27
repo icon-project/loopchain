@@ -1,6 +1,6 @@
-grpcio~=1.27.2
-grpcio-tools~=1.27.2
-protobuf~=3.11.3
+grpcio~=1.32.0
+grpcio-tools~=1.32.0
+protobuf~=3.13.0
 coloredlogs~=14.0.0
 earlgrey~=0.2.1
 jsonrpcclient[aiohttp]~=3.3.5

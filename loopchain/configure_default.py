@@ -75,23 +75,13 @@ class KeyLoadType(IntEnum):
 
 
 IP_LOCAL = '127.0.0.1'
-IP_BLOCKGENERATOR = IP_LOCAL
-IP_PEER = IP_LOCAL
-IP_RADIOSTATION = IP_LOCAL
-IP_RADIOSTATION_SUB = IP_LOCAL
-INNER_SERVER_BIND_IP = '127.0.0.1'
 DOCKER_HOST = os.getenv('DOCKER_HOST')
 LOOPCHAIN_HOST = os.getenv('LOOPCHAIN_HOST', DOCKER_HOST)
 
 PORT_PEER = 7100
-PORT_INNER_SERVICE = 0
-PORT_DIFF_INNER_SERVICE = 10000  # set inner_service_port to (peer_service_port + this value)
-PORT_BLOCKGENERATOR = 7101
 PORT_RADIOSTATION = 7102
-PORT_RADIOSTATION_SUB = 7102
 PORT_DIFF_SCORE_CONTAINER = 20021  # peer service 가 score container 를 시작할 때 자신과 다른 포트를 사용하도록 차이를 설정한다.
 PORT_DIFF_BETWEEN_SCORE_CONTAINER = 30
-MAX_WORKERS = 8
 MAX_BROADCAST_WORKERS = 1
 SLEEP_SECONDS_IN_SERVICE_LOOP = 0.1  # 0.05  # multi thread 동작을 위한 최소 대기 시간 설정
 SLEEP_SECONDS_IN_SERVICE_NONE = 2  # _아무일도 하지 않는 대기 thread 의 대기 시간 설정
@@ -99,7 +89,6 @@ GRPC_TIMEOUT = 30  # seconds
 GRPC_TIMEOUT_SHORT = 5  # seconds
 GRPC_TIMEOUT_BROADCAST_RETRY = 6  # seconds
 GRPC_TIMEOUT_TEST = 30  # seconds
-GRPC_CONNECTION_TIMEOUT = GRPC_TIMEOUT * 2  # seconds, Connect Peer 메시지는 처리시간이 좀 더 필요함
 STUB_REUSE_TIMEOUT = 60  # minutes
 
 GRPC_SSL_TYPE = SSLAuthType.none
@@ -127,10 +116,6 @@ WAIT_SECONDS_FOR_VOTE = 0.2
 MAX_RETRY_CREATE_DB = 10
 # default key value store type
 DEFAULT_KEY_VALUE_STORE_TYPE = "plyvel"
-# default level db path
-DEFAULT_LEVEL_DB_PATH = "./db"
-# peer_id (UUID) 는 최초 1회 생성하여 level db에 저장한다.
-LEVEL_DB_KEY_FOR_PEER_ID = str.encode("peer_id_key")
 # String Peer Data Encoding
 PEER_DATA_ENCODING = 'UTF-8'
 # Hash Key Encoding
@@ -138,8 +123,6 @@ HASH_KEY_ENCODING = 'UTF-8'
 # Consensus Algorithm
 CONSENSUS_ALGORITHM = ConsensusAlgorithm.siever
 
-# 블럭의 최대 크기 (kbytes), gRPC 최대 메시지는 4MB (4096) 이므로 그보다 작게 설정할 것
-MAX_BLOCK_KBYTES = 3000  # default: 3000
 # The total size of the transactions in a block.
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
 MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
