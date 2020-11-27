@@ -145,7 +145,8 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
         """
         utils.logger.info(f"length of txlist: {len(request.tx_list)}")
         channel_name = request.channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
-        StubCollection().channel_tx_receiver_stubs[channel_name].sync_task().add_tx_list(request)
+        tx_receiver_stub = StubCollection().channel_tx_receiver_stubs[channel_name]
+        await tx_receiver_stub.async_task().add_tx_list(request)
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
     async def AnnounceUnconfirmedBlock(self, request, context):

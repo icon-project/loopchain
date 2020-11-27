@@ -217,7 +217,7 @@ class ChannelTxReceiverInnerTask:
             pass
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx_list(self, request) -> tuple:
+    async def add_tx_list(self, request) -> tuple:
         if self.__nid is None:
             response_code = message_code.Response.fail
             message = "Node initialization is not completed."

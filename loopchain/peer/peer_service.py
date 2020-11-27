@@ -21,7 +21,6 @@ import logging
 import multiprocessing
 import signal
 import timeit
-from concurrent import futures
 from contextlib import suppress
 
 from grpc import aio as grpc_aio
