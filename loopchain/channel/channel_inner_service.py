@@ -686,7 +686,7 @@ class ChannelInnerTask:
         else:
             unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
-        if block is None:
+        if block is None or (unconfirmed_block_height == -1 and block_height > self._blockchain.block_height):
             if response_code is None:
                 response_code = message_code.Response.fail_wrong_block_height
             return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None

@@ -460,6 +460,7 @@ class BlockManager:
 
         :param peer_stubs:
         :param block_height:
+        :param max_height:
         :return
         """
 
@@ -467,16 +468,17 @@ class BlockManager:
         origin_block_height = block_height
 
         while max_height > block_height:
-            block_height += 1
-            self._sync_peer_target[block_height], peer_stub = peer_stubs[peer_index]
+            request_height = block_height + 1
+            util.logger.debug(f"request_height : {request_height}")
+            self._sync_peer_target[request_height], peer_stub = peer_stubs[peer_index]
             try:
-                result_future = self._sync_request_result.get(block_height, None)
+                result_future = self._sync_request_result.get(request_height, None)
                 if result_future is None:
                     result_future = asyncio.get_event_loop().create_future()
-                    self._sync_request_result[block_height] = result_future
+                    self._sync_request_result[request_height] = result_future
 
                 # FIXME : block_request to asyncio_loop.run_in_executor
-                request_result = self.__block_request_by_voter(block_height, peer_stub)
+                request_result = self.__block_request_by_voter(request_height, peer_stub)
                 result_future.set_result(request_result)
 
                 _, _max_height, _unconfirmed_block_height, _, response_code = request_result
@@ -488,16 +490,13 @@ class BlockManager:
             except NoConfirmInfo as e:
                 util.logger.warning(f"{e!r}")
                 response_code = message_code.Response.fail_no_confirm_info
-            except exception.BlockError:
-                util.exit_and_msg("Block Error Clear all block and restart peer.")
-                raise
             except Exception as e:
                 util.logger.exception(f"There is a bad peer: {e!r}")
                 response_code = message_code.Response.fail
 
             if response_code == message_code.Response.success:
                 if (len(peer_stubs) > 1 and
-                        (block_height - origin_block_height) % conf.SYNC_BLOCK_COUNT_PER_NODE == 0):
+                        (request_height - origin_block_height) % conf.SYNC_BLOCK_COUNT_PER_NODE == 0):
                     peer_index = (peer_index + 1) % len(peer_stubs)
 
                     if len(self._sync_request_result) < conf.SYNC_REQUEST_RESULT_MAX_SIZE:
@@ -507,6 +506,7 @@ class BlockManager:
                         util.logger.debug(f"waiting event on sync request size: {len(self._sync_request_result)}")
                         self._request_limit_event.clear()
                         await self._request_limit_event.wait()
+                block_height = request_height
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
@@ -530,7 +530,7 @@ class BlockManager:
                 block = self.blockchain.block_loads(response.block)
             except Exception as e:
                 traceback.print_exc()
-                raise exception.BlockError(f"Received block is invalid: original exception={e}")
+                raise exception.BlockError(f"Received block is invalid: original exception={e}") from e
 
             votes_dumped: bytes = response.confirm_info
             try:
@@ -619,7 +619,14 @@ class BlockManager:
         if self.__consensus_algorithm:
             self.__consensus_algorithm.stop()
 
-    def __add_block_by_sync(self, block_, confirm_info=None):
+    async def _add_block_by_sync(self, block_, confirm_info: Optional[List] = None):
+        """
+        TODO : If possible, change _add_block_by_sync to coroutine
+
+        :param block_:
+        :param confirm_info:
+        :return:
+        """
         util.logger.debug(f"height({block_.header.height}) hash({block_.header.hash})")
 
         block_version = self.blockchain.block_versioner.get_version(block_.header.height)
@@ -669,8 +676,6 @@ class BlockManager:
         :param max_height:
         :return: last_block_height, unconfirmed_block_height, max_height
         """
-        asyncio.get_event_loop().set_default_executor(ThreadPoolExecutor(1))
-
         while max_height > my_height:
             if self.__channel_service.state_machine.state != 'BlockSync':
                 break
@@ -701,6 +706,12 @@ class BlockManager:
                     if current_unconfirmed_block_height == max_block_height:
                         unconfirmed_block_height = current_unconfirmed_block_height
 
+                util.logger.debug(
+                    f"max_height: {max_height}, "
+                    f"max_block_height: {max_block_height}, "
+                    f"unconfirmed_block_height: {current_unconfirmed_block_height}, "
+                    f"confirm_info: {len(confirm_info)}"
+                )
                 try:
                     if (max_height == unconfirmed_block_height == block.header.height and
                             max_height > 0 and not confirm_info):
@@ -708,13 +719,7 @@ class BlockManager:
                             block, self.blockchain.find_preps_addresses_by_header(block.header))
                         self.blockchain.last_unconfirmed_block = block
                     else:
-                        # TODO : If possible, change add_block_by_sync to coroutine
-                        await asyncio.get_event_loop().run_in_executor(
-                            None,
-                            self.__add_block_by_sync,
-                            block,
-                            confirm_info
-                        )
+                        await self._add_block_by_sync(block, confirm_info)
 
                     if block.header.height == 0:
                         self.__rebuild_nid(block)
@@ -723,6 +728,9 @@ class BlockManager:
                         self.__rebuild_nid(genesis_block)
                 except KeyError as e:
                     util.logger.exception(f"during block height sync: {e!r}")
+                    raise
+                except exception.BlockError:
+                    util.exit_and_msg("Block Error Clear all block and restart peer.")
                     raise
                 except Exception as e:
                     util.logger.warning(f"fail block height sync: {e!r}")
