@@ -161,7 +161,7 @@ class BlockManager:
             from loopchain.tools.recovery import Recovery
             if self.blockchain.block_height <= Recovery.release_block_height():
                 util.logger.info(f"broadcast block({block_.header.height}) from recovery node")
-                send_kwargs.update({"from_recovery": True})
+                send_kwargs["from_recovery"] = True
 
             if self.blockchain.block_height >= Recovery.release_block_height():
                 release_recovery_mode = True
@@ -980,7 +980,7 @@ class BlockManager:
         self.blockchain.close_blockchain_store()
 
     def add_complain(self, vote: LeaderVote):
-        util.logger.spam(f"vote({vote})")
+        util.logger.debug(f"vote({vote})")
 
         if not self.epoch:
             util.logger.debug(f"Epoch is not initialized.")
@@ -1015,10 +1015,16 @@ class BlockManager:
         )
 
         fail_vote_dumped = json.dumps(fail_vote.serialize())
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complain_vote=fail_vote_dumped,
-            channel=self.channel_name
-        )
+
+        complain_kwargs = {
+            "complain_vote": fail_vote_dumped,
+            "channel": self.channel_name
+        }
+
+        if conf.RECOVERY_MODE:
+            complain_kwargs["from_recovery"] = True
+
+        request = loopchain_pb2.ComplainLeaderRequest(**complain_kwargs)
 
         reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
         rep_id = leader_vote.rep.hex_hx()
@@ -1070,10 +1076,16 @@ class BlockManager:
 
         leader_vote_serialized = leader_vote.serialize()
         leader_vote_dumped = json.dumps(leader_vote_serialized)
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complain_vote=leader_vote_dumped,
-            channel=self.channel_name
-        )
+
+        complain_kwargs = {
+            "complain_vote": leader_vote_dumped,
+            "channel": self.channel_name
+        }
+
+        if conf.RECOVERY_MODE:
+            complain_kwargs["from_recovery"] = True
+
+        request = loopchain_pb2.ComplainLeaderRequest(**complain_kwargs)
 
         util.logger.debug(
             f"complained_leader_id({complained_leader_id}), "

@@ -720,7 +720,11 @@ class ChannelInnerTask:
                 self._block_manager.consensus_algorithm.vote(vote)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def complain_leader(self, vote_dumped: str) -> None:
+    async def complain_leader(self, vote_dumped: str, from_recovery: bool = False) -> None:
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore complain leader from not recovery node in Recovery Mode")
+            return
+
         vote_serialized = json.loads(vote_dumped)
         version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
         vote = Vote.get_leader_vote_class(version).deserialize(vote_serialized)

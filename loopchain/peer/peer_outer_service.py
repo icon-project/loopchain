@@ -129,10 +129,12 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
 
     async def ComplainLeader(self, request: ComplainLeaderRequest, context):
         channel = conf.LOOPCHAIN_DEFAULT_CHANNEL if request.channel == '' else request.channel
-        utils.logger.info(f"complain_vote: {request.complain_vote}")
+        utils.logger.info(f"complain_vote: {request.complain_vote}, from_recovery({request.from_recovery!r})")
+
+        from_recovery = request.from_recovery if request.from_recovery else False
 
         channel_stub = StubCollection().channel_stubs[channel]
-        await channel_stub.async_task().complain_leader(vote_dumped=request.complain_vote)
+        await channel_stub.async_task().complain_leader(vote_dumped=request.complain_vote, from_recovery=from_recovery)
 
         return loopchain_pb2.CommonReply(response_code=message_code.Response.success, message="success")
 
