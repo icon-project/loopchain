@@ -141,7 +141,7 @@ class ChannelStateMachine(object):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
     def _do_block_sync(self):
-        self.__channel_service.block_manager.block_height_sync()
+        self.__channel_service.block_manager.start_block_height_sync()
 
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
