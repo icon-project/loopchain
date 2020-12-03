@@ -789,10 +789,20 @@ class BlockManager:
             _, _sync_result = await asyncio.gather(*coroutines)
             return _sync_result
 
-        my_height, unconfirmed_block_height, max_height = asyncio.run(synchronizer())
-        util.logger.debug(f"sync finished: current_height({my_height}), "
-                          f"unconfirmed block height({unconfirmed_block_height}), "
-                          f"max_height({max_height})")
+        try:
+            my_height, unconfirmed_block_height, max_height = asyncio.run(synchronizer())
+            util.logger.debug(f"sync finished: current_height({my_height}), "
+                              f"unconfirmed block height({unconfirmed_block_height}), "
+                              f"max_height({max_height})")
+        finally:
+            util.logger.debug(f"block sync cleanup: "
+                              f"sync_request_result({len(self._sync_request_result)}), "
+                              f"sync_peer_target({len(self._sync_peer_target)})")
+            for f in self._sync_request_result.values():
+                f.cancel()
+            self._sync_request_result.clear()
+            self._sync_peer_target.clear()
+            self._request_limit_event = None
 
     def request_rollback(self) -> bool:
         """Request block data rollback behind to 1 block
