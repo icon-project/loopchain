@@ -733,6 +733,11 @@ class BlockManager:
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
         util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
+        if unconfirmed_block.header.height > 50 and (unconfirmed_block.header.height % 20) == 0:
+            import time
+            util.logger.warning(f"sleep for 100 seconds")
+            time.sleep(450)
+
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
