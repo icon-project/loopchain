@@ -21,7 +21,7 @@ class MockBlockManager:
     def stop_block_generate_timer(self):
         self.timer_called -= 1
 
-    def block_height_sync(self):
+    def start_block_height_sync(self):
         pass
 
     def stop_block_height_sync_timer(self):

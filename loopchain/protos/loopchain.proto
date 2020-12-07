@@ -67,6 +67,7 @@ message BlockSend {
 message ComplainLeaderRequest {
     required string complain_vote = 1;
     optional string channel = 2;
+    optional bool from_recovery = 3;
 }
 
 message TxSend {

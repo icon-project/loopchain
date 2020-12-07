@@ -686,7 +686,7 @@ class ChannelInnerTask:
         else:
             unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
-        if block is None:
+        if block is None or (unconfirmed_block_height == -1 and block_height > self._blockchain.block_height):
             if response_code is None:
                 response_code = message_code.Response.fail_wrong_block_height
             return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
@@ -720,7 +720,11 @@ class ChannelInnerTask:
                 self._block_manager.consensus_algorithm.vote(vote)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def complain_leader(self, vote_dumped: str) -> None:
+    async def complain_leader(self, vote_dumped: str, from_recovery: bool = False) -> None:
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore complain leader from not recovery node in Recovery Mode")
+            return
+
         vote_serialized = json.loads(vote_dumped)
         version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
         vote = Vote.get_leader_vote_class(version).deserialize(vote_serialized)
