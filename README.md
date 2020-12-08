@@ -21,7 +21,6 @@ and [ICON RPC Server] that processes HTTP requests from clients.
     + [TearDown](#teardown)
 * [See Also...](#see-also)
     + [Documentation](#documentation)
-    + [ICON Release](#icon-release)
     + [License](#license)
 
 ## Getting Started
@@ -139,10 +138,6 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 
 * Please visit [ICON Developers Portal]
 
-### ICON release
-
-* Please visit [ICON Release]
-
 ### License
 
 * This project follows the [Apache 2.0 License].
@@ -153,12 +148,11 @@ and [ICON RPC Server] that processes HTTP requests from clients.
 [Reward Calculator]: https://github.com/icon-project/rewardcalculator
 [virtualenv]: https://virtualenv.pypa.io/en/stable/
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
-[ICON Release]: https://github.com/icon-project/icon-release/releases
+[install loopchain via snap]: citizen/quick_start_snap.md
 
 <!--Relative links-->
 [Run Citizen Node on ICON Testnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-testnet-network
 [Run Citizen Node on ICON Mainnet network]: docs/5.%20run/run_citizen_node.md#run-citizen-node-on-icon-mainnet-network
-[install loopchain via snap]: citizen/quick_start_snap.md
 
 <!--Web pages-->
 [ICON Developers Portal]: https://www.icondev.io/
