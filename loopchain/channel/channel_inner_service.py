@@ -809,6 +809,18 @@ class ChannelInnerTask:
         block_dict = bs.serialize(block)
         return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict)
 
+    @message_queue_task
+    async def get_block_receipts(self, block_height, block_hash) -> Tuple[int, str]:
+        code, block_receipts = await self.__get_block_receipts(
+            block_hash,
+            block_height
+        )
+
+        if code != message_code.Response.success:
+            return code, json.dumps([])
+
+        return message_code.Response.success, json.dumps(block_receipts)
+
     async def __get_block(self, block_hash, block_height):
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
@@ -837,6 +849,33 @@ class ChannelInnerTask:
             logging.warning(f"{e!r}")
             fail_response_code = e.message_code
         return block, block_hash, bytes(confirm_info), fail_response_code
+
+    async def __get_block_receipts(self, block_hash, block_height):
+        # is Last Block
+        if block_hash == "" and block_height == -1 and self._blockchain.last_block:
+            block_hash = self._blockchain.last_block.header.hash.hex()
+
+        block_receipts: list = []
+        try:
+            if block_hash:
+                block: 'Block' = self._blockchain.find_block_by_hash(block_hash)
+            elif block_height != -1:
+                block: 'Block' = self._blockchain.find_block_by_height(block_height)
+            else:
+                block: Optional['Block'] = None
+
+            if block:
+                transactions = block.body.transactions
+                for tx_hash in transactions:
+                    invoke_result = self._block_manager.get_invoke_result(tx_hash)
+                    block_receipts.append(invoke_result)
+                response_code = message_code.Response.success
+            else:
+                response_code = message_code.Response.fail_wrong_block_hash
+        except PrunedHashDataError as e:
+            logging.warning(f"{e!r}")
+            response_code = e.message_code
+        return response_code, block_receipts
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
