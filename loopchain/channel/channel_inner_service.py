@@ -855,22 +855,27 @@ class ChannelInnerTask:
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
 
-        if block_hash:
-            block: 'Block' = self._blockchain.find_block_by_hash(block_hash)
-        elif block_height != -1:
-            block: 'Block' = self._blockchain.find_block_by_height(block_height)
-        else:
-            block: 'Block' = None
+        block_receipts: list = []
+        try:
+            if block_hash:
+                block: 'Block' = self._blockchain.find_block_by_hash(block_hash)
+            elif block_height != -1:
+                block: 'Block' = self._blockchain.find_block_by_height(block_height)
+            else:
+                block: Optional['Block'] = None
 
-        if block:
-            block_receipts: list = []
-            transactions = block.body.transactions
-            for tx_hash in transactions:
-                invoke_result = self._block_manager.get_invoke_result(tx_hash)
-                block_receipts.append(invoke_result)
-            return message_code.Response.success, block_receipts
-        else:
-            return message_code.Response.fail_wrong_block_hash, []
+            if block:
+                transactions = block.body.transactions
+                for tx_hash in transactions:
+                    invoke_result = self._block_manager.get_invoke_result(tx_hash)
+                    block_receipts.append(invoke_result)
+                response_code = message_code.Response.success
+            else:
+                response_code = message_code.Response.fail_wrong_block_hash
+        except PrunedHashDataError as e:
+            logging.warning(f"{e!r}")
+            response_code = e.message_code
+        return response_code, block_receipts
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
