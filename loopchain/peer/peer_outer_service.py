@@ -167,7 +167,7 @@ class PeerOuterService(loopchain_pb2_grpc.PeerServiceServicer):
             round_ = 0
 
         utils.logger.info(f"peer_id({request.peer_id}), height({request.height}), "
-                          f"round({round_}), hash({request.hash}, from_recovery({request.from_recovery!r})")
+                          f"round({round_}), hash({request.hash}), from_recovery({request.from_recovery!r})")
 
         from_recovery = request.from_recovery if request.from_recovery else False
 
