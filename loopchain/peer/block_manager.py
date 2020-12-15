@@ -748,3 +748,12 @@ class BlockManager:
             self._vote(unconfirmed_block, round_)
         else:
             self._vote(unconfirmed_block, round_)
+
+    def preps_contain(self, peer_address) -> bool:
+        last_block = self.blockchain.last_block
+        if last_block:
+            reps = self.blockchain.find_preps_addresses_by_roothash(last_block.header.reps_hash)
+            util.logger.debug(f"peer_addr: {peer_address}, reps: {reps}")
+            return peer_address in reps
+
+        return False
