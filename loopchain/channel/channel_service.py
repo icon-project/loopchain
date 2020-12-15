@@ -250,7 +250,7 @@ class ChannelService:
         self.__ready_to_height_sync()
 
         if conf.RECOVERY_MODE:
-            if self.is_support_node_function(conf.NodeFunction.Vote):
+            if self.block_manager.preps_contain(ChannelProperty().peer_address):
                 self.state_machine.recovery()
                 return
 
