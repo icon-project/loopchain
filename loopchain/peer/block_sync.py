@@ -293,7 +293,6 @@ class BlockSync:
         request_coros: OrderedDict[int, Coroutine[int, int, RequestResult]] = OrderedDict()
         request_successes: Set[int] = set()
         request_height = block_height
-        retry_time = 0
 
         while True:
             if self._max_height > request_height:
@@ -307,7 +306,6 @@ class BlockSync:
                         request_result: RequestResult = await done_future
                     except Exception as e:
                         utils.logging.exception(f"sync request failed caused by {e!r}")
-                        response_code = message_code.Response.fail
                     else:
                         _block, _max_height, _unconfirmed_block_height, _, response_code = request_result
                         utils.logger.debug(f"block_height({_block.header.height}) received")
@@ -325,12 +323,9 @@ class BlockSync:
 
                         request_successes.add(_block.header.height)
 
-                    if response_code != message_code.Response.success:
-                        retry_time += 1
-
                 request_failed = set(request_coros.keys()) - request_successes
-                if retry_time > conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES:
-                    utils.exit_and_msg(f"These heights({request_failed}) can't get Block Information.")
+                if request_failed:
+                    utils.logger.warning(f"These heights({request_failed}) can't get Block Information.")
 
                 request_coros.clear()
 
