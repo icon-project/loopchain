@@ -32,6 +32,7 @@ RequestResult = Tuple[Block, int, int, Union[List, bytes], int]
 class BlockSync:
     """Block Sync
     """
+    _default_sync_target = "solidwallet.io"
 
     def __init__(self, block_manager: 'BlockManager', channel_service: 'ChannelService'):
         self._block_manager = block_manager
@@ -383,13 +384,21 @@ class BlockSync:
         utils.logger.info(f"finished. max_height({self._max_height})")
 
     async def _retry_all_targets(self, request_height: int, retry_client: RestClient):
+        retry_count = 0
+
         while True:
             try:
                 request_result: RequestResult = await self._block_request_by_citizen(request_height, retry_client)
             except Exception as e:
                 utils.logging.warning(f"retry request failed caused by {e!r}")
+
+                if (self._default_sync_target in retry_client.target and
+                        retry_count < conf.CITIZEN_ASYNC_REQUEST_RETRY_TIMES):
+                    retry_count += 1
+                    continue
                 try:
                     retry_client.init_next_target()
+                    retry_count = 0
                     utils.logging.info(f"retry with new target: {retry_client.target}")
                 except StopIteration as e:
                     utils.logging.exception(f"does not exist next target. "
