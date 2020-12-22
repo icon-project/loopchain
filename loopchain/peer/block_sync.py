@@ -212,35 +212,36 @@ class BlockSync:
                 response_code = message_code.Response.fail
 
             if response_code == message_code.Response.success:
+                block_height = request_height
+
                 if (len(peer_stubs) > 1 and
                         (request_height - origin_block_height) % conf.SYNC_BLOCK_COUNT_PER_NODE == 0):
                     self._sync_peer_index = (self._sync_peer_index + 1) % len(peer_stubs)
 
-                if len(self._sync_request_result) >= conf.SYNC_REQUEST_RESULT_MAX_SIZE:
-                    utils.logger.debug(f"waiting event on sync request size: {len(self._sync_request_result)}")
-                    self._request_limit_event.clear()
-                    await self._request_limit_event.wait()
-                else:
-                    await asyncio.sleep(0)
+                if self._max_height <= block_height and len(self._sync_request_result) > 0:
+                    utils.logger.debug(f"waiting on sync done: max_height = {self._max_height}")
+                    await self._sync_done_event.wait()
+                    if self._max_height <= block_height:
+                        break
 
-                block_height = request_height
+                    utils.logger.debug(f"new max height({self._max_height}), "
+                                       f"request_height({request_height}) "
+                                       f"is unconfirmed block({max_height_block_is_unconfirmed_block})")
+                    if max_height_block_is_unconfirmed_block:
+                        block_height = request_height - 1
+                        max_height_block_is_unconfirmed_block = False
+                else:
+                    if len(self._sync_request_result) >= conf.SYNC_REQUEST_RESULT_MAX_SIZE:
+                        utils.logger.debug(f"waiting event on sync request size: {len(self._sync_request_result)}")
+                        self._request_limit_event.clear()
+                        await self._request_limit_event.wait()
+                    else:
+                        await asyncio.sleep(0)
             else:
                 if len(peer_stubs) == 1:
                     raise ConnectionError
 
                 self._sync_peer_index = (self._sync_peer_index + 1) % len(peer_stubs)
-
-            if self._max_height <= block_height and len(self._sync_request_result) > 0:
-                utils.logger.debug(f"waiting on sync done: max_height = {self._max_height}")
-                await self._sync_done_event.wait()
-                if self._max_height <= block_height:
-                    break
-
-                utils.logger.debug(f"new max height({self._max_height}), "
-                                   f"request_height({request_height}) "
-                                   f"is unconfirmed block({max_height_block_is_unconfirmed_block})")
-                if max_height_block_is_unconfirmed_block:
-                    block_height = request_height - 1
 
         utils.logger.info(f"finished. max_height({self._max_height})")
 
