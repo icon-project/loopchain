@@ -505,6 +505,10 @@ class BlockManager:
     def add_complain(self, vote: LeaderVote):
         util.logger.debug(f"vote({vote})")
 
+        if not self.preps_contain(vote.rep):
+            util.logger.debug(f"ignore vote from unknown prep: {vote.rep.hex_hx()}")
+            return
+
         if not self.epoch:
             util.logger.debug(f"Epoch is not initialized.")
             return
@@ -752,7 +756,7 @@ class BlockManager:
     def preps_contain(self, peer_address: ExternalAddress) -> bool:
         last_block = self.blockchain.last_block
         if last_block:
-            preps = self.blockchain.find_preps_addresses_by_roothash(last_block.header.reps_hash)
+            preps = self.blockchain.find_preps_addresses_by_roothash(last_block.header.revealed_next_reps_hash)
             util.logger.debug(f"peer_addr: {peer_address}, preps: {preps}")
             return peer_address in preps
 

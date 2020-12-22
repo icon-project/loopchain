@@ -56,6 +56,10 @@ class RestClient:
             self._set_target(target)
 
     async def init(self, endpoints: List[str]):
+        if len(endpoints) == 1:
+            self._set_target(endpoints[0])
+            return
+
         self._latest_targets = await self._select_fastest_endpoints(endpoints)
         if self._latest_targets:
             min_latency_target = next(self._latest_targets)['target']  # get first target
@@ -136,7 +140,7 @@ class RestClient:
             else:
                 response = await self._call_async_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {e!r}")
             raise
         else:
             utils.logger.debug(f"REST call async complete method_name({method.value.name})")
