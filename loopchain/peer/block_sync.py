@@ -116,8 +116,10 @@ class BlockSync:
             self._block_manager.request_rollback()
             self._block_manager.start_block_height_sync_timer(is_run_at_start=True)
         except Exception as e:
-            utils.logger.warning(f"exception during block_height_sync : {e!r}", exc_info=True)
-            self._block_manager.start_block_height_sync_timer()
+            try:
+                utils.logger.warning(f"exception during block_height_sync : {e!r}", exc_info=True)
+            finally:
+                self._block_manager.start_block_height_sync_timer()
         else:
             utils.logger.debug(f"block_height_sync is complete.")
             self._channel_service.state_machine.complete_sync()
@@ -419,7 +421,6 @@ class BlockSync:
     async def _retry_citizen_request(self):
         self._retry_queue = asyncio.Queue()
         retry_client = RestClient(channel=ChannelProperty().name)
-        retry_history = set()
 
         while True:
             try:
@@ -428,11 +429,7 @@ class BlockSync:
                 utils.logging.warning(f"retry request cancelled by {e!r}")
                 break
 
-            if request_height not in retry_history:
-                await retry_client.init(self._endpoints)
-                retry_history.add(request_height)
-
-            utils.logging.debug(f"retry history: {retry_history}")
+            await retry_client.init(self._endpoints)
             await self._retry_all_targets(request_height, retry_client)
             self._retry_queue.task_done()
 
