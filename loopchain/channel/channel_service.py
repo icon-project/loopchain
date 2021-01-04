@@ -130,7 +130,7 @@ class ChannelService:
         try:
             loop.run_forever()
         except Exception as e:
-            traceback.print_exception(type(e), e, e.__traceback__)
+            utils.logger.exception(f"{e!r}")
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             self._cancel_tasks(loop)
