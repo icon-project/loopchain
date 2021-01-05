@@ -45,8 +45,7 @@ class BlockSync:
 
         self._block_height_sync_bad_targets = {}
         self._block_height_sync_lock = threading.Lock()
-        self._block_height_thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
-        self._block_height_future: Optional[Future] = None
+        self._is_busy_sync = False
 
         self._max_height = 0
         self._sync_peer_index = 0
@@ -75,18 +74,20 @@ class BlockSync:
         return endpoints
 
     def block_height_sync(self):
-        def _print_exception(fut):
+        def _done_callback(fut):
             exc = fut.exception()
             if exc:
                 utils.logger.exception(f"{exc!r}")
+            self._is_busy_sync = False
 
         with self._block_height_sync_lock:
-            need_to_sync = (self._block_height_future is None or self._block_height_future.done())
-
-            if need_to_sync:
+            if not self._is_busy_sync:
                 self._channel_service.stop_leader_complain_timer()
-                self._block_height_future = self._block_height_thread_pool.submit(self._block_height_sync)
-                self._block_height_future.add_done_callback(_print_exception)
+
+                with ThreadPoolExecutor(1, 'BlockHeightSyncThread') as executor:
+                    sync_future = executor.submit(self._block_height_sync)
+                    sync_future.add_done_callback(_done_callback)
+                    self._is_busy_sync = True
             else:
                 utils.logger.warning('Tried block_height_sync. But failed. The thread is already running')
 
@@ -96,6 +97,7 @@ class BlockSync:
             self._blockchain.last_unconfirmed_block = None
 
     def _block_height_sync(self):
+        utils.logger.debug(f"_block_height_sync")
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             self._max_height, unconfirmed_block_height, peer_stubs = self._get_peer_stub_list()
@@ -697,9 +699,8 @@ class BlockSync:
         self._sync_done_event = None
         self._retry_queue = None
         self._retry_task = None
+        self._block_height_sync_bad_targets.clear()
 
     def stop(self):
         self._cleanup()
-
-        if self._block_height_thread_pool:
-            self._block_height_thread_pool.shutdown()
+        self._is_busy_sync = False
