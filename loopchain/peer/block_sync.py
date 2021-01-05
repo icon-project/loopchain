@@ -78,7 +78,7 @@ class BlockSync:
         def _print_exception(fut):
             exc = fut.exception()
             if exc:
-                utils.logger.exception(f"{exc!r}")
+                utils.logger.warning(f"{exc!r}")
 
         with self._block_height_sync_lock:
             need_to_sync = (self._block_height_future is None or self._block_height_future.done())
@@ -96,6 +96,7 @@ class BlockSync:
             self._blockchain.last_unconfirmed_block = None
 
     def _block_height_sync(self):
+        utils.logger.debug(f"_block_height_sync")
         # Make Peer Stub List [peer_stub, ...] and get max_height of network
         try:
             self._max_height, unconfirmed_block_height, peer_stubs = self._get_peer_stub_list()
@@ -123,6 +124,7 @@ class BlockSync:
         else:
             utils.logger.debug(f"block_height_sync is complete.")
             self._channel_service.state_machine.complete_sync()
+            utils.logger.debug(f"after complete_sync")
 
     def _block_request_to_peers_in_sync(
             self,
@@ -697,6 +699,7 @@ class BlockSync:
         self._sync_done_event = None
         self._retry_queue = None
         self._retry_task = None
+        self._block_height_sync_bad_targets.clear()
 
     def stop(self):
         self._cleanup()
