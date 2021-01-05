@@ -78,7 +78,7 @@ class BlockSync:
         def _print_exception(fut):
             exc = fut.exception()
             if exc:
-                utils.logger.warning(f"{exc!r}")
+                utils.logger.error(f"{exc!r}")
 
         with self._block_height_sync_lock:
             need_to_sync = (self._block_height_future is None or self._block_height_future.done())
@@ -699,7 +699,6 @@ class BlockSync:
         self._sync_done_event = None
         self._retry_queue = None
         self._retry_task = None
-        self._block_height_sync_bad_targets.clear()
 
     def stop(self):
         self._cleanup()
