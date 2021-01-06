@@ -234,15 +234,48 @@ def new_print_exception(etype, value, tb, limit=None, file=None, chain=True, out
         file = sys.stderr
 
     if file is not sys.stderr or console:
-        tb_print_exception(etype, value, tb, limit=limit, file=file, chain=chain)
+        new_tb_print_exception(etype, value, tb, limit=limit, file=file, chain=chain)
 
     if output_file:
-        tb_print_exception(etype, value, tb, limit=limit, file=output_file, chain=chain)
+        new_tb_print_exception(etype, value, tb, limit=limit, file=output_file, chain=chain)
 
 
 def new_excepthook(exc_type, exc_value, tb, output_file, console):
     if console:
-        sys_excepthook(exc_type, exc_value, tb)
+        new_sys_excepthook(exc_type, exc_value, tb)
 
     if output_file:
-        tb_print_exception(exc_type, exc_value, tb, file=output_file)
+        new_tb_print_exception(exc_type, exc_value, tb, file=output_file)
+
+
+def new_tb_print_exception(etype, value, tb, limit=None, file=None, chain=True):
+    try:
+        tb_print_exception(etype, value, tb, limit=limit, file=file, chain=chain)
+    except:
+        try:
+            print(f"LoopChain/new_tb_print_exception] new_tb_print_exception, "
+                  f"etype: {etype}, "
+                  f"value: {value}, "
+                  f"limit: {limit}, "
+                  f"file: {str(file)}, "
+                  f"chain: {chain}")
+            while tb is not None:
+                print(f"LoopChain/new_tb_print_exception] traceback: {tb.tb_frame}, {tb.tb_lineno}")
+                tb = tb.tb_next
+        except:
+            pass
+
+
+def new_sys_excepthook(etype, value, tb):
+    try:
+        sys_excepthook(etype, value, tb)
+    except:
+        try:
+            print(f"LoopChain/new_sys_excepthook] new_sys_excepthook, "
+                  f"etype: {etype}, "
+                  f"value: {value}, ")
+            while tb is not None:
+                print(f"LoopChain/new_sys_excepthook] traceback: {tb.tb_frame}, {tb.tb_lineno}")
+                tb = tb.tb_next
+        except:
+            pass

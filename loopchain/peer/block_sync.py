@@ -78,7 +78,7 @@ class BlockSync:
         def _print_exception(fut):
             exc = fut.exception()
             if exc:
-                utils.logger.error(f"{exc!r}")
+                utils.logger.exception(f"{exc!r}")
 
         with self._block_height_sync_lock:
             need_to_sync = (self._block_height_future is None or self._block_height_future.done())
