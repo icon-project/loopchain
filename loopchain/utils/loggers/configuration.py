@@ -253,15 +253,7 @@ def new_tb_print_exception(etype, value, tb, limit=None, file=None, chain=True):
         tb_print_exception(etype, value, tb, limit=limit, file=file, chain=chain)
     except:
         try:
-            print(f"LoopChain/new_tb_print_exception] new_tb_print_exception, "
-                  f"etype: {etype}, "
-                  f"value: {value}, "
-                  f"limit: {limit}, "
-                  f"file: {str(file)}, "
-                  f"chain: {chain}")
-            while tb is not None:
-                print(f"LoopChain/new_tb_print_exception] traceback: {tb.tb_frame}, {tb.tb_lineno}")
-                tb = tb.tb_next
+            tb_print_exception(etype, value, tb, limit=limit, file=sys.stderr, chain=chain)
         except:
             pass
 
