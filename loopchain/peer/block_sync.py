@@ -699,6 +699,7 @@ class BlockSync:
         self._sync_done_event = None
         self._retry_queue = None
         self._retry_task = None
+        self._block_height_sync_bad_targets.clear()
 
     def stop(self):
         self._cleanup()
