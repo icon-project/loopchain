@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import asyncio
+import sys
+
 from grpc._channel import _Rendezvous
 
 
@@ -24,7 +26,12 @@ def __await__(self: _Rendezvous):
     def _callback():
         try:
             future.set_result(self.result())
+        except StopIteration as e:
+            print(f"await _callback(StopIteration): {e!r}", sys.stderr)
+            # instead StopIteration to Exception
+            future.set_exception(Exception(f"await _callback(StopIteration): {e!r}"))
         except BaseException as e:
+            print(f"await _callback: {e!r}", sys.stderr)
             future.set_exception(e)
 
     loop: asyncio.BaseEventLoop = asyncio.get_event_loop()
