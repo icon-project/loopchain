@@ -619,6 +619,9 @@ class BlockSync:
                 )
                 votes.verify()
         except StopIteration:
+            # I think is is unconfirmed_block because no confirm_info.
+            # should be fix prevent unconfirmed block later.
+            utils.logger.warning(f"block: {block_}")
             raise Exception(f"confirm_info is empty: {confirm_info}")
 
         self._blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
