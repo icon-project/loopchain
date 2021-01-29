@@ -56,6 +56,8 @@ class RestClient:
             self._set_target(target)
 
     async def init(self, endpoints: List[str]):
+        utils.logger.debug(f"[init]endpoints: {endpoints}")
+
         if len(endpoints) == 1:
             self._set_target(endpoints[0])
             return
@@ -68,7 +70,10 @@ class RestClient:
     def init_next_target(self):
         logging.debug(f"switching target from: {self._target}")
         if not self._latest_targets:
-            return
+            raise StopIteration(f"latest_targets is empty")
+
+        logging.debug(f"[init_next_target] latest_targets: {self._latest_targets}")
+
         next_target = next(self._latest_targets)['target']
         logging.debug(f"switching target to: {next_target}")
         self._set_target(next_target)
@@ -114,6 +119,7 @@ class RestClient:
 
         # sort results by min elapsed_time with max block height
         sorted_result = sorted(results, key=lambda k: (-k['height'], k['elapsed_time']))
+        utils.logger.debug(f"[_select_fastest_endpoints]sorted_result: {sorted_result}")
         return iter(sorted_result)
 
     def call(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:

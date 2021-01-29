@@ -358,6 +358,7 @@ class ChannelService:
 
     def _get_radiostations(self):
         radiostations: list = self.get_channel_option().get('radiostations')
+        utils.logger.debug(f"[_get_radiostations]: {radiostations}")
         if not radiostations:
             logging.warning(f"no configurations for radiostations.")
             return None
@@ -365,6 +366,7 @@ class ChannelService:
         radiostations = utils.convert_local_ip_to_private_ip(radiostations)
         try:
             radiostations.remove(ChannelProperty().rest_target)
+            utils.logger.debug(f"[remove rest_target]: {ChannelProperty().rest_target}")
         except ValueError:
             pass
 
