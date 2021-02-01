@@ -11,10 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+from typing import Optional
 
 from earlgrey import message_queue_task, MessageQueueStub
 
-from loopchain import utils
+from loopchain.utils import exit_and_msg
 
 
 class IconScoreInnerTask:
@@ -63,5 +64,5 @@ class IconScoreInnerTask:
 class IconScoreInnerStub(MessageQueueStub[IconScoreInnerTask]):
     TaskType = IconScoreInnerTask
 
-    def _callback_connection_lost_callback(self, connection):
-        utils.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [IconScoreInnerStub] connection closed. sender = {sender}, exc = {exc}")

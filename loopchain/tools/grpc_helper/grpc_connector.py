@@ -32,7 +32,8 @@ class GRPCConnector(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType):
+    def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType,
+                              compression: grpc.Compression):
         pass
 
 
@@ -43,8 +44,11 @@ class GRPCConnectorInsecure(GRPCConnector):
         server.add_insecure_port(host)
 
     @classmethod
-    def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType):
-        return grpc.insecure_channel(host)
+    def create_client_channel(cls, keys: GRPCSecureKeyCollection,
+                              host,
+                              ssl_auth_type: conf.SSLAuthType,
+                              compression=grpc.Compression.NoCompression):
+        return grpc.insecure_channel(host, compression=compression)
 
 
 class GRPCConnectorServerOnly(GRPCConnector):
@@ -58,10 +62,14 @@ class GRPCConnectorServerOnly(GRPCConnector):
         server.add_secure_port(host, credentials)
 
     @classmethod
-    def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType):
+    def create_client_channel(cls,
+                              keys: GRPCSecureKeyCollection,
+                              host,
+                              ssl_auth_type: conf.SSLAuthType,
+                              compression=grpc.Compression.NoCompression):
         credentials = grpc.ssl_channel_credentials(
             root_certificates=keys.ssl_root_crt)
-        return grpc.secure_channel(host, credentials)
+        return grpc.secure_channel(host, credentials, compression=compression)
 
 
 class GRPCConnectorMutual(GRPCConnector):
@@ -75,9 +83,13 @@ class GRPCConnectorMutual(GRPCConnector):
         server.add_secure_port(host, credentials)
 
     @classmethod
-    def create_client_channel(cls, keys: GRPCSecureKeyCollection, host, ssl_auth_type: conf.SSLAuthType):
+    def create_client_channel(cls,
+                              keys: GRPCSecureKeyCollection,
+                              host,
+                              ssl_auth_type: conf.SSLAuthType,
+                              compression=grpc.Compression.NoCompression):
         credentials = grpc.ssl_channel_credentials(
             root_certificates=keys.ssl_root_crt,
             private_key=keys.ssl_pk,
             certificate_chain=keys.ssl_crt)
-        return grpc.secure_channel(host, credentials)
+        return grpc.secure_channel(host, credentials, compression=compression)

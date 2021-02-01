@@ -1,11 +1,9 @@
 """A management class for blockchain."""
 
 import json
-import threading
 import traceback
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor, Future
-from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, cast
+from typing import TYPE_CHECKING, Dict, DefaultDict, Optional, Tuple, List, Union, cast
 
 from pkg_resources import parse_version
 
@@ -13,16 +11,14 @@ import loopchain.utils as util
 from loopchain import configure as conf
 from loopchain.baseservice import TimerService, ObjectManager, Timer, RestMethod
 from loopchain.baseservice.aging_cache import AgingCache
-from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, exception,
-                                  NoConfirmInfo,
-                                  BlockHeightMismatch, RoundMismatch)
-from loopchain.blockchain.blocks import Block, BlockVerifier, BlockSerializer
+from loopchain.blockchain import (BlockChain, CandidateBlocks, Epoch, BlockchainError, NID, BlockHeightMismatch,
+                                  RoundMismatch)
+from loopchain.blockchain.blocks import Block, BlockVerifier
 from loopchain.blockchain.blocks.block import NextRepsChangeReason
-from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock,
-                                            NotInReps, NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
-from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync, TransactionDuplicatedHashError
-from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock, \
-    ScoreInvokeError
+from loopchain.blockchain.exception import (ConfirmInfoInvalid, ConfirmInfoInvalidAddedBlock, NotInReps,
+                                            NotReadyToConfirmInfo, UnrecordedBlock, UnexpectedLeader)
+from loopchain.blockchain.exception import ConfirmInfoInvalidNeedBlockSync
+from loopchain.blockchain.exception import InvalidUnconfirmedBlock, DuplicationUnconfirmedBlock
 from loopchain.blockchain.transactions import Transaction, TransactionSerializer, v2, v3
 from loopchain.blockchain.types import ExternalAddress
 from loopchain.blockchain.types import TransactionStatusInQueue, Hash32
@@ -31,14 +27,16 @@ from loopchain.blockchain.votes.v0_5 import LeaderVote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc import GenericJsonRpcServerError
 from loopchain.peer import status_code
+from loopchain.peer.block_sync import BlockSync
 from loopchain.peer.consensus_siever import ConsensusSiever
-from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
-from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.protos import loopchain_pb2
 from loopchain.utils.icon_service import convert_params, ParamType, response_to_json_query
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+
+RequestResult = Tuple[Block, int, int, Union[List, bytes], int]
 
 
 class BlockManager:
@@ -59,16 +57,15 @@ class BlockManager:
         self.__peer_type = None
         self.__consensus_algorithm = None
         self.candidate_blocks = CandidateBlocks(self.blockchain)
-        self.__block_height_sync_bad_targets = {}
-        self.__block_height_sync_lock = threading.Lock()
-        self.__block_height_thread_pool: ThreadPoolExecutor = ThreadPoolExecutor(1, 'BlockHeightSyncThread')
-        self.__block_height_future: Future = None
+
         self.set_peer_type(loopchain_pb2.PEER)
         self.__service_status = status_code.Service.online
 
         # old_block_hashes[height][new_block_hash] = old_block_hash
         self.__old_block_hashes: DefaultDict[int, Dict[Hash32, Hash32]] = defaultdict(dict)
         self.epoch: Epoch = None
+
+        self._block_sync = BlockSync(self, channel_service)
 
     @property
     def channel_name(self):
@@ -140,11 +137,34 @@ class BlockManager:
             f"target_reps_hash({target_reps_hash})")
 
         block_dumped = self.blockchain.block_dumps(block_)
-        ObjectManager().channel_service.broadcast_scheduler.schedule_broadcast(
+        send_kwargs = {
+            "block": block_dumped,
+            "round_": round_,
+            "channel": self.__channel_name,
+            "peer_id": block_.header.peer_id.hex_hx(),
+            "height": block_.header.height,
+            "hash": block_.header.hash.hex()
+        }
+
+        release_recovery_mode = False
+        if conf.RECOVERY_MODE:
+            from loopchain.tools.recovery import Recovery
+            if self.blockchain.block_height <= Recovery.release_block_height():
+                util.logger.info(f"broadcast block({block_.header.height}) from recovery node")
+                send_kwargs["from_recovery"] = True
+
+            if self.blockchain.block_height >= Recovery.release_block_height():
+                release_recovery_mode = True
+
+        self.__channel_service.broadcast_scheduler.schedule_broadcast(
             "AnnounceUnconfirmedBlock",
-            loopchain_pb2.BlockSend(block=block_dumped, round_=round_, channel=self.__channel_name),
+            loopchain_pb2.BlockSend(**send_kwargs),
             reps_hash=target_reps_hash
         )
+
+        if release_recovery_mode:
+            conf.RECOVERY_MODE = False
+            util.logger.info(f"recovery mode released at {self.blockchain.block_height}")
 
     def add_tx_obj(self, tx):
         """전송 받은 tx 를 Block 생성을 위해서 큐에 입력한다. load 하지 않은 채 입력한다.
@@ -215,12 +235,12 @@ class BlockManager:
                     await rs_client.call_async(rest_method,
                                                rest_method.value.params(**raw_data))
                 except Exception as e:
-                    util.logger.warning(f"Relay failed. Tx({tx}), {e}")
+                    util.logger.warning(f"Relay failed. Tx({tx}), {e!r}")
                 else:
                     break
 
     def restore_tx_status(self, tx: Transaction):
-        util.logger.debug(f"restore_tx_status() tx : {tx}")
+        util.logger.debug(f"tx : {tx}")
         self.__tx_queue.set_item_status(tx.hash.hex(), TransactionStatusInQueue.normal)
 
     def __validate_duplication_of_unconfirmed_block(self, unconfirmed_block: Block):
@@ -328,11 +348,11 @@ class BlockManager:
         nid = self.blockchain.find_nid()
         if nid is None:
             genesis_block = self.blockchain.find_block_by_height(0)
-            self.__rebuild_nid(genesis_block)
+            self.rebuild_nid(genesis_block)
         else:
             ChannelProperty().nid = nid
 
-    def __rebuild_nid(self, block: Block):
+    def rebuild_nid(self, block: Block):
         nid = NID.unknown.value
         if block.header.hash.hex() == BlockManager.MAINNET:
             nid = NID.mainnet.value
@@ -350,86 +370,10 @@ class BlockManager:
         self.blockchain.put_nid(nid)
         ChannelProperty().nid = nid
 
-    def block_height_sync(self):
-        def _print_exception(fut):
-            exc = fut.exception()
-            if exc:
-                traceback.print_exception(type(exc), exc, exc.__traceback__)
+    def start_block_height_sync(self):
+        self._block_sync.block_height_sync()
 
-        with self.__block_height_sync_lock:
-            need_to_sync = (self.__block_height_future is None or self.__block_height_future.done())
-
-            if need_to_sync:
-                self.__channel_service.stop_leader_complain_timer()
-                self.__block_height_future = self.__block_height_thread_pool.submit(self.__block_height_sync)
-                self.__block_height_future.add_done_callback(_print_exception)
-            else:
-                util.logger.warning('Tried block_height_sync. But failed. The thread is already running')
-
-            return need_to_sync, self.__block_height_future
-
-    def __block_request(self, peer_stub, block_height):
-        """request block by gRPC or REST
-
-        :param peer_stub:
-        :param block_height:
-        :return block, max_block_height, confirm_info, response_code
-        """
-        if ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            return self.__block_request_by_voter(block_height, peer_stub)
-        else:
-            # request REST(json-rpc) way to RS peer
-            return self.__block_request_by_citizen(block_height)
-
-    def __block_request_by_voter(self, block_height, peer_stub):
-        response = peer_stub.BlockSync(loopchain_pb2.BlockSyncRequest(
-            block_height=block_height,
-            channel=self.__channel_name
-        ), conf.GRPC_TIMEOUT)
-
-        if response.response_code == message_code.Response.fail_no_confirm_info:
-            raise NoConfirmInfo(f"The peer has not confirm_info of the block by height({block_height}).")
-        else:
-            try:
-                block = self.blockchain.block_loads(response.block)
-            except Exception as e:
-                traceback.print_exc()
-                raise exception.BlockError(f"Received block is invalid: original exception={e}")
-
-            votes_dumped: bytes = response.confirm_info
-            try:
-                votes_serialized = json.loads(votes_dumped)
-                version = self.blockchain.block_versioner.get_version(block_height)
-                votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
-            except json.JSONDecodeError:
-                votes = votes_dumped
-
-        return block, response.max_block_height, response.unconfirmed_block_height, votes, response.response_code
-
-    def __block_request_by_citizen(self, block_height):
-        rs_client = ObjectManager().channel_service.rs_client
-        get_block_result = rs_client.call(
-            RestMethod.GetBlockByHeight,
-            RestMethod.GetBlockByHeight.value.params(height=str(block_height))
-        )
-        last_block = rs_client.call(RestMethod.GetLastBlock)
-        if not last_block:
-            raise exception.InvalidBlockSyncTarget("The Radiostation may not be ready. It will retry after a while.")
-
-        max_height = self.blockchain.block_versioner.get_height(last_block)
-        block_version = self.blockchain.block_versioner.get_version(block_height)
-        block_serializer = BlockSerializer.new(block_version, self.blockchain.tx_versioner)
-        block = block_serializer.deserialize(get_block_result['block'])
-        votes_dumped: str = get_block_result.get('confirm_info', '')
-        try:
-            votes_serialized = json.loads(votes_dumped)
-            version = self.blockchain.block_versioner.get_version(block_height)
-            votes = Votes.get_block_votes_class(version).deserialize_votes(votes_serialized)
-        except json.JSONDecodeError:
-            votes = votes_dumped
-        return block, max_height, -1, votes, message_code.Response.success
-
-    def __start_block_height_sync_timer(self, is_run_at_start=False):
+    def start_block_height_sync_timer(self, is_run_at_start=False):
         timer_key = TimerService.TIMER_KEY_BLOCK_HEIGHT_SYNC
         timer_service: TimerService = self.__channel_service.timer_service
 
@@ -440,7 +384,7 @@ class BlockManager:
                 Timer(
                     target=timer_key,
                     duration=conf.GET_LAST_BLOCK_TIMER,
-                    callback=self.block_height_sync,
+                    callback=self.start_block_height_sync,
                     is_repeat=True,
                     is_run_at_start=is_run_at_start
                 )
@@ -467,143 +411,6 @@ class BlockManager:
         if self.__consensus_algorithm:
             self.__consensus_algorithm.stop()
 
-    def __add_block_by_sync(self, block_, confirm_info=None):
-        util.logger.debug(f"__add_block_by_sync :: height({block_.header.height}) hash({block_.header.hash})")
-
-        block_version = self.blockchain.block_versioner.get_version(block_.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner, raise_exceptions=False)
-        block_verifier.invoke_func = self.blockchain.get_invoke_func(block_.header.height)
-
-        reps_getter = self.blockchain.find_preps_addresses_by_roothash
-        block_verifier.verify_loosely(block_,
-                                      self.blockchain.last_block,
-                                      self.blockchain,
-                                      reps_getter=reps_getter)
-        need_to_write_tx_info, need_to_score_invoke = True, True
-        for exc in block_verifier.exceptions:
-            if isinstance(exc, TransactionDuplicatedHashError):
-                need_to_write_tx_info = False
-            if isinstance(exc, ScoreInvokeError) and not need_to_write_tx_info:
-                need_to_score_invoke = False
-
-        exc = next((exc for exc in block_verifier.exceptions
-                    if not isinstance(exc, TransactionDuplicatedHashError)), None)
-        if exc:
-            if isinstance(exc, ScoreInvokeError) and not need_to_score_invoke:
-                pass
-            else:
-                raise exc
-
-        if parse_version(block_.header.version) >= parse_version("0.3"):
-            reps = reps_getter(block_.header.reps_hash)
-            round_ = next(vote for vote in confirm_info if vote).round
-            votes = Votes.get_block_votes_class(block_.header.version)(
-                reps,
-                conf.VOTING_RATIO,
-                block_.header.height,
-                round_,
-                block_.header.hash,
-                confirm_info
-            )
-            votes.verify()
-        return self.blockchain.add_block(block_, confirm_info, need_to_write_tx_info, need_to_score_invoke)
-
-    def __confirm_prev_block_by_sync(self, block_):
-        prev_block = self.blockchain.last_unconfirmed_block
-        confirm_info = block_.body.confirm_prev_block
-
-        util.logger.debug(f"confirm_prev_block_by_sync :: height({prev_block.header.height})")
-
-        block_version = self.blockchain.block_versioner.get_version(prev_block.header.height)
-        block_verifier = BlockVerifier.new(block_version, self.blockchain.tx_versioner)
-        block_verifier.invoke_func = self.blockchain.get_invoke_func(prev_block.header.height)
-
-        reps_getter = self.blockchain.find_preps_addresses_by_roothash
-        block_verifier.verify_loosely(prev_block,
-                                      self.blockchain.last_block,
-                                      self.blockchain,
-                                      reps_getter=reps_getter)
-        return self.blockchain.add_block(prev_block, confirm_info)
-
-    def __block_request_to_peers_in_sync(self, peer_stubs, my_height, unconfirmed_block_height, max_height):
-        """Extracted func from __block_height_sync.
-        It has block request loop with peer_stubs for block height sync.
-
-        :param peer_stubs:
-        :param my_height:
-        :param unconfirmed_block_height:
-        :param max_height:
-        :return: my_height, max_height
-        """
-        peer_index = 0
-
-        while max_height > my_height:
-            if self.__channel_service.state_machine.state != 'BlockSync':
-                break
-
-            peer_target, peer_stub = peer_stubs[peer_index]
-            util.logger.info(f"Block Height Sync Target : {peer_target} / request height({my_height + 1})")
-            try:
-                block, max_block_height, current_unconfirmed_block_height, confirm_info, response_code = \
-                    self.__block_request(peer_stub, my_height + 1)
-            except NoConfirmInfo as e:
-                util.logger.warning(f"{e}")
-                response_code = message_code.Response.fail_no_confirm_info
-            except Exception as e:
-                util.logger.warning(f"There is a bad peer, I hate you: {type(e), e}")
-                traceback.print_exc()
-                response_code = message_code.Response.fail
-
-            if response_code == message_code.Response.success:
-                util.logger.debug(f"try add block height: {block.header.height}")
-
-                max_block_height = max(max_block_height, current_unconfirmed_block_height)
-                if max_block_height > max_height:
-                    util.logger.spam(f"set max_height :{max_height} -> {max_block_height}")
-                    max_height = max_block_height
-                    if current_unconfirmed_block_height == max_block_height:
-                        unconfirmed_block_height = current_unconfirmed_block_height
-
-                try:
-                    if (max_height == unconfirmed_block_height == block.header.height and
-                            max_height > 0 and not confirm_info):
-                        self.candidate_blocks.add_block(
-                            block, self.blockchain.find_preps_addresses_by_header(block.header))
-                        self.blockchain.last_unconfirmed_block = block
-                    else:
-                        self.__add_block_by_sync(block, confirm_info)
-
-                    if block.header.height == 0:
-                        self.__rebuild_nid(block)
-                    elif self.blockchain.find_nid() is None:
-                        genesis_block = self.blockchain.find_block_by_height(0)
-                        self.__rebuild_nid(genesis_block)
-
-                except KeyError as e:
-                    util.logger.error(f"{type(e)} during block height sync: {e, e.__traceback__}")
-                    raise
-                except exception.BlockError:
-                    util.exit_and_msg("Block Error Clear all block and restart peer.")
-                    raise
-                except Exception as e:
-                    util.logger.warning(f"fail block height sync: {type(e), e}")
-
-                    if self.blockchain.last_block.header.hash != block.header.prev_hash:
-                        raise exception.PreviousBlockMismatch
-                    else:
-                        self.__block_height_sync_bad_targets[peer_target] = max_block_height
-                        raise
-                else:
-                    peer_index = (peer_index + 1) % len(peer_stubs)
-                    my_height += 1
-            else:
-                if len(peer_stubs) == 1:
-                    raise ConnectionError
-
-                peer_index = (peer_index + 1) % len(peer_stubs)
-
-        return my_height, max_height
-
     def request_rollback(self) -> bool:
         """Request block data rollback behind to 1 block
 
@@ -611,8 +418,7 @@ class BlockManager:
         """
         target_block = self.blockchain.find_block_by_hash32(self.blockchain.last_block.header.prev_hash)
         if not self.blockchain.check_rollback_possible(target_block):
-            util.logger.warning(f"request_rollback() The request cannot be "
-                                f"rolled back to the target block({target_block}).")
+            util.logger.warning(f"The request cannot be rollback to the target block({target_block}).")
             return False
 
         request_origin = {
@@ -623,53 +429,22 @@ class BlockManager:
         request = convert_params(request_origin, ParamType.roll_back)
         stub = StubCollection().icon_score_stubs[ChannelProperty().name]
 
-        util.logger.debug(f"request_roll_back() Rollback request({request})")
+        util.logger.debug(f"Rollback request({request})")
         response: dict = cast(dict, stub.sync_task().rollback(request))
         try:
             response_to_json_query(response)
         except GenericJsonRpcServerError as e:
-            util.logger.warning(f"request_rollback() response error = {e}")
+            util.logger.warning(f"response error = {e}")
         else:
             result_height = response.get("blockHeight")
             if hex(target_block.header.height) == result_height:
-                util.logger.info(f"request_rollback() Rollback Success. result height = {result_height}")
+                util.logger.info(f"Rollback Success. result height = {result_height}")
                 self.blockchain.rollback(target_block)
                 self.rebuild_block()
                 return True
 
-        util.logger.warning(f"request_rollback() Rollback Fail. response = {response}")
+        util.logger.warning(f"Rollback Fail. response = {response}")
         return False
-
-    def __block_height_sync(self):
-        # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        try:
-            max_height, unconfirmed_block_height, peer_stubs = self.__get_peer_stub_list()
-
-            if self.blockchain.last_unconfirmed_block is not None:
-                self.candidate_blocks.remove_block(self.blockchain.last_unconfirmed_block.header.hash)
-            self.blockchain.last_unconfirmed_block = None
-
-            my_height = self.blockchain.block_height
-            util.logger.debug(f"in __block_height_sync max_height({max_height}), my_height({my_height})")
-
-            # prevent_next_block_mismatch until last_block_height in block DB.
-            # (excludes last_unconfirmed_block_height)
-            self.blockchain.prevent_next_block_mismatch(self.blockchain.block_height + 1)
-            self.__block_request_to_peers_in_sync(peer_stubs,
-                                                  my_height,
-                                                  unconfirmed_block_height,
-                                                  max_height)
-        except exception.PreviousBlockMismatch as e:
-            util.logger.warning(f"There is a previous block hash mismatch! :: {type(e)}, {e}")
-            self.request_rollback()
-            self.__start_block_height_sync_timer(is_run_at_start=True)
-        except Exception as e:
-            util.logger.warning(f"exception during block_height_sync :: {type(e)}, {e}")
-            traceback.print_exc()
-            self.__start_block_height_sync_timer()
-        else:
-            util.logger.debug(f"block_height_sync is complete.")
-            self.__channel_service.state_machine.complete_sync()
 
     def get_next_leader(self) -> Optional[str]:
         """get next leader from last_block of BlockChain. for new_epoch and set_peer_type_in_channel
@@ -691,7 +466,7 @@ class BlockManager:
         else:
             next_leader = self.__get_next_leader_by_block(block)
 
-        util.logger.spam(f"next_leader({next_leader}) from block({block.header.height})")
+        util.logger.debug(f"next_leader({next_leader}) from block({block.header.height})")
         return next_leader
 
     def __get_next_leader_by_block(self, block: Block) -> str:
@@ -703,70 +478,21 @@ class BlockManager:
         else:
             return block.header.next_leader.hex_hx()
 
-    def __get_peer_stub_list(self) -> Tuple[int, int, List[Tuple]]:
-        """It updates peer list for block manager refer to peer list on the loopchain network.
-        This peer list is not same to the peer list of the loopchain network.
-
-        :return max_height: a height of current blockchain
-        :return unconfirmed_block_height: unconfirmed_block_height on the network
-        :return peer_stubs: current peer list on the network (target, peer_stub)
-        """
-        max_height = -1      # current max height
-        unconfirmed_block_height = -1
-        peer_stubs = []     # peer stub list for block height synchronization
-
-        if not ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote):
-            rs_client = ObjectManager().channel_service.rs_client
-            status_response = rs_client.call(RestMethod.Status)
-            max_height = status_response['block_height']
-            peer_stubs.append((rs_client.target, rs_client))
-            return max_height, unconfirmed_block_height, peer_stubs
-
-        # Make Peer Stub List [peer_stub, ...] and get max_height of network
-        self.__block_height_sync_bad_targets = {k: v for k, v in self.__block_height_sync_bad_targets.items()
-                                                if v > self.blockchain.block_height}
-        util.logger.info(f"Bad Block Sync Peer : {self.__block_height_sync_bad_targets}")
-        peer_target = ChannelProperty().peer_target
-        my_height = self.blockchain.block_height
-
+    def get_target_list(self) -> List[str]:
         if self.blockchain.last_block:
             reps_hash = self.blockchain.get_reps_hash_by_header(self.blockchain.last_block.header)
         else:
             reps_hash = ChannelProperty().crep_root_hash
         rep_targets = self.blockchain.find_preps_targets_by_roothash(reps_hash)
-        target_list = list(rep_targets.values())
-        for target in target_list:
-            if target == peer_target:
-                continue
-            if target in self.__block_height_sync_bad_targets:
-                continue
-            util.logger.debug(f"try to target({target})")
-            channel = GRPCHelper().create_client_channel(target)
-            stub = loopchain_pb2_grpc.PeerServiceStub(channel)
-            try:
-                response = stub.GetStatus(loopchain_pb2.StatusRequest(
-                    request='block_sync',
-                    channel=self.__channel_name,
-                ), conf.GRPC_TIMEOUT_SHORT)
-                target_block_height = max(response.block_height, response.unconfirmed_block_height)
-
-                if target_block_height > my_height:
-                    peer_stubs.append((target, stub))
-                    max_height = max(max_height, target_block_height)
-                    unconfirmed_block_height = max(unconfirmed_block_height, response.unconfirmed_block_height)
-
-            except Exception as e:
-                util.logger.warning(f"This peer has already been removed from the block height target node. {e}")
-
-        return max_height, unconfirmed_block_height, peer_stubs
+        return list(rep_targets.values())
 
     def new_epoch(self):
         new_leader_id = self.get_next_leader()
         self.epoch = Epoch(self, new_leader_id)
-        util.logger.info(f"Epoch height({self.epoch.height}), leader ({self.epoch.leader_id})")
+        util.logger.info(f"Epoch height({self.epoch.height}), leader({self.epoch.leader_id})")
 
     def stop(self):
-        self.__block_height_thread_pool.shutdown()
+        self._block_sync.stop()
 
         if self.consensus_algorithm:
             self.consensus_algorithm.stop()
@@ -777,7 +503,11 @@ class BlockManager:
         self.blockchain.close_blockchain_store()
 
     def add_complain(self, vote: LeaderVote):
-        util.logger.spam(f"add_complain vote({vote})")
+        util.logger.debug(f"vote({vote})")
+
+        if not self.preps_contain(vote.rep):
+            util.logger.debug(f"ignore vote from unknown prep: {vote.rep.hex_hx()}")
+            return
 
         if not self.epoch:
             util.logger.debug(f"Epoch is not initialized.")
@@ -812,10 +542,16 @@ class BlockManager:
         )
 
         fail_vote_dumped = json.dumps(fail_vote.serialize())
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complain_vote=fail_vote_dumped,
-            channel=self.channel_name
-        )
+
+        complain_kwargs = {
+            "complain_vote": fail_vote_dumped,
+            "channel": self.channel_name
+        }
+
+        if conf.RECOVERY_MODE:
+            complain_kwargs["from_recovery"] = True
+
+        request = loopchain_pb2.ComplainLeaderRequest(**complain_kwargs)
 
         reps_hash = self.blockchain.last_block.header.revealed_next_reps_hash or ChannelProperty().crep_root_hash
         rep_id = leader_vote.rep.hex_hx()
@@ -867,13 +603,18 @@ class BlockManager:
 
         leader_vote_serialized = leader_vote.serialize()
         leader_vote_dumped = json.dumps(leader_vote_serialized)
-        request = loopchain_pb2.ComplainLeaderRequest(
-            complain_vote=leader_vote_dumped,
-            channel=self.channel_name
-        )
+
+        complain_kwargs = {
+            "complain_vote": leader_vote_dumped,
+            "channel": self.channel_name
+        }
+
+        if conf.RECOVERY_MODE:
+            complain_kwargs["from_recovery"] = True
+
+        request = loopchain_pb2.ComplainLeaderRequest(**complain_kwargs)
 
         util.logger.debug(
-            f"leader complain "
             f"complained_leader_id({complained_leader_id}), "
             f"new_leader_id({new_leader_id})")
 
@@ -883,7 +624,9 @@ class BlockManager:
                                                                       reps_hash=reps_hash)
 
     def vote_unconfirmed_block(self, block: Block, round_: int, is_validated):
-        util.logger.debug(f"vote_unconfirmed_block() ({block.header.height}/{block.header.hash}/{is_validated})")
+        util.logger.debug(f"height({block.header.height}), "
+                          f"block_hash({block.header.hash}), "
+                          f"is_validated({is_validated})")
         vote = Vote.get_block_vote_class(block.header.version).new(
             signer=ChannelProperty().peer_auth,
             block_height=block.header.height,
@@ -910,16 +653,21 @@ class BlockManager:
     def verify_confirm_info(self, unconfirmed_block: Block):
         unconfirmed_header = unconfirmed_block.header
         my_height = self.blockchain.block_height
+        util.logger.info(f"my_height({my_height}), unconfirmed_block_height({unconfirmed_header.height})")
+
         if my_height < (unconfirmed_header.height - 2):
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height})"
+            )
 
         is_rep = ObjectManager().channel_service.is_support_node_function(conf.NodeFunction.Vote)
         if is_rep and my_height == unconfirmed_header.height - 2 and not self.blockchain.last_unconfirmed_block:
             raise ConfirmInfoInvalidNeedBlockSync(
                 f"trigger block sync: my_height({my_height}), "
-                f"unconfirmed_block.header.height({unconfirmed_header.height})")
+                f"unconfirmed_block.header.height({unconfirmed_header.height}), "
+                f"last_unconfirmed_block({self.blockchain.last_unconfirmed_block})"
+            )
 
         # a block is already added that same height unconfirmed_block height
         if my_height >= unconfirmed_header.height:
@@ -941,11 +689,11 @@ class BlockManager:
                 prev_reps = reps_getter(prev_block.header.reps_hash)
                 block_verifier.verify_prev_votes(unconfirmed_block, prev_reps)
         except Exception as e:
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
             traceback.print_exc()
             raise ConfirmInfoInvalid("Unconfirmed block has no valid confirm info for previous block")
 
-    async def _vote(self, unconfirmed_block: Block, round_: int):
+    def _vote(self, unconfirmed_block: Block, round_: int):
         exc = None
         try:
             block_version = self.blockchain.block_versioner.get_version(unconfirmed_block.header.height)
@@ -961,14 +709,13 @@ class BlockManager:
                                   generator=self.blockchain.get_expected_generator(unconfirmed_block),
                                   reps_getter=reps_getter)
         except NotInReps as e:
-            util.logger.debug(f"in _vote Not In Reps({e}) state({self.__channel_service.state_machine.state})")
+            util.logger.debug(f"Not In Reps({e}) state({self.__channel_service.state_machine.state})")
         except BlockHeightMismatch as e:
             exc = e
-            util.logger.warning(f"Don't vote to the block of unexpected height.\n{e}")
+            util.logger.warning(f"Don't vote to the block of unexpected height. {e!r}")
         except Exception as e:
             exc = e
-            util.logger.error(e)
-            traceback.print_exc()
+            util.logger.exception(f"{e!r}")
         else:
             self.candidate_blocks.add_block(
                 unconfirmed_block, self.blockchain.find_preps_addresses_by_header(unconfirmed_block.header))
@@ -981,27 +728,36 @@ class BlockManager:
             if self.__channel_service.state_machine.state == "BlockGenerate" and self.consensus_algorithm:
                 self.consensus_algorithm.vote(vote)
 
-    async def vote_as_peer(self, unconfirmed_block: Block, round_: int):
+    def vote_as_peer(self, unconfirmed_block: Block, round_: int):
         """Vote to AnnounceUnconfirmedBlock
         """
         util.logger.debug(
-            f"in vote_as_peer "
             f"height({unconfirmed_block.header.height}) "
             f"round({round_}) "
             f"unconfirmed_block({unconfirmed_block.header.hash.hex()})")
+        util.logger.warning(f"last_block({self.blockchain.last_block.header.hash})")
 
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
         except RoundMismatch as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.prev_hash)
-            util.logger.warning(e)
+            util.logger.warning(f"{e!r}")
         except UnrecordedBlock as e:
-            util.logger.info(e)
+            util.logger.info(f"{e!r}")
         except DuplicationUnconfirmedBlock as e:
-            util.logger.debug(e)
-            await self._vote(unconfirmed_block, round_)
+            util.logger.debug(f"{e!r}")
+            self._vote(unconfirmed_block, round_)
         else:
-            await self._vote(unconfirmed_block, round_)
+            self._vote(unconfirmed_block, round_)
+
+    def preps_contain(self, peer_address: ExternalAddress) -> bool:
+        last_block = self.blockchain.last_block
+        if last_block:
+            preps = self.blockchain.find_preps_addresses_by_roothash(last_block.header.revealed_next_reps_hash)
+            util.logger.debug(f"peer_addr: {peer_address}, preps: {preps}")
+            return peer_address in preps
+
+        return False

@@ -1,10 +1,4 @@
-"""All loopchain configure value can set by system environment.
-But before set by system environment, loopchain use this default values.
-
-configure 의 default 값으로 지정하여 사용한다.
-이곳에서 직접 대입하거나 export 로 값을 지정할 수 있다.
-configure 에서 사용되기 전에 다른 값을 이용하여 가공되어야 하는 경우 이 파일내에서 가공하면
-configure 에서는 그대로 사용된다. (기존과 같은 방식을 유지할 수 있다.)"""
+"""It use setting default value about configure. It can set directly value or use export."""
 
 import os
 import sys
@@ -22,6 +16,12 @@ else:
     sys.path.append(PATH_PROTO_BUFFERS_TEST)
 
 
+# RECOVERY MODE
+RECOVERY_MODE: bool = False
+RECOVERY_CHECK_INTERVAL: int = 5   # sec
+RELEASE_RECOVERY_BLOCK_COUNT: int = 5
+
+
 #############
 # LOGGING ###
 #############
@@ -34,7 +34,7 @@ LOOPCHAIN_LOG_LEVEL = os.getenv('LOOPCHAIN_LOG_LEVEL', 'DEBUG')
 LOOPCHAIN_DEVELOP_LOG_LEVEL = "SPAM"
 LOOPCHAIN_OTHER_LOG_LEVEL = "WARNING"
 LOG_FORMAT = "%(asctime)s,%(msecs)03d %(process)d %(thread)d {PEER_ID} {CHANNEL_NAME} " \
-             "%(levelname)s %(filename)s(%(lineno)d) %(message)s"
+             "%(levelname)-8s [%(filename)s:%(funcName)s:%(lineno)d] %(message)s"
 
 LOG_OUTPUT_TYPE = LogOutputType.console | LogOutputType.file
 
@@ -75,23 +75,13 @@ class KeyLoadType(IntEnum):
 
 
 IP_LOCAL = '127.0.0.1'
-IP_BLOCKGENERATOR = IP_LOCAL
-IP_PEER = IP_LOCAL
-IP_RADIOSTATION = IP_LOCAL
-IP_RADIOSTATION_SUB = IP_LOCAL
-INNER_SERVER_BIND_IP = '127.0.0.1'
 DOCKER_HOST = os.getenv('DOCKER_HOST')
 LOOPCHAIN_HOST = os.getenv('LOOPCHAIN_HOST', DOCKER_HOST)
 
 PORT_PEER = 7100
-PORT_INNER_SERVICE = 0
-PORT_DIFF_INNER_SERVICE = 10000  # set inner_service_port to (peer_service_port + this value)
-PORT_BLOCKGENERATOR = 7101
 PORT_RADIOSTATION = 7102
-PORT_RADIOSTATION_SUB = 7102
 PORT_DIFF_SCORE_CONTAINER = 20021  # peer service 가 score container 를 시작할 때 자신과 다른 포트를 사용하도록 차이를 설정한다.
 PORT_DIFF_BETWEEN_SCORE_CONTAINER = 30
-MAX_WORKERS = 8
 MAX_BROADCAST_WORKERS = 1
 SLEEP_SECONDS_IN_SERVICE_LOOP = 0.1  # 0.05  # multi thread 동작을 위한 최소 대기 시간 설정
 SLEEP_SECONDS_IN_SERVICE_NONE = 2  # _아무일도 하지 않는 대기 thread 의 대기 시간 설정
@@ -99,7 +89,6 @@ GRPC_TIMEOUT = 30  # seconds
 GRPC_TIMEOUT_SHORT = 5  # seconds
 GRPC_TIMEOUT_BROADCAST_RETRY = 6  # seconds
 GRPC_TIMEOUT_TEST = 30  # seconds
-GRPC_CONNECTION_TIMEOUT = GRPC_TIMEOUT * 2  # seconds, Connect Peer 메시지는 처리시간이 좀 더 필요함
 STUB_REUSE_TIMEOUT = 60  # minutes
 
 GRPC_SSL_TYPE = SSLAuthType.none
@@ -127,10 +116,6 @@ WAIT_SECONDS_FOR_VOTE = 0.2
 MAX_RETRY_CREATE_DB = 10
 # default key value store type
 DEFAULT_KEY_VALUE_STORE_TYPE = "plyvel"
-# default level db path
-DEFAULT_LEVEL_DB_PATH = "./db"
-# peer_id (UUID) 는 최초 1회 생성하여 level db에 저장한다.
-LEVEL_DB_KEY_FOR_PEER_ID = str.encode("peer_id_key")
 # String Peer Data Encoding
 PEER_DATA_ENCODING = 'UTF-8'
 # Hash Key Encoding
@@ -138,8 +123,6 @@ HASH_KEY_ENCODING = 'UTF-8'
 # Consensus Algorithm
 CONSENSUS_ALGORITHM = ConsensusAlgorithm.siever
 
-# 블럭의 최대 크기 (kbytes), gRPC 최대 메시지는 4MB (4096) 이므로 그보다 작게 설정할 것
-MAX_BLOCK_KBYTES = 3000  # default: 3000
 # The total size of the transactions in a block.
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
 MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
@@ -162,6 +145,7 @@ TIMESTAMP_BOUNDARY_SECOND = 60 * 15
 # Some older clients have a process that treats tx, which is delayed by more than 30 minutes, as a failure.
 # The engine limits the timestamp of tx to a lower value.
 TIMESTAMP_BUFFER_IN_VERIFIER = int(0.3 * 1_000_000)  # 300ms (as microsecond)
+
 MAX_TX_QUEUE_AGING_SECONDS = 60 * 5
 INVOKE_RESULT_AGING_SECONDS = 60 * 60
 SAFE_BLOCK_BROADCAST = True
@@ -209,9 +193,9 @@ CONNECTION_RETRY_TIMEOUT_WHEN_INITIAL = 5  # seconds
 CONNECTION_RETRY_TIMEOUT = 60  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS = 60 * 5  # seconds
 CONNECTION_RETRY_TIMEOUT_TO_RS_TEST = 30  # seconds for testcase
-CONNECTION_RETRY_TIMES = 3  # times
-BROADCAST_RETRY_TIMES = 1  # times
-RELAY_RETRY_TIMES = 3  # times
+CONNECTION_RETRY_TIMES = 3
+BROADCAST_RETRY_TIMES = 1
+RELAY_RETRY_TIMES = 3
 REQUEST_BLOCK_GENERATOR_TIMEOUT = 10  # seconds
 BLOCK_GENERATOR_BROADCAST_TIMEOUT = 5  # seconds
 WAIT_GRPC_SERVICE_START = 5  # seconds
@@ -228,6 +212,10 @@ GET_LAST_BLOCK_TIMER = 30
 BLOCK_SYNC_RETRY_NUMBER = 5
 TIMEOUT_FOR_LEADER_COMPLAIN = 60
 MAX_TIMEOUT_FOR_LEADER_COMPLAIN = 300
+SYNC_REQUEST_RESULT_MAX_SIZE = 100  # dictionary Length
+CITIZEN_ASYNC_REQUEST_RETRY_TIMES = 20
+CITIZEN_REQUEST_SIZE_CONCURRENTLY = 10
+SYNC_BLOCK_COUNT_PER_NODE = 10
 
 
 class NodeFunction(IntEnum):
@@ -324,7 +312,7 @@ CHANNEL_OPTION = {
 }
 
 PRIVATE_PATH = ""
-PRIVATE_PASSWORD = None
+PRIVATE_PASSWORD = ""
 
 # KMS
 KMS_AGENT_PASSWORD = ""

@@ -13,7 +13,6 @@
 # limitations under the License.
 
 import asyncio
-import json
 import logging
 import signal
 import traceback
@@ -119,7 +118,7 @@ class ChannelService:
             await self._init()
             self.__timer_service.start()
             self.__state_machine.complete_init_components()
-            logging.info(f'channel_service: init complete channel: {ChannelProperty().name}, '
+            logging.info(f'init complete channel: {ChannelProperty().name}, '
                          f'state({self.__state_machine.state})')
 
         loop = self.__inner_service.loop
@@ -131,7 +130,7 @@ class ChannelService:
         try:
             loop.run_forever()
         except Exception as e:
-            traceback.print_exception(type(e), e, e.__traceback__)
+            utils.logger.exception(f"{e!r}")
         finally:
             loop.run_until_complete(loop.shutdown_asyncgens())
             self._cancel_tasks(loop)
@@ -157,7 +156,7 @@ class ChannelService:
         self.shutdown_peer(message=message)
 
     def _manual_rollback(self) -> str:
-        logging.debug("_manual_rollback() start manual rollback")
+        logging.debug("start manual rollback")
         if self.block_manager.blockchain.block_height >= 0:
             self.block_manager.rebuild_block()
 
@@ -166,11 +165,11 @@ class ChannelService:
         else:
             message = "rollback cancelled"
 
-        logging.debug("_manual_rollback() end manual rollback")
+        logging.debug("end manual rollback")
         return message
 
     def close(self, signum=None):
-        logging.info(f"close() signum = {repr(signum)}")
+        logging.info(f"signum = {repr(signum)}")
         if self.__inner_service:
             self.__inner_service.cleanup()
 
@@ -185,32 +184,32 @@ class ChannelService:
             try:
                 loop.run_until_complete(task)
             except asyncio.CancelledError as e:
-                logging.info(f"_cancel_tasks() task : {task}, error : {e}")
+                logging.info(f"task : {task}, error : {e}")
 
     def _cleanup(self):
-        logging.info("_cleanup() Channel Resources.")
+        logging.info("Channel Resources.")
 
         if self.__timer_service.is_run():
             self.__timer_service.stop()
             self.__timer_service.wait()
-            logging.info("_cleanup() TimerService.")
+            logging.info("TimerService.")
 
         if self.__score_container:
             self.__score_container.stop()
             self.__score_container.wait()
             self.__score_container = None
-            logging.info("_cleanup() ScoreContainer.")
+            logging.info("ScoreContainer.")
 
         if self.__broadcast_scheduler:
             self.__broadcast_scheduler.stop()
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
-            logging.info("_cleanup() BroadcastScheduler.")
+            logging.info("BroadcastScheduler.")
 
         if self.__block_manager:
             self.__block_manager.stop()
             self.__block_manager = None
-            logging.info("_cleanup() BlockManager.")
+            logging.info("BlockManager.")
 
     @staticmethod
     def _init_properties(**kwargs):
@@ -249,7 +248,23 @@ class ChannelService:
         self.__block_manager.blockchain.init_crep_reps()
         await self._select_node_type()
         self.__ready_to_height_sync()
-        self.__state_machine.block_sync()
+
+        if conf.RECOVERY_MODE:
+            if self.block_manager.preps_contain(ChannelProperty().peer_address):
+                self.state_machine.recovery()
+                return
+
+            conf.RECOVERY_MODE = False
+
+        self.state_machine.block_sync()
+
+    async def recovery(self):
+        from loopchain.tools.recovery import Recovery
+        recovery = Recovery(ChannelProperty().name, self.block_manager.blockchain.block_height)
+        recovery.set_target_list(self.block_manager.get_target_list())
+        await recovery.fill_quorum()
+
+        self.state_machine.recovery_block_sync()
 
     async def subscribe_network(self):
         await self._select_node_type()
@@ -320,7 +335,7 @@ class ChannelService:
             utils.exit_and_msg(f"peer auth init fail cause : {e}")
 
     def __init_block_manager(self):
-        logging.debug(f"__init_block_manager() : channel({ChannelProperty().name})")
+        logging.debug(f"channel({ChannelProperty().name})")
 
         channel_name = ChannelProperty().name
         develop = command_arguments.command_values.get(command_arguments.Type.Develop, False)
@@ -343,6 +358,7 @@ class ChannelService:
 
     def _get_radiostations(self):
         radiostations: list = self.get_channel_option().get('radiostations')
+        utils.logger.debug(f"[_get_radiostations]: {radiostations}")
         if not radiostations:
             logging.warning(f"no configurations for radiostations.")
             return None
@@ -350,6 +366,7 @@ class ChannelService:
         radiostations = utils.convert_local_ip_to_private_ip(radiostations)
         try:
             radiostations.remove(ChannelProperty().rest_target)
+            utils.logger.debug(f"[remove rest_target]: {ChannelProperty().rest_target}")
         except ValueError:
             pass
 
@@ -380,8 +397,7 @@ class ChannelService:
         try:
             self.__score_info = await self.__run_score_container()
         except BaseException as e:
-            logging.error(e)
-            traceback.print_exc()
+            logging.exception(f"{e!r}")
             utils.exit_and_msg(f"run_score_container failed!!")
 
     async def __init_sub_services(self):
@@ -430,7 +446,7 @@ class ChannelService:
     async def subscribe_to_parent(self):
         def _handle_exception(future: asyncio.Future):
             exc = future.exception()
-            logging.debug(f"error: {type(exc)}, {str(exc)}")
+            logging.debug(f"error: {exc!r}")
 
             if ChannelProperty().node_type != conf.NodeType.CitizenNode:
                 logging.debug(f"This node is not Citizen anymore.")
@@ -462,7 +478,7 @@ class ChannelService:
         await subscribe_event.wait()
 
     def shutdown_peer(self, **kwargs):
-        logging.debug(f"shutdown_peer() kwargs = {kwargs}")
+        logging.debug(f"kwargs = {kwargs}")
         StubCollection().peer_stub.sync_task().stop(message=kwargs['message'])
 
     def set_peer_type(self, peer_type):
@@ -472,20 +488,6 @@ class ChannelService:
         :return:
         """
         self.__block_manager.set_peer_type(peer_type)
-
-    def save_peer_manager(self, peer_manager):
-        """Save peer_list to leveldb
-
-        :param peer_manager:
-        """
-        level_db_key_name = str.encode(conf.LEVEL_DB_KEY_FOR_PEER_LIST)
-
-        try:
-            dump = peer_manager.dump()
-            key_value_store = self.__block_manager.blockchain.blockchain_store
-            key_value_store.put(level_db_key_name, dump)
-        except AttributeError as e:
-            logging.warning("Fail Save Peer_list: " + str(e))
 
     async def set_peer_type_in_channel(self):
         peer_type = loopchain_pb2.PEER
@@ -542,10 +544,10 @@ class ChannelService:
             return
 
         if leader_peer_target is None:
-            logging.warning(f"in peer_service:reset_leader There is no peer by peer_id({new_leader_id})")
+            logging.warning(f"There is no peer by peer_id({new_leader_id})")
             return
 
-        utils.logger.spam(f"reset_leader target({leader_peer_target}), complained={complained}")
+        utils.logger.spam(f"target({leader_peer_target}), complained={complained}")
 
         if complained:
             self.__block_manager.blockchain.reset_leader_made_block_count()
@@ -608,8 +610,8 @@ class ChannelService:
             self.start_leader_complain_timer_if_tx_exists()
 
     def reset_leader_complain_timer(self):
-        utils.logger.spam(f"reset_leader_complain_timer in channel service. ("
-                          f"{self.__block_manager.epoch.round}/{self.__block_manager.epoch.complain_duration})")
+        utils.logger.debug(f"round={self.__block_manager.epoch.round}, "
+                           f"complain_duration={self.__block_manager.epoch.complain_duration})")
 
         if self.__timer_service.get_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN):
             utils.logger.spam(f"Try to stop leader complaint timer for reset.")
@@ -625,15 +627,14 @@ class ChannelService:
     def start_leader_complain_timer(self, duration=None):
         if duration is None:
             duration = self.__block_manager.epoch.complain_duration
-        utils.logger.spam(
-            f"start_leader_complain_timer in channel service. ({self.block_manager.epoch.round}/{duration})")
+        utils.logger.debug(f"round={self.block_manager.epoch.round}, duration={duration}")
         if self.state_machine.state in ("Vote", "LeaderComplain"):
             self.__timer_service.add_timer_convenient(timer_key=TimerService.TIMER_KEY_LEADER_COMPLAIN,
                                                       duration=duration,
                                                       is_repeat=True, callback=self.callback_leader_complain_timeout)
 
     def stop_leader_complain_timer(self):
-        utils.logger.spam(f"stop_leader_complain_timer in channel service.")
+        utils.logger.debug(f"Stop leader complain timer")
         self.__timer_service.stop_timer(TimerService.TIMER_KEY_LEADER_COMPLAIN)
 
     def start_subscribe_timer(self):

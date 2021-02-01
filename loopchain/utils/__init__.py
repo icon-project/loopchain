@@ -278,7 +278,7 @@ def convert_local_ip_to_private_ip(data: Union[list, dict]):
 
 def load_json_data(channel_manage_data_path: str):
     try:
-        logging.debug(f"load_json_data() : try to load channel management"
+        logging.debug(f"try to load channel management"
                       f" data from json file ({channel_manage_data_path})")
         with open(channel_manage_data_path) as file:
             json_data = json.load(file)
@@ -389,47 +389,17 @@ def parse_target_list(targets: str) -> list:
     return target_list
 
 
-def rename_db_dir(old_store_name: str, store_name: str):
-    """Rename db directory
-    This method is temporary implementation for remove 'ip:port' in db directory name
-    Ths method is useless after rename all nodes done.
-
-    :param old_store_name: old store name
-    :param store_name: new store name
-    :return:
-    """
-    storage_path = Path(conf.DEFAULT_STORAGE_PATH)
-    if os.path.exists(storage_path / store_name):
-        return
-
-    src_path = storage_path / old_store_name
-    dst_path = storage_path / store_name
-    if os.path.exists(src_path):
-        try:
-            logger.info(f"rename_db_dir() : src = {src_path}, dst = {dst_path}")
-            os.rename(src_path, dst_path)
-        except OSError as e:
-            logger.error(f"rename_db_dir() : error = {e}")
-            raise e
-
-
-def init_default_key_value_store(old_store_id: str, store_id: str) -> KeyValueStore:
+def init_default_key_value_store(store_id: str) -> KeyValueStore:
     """init default key value store
 
-    :param old_store_id: old identity of key-value store
     :param store_id: new identity of key-value store
     :return: KeyValueStore, store_path
     """
     if not os.path.exists(conf.DEFAULT_STORAGE_PATH):
         os.makedirs(conf.DEFAULT_STORAGE_PATH, exist_ok=True)
 
-    db_dirname = f'db_{store_id}'
-
-    # FIXME : remove rename_db_dir() after all applied, maybe next release
-    rename_db_dir(f"db_{old_store_id}", db_dirname)
-
-    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, db_dirname)
-    logger.info(f"init_default_key_value_store() store_id={store_id}")
+    store_path = os.path.join(conf.DEFAULT_STORAGE_PATH, f'db_{store_id}')
+    logger.info(f"store_id={store_id}")
 
     retry_count = 0
     store = None
@@ -438,9 +408,8 @@ def init_default_key_value_store(old_store_id: str, store_id: str) -> KeyValueSt
         try:
             store = KeyValueStore.new(uri, create_if_missing=True)
         except KeyValueStoreError as e:
-            logging.error(f"KeyValueStoreError: {e}")
+            logging.exception(f"KeyValueStore create failed: {e!r}")
             logger.debug(f"retry_count: {retry_count}, uri: {uri}")
-            traceback.print_exc()
         retry_count += 1
 
     if store is None:

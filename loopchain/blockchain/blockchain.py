@@ -3,7 +3,6 @@
 import json
 import pickle
 import threading
-import zlib
 from collections import Counter
 from enum import Enum
 from functools import lru_cache
@@ -11,6 +10,8 @@ from os import linesep
 from types import MappingProxyType
 from typing import Union, List, cast, Optional, Tuple, Sequence, Mapping
 
+import logging
+import zlib
 from pkg_resources import parse_version
 
 from loopchain import configure as conf
@@ -22,7 +23,6 @@ from loopchain.blockchain.blocks import Block, BlockBuilder, BlockSerializer, Bl
 from loopchain.blockchain.blocks import BlockProver, BlockProverType, BlockVersioner, NextRepsChangeReason
 from loopchain.blockchain.exception import *
 from loopchain.blockchain.peer_loader import PeerLoader
-from loopchain.blockchain.score_base import *
 from loopchain.blockchain.transactions import Transaction, TransactionBuilder
 from loopchain.blockchain.transactions import TransactionSerializer, TransactionVersioner
 from loopchain.blockchain.types import Hash32, ExternalAddress
@@ -75,9 +75,7 @@ class BlockChain:
         self.__peer_id = ChannelProperty().peer_id
         self.__block_manager: BlockManager = block_manager
 
-        # FIXME : old_store_id is temporary code to rename dbpath
-        old_store_id = f"{ChannelProperty().peer_target}_{channel_name}"
-        self._blockchain_store = utils.init_default_key_value_store(old_store_id, store_id)
+        self._blockchain_store = utils.init_default_key_value_store(store_id)
 
         # tx receipts and next prep after invoke, {Hash32: (receipts, next_prep)}
         self.__invoke_results: AgingCache = AgingCache(max_age_seconds=conf.INVOKE_RESULT_AGING_SECONDS)
@@ -133,7 +131,7 @@ class BlockChain:
                       self.last_block.header.prep_changed_reason is NextRepsChangeReason.Penalty and
                       self.last_block.header.peer_id == self.last_block.header.next_leader)
 
-        utils.logger.debug(f"_keep_order_in_penalty() : keep_order = {keep_order}")
+        utils.logger.debug(f"keep_order = {keep_order}")
         return keep_order
 
     def reset_leader_made_block_count(self, need_check_switched_role: bool = False):
@@ -152,13 +150,13 @@ class BlockChain:
         else:
             is_switched_role = False
 
-        utils.logger.debug(f"reset_leader_made_block_count() : made_block_count = {self.__made_block_counter}")
+        utils.logger.debug(f"made_block_count = {self.__made_block_counter}")
         if not self._keep_order_in_penalty() or is_switched_role:
             self.__made_block_counter.clear()
 
     def get_first_leader_of_next_reps(self, block: Block) -> str:
         utils.logger.spam(
-            f"in get_next_leader new reps leader is "
+            f"new reps leader is "
             f"{self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]}")
         return self.find_preps_ids_by_roothash(block.header.revealed_next_reps_hash)[0]
 
@@ -190,15 +188,14 @@ class BlockChain:
 
         peer_id = new_block.header.peer_id
         if self.__made_block_counter[peer_id] > conf.MAX_MADE_BLOCK_COUNT:
-            utils.logger.debug(
-                f"get_expected_generator made_block_count reached!({self.__made_block_counter})")
+            utils.logger.debug(f"made_block_count reached!({self.__made_block_counter})")
             reps: Sequence[ExternalAddress] = \
                 self.find_preps_addresses_by_roothash(self.__last_block.header.revealed_next_reps_hash)
             expected_generator = self.get_next_rep_in_reps(peer_id, reps)
         else:
             expected_generator = peer_id
 
-        utils.logger.debug(f"get_expected_generator ({expected_generator})")
+        utils.logger.debug(f"expected_generator({expected_generator})")
         return expected_generator
 
     @property
@@ -228,12 +225,8 @@ class BlockChain:
     def tx_versioner(self):
         return self.__tx_versioner
 
-    @property
-    def blockchain_store(self) -> KeyValueStore:
-        return self._blockchain_store
-
     def close_blockchain_store(self):
-        logging.info(f"close_blockchain_store() : {self._blockchain_store}")
+        logging.info(f"blockchain_store: {self._blockchain_store}")
         if self._blockchain_store:
             self._blockchain_store.close()
             self._blockchain_store: KeyValueStore = None
@@ -339,10 +332,10 @@ class BlockChain:
                     logging.warning(f"Cannot find 'TRANSACTION_COUNT' Key from DB. Rebuild tx count")
                 else:
                     logging.warning(f"Exception raised on getting 'TRANSACTION_COUNT' from DB. Rebuild tx count,"
-                                    f"Exception : {type(e)}, {e}")
+                                    f"Exception : {e!r}")
                 self.__total_tx = self._rebuild_transaction_count_from_blocks()
 
-            logging.info(f"rebuilt blocks, total_tx: {self.__total_tx}")
+            logging.info(f"total_tx: {self.__total_tx}")
             logging.info(
                 f"block hash({self.__last_block.header.hash.hex()})"
                 f" and height({self.__last_block.header.height})")
@@ -378,12 +371,14 @@ class BlockChain:
     def __find_block_by_key(self, key):
         try:
             block_bytes = self._blockchain_store.get(key)
+            if block_bytes == b'':
+                raise PrunedHashDataError(prefix="Block", _hash=key)
             block_dumped = json.loads(block_bytes)
             block_height = self.__block_versioner.get_height(block_dumped)
             block_version = self.__block_versioner.get_version(block_height)
             return BlockSerializer.new(block_version, self.__tx_versioner).deserialize(block_dumped)
         except KeyError as e:
-            logging.debug(f"__find_block_by_key::KeyError block_hash({key}) error({e})")
+            logging.debug(f"KeyError block_hash({key}) error({e!r})")
 
         return None
 
@@ -608,10 +603,19 @@ class BlockChain:
             self.__block_manager.new_epoch()
 
             logging.info(
-                f"ADD BLOCK HEIGHT : {block.header.height} , "
-                f"HASH : {block.header.hash.hex()} , "
+                f"BLOCK HEIGHT : {block.header.height}, "
+                f"VERSION : {block.header.version}, "
+                f"HASH : {block.header.hash.hex()}, "
                 f"CHANNEL : {self.__channel_name}")
             utils.logger.debug(f"ADDED BLOCK HEADER : {block.header}")
+
+            if conf.RECOVERY_MODE:
+                from loopchain.tools.recovery import Recovery
+                utils.logger.debug(f"release recovery_mode block height : {Recovery.release_block_height()}")
+                if (channel_service.state_machine.state in ('Vote', 'BlockSync')
+                        and block.header.height >= Recovery.release_block_height()):
+                    conf.RECOVERY_MODE = False
+                    logging.info(f"recovery mode released at {block.header.height}")
 
             if not (conf.SAFE_BLOCK_BROADCAST and channel_service.state_machine.state == 'BlockGenerate'):
                 channel_service.inner_service.notify_new_block()
@@ -697,7 +701,7 @@ class BlockChain:
 
         if next_prep:
             utils.logger.spam(
-                f"store next_prep in __write_block_data\nprep_hash({next_prep['rootHash']})"
+                f"store next_prep\nprep_hash({next_prep['rootHash']})"
                 f"\npreps({next_prep['preps']})")
             self.write_preps(Hash32.fromhex(next_prep['rootHash'], ignore_prefix=True), next_prep['preps'], batch)
 
@@ -725,7 +729,7 @@ class BlockChain:
         return next_total_tx
 
     def prevent_next_block_mismatch(self, next_height: int) -> bool:
-        logging.debug(f"prevent_block_mismatch...")
+        logging.debug(f"next_height: {next_height}")
         score_stub = StubCollection().icon_score_stubs[self.__channel_name]
         request = {
             "method": "ise_getStatus",
@@ -817,7 +821,7 @@ class BlockChain:
             self.__nid = nid.decode(conf.HASH_KEY_ENCODING)
             return self.__nid
         except KeyError as e:
-            logging.debug(f"blockchain:get_nid::There is no NID.")
+            logging.debug(f"There is no NID.")
             return None
 
     def add_tx_to_list_by_address(self, address, tx_hash, batch=None):
@@ -869,10 +873,10 @@ class BlockChain:
         except KeyError as e:
             if tx_hash in self.__block_manager.get_tx_queue():
                 # this case is tx pending
-                logging.debug(f"blockchain:find_invoke_result_by_tx_hash pending tx({tx_hash})")
+                logging.debug(f"pending tx({tx_hash})")
                 return {'code': ScoreResponse.NOT_INVOKED}
             else:
-                logging.debug("blockchain::find invoke_result KeyError: " + str(e))
+                logging.debug(f"KeyError: {e!r}")
                 # This transaction is considered a failure.
                 return {'code': ScoreResponse.NOT_EXIST}
 
@@ -883,12 +887,14 @@ class BlockChain:
             tx_hash_key = tx_hash_key.hex()
 
         try:
-            tx_info = self._blockchain_store.get(
-                tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING))
+            tx_hash: bytes = tx_hash_key.encode(encoding=conf.HASH_KEY_ENCODING)
+            tx_info = self._blockchain_store.get(tx_hash)
+            if tx_info == b'':
+                raise PrunedHashDataError(prefix="Tx", _hash=tx_hash)
             tx_info_json = json.loads(tx_info, encoding=conf.PEER_DATA_ENCODING)
 
         except UnicodeDecodeError as e:
-            logging.warning("blockchain::find_tx_info: UnicodeDecodeError: " + str(e))
+            logging.warning(f"UnicodeDecodeError: {e!r}")
             return None
 
         return tx_info_json
@@ -940,6 +946,21 @@ class BlockChain:
 
         return results
 
+    def _reset_last_unconfirmed_block(self, current_block):
+        if current_block.header.complained and self.__block_manager.epoch.complained_result:
+            utils.logger.debug("reset last_unconfirmed_block by complain block")
+            self.last_unconfirmed_block = current_block
+        elif self.last_block.header.prep_changed:
+            utils.logger.debug("reset last_unconfirmed_block by prep changed")
+            self.last_unconfirmed_block = current_block
+        elif conf.RECOVERY_MODE and self.last_unconfirmed_block is None:
+            utils.logger.debug("reset last_unconfirmed_block by recovery_mode")
+            self.last_unconfirmed_block = current_block
+        else:
+            block_header = self.last_unconfirmed_block.header if self.last_unconfirmed_block else None
+            utils.logger.debug(f"keep last_unconfirmed_block: {block_header}, "
+                               f"current_block: {current_block.header}")
+
     def confirm_prev_block(self, current_block: Block):
         """confirm prev unconfirmed block by votes in current block
 
@@ -948,15 +969,14 @@ class BlockChain:
         """
         candidate_blocks = self.__block_manager.candidate_blocks
         with self.__confirmed_block_lock:
-            logging.debug(f"confirm_prev_block with "
-                          f"current_block({current_block.header.height}, {current_block.header.hash})")
+            logging.debug(f"current_block height({current_block.header.height}), hash({current_block.header.hash})")
 
             try:
                 unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
-                logging.debug("confirmed_block_hash: " + current_block.header.prev_hash.hex())
+                logging.debug(f"confirmed_block_hash: {current_block.header.prev_hash.hex()}")
                 if unconfirmed_block:
-                    logging.debug("unconfirmed_block.block_hash: " + unconfirmed_block.header.hash.hex())
-                    logging.debug("unconfirmed_block.prev_block_hash: " + unconfirmed_block.header.prev_hash.hex())
+                    logging.debug(f"unconfirmed_block.block_hash: {unconfirmed_block.header.hash.hex()}")
+                    logging.debug(f"unconfirmed_block.prev_block_hash: {unconfirmed_block.header.prev_hash.hex()}")
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
                     return None
@@ -964,10 +984,7 @@ class BlockChain:
             except KeyError:
                 if self.last_block.header.hash == current_block.header.prev_hash:
                     logging.warning(f"Already added block hash({current_block.header.prev_hash.hex()})")
-                    if ((current_block.header.complained and self.__block_manager.epoch.complained_result)
-                            or self.last_block.header.prep_changed):
-                        utils.logger.debug("reset last_unconfirmed_block by complain block or first block of new term.")
-                        self.last_unconfirmed_block = current_block
+                    self._reset_last_unconfirmed_block(current_block)
                     return None
                 else:
                     except_msg = ("there is no unconfirmed block in this peer "
@@ -1201,8 +1218,8 @@ class BlockChain:
 
         if next_prep:
             # P-Rep list has been changed
-            utils.logger.debug(f"_process_next_prep_legacy() current_height({_block.header.height})"
-                               f" next_prep({next_prep})")
+            utils.logger.debug(f"current_height({_block.header.height}), "
+                               f"next_prep({next_prep})")
 
             change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
             if change_reason == NextRepsChangeReason.TermEnd:
@@ -1223,16 +1240,16 @@ class BlockChain:
 
         if next_prep:
             # P-Rep list has been changed
-            utils.logger.debug(f"_process_next_prep() current_height({_block.header.height}),"
-                               f" next_prep({next_prep})")
+            utils.logger.debug(f"current_height({_block.header.height}), "
+                               f"next_prep({next_prep})")
 
             change_reason = NextRepsChangeReason.convert_to_change_reason(next_prep["state"])
 
             next_leader = None  # to rebuild next_leader
             block_builder.next_reps_change_reason = change_reason
             block_builder.is_max_made_block_count = self.made_block_count_reached_max(_block)
-            utils.logger.debug(f"_process_next_prep() change_reason = {block_builder.next_reps_change_reason},"
-                               f" is_max_mbc = {block_builder.is_max_made_block_count}")
+            utils.logger.debug(f"change_reason = {block_builder.next_reps_change_reason}, "
+                               f"is_max_mbc = {block_builder.is_max_made_block_count}")
 
             next_preps = [ExternalAddress.fromhex(prep["id"]) for prep in next_prep["preps"]]
             next_preps_hash = None  # to rebuild next_reps_hash
@@ -1257,7 +1274,7 @@ class BlockChain:
             invoked_tx_length: int = len(tx_receipts) - len(added_transactions)
             if original_tx_length > invoked_tx_length:
                 # restore tx status to normal and remove tx that dropped in block_builder
-                utils.logger.debug(f"_process_added_transactions() : origin tx length = {original_tx_length}, "
+                utils.logger.debug(f"origin tx length = {original_tx_length}, "
                                    f"after invoke tx length = {invoked_tx_length}, "
                                    f"added_transactions length = {len(added_transactions)}")
                 dropped_transactions: List[Transaction] = []
@@ -1271,7 +1288,7 @@ class BlockChain:
                 for tx in dropped_transactions:  # type: Transaction
                     self.__block_manager.restore_tx_status(tx)
                     block_builder.transactions.pop(tx.hash)
-                utils.logger.debug(f"_process_added_transactions() dropped tx length = {len(dropped_transactions)}")
+                utils.logger.debug(f"dropped tx length = {len(dropped_transactions)}")
 
         if added_transactions:
             # add added_transactions to block_builder.transactions

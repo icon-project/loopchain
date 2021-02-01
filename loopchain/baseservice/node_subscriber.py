@@ -118,8 +118,10 @@ class NodeSubscriber:
             if self._exception:
                 raise self._exception
         except Exception as e:
-            logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
-            await self.close()
+            try:
+                logging.debug(f"Exception raised during handshake step: {e}", exc_info=True)
+            finally:
+                await self.close()
             raise
         else:
             logging.debug(f"successfully registered as citizen, with id({ChannelProperty().peer_id})")

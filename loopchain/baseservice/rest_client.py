@@ -47,12 +47,21 @@ class RestMethod(Enum):
 
 
 class RestClient:
-    def __init__(self, channel=None):
-        self._target: str = None
+    def __init__(self, channel=None, target=None):
+        self._target: Optional[str] = None
         self._latest_targets: Iterator[Dict] = None
         self._channel_name = channel or conf.LOOPCHAIN_DEFAULT_CHANNEL
 
+        if target:
+            self._set_target(target)
+
     async def init(self, endpoints: List[str]):
+        utils.logger.debug(f"[init]endpoints: {endpoints}")
+
+        if len(endpoints) == 1:
+            self._set_target(endpoints[0])
+            return
+
         self._latest_targets = await self._select_fastest_endpoints(endpoints)
         if self._latest_targets:
             min_latency_target = next(self._latest_targets)['target']  # get first target
@@ -61,7 +70,10 @@ class RestClient:
     def init_next_target(self):
         logging.debug(f"switching target from: {self._target}")
         if not self._latest_targets:
-            return
+            raise StopIteration(f"latest_targets is empty")
+
+        logging.debug(f"[init_next_target] latest_targets: {self._latest_targets}")
+
         next_target = next(self._latest_targets)['target']
         logging.debug(f"switching target to: {next_target}")
         self._set_target(next_target)
@@ -107,6 +119,7 @@ class RestClient:
 
         # sort results by min elapsed_time with max block height
         sorted_result = sorted(results, key=lambda k: (-k['height'], k['elapsed_time']))
+        utils.logger.debug(f"[_select_fastest_endpoints]sorted_result: {sorted_result}")
         return iter(sorted_result)
 
     def call(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
@@ -118,10 +131,10 @@ class RestClient:
             else:
                 response = self._call_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            logging.warning(f"REST call fail method_name({method.value.name}), caused by : {e!r}")
             raise
         else:
-            utils.logger.spam(f"REST call complete method_name({method.value.name})")
+            utils.logger.debug(f"REST call complete method_name({method.value.name})")
             return response
 
     async def call_async(self, method: RestMethod, params: Optional[NamedTuple] = None, timeout=None) -> dict:
@@ -133,10 +146,10 @@ class RestClient:
             else:
                 response = await self._call_async_jsonrpc(self.target, method, params, timeout)
         except Exception as e:
-            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {type(e)}, {e}")
+            logging.warning(f"REST call async fail method_name({method.value.name}), caused by : {e!r}")
             raise
         else:
-            utils.logger.spam(f"REST call async complete method_name({method.value.name})")
+            utils.logger.debug(f"REST call async complete method_name({method.value.name})")
             return response
 
     def _call_rest(self, target: str, method: RestMethod, timeout):

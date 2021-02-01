@@ -194,7 +194,7 @@ class TimerService(CommonThread):
         if key in self.__timer_list.keys():
             return self.__timer_list[key]
         else:
-            logging.debug(f'get_timer:There is no value by this key: {key}')
+            logging.debug(f'There is no value by this key: {key}')
             return None
 
     def reset_timer(self, key):
@@ -206,7 +206,7 @@ class TimerService(CommonThread):
         if key in self.__timer_list.keys():
             self.__timer_list[key].reset()
         else:
-            logging.warning(f'reset_timer:There is no value by this key: {key}')
+            logging.warning(f'There is no value by this key: {key}')
 
     def restart_timer(self, key):
         """restart the timer when timer is timeout (off the timer to run callback)
@@ -220,7 +220,7 @@ class TimerService(CommonThread):
             timer.reset()
             asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
         else:
-            logging.warning(f"restart_timer:There is no value by this key: {key}")
+            logging.warning(f"There is no value by this key: {key}")
 
     def stop_timer(self, key, off_type: OffType = OffType.normal):
         """stop timer
@@ -237,7 +237,7 @@ class TimerService(CommonThread):
             logging.debug(f"TIMER IS STOP ({key})")
             util.logger.spam(f"remain timers after stop_timer: {self.__timer_list.keys()}")
         else:
-            logging.debug(f'stop_timer:There is no value by this key: {key}')
+            logging.debug(f'There is no value by this key: {key}')
 
     def stop(self):
         super().stop()

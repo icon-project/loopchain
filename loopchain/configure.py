@@ -18,6 +18,8 @@ import importlib
 import json
 import logging
 import re
+from typing import Any
+
 import pkg_resources
 
 import loopchain
@@ -118,20 +120,24 @@ class Configure(metaclass=SingletonMetaClass):
             # checking for environment variable of system
         return configure_type, target_value
 
-    def __check_value_condition(self, target_value_type, value):
-        # turn configure value to int or float after some condition check.
+    def __check_value_condition(self, target_value_type, value) -> Any:
+        # turn configure value to bool, int or float after some condition check.
         # cast type string to original type if it exists in the globals().
-        target_value = value
+        target_value: Any = value
         if (isinstance(value, str) and len(value) > 0
                 and target_value_type is not str):
-            if re.match("^\d+?\.\d+?$", value) is not None:
-                # print("float configure value")
+            if re.match(r"^\d+?\.\d+?$", value) is not None:
                 try:
                     target_value = float(value)
                 except Exception as e:
                     print(f"this value can't convert to float! {value}: {e}")
+            elif re.match(r"([Tt]rue|[Ff]alse)", value):
+                target_value = json.loads(value.lower())
             elif value.isnumeric():
                 target_value = int(value)
+        elif isinstance(value, str) and len(value) == 0:
+            # use default value when value is empty string
+            target_value = None
 
         return target_value
 
@@ -149,7 +155,7 @@ class Configure(metaclass=SingletonMetaClass):
                 version = pkg_resources.get_distribution(pkg_name).version
                 icon_versions[pkg_name] = version
             except pkg_resources.DistributionNotFound as e:
-                logging.warning(f"get '{pkg_name}' version error : {e}")
+                logging.warning(f"get '{pkg_name}' version error : {e!r}")
                 continue
 
         command_result = os.popen('icon_rc -version').read()

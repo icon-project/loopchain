@@ -40,9 +40,9 @@ requirements:
 all: install generate-key
 
 requires:
-	$(PIP_INSTALL) iconservice~=1.7.0
-	$(PIP_INSTALL) iconrpcserver~=1.5.0
-	$(PIP_INSTALL) iconsdk~=1.3.0
+	$(PIP_INSTALL) iconservice~=1.8.0
+	$(PIP_INSTALL) iconrpcserver~=1.6.0
+	$(PIP_INSTALL) iconsdk~=1.3.2
 
 ## pip install packages
 install: $(INSTALL_REQUIRES)
@@ -79,11 +79,11 @@ test: unit-test integration-test
 
 unit-test:
 	@echo "Start unit test..."
-	$(TEST_CMD) testcase/unittest --benchmark-disable || exit -1
+	$(TEST_CMD) tests/unit --benchmark-disable || exit -1
 
 integration-test:
 	@echo "Start integration test..."
-	$(TEST_CMD) testcase/integration || exit -1
+	$(TEST_CMD) tests/integration || exit -1
 
 ## Clean all - clean-process clean-mq clean-pyc clean-db clean-log clean-test
 clean: $(CLEAN_TARGETS) check

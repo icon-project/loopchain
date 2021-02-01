@@ -25,10 +25,12 @@ from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
+from loopchain.utils import exit_and_msg
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.channel.channel_service import ChannelService
+    from loopchain.peer import BlockManager
 
 
 class ChannelTxCreatorInnerTask:
@@ -109,7 +111,7 @@ class ChannelTxCreatorInnerTask:
             traceback.print_exc()
         finally:
             if exception:
-                logging.warning(f"create_icx_tx: tx restore fail.\n\n"
+                logging.warning(f"tx restore fail.\n\n"
                                 f"kwargs({kwargs})\n\n"
                                 f"tx({tx})\n\n"
                                 f"exception({exception})")
@@ -146,8 +148,8 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
         self.__broadcast_thread = threading.Thread(target=_schedule_job)
         self.__broadcast_thread.start()
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerService] connection closed. sender = {sender}, exc = {exc}")
 
     def stop(self):
         self.__broadcast_queue.put((None, None))
@@ -197,8 +199,8 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
 class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
     TaskType = ChannelTxCreatorInnerTask
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerStub] connection closed. sender = {sender}, exc = {exc}")
 
 
 class ChannelTxReceiverInnerTask:
@@ -215,7 +217,7 @@ class ChannelTxReceiverInnerTask:
             pass
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def add_tx_list(self, request) -> tuple:
+    async def add_tx_list(self, request) -> tuple:
         if self.__nid is None:
             response_code = message_code.Response.fail
             message = "Node initialization is not completed."
@@ -255,8 +257,9 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
     def __init__(self, amqp_target, route_key, username=None, password=None, **task_kwargs):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc}")
+
 
     @staticmethod
     def main(channel_name: str, amqp_target: str, amqp_key: str,
@@ -296,8 +299,8 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
 class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
     TaskType = ChannelTxReceiverInnerTask
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerStub] connection closed. sender = {sender}, exc = {exc}")
 
 
 class _ChannelTxCreatorProcess(ModuleProcess):
@@ -382,7 +385,7 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 class ChannelInnerTask:
     def __init__(self, channel_service: 'ChannelService'):
         self._channel_service = channel_service
-        self._block_manager = None
+        self._block_manager: 'BlockManager' = None
         self._blockchain = None
 
         # Citizen
@@ -403,7 +406,7 @@ class ChannelInnerTask:
             raise RuntimeError("Channel sub services need a loop")
         self.__loop_for_sub_services = loop
 
-        self._block_manager = self._channel_service.block_manager
+        self._block_manager: 'BlockManager' = self._channel_service.block_manager
         self._blockchain = self._channel_service.block_manager.blockchain
 
         tx_versioner = self._blockchain.tx_versioner
@@ -498,7 +501,7 @@ class ChannelInnerTask:
 
             confirm_info: bytes = self._blockchain.find_confirm_info_by_hash(new_block.header.hash)
 
-            logging.debug(f"announce_new_block: height({new_block.header.height}), to: {subscriber_id}")
+            logging.debug(f"height({new_block.header.height}), to: {subscriber_id}")
             bs = BlockSerializer.new(new_block.header.version, self._blockchain.tx_versioner)
             return json.dumps(bs.serialize(new_block)), confirm_info
 
@@ -567,6 +570,7 @@ class ChannelInnerTask:
         if last_unconfirmed_block:
             unconfirmed_block_height = last_unconfirmed_block.header.height
 
+        from loopchain.tools.recovery import Recovery
         status_data["nid"] = ChannelProperty().nid
         status_data["status"] = self._block_manager.service_status
         status_data["state"] = self._channel_service.state_machine.state
@@ -588,6 +592,10 @@ class ChannelInnerTask:
         status_data["peer_count"] = peer_count
         status_data["leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
         status_data["epoch_leader"] = self._block_manager.epoch.leader_id if self._block_manager.epoch else ""
+        status_data["recovery"] = {
+            "mode": conf.RECOVERY_MODE,
+            "highest_block_height": Recovery.get_highest_block_height()
+        }
         status_data["versions"] = conf.ICON_VERSIONS
 
         return status_data
@@ -599,7 +607,7 @@ class ChannelInnerTask:
             tx_serializer = TransactionSerializer.new(tx.version, tx.type(), self._blockchain.tx_versioner)
             tx_origin = tx_serializer.to_origin_data(tx)
 
-            logging.info(f"get_tx_info pending : tx_hash({tx_hash})")
+            logging.info(f"tx_hash({tx_hash})")
             tx_info = dict()
             tx_info["transaction"] = tx_origin
             tx_info["tx_index"] = None
@@ -610,25 +618,31 @@ class ChannelInnerTask:
             try:
                 return message_code.Response.success, self._block_manager.get_tx_info(tx_hash)
             except KeyError as e:
-                logging.error(f"get_tx_info error : tx_hash({tx_hash}) not found error({e})")
+                logging.error(f"tx_hash({tx_hash}) not found error({e!r})")
                 response_code = message_code.Response.fail_invalid_key_error
+                return response_code, None
+            except PrunedHashDataError as e:
+                logging.warning(f"{e!r}")
+                response_code = e.message_code
                 return response_code, None
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def announce_unconfirmed_block(self, block_dumped, round_: int) -> None:
+    async def announce_unconfirmed_block(self, block_dumped, round_: int, from_recovery: bool = False) -> None:
         try:
             unconfirmed_block = self._blockchain.block_loads(block_dumped)
         except BlockError as e:
-            traceback.print_exc()
-            logging.error(f"announce_unconfirmed_block: {e}")
+            logging.exception(f"{e!r}")
             return
 
         util.logger.debug(
-            f"announce_unconfirmed_block \n"
-            f"peer_id({unconfirmed_block.header.peer_id.hex()})\n"
+            f"peer_id({unconfirmed_block.header.peer_id.hex_hx()})\n"
             f"height({unconfirmed_block.header.height})\n"
             f"round({round_})\n"
             f"hash({unconfirmed_block.header.hash.hex()})")
+
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore unconfirmed block from not recovery node in Recovery Mode")
+            return
 
         if self._channel_service.state_machine.state not in \
                 ("Vote", "Watch", "LeaderComplain", "BlockGenerate"):
@@ -643,28 +657,26 @@ class ChannelInnerTask:
         try:
             self._block_manager.verify_confirm_info(unconfirmed_block)
         except ConfirmInfoInvalid as e:
-            util.logger.warning(f"ConfirmInfoInvalid {e}")
+            util.logger.warning(f"{e!r}")
         except ConfirmInfoInvalidNeedBlockSync as e:
-            util.logger.debug(f"ConfirmInfoInvalidNeedBlockSync {e}")
+            util.logger.warning(f"{e!r}")
             if self._channel_service.state_machine.state == "BlockGenerate" and (
                     self._block_manager.consensus_algorithm and self._block_manager.consensus_algorithm.is_running):
                 self._block_manager.consensus_algorithm.stop()
             else:
                 self._channel_service.state_machine.block_sync()
         except ConfirmInfoInvalidAddedBlock as e:
-            util.logger.warning(f"ConfirmInfoInvalidAddedBlock {e}")
+            util.logger.warning(f"{e!r}")
         except NotReadyToConfirmInfo as e:
-            util.logger.warning(f"NotReadyToConfirmInfo {e}")
+            util.logger.warning(f"{e!r}")
         else:
             self._channel_service.state_machine.vote(unconfirmed_block=unconfirmed_block, round_=round_)
 
     @message_queue_task
-    def block_sync(self, block_hash, block_height):
+    async def block_sync(self, block_height):
         response_code = None
         block: Block = None
-        if block_hash != "":
-            block = self._blockchain.find_block_by_hash(block_hash)
-        elif block_height != -1:
+        if block_height != -1:
             block = self._blockchain.find_block_by_height(block_height)
         else:
             response_code = message_code.Response.fail_not_enough_data
@@ -674,9 +686,9 @@ class ChannelInnerTask:
         else:
             unconfirmed_block_height = self._blockchain.last_unconfirmed_block.header.height
 
-        if block is None:
+        if block is None or (unconfirmed_block_height == -1 and block_height > self._blockchain.block_height):
             if response_code is None:
-                response_code = message_code.Response.fail_wrong_block_hash
+                response_code = message_code.Response.fail_wrong_block_height
             return response_code, -1, self._blockchain.block_height, unconfirmed_block_height, None, None
 
         confirm_info = None
@@ -690,7 +702,7 @@ class ChannelInnerTask:
                 unconfirmed_block_height, confirm_info, self._blockchain.block_dumps(block))
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    def vote_unconfirmed_block(self, vote_dumped: str) -> None:
+    async def vote_unconfirmed_block(self, vote_dumped: str) -> None:
         try:
             vote_serialized = json.loads(vote_dumped)
         except json.decoder.JSONDecodeError:
@@ -708,7 +720,11 @@ class ChannelInnerTask:
                 self._block_manager.consensus_algorithm.vote(vote)
 
     @message_queue_task(type_=MessageQueueType.Worker)
-    async def complain_leader(self, vote_dumped: str) -> None:
+    async def complain_leader(self, vote_dumped: str, from_recovery: bool = False) -> None:
+        if conf.RECOVERY_MODE and not from_recovery:
+            util.logger.info("ignore complain leader from not recovery node in Recovery Mode")
+            return
+
         vote_serialized = json.loads(vote_dumped)
         version = self._blockchain.block_versioner.get_version(int(vote_serialized["blockHeight"], 16))
         vote = Vote.get_leader_vote_class(version).deserialize(vote_serialized)
@@ -724,15 +740,19 @@ class ChannelInnerTask:
 
             if 'code' in invoke_result:
                 if invoke_result['code'] == ScoreResponse.NOT_EXIST:
-                    logging.debug(f"get invoke result NOT_EXIST tx_hash({tx_hash})")
+                    logging.debug(f"NOT_EXIST tx_hash({tx_hash})")
                     response_code = message_code.Response.fail_invalid_key_error
                 elif invoke_result['code'] == ScoreResponse.NOT_INVOKED:
-                    logging.info(f"get invoke result NOT_INVOKED tx_hash({tx_hash})")
+                    logging.info(f"NOT_INVOKED tx_hash({tx_hash})")
                     response_code = message_code.Response.fail_tx_not_invoked
 
             return response_code, invoke_result_str
+        except PrunedHashDataError as e:
+            logging.warning(f"{e!r}")
+            response_code = e.message_code
+            return response_code, None
         except BaseException as e:
-            logging.error(f"get invoke result error : {e}")
+            logging.error(f"get invoke result error : {e!r}")
 
             return message_code.Response.fail, None
 
@@ -789,6 +809,18 @@ class ChannelInnerTask:
         block_dict = bs.serialize(block)
         return message_code.Response.success, block_hash, confirm_info, json.dumps(block_dict)
 
+    @message_queue_task
+    async def get_block_receipts(self, block_height, block_hash) -> Tuple[int, str]:
+        code, block_receipts = await self.__get_block_receipts(
+            block_hash,
+            block_height
+        )
+
+        if code != message_code.Response.success:
+            return code, json.dumps([])
+
+        return message_code.Response.success, json.dumps(block_receipts)
+
     async def __get_block(self, block_hash, block_height):
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
@@ -796,24 +828,54 @@ class ChannelInnerTask:
         block = None
         confirm_info = b''
         fail_response_code = None
-        if block_hash:
-            block = self._blockchain.find_block_by_hash(block_hash)
-            if block is None:
+        try:
+            if block_hash:
+                block = self._blockchain.find_block_by_hash(block_hash)
+                if block is None:
+                    fail_response_code = message_code.Response.fail_wrong_block_hash
+                    confirm_info = bytes()
+                else:
+                    confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
+            elif block_height != -1:
+                block = self._blockchain.find_block_by_height(block_height)
+                if block is None:
+                    fail_response_code = message_code.Response.fail_wrong_block_height
+                    confirm_info = bytes()
+                else:
+                    confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
+            else:
                 fail_response_code = message_code.Response.fail_wrong_block_hash
-                confirm_info = bytes()
-            else:
-                confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
-        elif block_height != -1:
-            block = self._blockchain.find_block_by_height(block_height)
-            if block is None:
-                fail_response_code = message_code.Response.fail_wrong_block_height
-                confirm_info = bytes()
-            else:
-                confirm_info = self._blockchain.find_confirm_info_by_hash(block.header.hash)
-        else:
-            fail_response_code = message_code.Response.fail_wrong_block_hash
-
+        except PrunedHashDataError as e:
+            logging.warning(f"{e!r}")
+            fail_response_code = e.message_code
         return block, block_hash, bytes(confirm_info), fail_response_code
+
+    async def __get_block_receipts(self, block_hash, block_height):
+        # is Last Block
+        if block_hash == "" and block_height == -1 and self._blockchain.last_block:
+            block_hash = self._blockchain.last_block.header.hash.hex()
+
+        block_receipts: list = []
+        try:
+            if block_hash:
+                block: 'Block' = self._blockchain.find_block_by_hash(block_hash)
+            elif block_height != -1:
+                block: 'Block' = self._blockchain.find_block_by_height(block_height)
+            else:
+                block: Optional['Block'] = None
+
+            if block:
+                transactions = block.body.transactions
+                for tx_hash in transactions:
+                    invoke_result = self._block_manager.get_invoke_result(tx_hash)
+                    block_receipts.append(invoke_result)
+                response_code = message_code.Response.success
+            else:
+                response_code = message_code.Response.fail_wrong_block_hash
+        except PrunedHashDataError as e:
+            logging.warning(f"{e!r}")
+            response_code = e.message_code
+        return response_code, block_receipts
 
     @message_queue_task
     def get_tx_by_address(self, address, index):
@@ -875,7 +937,7 @@ class ChannelInnerTask:
 
     @message_queue_task(type_=MessageQueueType.Worker)
     def stop(self, message):
-        logging.info(f"channel_inner_service:stop message({message})")
+        logging.info(f"message({message})")
         self._channel_service.close()
 
 
@@ -887,8 +949,8 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc}")
 
     def notify_new_block(self):
 
@@ -925,8 +987,8 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
-    def _callback_connection_lost_callback(self, connection: RobustConnection):
-        util.exit_and_msg("MQ Connection lost.")
+    def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
+        exit_and_msg(msg=f"MQ [ChannelInnerStub] connection closed. sender = {sender}, exc = {exc}")
 
 
 def make_proof_serializable(proof: list):

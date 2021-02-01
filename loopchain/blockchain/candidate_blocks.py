@@ -73,7 +73,7 @@ class CandidateBlock:
                             votes_class(self._reps, conf.VOTING_RATIO, self.height, vote.round, self.hash)
                     self.votes[vote.round].add_vote(vote)
                 except VoteError as e:
-                    utils.logger.info(e)
+                    utils.logger.info(f"{e!r}")
             self.votes_buffer.clear()
 
     def add_vote(self, vote: 'BlockVote'):
@@ -85,7 +85,7 @@ class CandidateBlock:
             try:
                 self.votes[vote.round].add_vote(vote)
             except VoteError as e:
-                utils.logger.info(e)
+                utils.logger.info(f"{e!r}")
         else:
             self.votes_buffer.append(vote)
 

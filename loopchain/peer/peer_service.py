@@ -14,19 +14,20 @@
 """loopchain main peer service.
 It has secure outer service for p2p consensus and status monitoring.
 And also has insecure inner service for inner process modules."""
+
 import asyncio
 import getpass
 import logging
 import multiprocessing
-import os
 import signal
 import timeit
+from contextlib import suppress
 
-import grpc
+from grpc import aio as grpc_aio
 
 from loopchain import configure as conf
 from loopchain import utils
-from loopchain.baseservice import CommonSubprocess, ObjectManager, RestService
+from loopchain.baseservice import CommonSubprocess, RestService
 from loopchain.crypto.signature import Signer
 from loopchain.peer import PeerInnerService, PeerOuterService
 from loopchain.protos import loopchain_pb2_grpc
@@ -46,7 +47,7 @@ class PeerService:
         """
         self._peer_id = None
         self._node_key = bytes()
-        self.p2p_outer_server: grpc.Server = None
+        self._p2p_outer_server: grpc_aio.Server = None
         self._channel_infos = None
 
         self._peer_target = None
@@ -59,8 +60,6 @@ class PeerService:
 
         self._channel_services = {}
         self._rest_service = None
-
-        ObjectManager().peer_service = self
 
     @property
     def inner_service(self):
@@ -94,11 +93,8 @@ class PeerService:
     def node_key(self):
         return self._node_key
 
-    def p2p_server_stop(self):
-        self.p2p_outer_server.stop(None)
-
     def _init_port(self, port):
-        # service 초기화 작업
+        # service initialize
         target_ip = utils.get_private_ip()
         self._peer_target = f"{target_ip}:{port}"
         self._peer_port = int(port)
@@ -132,7 +128,7 @@ class PeerService:
         logger_preset.peer_id = self.peer_id
         logger_preset.update_logger()
 
-        logging.info(f"run peer_id : {self._peer_id}")
+        logging.info(f"peer_id : {self._peer_id}")
 
     @staticmethod
     def _get_use_kms():
@@ -153,16 +149,20 @@ class PeerService:
             from loopchain.tools.kms_helper import KmsHelper
             KmsHelper().remove_agent_pin()
 
-    def run_p2p_server(self):
-        self.p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
-        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self.p2p_outer_server)
+    async def run_p2p_server(self):
+        self._p2p_outer_server = GRPCHelper().start_outer_server(str(self._peer_port))
+        loopchain_pb2_grpc.add_PeerServiceServicer_to_server(self._outer_service, self._p2p_outer_server)
+        await self._p2p_outer_server.start()
+
+    async def p2p_server_stop(self):
+        await self._p2p_outer_server.stop(None)
 
     def serve(self,
               port,
-              agent_pin: str=None,
-              amqp_target: str=None,
-              amqp_key: str=None,
-              event_for_init: multiprocessing.Event=None):
+              agent_pin: str = None,
+              amqp_target: str = None,
+              amqp_key: str = None,
+              event_for_init: multiprocessing.Event = None):
         """start func of Peer Service ===================================================================
 
         :param port:
@@ -185,14 +185,13 @@ class PeerService:
         StubCollection().amqp_key = amqp_key
 
         peer_queue_name = conf.PEER_QUEUE_NAME_FORMAT.format(amqp_key=amqp_key)
-        self._outer_service = PeerOuterService()
+        self._outer_service = PeerOuterService(self)
         self._inner_service = PeerInnerService(
             amqp_target, peer_queue_name, conf.AMQP_USERNAME, conf.AMQP_PASSWORD, peer_service=self)
 
         self._channel_infos = conf.CHANNEL_OPTION
 
         self._run_rest_services(port)
-        self.run_p2p_server()
 
         self._close_kms_helper()
 
@@ -200,6 +199,7 @@ class PeerService:
         logging.info(f"Start Peer Service at port: {port} start duration({stopwatch_duration})")
 
         async def _serve():
+            await self.run_p2p_server()
             await self.ready_tasks()
             await self._inner_service.connect(conf.AMQP_CONNECTION_ATTEMPTS, conf.AMQP_RETRY_DELAY, exclusive=True)
 
@@ -209,7 +209,7 @@ class PeerService:
             if event_for_init is not None:
                 event_for_init.set()
 
-            logging.info(f'peer_service: init complete peer: {self.peer_id}')
+            logging.info(f'init complete peer: {self.peer_id}')
 
         loop = self._inner_service.loop
         loop.create_task(_serve())
@@ -229,23 +229,22 @@ class PeerService:
         self._inner_service.loop.stop()
 
     def _cleanup(self, loop):
-        logging.info("_cleanup() Peer Resources.")
+        logging.info("Peer Resources.")
+
+        loop.run_until_complete(self.p2p_server_stop())
+        logging.info("p2p server.")
+
         for task in asyncio.Task.all_tasks(loop):
             if task.done():
                 continue
             task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 loop.run_until_complete(task)
-            except asyncio.CancelledError as e:
-                logging.info(f"_cleanup() task : {task}, error : {e}")
-
-        self.p2p_server_stop()
-        logging.info("_cleanup() p2p server.")
 
         if self._rest_service is not None:
             self._rest_service.stop()
             self._rest_service.wait()
-            logging.info("_cleanup() Rest Service.")
+            logging.info("Rest Service.")
 
     async def serve_channels(self):
         for i, channel_name in enumerate(self._channel_infos):
@@ -278,4 +277,3 @@ class PeerService:
             await StubCollection().create_channel_tx_receiver_stub(channel_name)
 
             await StubCollection().create_icon_score_stub(channel_name)
-

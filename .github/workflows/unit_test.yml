@@ -12,8 +12,8 @@ jobs:
     - name: Variable Settings
       run: |
         pr_num=$(echo ${GITHUB_REF} | cut -d "/" -f 3)
-        echo "::set-env name=LOG_PATH::https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-        echo "::set-env name=PR_PATH::https://github.com/${GITHUB_REPOSITORY}/pull/${pr_num}"
+        echo "LOG_PATH=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >> $GITHUB_ENV
+        echo "PR_PATH=https://github.com/${GITHUB_REPOSITORY}/pull/${pr_num}" >> $GITHUB_ENV
 
     - name: Setup Python
       uses: actions/setup-python@v2
@@ -35,7 +35,7 @@ jobs:
       run: |
         pip install -e .[tests]
 
-    - name:
+    - name: Test
       run: |
         make unit-test
 

@@ -200,6 +200,9 @@ class UnknownHashVersionError(Exception):
 class MessageCodeError(Exception):
     message_code = None
 
+    def __repr__(self):
+        return f"{super().__str__()}, message_code={message_code.get_response(self.message_code)}"
+
 
 class NodeInitializationError(MessageCodeError):
     message_code = message_code.Response.fail_create_tx
@@ -218,7 +221,7 @@ class TransactionInvalidError(MessageCodeError):
     def __init__(self, tx: 'Transaction', message=''):
         super().__init__(message)
         self.tx = tx
-        
+
     def __str__(self):
         return \
             f"{super().__str__()}\n" \
@@ -270,3 +273,19 @@ class TransactionInvalidNidError(TransactionInvalidError):
         return \
             f"{super().__str__()}" \
             f"expected_nid: {self.expected_nid}"
+
+
+class PrunedHashDataError(MessageCodeError):
+    message_code = message_code.Response.pruned_hash_data
+
+    def __init__(self, prefix: str, _hash: bytes, message=""):
+        super().__init__(message)
+        self._prefix: str = prefix
+        self._hash = _hash
+
+    def __repr__(self):
+        return f"Pruned {self._prefix} ({self._hash}), code: {self.message_code}"
+
+
+class CitizenRequestError(Exception):
+    pass

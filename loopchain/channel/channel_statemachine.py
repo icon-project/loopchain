@@ -26,6 +26,8 @@ class ChannelStateMachine(object):
                     ignore_invalid_triggers=True,
                     on_enter='_blockheightsync_on_enter'),
               'EvaluateNetwork',
+              State(name='Recovery',
+                    ignore_invalid_triggers=True),
               State(name='BlockSync',
                     ignore_invalid_triggers=True,
                     on_enter='_blocksync_on_enter',
@@ -36,7 +38,7 @@ class ChannelStateMachine(object):
                     on_exit='_subscribe_network_on_exit'),
               State(name='Watch',
                     ignore_invalid_triggers=True,
-                    on_enter='_watch_on_enter', 
+                    on_enter='_watch_on_enter',
                     on_exit='_watch_on_exit'),
               State(name='Vote',
                     ignore_invalid_triggers=True,
@@ -79,6 +81,18 @@ class ChannelStateMachine(object):
                              dest='EvaluateNetwork',
                              after='_do_evaluate_network')
     def evaluate_network(self):
+        pass
+
+    @statemachine.transition(source='EvaluateNetwork',
+                             dest='Recovery',
+                             after='_do_recovery')
+    def recovery(self):
+        pass
+
+    @statemachine.transition(source='Recovery',
+                             dest='BlockSync',
+                             after='_do_block_sync')
+    def recovery_block_sync(self):
         pass
 
     @statemachine.transition(source=('EvaluateNetwork', 'SubscribeNetwork', 'Watch',
@@ -127,23 +141,24 @@ class ChannelStateMachine(object):
         return not self.__channel_service.is_support_node_function(conf.NodeFunction.Vote)
 
     def _do_block_sync(self):
-        self.__channel_service.block_manager.block_height_sync()
+        self.__channel_service.block_manager.start_block_height_sync()
 
     def _do_evaluate_network(self):
         self._run_coroutine_threadsafe(self.__channel_service.evaluate_network())
 
+    def _do_recovery(self):
+        self._run_coroutine_threadsafe(self.__channel_service.recovery())
+
     def _do_vote(self, unconfirmed_block: Block, round_: int):
         if unconfirmed_block.header.is_unrecorded:
             try:
-                self._run_coroutine_threadsafe(
-                    self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_))
+                self.__channel_service.block_manager.add_unconfirmed_block(unconfirmed_block, round_)
             except UnrecordedBlock as e:
-                util.logger.info(e)
+                util.logger.info(f"{e!r}")
             except InvalidUnconfirmedBlock as e:
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
-            self._run_coroutine_threadsafe(
-                self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_))
+            self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_)
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
@@ -203,11 +218,11 @@ class ChannelStateMachine(object):
         self.__channel_service.block_manager.stop_block_generate_timer()
 
     def _leadercomplain_on_enter(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_enter")
+        util.logger.debug(f"on_enter")
         self.__channel_service.block_manager.leader_complain()
 
     def _leadercomplain_on_exit(self, *args, **kwargs):
-        util.logger.debug(f"_leadercomplain_on_exit")
+        util.logger.debug(f"on_exit")
 
     def _run_coroutine_threadsafe(self, coro):
         async def _run_with_handling_exception():
