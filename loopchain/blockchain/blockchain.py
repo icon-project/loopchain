@@ -226,9 +226,11 @@ class BlockChain:
         return self.__tx_versioner
 
     def close_blockchain_store(self):
-        logging.info(f"blockchain_store: {self._blockchain_store}")
+        utils.logger.info(f"close_blockchain_store enter")
         if self._blockchain_store:
+            utils.logger.info(f"blockchain_store close start")
             self._blockchain_store.close()
+            utils.logger.info(f"blockchain_store close done")
             self._blockchain_store: KeyValueStore = None
 
     def check_rollback_possible(self, target_block, start_block=None):

@@ -21,6 +21,7 @@ from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import loopchain_pb2, loopchain_pb2_grpc, message_code
 from loopchain.tools.grpc_helper import GRPCHelper
+from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
     from loopchain.peer.block_manager import BlockManager
@@ -711,4 +712,9 @@ class BlockSync:
         self._cleanup()
 
         if self._block_height_thread_pool:
+            try:
+                stub = StubCollection().icon_score_stubs[ChannelProperty().name]
+                stub.shutdown()
+            except:
+                utils.logger.error(f"can not call shutdown")
             self._block_height_thread_pool.shutdown()
