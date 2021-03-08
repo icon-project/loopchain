@@ -169,7 +169,7 @@ class ChannelService:
         return message
 
     def close(self, signum=None):
-        logging.info(f"signum = {repr(signum)}")
+        utils.logger.info(f"signum = {repr(signum)}")
         if self.__inner_service:
             self.__inner_service.cleanup()
 
@@ -187,29 +187,29 @@ class ChannelService:
                 logging.info(f"task : {task}, error : {e}")
 
     def _cleanup(self):
-        logging.info("Channel Resources.")
+        utils.logger.info("Channel Resources.")
 
         if self.__timer_service.is_run():
             self.__timer_service.stop()
             self.__timer_service.wait()
-            logging.info("TimerService.")
+            utils.logger.info("TimerService.")
 
         if self.__score_container:
             self.__score_container.stop()
             self.__score_container.wait()
             self.__score_container = None
-            logging.info("ScoreContainer.")
+            utils.logger.info("ScoreContainer.")
 
         if self.__broadcast_scheduler:
             self.__broadcast_scheduler.stop()
             self.__broadcast_scheduler.wait()
             self.__broadcast_scheduler = None
-            logging.info("BroadcastScheduler.")
+            utils.logger.info("BroadcastScheduler.")
 
         if self.__block_manager:
             self.__block_manager.stop()
             self.__block_manager = None
-            logging.info("BlockManager.")
+            utils.logger.info("BlockManager.")
 
     @staticmethod
     def _init_properties(**kwargs):
