@@ -62,6 +62,11 @@ class ChannelTxCreatorInnerTask:
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
+        if self.__properties.get('reject_create_tx'):
+            util.logger.debug(
+                f"create_icx_tx has policy of reject_create_tx({self.__properties.get('reject_create_tx')})")
+            return message_code.Response.fail_out_of_tps_limit, None, None
+
         tx_hash = None
         relay_target = None
         if self.__qos_controller.limit():
@@ -429,12 +434,17 @@ class ChannelInnerTask:
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
     def update_sub_services_properties(self, **properties):
-        logging.info(f"properties {properties}")
-        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+        logging.debug(f"properties {properties}")
+        target_stubs = {
+            'tx_creator': StubCollection().channel_tx_creator_stubs[ChannelProperty().name],
+            'tx_receiver': StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]}
 
-        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+        if len(properties) == 1 and "reject_create_tx" in properties:
+            target_stubs.pop('tx_receiver')
+
+        for stub in target_stubs.values():
+            asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties),
+                                             self.__loop_for_sub_services)
 
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
@@ -459,6 +469,11 @@ class ChannelInnerTask:
             pass
 
     def __add_tx_list(self, tx_list):
+        if (not self._channel_service.inner_service.get_sub_services_properties('reject_create_tx') and
+                self._block_manager.get_count_of_unconfirmed_tx() >= conf.TX_COUNT_TO_START_REJECT):
+            self._channel_service.inner_service.update_sub_services_properties(
+                reject_create_tx="There are too many unconfirmed tx(s) in the queue.")
+
         for tx in tx_list:
             if tx.hash.hex() in self._block_manager.get_tx_queue():
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in transaction queue.")
@@ -948,6 +963,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
         self._task._citizen_condition_new_block = Condition(loop=self.loop)
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
+        self.__sub_services_properties = {}
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
         exit_and_msg(msg=f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc}")
@@ -974,7 +990,11 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
 
+    def get_sub_services_properties(self, property_key):
+        return self.__sub_services_properties.get(property_key)
+
     def update_sub_services_properties(self, **properties):
+        self.__sub_services_properties.update(properties)
         self._task.update_sub_services_properties(**properties)
 
     def cleanup(self):

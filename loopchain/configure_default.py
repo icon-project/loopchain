@@ -126,6 +126,8 @@ CONSENSUS_ALGORITHM = ConsensusAlgorithm.siever
 # The total size of the transactions in a block.
 MAX_TX_SIZE_IN_BLOCK = 1 * 1024 * 1024  # 1 MB is better than 2 MB (because tx invoke need CPU time)
 MAX_TX_COUNT_IN_ADDTX_LIST = 128  # AddTxList can send multiple tx in one message.
+TX_COUNT_TO_START_REJECT = 10000  # Maximum allowed size of unconfirmed tx pools.
+TX_COUNT_TO_RESUME_ACCEPT = 1500
 SEND_TX_LIST_DURATION = 0.3  # seconds
 # Consensus Vote Ratio 1 = 100%, 0.5 = 50%
 VOTING_RATIO = 0.67  # for Add Block

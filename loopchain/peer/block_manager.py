@@ -201,9 +201,9 @@ class BlockManager:
         return self.__tx_queue
 
     def get_count_of_unconfirmed_tx(self):
-        """BlockManager 의 상태를 확인하기 위하여 현재 입력된 unconfirmed_tx 의 카운트를 구한다.
+        """Monitors the node's tx_queue status and, if necessary, changes the properties of the sub-service according to the policy.
 
-        :return: 현재 입력된 unconfirmed tx 의 갯수
+        :return: count of unconfirmed tx
         """
         return len(self.__tx_queue)
 
@@ -647,6 +647,10 @@ class BlockManager:
             block_vote,
             reps_hash=target_reps_hash
         )
+
+        if (self.__channel_service.inner_service.get_sub_services_properties('reject_create_tx') and
+                self.get_count_of_unconfirmed_tx() <= conf.TX_COUNT_TO_RESUME_ACCEPT):
+            self.__channel_service.inner_service.update_sub_services_properties(reject_create_tx=None)
 
         return vote
 
