@@ -13,7 +13,7 @@ from pkg_resources import parse_version
 from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
-                                   ScoreResponse)
+                                   ScoreResponse, TimerService, Timer)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *
@@ -75,6 +75,11 @@ class ChannelTxCreatorInnerTask:
         elif node_type != conf.NodeType.CommunityNode.value:
             relay_target = self.__properties.get('relay_target', None)
             return message_code.Response.fail_no_permission, tx_hash, relay_target
+
+        if self.__properties.get('reject_create_tx'):
+            util.logger.debug(
+                f"create_icx_tx has policy of reject_create_tx({self.__properties.get('reject_create_tx')})")
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         result_code = None
         exception = None
@@ -383,6 +388,8 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 
 
 class ChannelInnerTask:
+    TIMER_KEY_UPDATE_CREATOR_PROPERTIES = "TIMER_KEY_UPDATE_CREATOR_PROPERTIES"
+
     def __init__(self, channel_service: 'ChannelService'):
         self._channel_service = channel_service
         self._block_manager: 'BlockManager' = None
@@ -428,14 +435,6 @@ class ChannelInnerTask:
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
-    def update_sub_services_properties(self, **properties):
-        logging.info(f"properties {properties}")
-        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
-
-        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
-
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
             process.terminate()
@@ -458,7 +457,32 @@ class ChannelInnerTask:
             # Call this function by cleanup
             pass
 
+    def __update_creator_properties(self):
+        timer_key = self.TIMER_KEY_UPDATE_CREATOR_PROPERTIES
+        timer_service = self._channel_service.timer_service
+
+        if timer_key in timer_service.timer_list:
+            if self._block_manager.get_count_of_unconfirmed_tx() <= conf.TX_COUNT_TO_RESUME_ACCEPT:
+                self._channel_service.inner_service.update_creator_properties(reject_create_tx=None)
+                timer_service.remove_timer(timer_key)
+        elif self._block_manager.get_count_of_unconfirmed_tx() >= conf.TX_COUNT_TO_START_REJECT:
+            self._channel_service.inner_service.update_creator_properties(
+                reject_create_tx="There are too many unconfirmed tx(s) in the queue.")
+
+            timer_service.add_timer(
+                timer_key,
+                Timer(
+                    target=timer_key,
+                    duration=conf.TIMER_INTERVAL_UPDATE_CREATOR_PROPERTIES,
+                    is_repeat=True,
+                    is_run_at_start=True,
+                    callback=self.__update_creator_properties
+                )
+            )
+
     def __add_tx_list(self, tx_list):
+        self.__update_creator_properties()
+
         for tx in tx_list:
             if tx.hash.hex() in self._block_manager.get_tx_queue():
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in transaction queue.")
@@ -974,8 +998,17 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
 
+    def update_creator_properties(self, **properties):
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
+
+    def update_receiver_properties(self, **properties):
+        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
+
     def update_sub_services_properties(self, **properties):
-        self._task.update_sub_services_properties(**properties)
+        self.update_creator_properties(**properties)
+        self.update_receiver_properties(**properties)
 
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():
