@@ -648,10 +648,6 @@ class BlockManager:
             reps_hash=target_reps_hash
         )
 
-        if (self.__channel_service.inner_service.need_to_update_properties(reject_create_tx=None)
-                and self.get_count_of_unconfirmed_tx() <= conf.TX_COUNT_TO_RESUME_ACCEPT):
-            self.__channel_service.inner_service.update_creator_properties(reject_create_tx=None)
-
         return vote
 
     def verify_confirm_info(self, unconfirmed_block: Block):
