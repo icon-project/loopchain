@@ -10,7 +10,7 @@ from typing import Union, Dict, List, Tuple
 from earlgrey import *
 from pkg_resources import parse_version
 
-from loopchain import configure as conf
+from loopchain import configure as conf, utils
 from loopchain import utils as util
 from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
                                    ScoreResponse, TimerService, Timer)
@@ -26,6 +26,7 @@ from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils import exit_and_msg
+from loopchain.utils.dosguard.dosguard import DoSGuard, DOS_OVERFLOW_TX_KEY, DOS_TX_FROM_BLACKLIST_KEY
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -47,6 +48,10 @@ class ChannelTxCreatorInnerTask:
         self.__qos_controller = QosController()
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
 
+        # DoS
+        self._dos_overflow_tx: bool = False
+        self._dos_tx_from_blacklist: list = []
+
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
             raise TransactionOutOfTimeBound(tx, util.get_now_time_stamp())
@@ -56,9 +61,20 @@ class ChannelTxCreatorInnerTask:
         self.__broadcast_scheduler.wait()
         self.__broadcast_scheduler: BroadcastScheduler = None
 
+        self._dos_overflow_tx: bool = False
+        self._dos_tx_from_blacklist: list = []
+
     @message_queue_task
     async def update_properties(self, properties: dict):
         self.__properties.update(properties)
+
+    @message_queue_task
+    async def update_dos_properties(self, properties: dict):
+        util.logger.info(f"update_dos_properties: {properties}")
+        if DOS_OVERFLOW_TX_KEY in properties:
+            self._dos_overflow_tx: bool = properties[DOS_OVERFLOW_TX_KEY]
+        if DOS_TX_FROM_BLACKLIST_KEY in properties:
+            self._dos_tx_from_blacklist: list = properties[DOS_TX_FROM_BLACKLIST_KEY]
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
@@ -76,9 +92,15 @@ class ChannelTxCreatorInnerTask:
             relay_target = self.__properties.get('relay_target', None)
             return message_code.Response.fail_no_permission, tx_hash, relay_target
 
-        if self.__properties.get('reject_create_tx'):
+        if self._dos_overflow_tx:
             util.logger.debug(
-                f"create_icx_tx has policy of reject_create_tx({self.__properties.get('reject_create_tx')})")
+                f"create_icx_tx has policy of reject_create_tx(OVERFLOW_TX)")
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
+
+        _from: str = kwargs.get("from", "")
+        if _from in self._dos_tx_from_blacklist:
+            util.logger.debug(
+                f"create_icx_tx has policy of reject_create_tx(DoS DETECTED {_from})")
             return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         result_code = None
@@ -404,6 +426,7 @@ class ChannelInnerTask:
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
+        self.__dosguard = None
 
     def init_sub_service(self, loop):
         if len(self.__sub_processes) > 0:
@@ -435,6 +458,12 @@ class ChannelInnerTask:
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
+        self.__dosguard = DoSGuard(
+            self._block_manager,
+            self._channel_service,
+            loop
+        )
+
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
             process.terminate()
@@ -457,32 +486,7 @@ class ChannelInnerTask:
             # Call this function by cleanup
             pass
 
-    def __update_creator_properties(self):
-        timer_key = self.TIMER_KEY_UPDATE_CREATOR_PROPERTIES
-        timer_service = self._channel_service.timer_service
-
-        if timer_key in timer_service.timer_list:
-            if self._block_manager.get_count_of_unconfirmed_tx() <= conf.TX_COUNT_TO_RESUME_ACCEPT:
-                self._channel_service.inner_service.update_creator_properties(reject_create_tx=None)
-                timer_service.remove_timer(timer_key)
-        elif self._block_manager.get_count_of_unconfirmed_tx() >= conf.TX_COUNT_TO_START_REJECT:
-            self._channel_service.inner_service.update_creator_properties(
-                reject_create_tx="There are too many unconfirmed tx(s) in the queue.")
-
-            timer_service.add_timer(
-                timer_key,
-                Timer(
-                    target=timer_key,
-                    duration=conf.TIMER_INTERVAL_UPDATE_CREATOR_PROPERTIES,
-                    is_repeat=True,
-                    is_run_at_start=True,
-                    callback=self.__update_creator_properties
-                )
-            )
-
     def __add_tx_list(self, tx_list):
-        self.__update_creator_properties()
-
         for tx in tx_list:
             if tx.hash.hex() in self._block_manager.get_tx_queue():
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in transaction queue.")
@@ -490,8 +494,9 @@ class ChannelInnerTask:
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
-
-            self._block_manager.add_tx_obj(tx)
+            if self.__dosguard.invoke(tx):
+                self._block_manager.add_tx_obj(tx)
+        self.__dosguard.commit()
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -962,6 +967,7 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def stop(self, message):
         logging.info(f"message({message})")
+        self.__dosguard.close()
         self._channel_service.close()
 
 
@@ -986,7 +992,6 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         asyncio.run_coroutine_threadsafe(_notify_new_block(), self.loop)
 
     def notify_unregister(self):
-
         async def _notify_unregister():
             condition = self._task._citizen_condition_unregister
             async with condition:
@@ -998,17 +1003,15 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
 
-    def update_creator_properties(self, **properties):
+    async def update_dos_properties(self, properties):
         stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
-
-    def update_receiver_properties(self, **properties):
-        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
+        await stub.async_task().update_dos_properties(properties)
 
     def update_sub_services_properties(self, **properties):
-        self.update_creator_properties(**properties)
-        self.update_receiver_properties(**properties)
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
+        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
 
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():
