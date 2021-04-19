@@ -1,83 +1,133 @@
 import asyncio
-import enum
 import time
 
-from loopchain import configure as conf
 from ...utils import logger
+from ...blockchain.types import ExternalAddress
 
 
 def now():
     return int(time.monotonic())  # unit: second
 
 
-class Category(enum.Enum):
-    FROM_TX = 0
-
-
 DOS_OVERFLOW_TX_KEY = "overflow_tx"
-DOS_TX_FROM_BLACKLIST_KEY = "tx_from_blacklist"
+DOS_TX_FROM_DENYLIST_KEY = "tx_from_denylist"
+
+
+class Item:
+    _TX_FROM_CHECK_BOUNDARY_TIME = 5  # 5s
+    _GUARD_THRESHOLD = 100
+    _TX_FROM_BLOCK_DURATION = 120  # 120s
+
+    def __init__(self):
+        self._count = 0
+        self._expired_time = 0
+        self._blocked = False
+
+    @classmethod
+    def init(cls, boundary_time: int, guard_threshold: int, block_duration: int):
+        cls._TX_FROM_CHECK_BOUNDARY_TIME = boundary_time
+        cls._GUARD_THRESHOLD = guard_threshold
+        cls._TX_FROM_BLOCK_DURATION = block_duration
+
+    @property
+    def count(self) -> int:
+        return self._count
+
+    @property
+    def expired_time(self) -> int:
+        return self._expired_time
+
+    @property
+    def is_blocked(self) -> bool:
+        return self._blocked
+
+    def increment_count(self) -> bool:
+        """
+        :return: blocked state is changed or not
+        """
+        cur_time = now()
+
+        if cur_time > self._expired_time:
+            self._count = 0
+        if self._count == 0:
+            self._expired_time = cur_time + self._TX_FROM_CHECK_BOUNDARY_TIME
+
+        self._count += 1
+        blocked = self._count > self._GUARD_THRESHOLD
+
+        if blocked:
+            self._expired_time = cur_time + self._TX_FROM_BLOCK_DURATION
+        if blocked != self._blocked:
+            self._blocked = blocked
+            return True
+
+        return False
+
+    def __str__(self) -> str:
+        return (
+            f"count={self._count} "
+            f"blocked={self._blocked} "
+            f"expired_time={self._expired_time}"
+        )
 
 
 class DoSGuard:
-    def __init__(
-            self,
-            block_mgr,
-            ch_svc,
-            loop
-    ):
-        self._enable: bool = conf.DOS_GUARD_ENABLE
-        if not self._enable:
-            return
-
+    def __init__(self, block_mgr, ch_svc):
         self._block_mgr = block_mgr
         self._ch_svc = ch_svc
         self._is_run = True
 
         self._is_update_overflow_tx = False
-        self._is_update_blacklist = {c.value: False for c in Category}
+        self._is_update_denylist = False
 
         self._last_overflow_tx: bool = False
-        self._last_blacklist: dict = {c.value: [] for c in Category}
+        self._denylist = set()
+        self._statistics = {}
 
-        self._statistics: dict = {c.value: {} for c in Category}
-        self._blacklist_expired: dict = {c.value: {} for c in Category}
+        self._count_to_resume_accept = 0
+        self._count_to_start_reject = 0
+        self._timer_interval = 5
 
-        loop.create_task(self._main_timer())
-        loop.create_task(self._tx_from_check_boundary_timer())
-        logger.info("[DoSGuard] DoSGuard Init")
+        logger.info("[DoSGuard] init")
+
+    def open(
+            self,
+            loop,
+            count_to_resume_accept: int,
+            count_to_start_reject: int,
+            boundary_time: int,
+            guard_threshold: int,
+            block_duration: int,
+            timer_interval: int,
+    ):
+        logger.info("[DoSGuard] open")
+        self._count_to_resume_accept = count_to_resume_accept
+        self._count_to_start_reject = count_to_start_reject
+        self._timer_interval = timer_interval
+        Item.init(boundary_time, guard_threshold, block_duration)
+
+        if loop:
+            loop.create_task(self._main_timer())
 
     def close(self):
-        if not self._enable:
-            return
-
         self._is_run = False
         logger.info("[DoSGuard] close")
 
     async def _main_timer(self):
         while self._is_run:
-            await asyncio.sleep(1)
-            await self._check_overflow_tx()
-            await self._check_tx_from_blacklist()
+            await asyncio.sleep(self._timer_interval)
+            self._check_overflow_tx()
+            self._check_denylist()
             await self._upload_dos_properties()
             logger.info("[DoSGuard] _main_timer")
         logger.info("[DoSGuard] _main_timer close")
 
-    async def _tx_from_check_boundary_timer(self):
-        while self._is_run:
-            await asyncio.sleep(conf.DOS_GUARD_TX_FROM_CHECK_BOUNDARY_TIME)
-            await self._tx_from_check_boundary_reset()
-            logger.info("[DoSGuard] _tx_from_check_boundary_timer")
-        logger.info("[DoSGuard] _tx_from_check_boundary_timer close")
-
-    async def _tx_from_check_boundary_reset(self):
-        self._statistics = {c.value: {} for c in Category}
-
-    async def _check_overflow_tx(self):
+    def _check_overflow_tx(self):
         tx_pool_length: int = self._block_mgr.get_count_of_unconfirmed_tx()
         logger.debug(f"[DoSGuard] _check_overflow_tx {tx_pool_length}")
-        if tx_pool_length <= conf.DOS_GUARD_TX_COUNT_TO_RESUME_ACCEPT:
+        if tx_pool_length <= self._count_to_resume_accept:
             overflow_tx = False
-        elif tx_pool_length >= conf.DOS_GUARD_TX_COUNT_TO_START_REJECT:
+        elif tx_pool_length >= self._count_to_start_reject:
             overflow_tx = True
         else:
             overflow_tx = self._last_overflow_tx
@@ -87,57 +137,55 @@ class DoSGuard:
             self._last_overflow_tx = overflow_tx
             logger.info("[DoSGuard] is_update_overflow_tx True")
 
-    async def _check_tx_from_blacklist(self):
+    def _check_denylist(self):
         cur_time: int = now()
-        tmp_blacklist: list = [
-            k for k, v in self._blacklist_expired[Category.FROM_TX.value].items()
-            if v >= cur_time
-        ]
-        logger.debug(f"[DoSGuard] _check_tx_from_blacklist: {tmp_blacklist}")
-        if self._last_blacklist[Category.FROM_TX.value] != tmp_blacklist:
-            self._is_update_blacklist[Category.FROM_TX.value] = True
-            self._last_blacklist[Category.FROM_TX.value] = tmp_blacklist
-            logger.info("[DoSGuard] is_update_blacklist[Category.FROM_TX] True")
+        expired_addresses = []
+
+        for _from in self._denylist:
+            item = self._statistics.get(_from)
+            if item is None:
+                logger.warning(f"DoSItem for {_from} is None")
+                continue
+
+            if item and cur_time > item.expired_time:
+                expired_addresses.append(_from)
+                del self._statistics[_from]
+
+        if len(expired_addresses):
+            self._is_update_denylist = True
+            for address in expired_addresses:
+                self._denylist.remove(address)
 
     async def _upload_dos_properties(self):
         dos_properties: dict = {}
         if self._is_update_overflow_tx:
             self._is_update_overflow_tx = False
             dos_properties[DOS_OVERFLOW_TX_KEY] = self._last_overflow_tx
-        if self._is_update_blacklist[Category.FROM_TX.value]:
-            self._is_update_blacklist[Category.FROM_TX.value] = False
-            dos_properties[DOS_TX_FROM_BLACKLIST_KEY] = self._last_blacklist[Category.FROM_TX.value]
+        if self._is_update_denylist:
+            self._is_update_denylist = False
+            dos_properties[DOS_TX_FROM_DENYLIST_KEY] = self._denylist
 
         if dos_properties:
             logger.info(f"[DoSGuard] _upload_dos_properties: {dos_properties}")
             await self._ch_svc.inner_service.update_dos_properties(dos_properties)
 
-    def commit(self):
-        if not self._enable:
-            return
-
-        tmp_blacklist: list = [
-            k for k, v in self._statistics[Category.FROM_TX.value].items()
-            if v >= conf.DOS_GUARD_THRESHOLD
-        ]
-        logger.debug(f"[DoSGuard] commit: {tmp_blacklist}")
-
-        for addr in tmp_blacklist:
-            self._blacklist_expired[Category.FROM_TX.value][addr] = now() + conf.DOS_GUARD_TX_FROM_BLACKLIST_TIME
-
     def invoke(self, tx) -> bool:
-        if not self._enable:
-            return True
+        _from = tx.from_address.hex_hx()
+        from_tx_statistics: dict = self._statistics
 
-        _from: str = tx.from_address.hex_hx()
+        item = from_tx_statistics.get(_from)
+        if item is None:
+            item = Item()
+            from_tx_statistics[_from] = item
+            logger.info(f"[DoSGuard] len(from_tx_statistics)={len(from_tx_statistics)}")
 
-        from_tx_statistics: dict = self._statistics[Category.FROM_TX.value]
-        from_tx_statistics[_from] = from_tx_statistics.get(_from, 0) + 1
+        # if the blocked state of the item is changed
+        if item.increment_count():
+            self._is_update_denylist = True
+            if item.is_blocked:
+                self._denylist.add(_from)
+            else:
+                self._denylist.remove(_from)
+            logger.info(f"[DosGuard] from={_from} {item}")
 
-        if _from in self._last_blacklist[Category.FROM_TX.value]:
-            return False
-
-        if from_tx_statistics[_from] >= conf.DOS_GUARD_THRESHOLD:
-            return False
-
-        return True
+        return item.is_blocked

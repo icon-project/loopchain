@@ -26,7 +26,7 @@ from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
 from loopchain.qos.qos_controller import QosController, QosCountControl
 from loopchain.utils import exit_and_msg
-from loopchain.utils.dosguard.dosguard import DoSGuard, DOS_OVERFLOW_TX_KEY, DOS_TX_FROM_BLACKLIST_KEY
+from loopchain.utils.dosguard.dosguard import DoSGuard, DOS_OVERFLOW_TX_KEY, DOS_TX_FROM_DENYLIST_KEY
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -50,7 +50,7 @@ class ChannelTxCreatorInnerTask:
 
         # DoS
         self._dos_overflow_tx: bool = False
-        self._dos_tx_from_blacklist: list = []
+        self._dos_tx_from_denylist = set()
 
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
@@ -62,7 +62,7 @@ class ChannelTxCreatorInnerTask:
         self.__broadcast_scheduler: BroadcastScheduler = None
 
         self._dos_overflow_tx: bool = False
-        self._dos_tx_from_blacklist: list = []
+        self._dos_tx_from_denylist = set()
 
     @message_queue_task
     async def update_properties(self, properties: dict):
@@ -73,8 +73,8 @@ class ChannelTxCreatorInnerTask:
         util.logger.info(f"update_dos_properties: {properties}")
         if DOS_OVERFLOW_TX_KEY in properties:
             self._dos_overflow_tx: bool = properties[DOS_OVERFLOW_TX_KEY]
-        if DOS_TX_FROM_BLACKLIST_KEY in properties:
-            self._dos_tx_from_blacklist: list = properties[DOS_TX_FROM_BLACKLIST_KEY]
+        if DOS_TX_FROM_DENYLIST_KEY in properties:
+            self._dos_tx_from_denylist = properties[DOS_TX_FROM_DENYLIST_KEY]
 
     @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
@@ -98,7 +98,7 @@ class ChannelTxCreatorInnerTask:
             return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         _from: str = kwargs.get("from", "")
-        if _from in self._dos_tx_from_blacklist:
+        if _from in self._dos_tx_from_denylist:
             util.logger.debug(
                 f"create_icx_tx has policy of reject_create_tx(DoS DETECTED {_from})")
             return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
@@ -426,7 +426,7 @@ class ChannelInnerTask:
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
-        self.__dosguard = None
+        self.__dos_guard = None
 
     def init_sub_service(self, loop):
         if len(self.__sub_processes) > 0:
@@ -458,11 +458,20 @@ class ChannelInnerTask:
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
-        self.__dosguard = DoSGuard(
-            self._block_manager,
-            self._channel_service,
-            loop
-        )
+        if conf.DOS_GUARD_ENABLE:
+            self.__dos_guard = DoSGuard(
+                self._block_manager,
+                self._channel_service,
+            )
+            self.__dos_guard.open(
+                loop,
+                count_to_resume_accept=conf.DOS_GUARD_TX_COUNT_TO_RESUME_ACCEPT,
+                count_to_start_reject=conf.DOS_GUARD_TX_COUNT_TO_START_REJECT,
+                boundary_time=conf.DOS_GUARD_TX_FROM_CHECK_BOUNDARY_TIME,
+                guard_threshold=conf.DOS_GUARD_THRESHOLD,
+                block_duration=conf.DOS_GUARD_TX_FROM_BLOCK_DURATION,
+                timer_interval=conf.DOS_GUARD_TIMER_INTERVAL,
+            )
 
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
@@ -494,9 +503,8 @@ class ChannelInnerTask:
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
-            if self.__dosguard.invoke(tx):
+            if self.__dos_guard is None or self.__dos_guard.invoke(tx):
                 self._block_manager.add_tx_obj(tx)
-        self.__dosguard.commit()
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -967,7 +975,9 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def stop(self, message):
         logging.info(f"message({message})")
-        self.__dosguard.close()
+        if self.__dos_guard:
+            self.__dos_guard.close()
+            self.__dos_guard = None
         self._channel_service.close()
 
 
