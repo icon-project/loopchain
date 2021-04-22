@@ -503,7 +503,7 @@ class ChannelInnerTask:
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
-            if self.__dos_guard is not None or not self.__dos_guard.invoke(tx):
+            if self.__dos_guard is None or not self.__dos_guard.invoke(tx):
                 self._block_manager.add_tx_obj(tx)
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:

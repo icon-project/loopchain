@@ -2,7 +2,6 @@ import asyncio
 import time
 
 from ...utils import logger
-from ...blockchain.types import ExternalAddress
 
 
 def now():
@@ -173,13 +172,12 @@ class DoSGuard:
 
     def invoke(self, tx) -> bool:
         _from = tx.from_address.hex_hx()
-        from_tx_statistics: dict = self._statistics
 
-        item = from_tx_statistics.get(_from)
+        item = self._statistics.get(_from)
         if item is None:
             item = Item()
-            from_tx_statistics[_from] = item
-            logger.info(f"[DoSGuard] len(from_tx_statistics)={len(from_tx_statistics)}")
+            self._statistics[_from] = item
+            logger.info(f"[DoSGuard] len(from_tx_statistics)={len(self._statistics)}")
 
         # if the blocked state of the item is changed
         if item.increment_count():
