@@ -100,7 +100,9 @@ class DoSGuard:
             block_duration: int,
             timer_interval: int,
     ):
-        logger.info("[DoSGuard] open")
+        logger.info(f"[DoSGuard] open, "
+                    f"{count_to_resume_accept}, {count_to_start_reject}, "
+                    f"{boundary_time}, {guard_threshold}, {block_duration}, {timer_interval}")
         self._count_to_resume_accept = count_to_resume_accept
         self._count_to_start_reject = count_to_start_reject
         self._timer_interval = timer_interval
@@ -187,5 +189,4 @@ class DoSGuard:
             else:
                 self._denylist.remove(_from)
             logger.info(f"[DosGuard] from={_from} {item}")
-
         return item.is_blocked
