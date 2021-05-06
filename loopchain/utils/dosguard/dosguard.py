@@ -1,5 +1,6 @@
 import asyncio
 import time
+from enum import Enum
 
 from ...utils import logger
 
@@ -12,21 +13,29 @@ DOS_OVERFLOW_TX_KEY = "overflow_tx"
 DOS_TX_FROM_DENYLIST_KEY = "tx_from_denylist"
 
 
+class ItemState(Enum):
+    NONE = 0
+    CHANGED = 1
+    RESET = 2
+
+
 class Item:
     _TX_FROM_CHECK_BOUNDARY_TIME = 5  # 5s
     _GUARD_THRESHOLD = 100
     _TX_FROM_BLOCK_DURATION = 120  # 120s
+    _RESET_TIME = 300  # 300s
+
+    @classmethod
+    def init(cls, boundary_time: int, reset_time: int, guard_threshold: int, block_duration: int):
+        cls._TX_FROM_CHECK_BOUNDARY_TIME = boundary_time
+        cls._RESET_TIME = reset_time
+        cls._GUARD_THRESHOLD = guard_threshold
+        cls._TX_FROM_BLOCK_DURATION = block_duration
 
     def __init__(self):
         self._count = 0
         self._expired_time = 0
         self._blocked = False
-
-    @classmethod
-    def init(cls, boundary_time: int, guard_threshold: int, block_duration: int):
-        cls._TX_FROM_CHECK_BOUNDARY_TIME = boundary_time
-        cls._GUARD_THRESHOLD = guard_threshold
-        cls._TX_FROM_BLOCK_DURATION = block_duration
 
     @property
     def count(self) -> int:
@@ -40,13 +49,17 @@ class Item:
     def is_blocked(self) -> bool:
         return self._blocked
 
-    def increment_count(self) -> bool:
+    def increment_count(self) -> ItemState:
         """
         :return: blocked state is changed or not
         """
         cur_time = now()
 
         if cur_time > self._expired_time:
+            if (cur_time - self._expired_time + self._TX_FROM_CHECK_BOUNDARY_TIME > self._RESET_TIME
+                    and self._count > 0
+                    and not self._blocked):
+                return ItemState.RESET
             self._count = 0
         if self._count == 0:
             self._expired_time = cur_time + self._TX_FROM_CHECK_BOUNDARY_TIME
@@ -58,9 +71,9 @@ class Item:
             self._expired_time = cur_time + self._TX_FROM_BLOCK_DURATION
         if blocked != self._blocked:
             self._blocked = blocked
-            return True
+            return ItemState.CHANGED
 
-        return False
+        return ItemState.NONE
 
     def __str__(self) -> str:
         return (
@@ -95,17 +108,29 @@ class DoSGuard:
             count_to_resume_accept: int,
             count_to_start_reject: int,
             boundary_time: int,
+            reset_time: int,
             guard_threshold: int,
             block_duration: int,
             timer_interval: int,
     ):
-        logger.info(f"[DoSGuard] open, "
-                    f"{count_to_resume_accept}, {count_to_start_reject}, "
-                    f"{boundary_time}, {guard_threshold}, {block_duration}, {timer_interval}")
+        logger.info(
+            f"[DoSGuard] open, "
+            f"count_to_resume_accept={count_to_resume_accept}, "
+            f"count_to_start_reject={count_to_start_reject}, "
+            f"boundary_time={boundary_time}, "
+            f"guard_threshold={guard_threshold}, "
+            f"block_duration={block_duration}, "
+            f"timer_interval={timer_interval}"
+        )
         self._count_to_resume_accept = count_to_resume_accept
         self._count_to_start_reject = count_to_start_reject
         self._timer_interval = timer_interval
-        Item.init(boundary_time, guard_threshold, block_duration)
+        Item.init(
+            boundary_time=boundary_time,
+            reset_time=reset_time,
+            guard_threshold=guard_threshold,
+            block_duration=block_duration
+        )
 
         if loop:
             loop.create_task(self._main_timer())
@@ -180,11 +205,19 @@ class DoSGuard:
             logger.info(f"[DoSGuard] len(from_tx_statistics)={len(self._statistics)}")
 
         # if the blocked state of the item is changed
-        if item.increment_count():
+        ret: ItemState = item.increment_count()
+        if ret == ItemState.NONE:
+            # Do nothing
+            pass
+        elif ret == ItemState.CHANGED:
             self._is_update_denylist = True
             if item.is_blocked:
                 self._denylist.add(_from)
             else:
                 self._denylist.remove(_from)
-            logger.info(f"[DosGuard] from={_from} {item}")
+            logger.info(f"[DosGuard] Changed: from={_from} {item}")
+        else:
+            self._statistics.pop(_from, None)
+            logger.info(f"[DosGuard] Reset: from={_from} {item}")
+
         return item.is_blocked

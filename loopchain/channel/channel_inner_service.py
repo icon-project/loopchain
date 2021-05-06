@@ -468,6 +468,7 @@ class ChannelInnerTask:
                 count_to_resume_accept=conf.DOS_GUARD_TX_COUNT_TO_RESUME_ACCEPT,
                 count_to_start_reject=conf.DOS_GUARD_TX_COUNT_TO_START_REJECT,
                 boundary_time=conf.DOS_GUARD_TX_FROM_CHECK_BOUNDARY_TIME,
+                reset_time=conf.DOS_GUARD_TX_FROM_RESET_TIME,
                 guard_threshold=conf.DOS_GUARD_THRESHOLD,
                 block_duration=conf.DOS_GUARD_TX_FROM_BLOCK_DURATION,
                 timer_interval=conf.DOS_GUARD_TIMER_INTERVAL,
