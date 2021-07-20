@@ -20,7 +20,8 @@ from typing import TYPE_CHECKING, Optional
 
 import loopchain.utils as util
 from loopchain import configure as conf
-from loopchain.baseservice import ObjectManager, TimerService, SlotTimer, Timer
+from loopchain.baseservice import ObjectManager, SlotTimer
+from loopchain.baseservice.timer_service import TimerService, Timer, OffType
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.exception import NotEnoughVotes, ThereIsNoCandidateBlock, InvalidBlock
 from loopchain.blockchain.types import ExternalAddress, Hash32
@@ -68,6 +69,8 @@ class ConsensusSiever(ConsensusBase):
 
     def stop(self):
         self.__block_generation_timer.stop()
+        # FIXME : need to stop timer send_unconfirmed_block
+        self.stop_broadcast_send_unconfirmed_block_timer(off_type=OffType.force_call)
         if self._loop:
             self.__put_vote(None)
 
@@ -222,6 +225,10 @@ class ConsensusSiever(ConsensusBase):
                 candidate_block, self._blockchain.find_preps_addresses_by_header(candidate_block.header))
             self.__broadcast_block(candidate_block)
 
+            if self._block_manager.is_shutdown_block():
+                self._block_manager.start_suspend()
+                return
+
             if is_unrecorded_block:
                 self._blockchain.last_unconfirmed_block = None
             else:
@@ -350,11 +357,11 @@ class ConsensusSiever(ConsensusBase):
         )
 
     @staticmethod
-    def stop_broadcast_send_unconfirmed_block_timer():
+    def stop_broadcast_send_unconfirmed_block_timer(off_type: OffType = OffType.normal):
         timer_key = TimerService.TIMER_KEY_BROADCAST_SEND_UNCONFIRMED_BLOCK
         timer_service = ObjectManager().channel_service.timer_service
         if timer_key in timer_service.timer_list:
-            timer_service.stop_timer(timer_key)
+            timer_service.stop_timer(timer_key, off_type=off_type)
 
     def __broadcast_block(self, block: 'Block'):
         broadcast_func = partial(self._block_manager.broadcast_send_unconfirmed_block,

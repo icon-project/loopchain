@@ -86,6 +86,10 @@ class BlockChain:
         self.__total_tx = 0
         self.__nid: Optional[str] = None
 
+        # FIXME : temporary setting
+        self._shutdown_block_height = 40
+        logging.warning(f"shutdown block height: {self._shutdown_block_height}")
+
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
         self.__block_versioner = BlockVersioner()
@@ -974,11 +978,11 @@ class BlockChain:
             logging.debug(f"current_block height({current_block.header.height}), hash({current_block.header.hash})")
 
             try:
-                unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
+                prev_unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
                 logging.debug(f"confirmed_block_hash: {current_block.header.prev_hash.hex()}")
-                if unconfirmed_block:
-                    logging.debug(f"unconfirmed_block.block_hash: {unconfirmed_block.header.hash.hex()}")
-                    logging.debug(f"unconfirmed_block.prev_block_hash: {unconfirmed_block.header.prev_hash.hex()}")
+                if prev_unconfirmed_block:
+                    logging.debug(f"unconfirmed_block.block_hash: {prev_unconfirmed_block.header.hash.hex()}")
+                    logging.debug(f"unconfirmed_block.prev_block_hash: {prev_unconfirmed_block.header.prev_hash.hex()}")
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
                     return None
@@ -994,10 +998,10 @@ class BlockChain:
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 
-            if unconfirmed_block.header.hash != current_block.header.prev_hash:
+            if prev_unconfirmed_block.header.hash != current_block.header.prev_hash:
                 raise BlockchainError(
                     f"It couldn't be confirmed by the new block. "
-                    f"Hash of last_unconfirmed_block({unconfirmed_block.header.hash})\n"
+                    f"Hash of last_unconfirmed_block({prev_unconfirmed_block.header.hash})\n"
                     f"prev_hash of the new unconfirmed_block({current_block.header.prev_hash})"
                 )
 
@@ -1014,11 +1018,11 @@ class BlockChain:
             else:
                 confirm_info = None
 
-            self.add_block(unconfirmed_block, confirm_info)
+            self.add_block(prev_unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
-            return unconfirmed_block
+            return prev_unconfirmed_block
 
     def _init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
@@ -1418,3 +1422,6 @@ class BlockChain:
         self.write_preps(roothash=next_reps_hash, preps=preps)
         self.__cache_clear_roothash()
         ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
+
+    def is_shutdown_block(self):
+        return self.last_block.header.height == self._shutdown_block_height

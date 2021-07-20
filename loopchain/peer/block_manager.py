@@ -739,6 +739,9 @@ class BlockManager:
 
         try:
             self.add_unconfirmed_block(unconfirmed_block, round_)
+            if self.blockchain.is_shutdown_block():
+                self.start_suspend()
+                return
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(f"{e!r}")
@@ -761,3 +764,10 @@ class BlockManager:
             return peer_address in preps
 
         return False
+
+    def is_shutdown_block(self) -> bool:
+        return self.blockchain.is_shutdown_block()
+
+    def start_suspend(self):
+        util.logger.info(f"start transition to suspend state")
+        self.__channel_service.state_machine.suspend()

@@ -55,6 +55,10 @@ class ChannelStateMachine(object):
               State(name='ResetNetwork',
                     ignore_invalid_triggers=True,
                     on_enter='_do_reset_network_on_enter'),
+              State(name='Suspend',
+                    ignore_invalid_triggers=True),
+              State(name='Resume',
+                    ignore_invalid_triggers=True),
               'GracefulShutdown']
     init_state = 'InitComponents'
     state = init_state
@@ -133,6 +137,14 @@ class ChannelStateMachine(object):
     def switch_role(self):
         pass
 
+    @statemachine.transition(source=('BlockGenerate', 'Vote', 'BlockSync'), dest='Suspend', after='_do_suspend')
+    def suspend(self):
+        pass
+
+    @statemachine.transition(source='Suspend', dest='Resume', after='_do_resume')
+    def resume(self):
+        pass
+
     def _is_leader(self):
         return (not self._has_no_vote_function() and
                 self.__channel_service.block_manager.peer_type == loopchain_pb2.BLOCK_GENERATOR)
@@ -159,6 +171,12 @@ class ChannelStateMachine(object):
                 util.logger.spam(f"The Unrecorded block is unnecessary to vote.")
         else:
             self.__channel_service.block_manager.vote_as_peer(unconfirmed_block, round_)
+
+    def _do_suspend(self):
+        self.__channel_service.suspend()
+
+    def _do_resume(self):
+        pass
 
     def _consensus_on_enter(self, *args, **kwargs):
         self.block_height_sync()
