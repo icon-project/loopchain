@@ -22,6 +22,10 @@ RECOVERY_CHECK_INTERVAL: int = 5   # sec
 RELEASE_RECOVERY_BLOCK_COUNT: int = 5
 
 
+# SHUTDOWN
+SHUTDOWN_RESUME: bool = False
+
+
 #############
 # LOGGING ###
 #############

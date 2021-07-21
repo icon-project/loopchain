@@ -137,7 +137,8 @@ class ChannelStateMachine(object):
     def switch_role(self):
         pass
 
-    @statemachine.transition(source=('BlockGenerate', 'Vote', 'BlockSync'), dest='Suspend', after='_do_suspend')
+    @statemachine.transition(source=('BlockGenerate', 'Vote', 'BlockSync', 'SubscribeNetwork'),
+                             dest='Suspend', after='_do_suspend')
     def suspend(self):
         pass
 

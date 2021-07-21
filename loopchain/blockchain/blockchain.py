@@ -63,6 +63,7 @@ class BlockChain:
     CONFIRM_INFO_KEY = b'confirm_info_key'
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
+    SHUTDOWN_BLOCK_HEIGHT = b'shutdown_block_height'
 
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
         # last block in block db
@@ -86,9 +87,15 @@ class BlockChain:
         self.__total_tx = 0
         self.__nid: Optional[str] = None
 
-        # FIXME : temporary setting
-        self._shutdown_block_height = 40
-        logging.warning(f"shutdown block height: {self._shutdown_block_height}")
+        # FIXME : temporary shutdown block height setting
+        sbh: Union[bytes, int] = (40).to_bytes(1, 'big')
+        self._blockchain_store.put(BlockChain.SHUTDOWN_BLOCK_HEIGHT, sbh)
+        sbh = int.from_bytes(self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT), 'big')
+        logging.warning(f"shutdown block height: {sbh}")
+
+        if conf.SHUTDOWN_RESUME:
+            self._blockchain_store.delete(BlockChain.SHUTDOWN_BLOCK_HEIGHT)
+            logging.warning(f"shutdown resume")
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -1424,4 +1431,5 @@ class BlockChain:
         ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
 
     def is_shutdown_block(self):
-        return self.last_block.header.height == self._shutdown_block_height
+        shutdown_block_height: bytes = self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b'\x00')
+        return self.last_block.header.height == int.from_bytes(shutdown_block_height, 'big')
