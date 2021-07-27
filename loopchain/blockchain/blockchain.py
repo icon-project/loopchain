@@ -1430,6 +1430,19 @@ class BlockChain:
         self.__cache_clear_roothash()
         ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
 
-    def is_shutdown_block(self):
+    def _get_shutdown_block_height(self) -> int:
         shutdown_block_height: bytes = self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b'\x00')
-        return self.last_block.header.height == int.from_bytes(shutdown_block_height, 'big')
+        return int.from_bytes(shutdown_block_height, 'big')
+
+    def is_shutdown_block(self) -> bool:
+        return self.block_height == self._get_shutdown_block_height()
+
+    def is_tx_limit_block(self) -> bool:
+        shutdown_block_height: int = self._get_shutdown_block_height()
+        return (shutdown_block_height > 0 and
+                self.block_height == (shutdown_block_height - conf.GAP_FROM_SHUTDOWN_BLOCK_HEIGHT))
+
+    def above_tx_limit_block(self) -> bool:
+        shutdown_block_height: int = self._get_shutdown_block_height()
+        return (shutdown_block_height > 0 and
+                self.block_height >= (shutdown_block_height - conf.GAP_FROM_SHUTDOWN_BLOCK_HEIGHT))

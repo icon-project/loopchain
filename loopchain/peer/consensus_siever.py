@@ -228,6 +228,8 @@ class ConsensusSiever(ConsensusBase):
             if self._block_manager.is_shutdown_block():
                 self._block_manager.start_suspend()
                 return
+            elif self._block_manager.is_tx_limit_block():
+                self._block_manager.add_zero_limit_control()
 
             if is_unrecorded_block:
                 self._blockchain.last_unconfirmed_block = None
