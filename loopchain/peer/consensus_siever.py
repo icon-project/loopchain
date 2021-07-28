@@ -226,6 +226,7 @@ class ConsensusSiever(ConsensusBase):
             self.__broadcast_block(candidate_block)
 
             if self._block_manager.is_shutdown_block():
+                self._blockchain.last_unconfirmed_block = candidate_block
                 self._block_manager.start_suspend()
                 return
             elif self._block_manager.is_tx_limit_block():
@@ -294,8 +295,8 @@ class ConsensusSiever(ConsensusBase):
             prev_votes = None
 
         if prev_votes:
+            last_unconfirmed_block = self._blockchain.last_unconfirmed_block
             try:
-                last_unconfirmed_block = self._blockchain.last_unconfirmed_block
                 if last_unconfirmed_block is None:
                     warning_msg = f"There is prev_votes({prev_votes}). But I have no last_unconfirmed_block."
                     if self._blockchain.find_block_by_hash32(block_hash):

@@ -14,12 +14,16 @@
 """Candidate Blocks"""
 
 import threading
-from typing import Dict, List, Sequence
+from typing import TYPE_CHECKING, Dict, List, Sequence
 
 from loopchain import utils, configure as conf
 from loopchain.blockchain.blocks import Block
 from loopchain.blockchain.types import Hash32, ExternalAddress
 from loopchain.blockchain.votes.votes import VoteError, Votes
+
+if TYPE_CHECKING:
+    from loopchain.blockchain.votes.v0_1a import BlockVotes, BlockVote
+
 
 __all__ = ("CandidateBlockSetBlock", "CandidateBlock", "CandidateBlocks")
 
@@ -33,7 +37,7 @@ class CandidateBlock:
         """Recommend use factory methods(from_*) instead direct this.
 
         """
-        self.votes: dict[int, 'BlockVotes'] = {}
+        self.votes: Dict[int, 'BlockVotes'] = {}
         self.votes_buffer: List['BlockVote'] = []
         self.start_time = utils.get_time_stamp()  # timestamp
         self.hash = block_hash
