@@ -712,9 +712,4 @@ class BlockSync:
         self._cleanup()
 
         if self._block_height_thread_pool:
-            try:
-                stub = StubCollection().icon_score_stubs[ChannelProperty().name]
-                stub.shutdown()
-            except:
-                utils.logger.error(f"can not call shutdown")
             self._block_height_thread_pool.shutdown()
