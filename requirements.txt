@@ -12,6 +12,6 @@ coincurve~=13.0.0
 setproctitle~=1.1.10
 transitions==0.6.8
 verboselogs~=1.7.0
-websockets~=8.1.0
+websockets~=9.1.0
 yappi~=1.2.3
 eth-keyfile~=0.5.1
