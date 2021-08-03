@@ -411,9 +411,6 @@ class ChannelService:
         await StubCollection().create_channel_tx_creator_stub(ChannelProperty().name)
         await StubCollection().create_channel_tx_receiver_stub(ChannelProperty().name)
 
-        if self.__block_manager.above_tx_limit_block():
-            self.inner_service.add_zero_limit_control()
-
     def __init_node_subscriber(self):
         self.__node_subscriber = NodeSubscriber(
             channel=ChannelProperty().name,

@@ -23,8 +23,7 @@ RELEASE_RECOVERY_BLOCK_COUNT: int = 5
 
 
 # SHUTDOWN
-SHUTDOWN_RESUME: bool = False
-GAP_FROM_SHUTDOWN_BLOCK_HEIGHT: int = 5
+CANCEL_SHUTDOWN: bool = False
 
 
 #############

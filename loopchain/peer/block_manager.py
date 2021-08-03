@@ -742,8 +742,7 @@ class BlockManager:
             if self.is_shutdown_block():
                 self.start_suspend()
                 return
-            elif self.is_tx_limit_block():
-                self.add_zero_limit_control()
+
         except InvalidUnconfirmedBlock as e:
             self.candidate_blocks.remove_block(unconfirmed_block.header.hash)
             util.logger.warning(f"{e!r}")
@@ -772,12 +771,3 @@ class BlockManager:
 
     def start_suspend(self):
         self.__channel_service.state_machine.suspend()
-
-    def is_tx_limit_block(self) -> bool:
-        return self.blockchain.is_tx_limit_block()
-
-    def above_tx_limit_block(self) -> bool:
-        return self.blockchain.above_tx_limit_block()
-
-    def add_zero_limit_control(self):
-        self.__channel_service.inner_service.add_zero_limit_control()
