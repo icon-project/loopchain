@@ -1447,3 +1447,6 @@ class BlockChain:
 
     def is_shutdown_block(self) -> bool:
         return self.block_height == self._get_shutdown_block_height()
+
+    def is_last_unconfirmed_block(self, height):
+        return self.last_unconfirmed_block and self.last_unconfirmed_block.header.height == height

@@ -299,7 +299,6 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
         exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc}")
 
-
     @staticmethod
     def main(channel_name: str, amqp_target: str, amqp_key: str,
              tx_versioner: TransactionVersioner, tx_queue: mp.Queue, properties: ModuleProcessProperties=None):
@@ -848,8 +847,10 @@ class ChannelInnerTask:
         return message_code.Response.success, block_hash, block_data_json
 
     @message_queue_task
-    async def get_block(self, block_height, block_hash) -> Tuple[int, str, bytes, str]:
-        block, block_hash, confirm_info, fail_response_code = await self.__get_block(block_hash, block_height)
+    async def get_block(self, block_height, block_hash, unconfirmed=False) -> Tuple[int, str, bytes, str]:
+        block, block_hash, confirm_info, fail_response_code = (
+            await self.__get_block(block_hash, block_height, unconfirmed)
+        )
 
         if fail_response_code:
             return fail_response_code, block_hash, b"", json.dumps({})
@@ -871,7 +872,7 @@ class ChannelInnerTask:
 
         return message_code.Response.success, json.dumps(block_receipts)
 
-    async def __get_block(self, block_hash, block_height):
+    async def __get_block(self, block_hash, block_height, unconfirmed=False):
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
 
@@ -888,7 +889,13 @@ class ChannelInnerTask:
                     confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             elif block_height != -1:
                 block = self._blockchain.find_block_by_height(block_height)
-                if block is None:
+                is_wrong_block_height: bool = (
+                        block is None or
+                        unconfirmed is False
+                        and self._blockchain.is_last_unconfirmed_block(block.header.height)
+                )
+
+                if is_wrong_block_height:
                     fail_response_code = message_code.Response.fail_wrong_block_height
                     confirm_info = bytes()
                 else:
@@ -1019,6 +1026,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             condition = self._task._citizen_condition_unregister
             async with condition:
                 condition.notify_all()
+
         asyncio.run_coroutine_threadsafe(_notify_unregister(), self.loop)
 
     def init_sub_services(self):
