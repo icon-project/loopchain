@@ -31,6 +31,7 @@ class Type(IntEnum):
     AMQPKey = 10
     Version = 11
     Rollback = 12
+    KeyConvert = 13
 
 
 class Attribute:
@@ -64,8 +65,8 @@ types_by_names = {
     "amqp_target": Type.AMQPTarget,
     "amqp_key": Type.AMQPKey,
     "version": Type.Version,
-    "rollback": Type.Rollback
-
+    "rollback": Type.Rollback,
+    "key_convert": Type.KeyConvert,
 }
 
 attributes = {
@@ -118,13 +119,17 @@ attributes = {
         Attribute("--amqp_key",
                   help="key sharing peer group using queue name. use it if one more peers connect one MQ"),
 
-    Type.Version:
-        Attribute("--version", action='store_true',
-                  help="show version of loopchain and it's dependencies"),
-
     Type.Rollback:
         Attribute("--rollback", action='store_true',
-                  help="rollback behind to 1 block(rollback can be up to 10 blocks)")
+                  help="rollback behind to 1 block(rollback can be up to 10 blocks)"),
+
+    Type.KeyConvert:
+        Attribute("-k", "--key-convert", action='store_true',
+                  help="convert pem, der to json keystore"),
+
+    Type.Version:
+        Attribute("--version", action='store_true',
+                  help="show version of loopchain and it's dependencies")
 }
 
 command_values: Dict[Type, str] = {}
