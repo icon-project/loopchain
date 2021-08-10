@@ -48,6 +48,47 @@ def get_quick_command(unknowns):
     raise Exception(f'There is unrecognized argument {unknowns}')
 
 
+def key_convert():
+    import os
+
+    if os.path.exists(conf.PRIVATE_PATH) and conf.PRIVATE_PATH.endswith((".pem", ".der")):
+        import getpass
+        import re
+        from loopchain.crypto.signature import Signer
+        from eth_keyfile import create_keyfile_json
+
+        private_path = conf.PRIVATE_PATH
+        password = conf.PRIVATE_PASSWORD
+        if not password:
+            password = getpass.getpass(f"Input your keystore password: ")
+
+        try:
+            signer = Signer.from_prikey_file(private_path, password)
+        except Exception as e:
+            print(f"Something wrong. {e!r}")
+            return
+
+        private_key = signer.private_key.secret
+        address = signer.address
+
+        key_store_contents = create_keyfile_json(
+            private_key,
+            bytes(password, "utf-8"),
+            iterations=16384,
+            kdf="scrypt"
+        )
+        key_store_contents["address"] = address
+        key_store_contents["coinType"] = "icx"
+
+        new_keypath = re.sub("(pem|der)$", "json", private_path)
+        with open(new_keypath, 'w') as f:
+            f.write(json.dumps(key_store_contents))
+
+        print(f"{new_keypath} created. update your PRIVATE_PATH in config file")
+    else:
+        print(f"Nothing to do. you don't have .pem or .der key file!")
+
+
 def main(argv):
     parser = argparse.ArgumentParser()
     for cmd_arg_type in command_arguments.Type:
@@ -72,6 +113,10 @@ def main(argv):
 
     if args.configure_file_path:
         conf.Configure().load_configure_json(args.configure_file_path)
+
+    if args.key_convert:
+        key_convert()
+        parser.exit()
 
     if args.develop:
         loggers.set_preset_type(loggers.PresetType.develop)
