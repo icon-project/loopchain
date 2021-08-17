@@ -87,13 +87,7 @@ class BlockChain:
         self.__total_tx = 0
         self.__nid: Optional[str] = None
 
-        # FIXME : temporary shutdown block height setting
-        sbh: Union[bytes, int] = (40).to_bytes(1, 'big')
-        self._blockchain_store.put(BlockChain.SHUTDOWN_BLOCK_HEIGHT, sbh)
-        sbh = int.from_bytes(self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT), 'big')
-        logging.warning(f"shutdown block height: {sbh}")
-
-        if conf.CANCEL_SHUTDOWN:
+        if conf.CANCEL_SHUTDOWN and self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
             self._blockchain_store.delete(BlockChain.SHUTDOWN_BLOCK_HEIGHT)
             logging.info(f"cancel shutdown")
 
@@ -1313,10 +1307,14 @@ class BlockChain:
                 block_builder.transactions.move_to_end(tx.hash, last=False)  # move to first
 
     def _prepare_shutdown(self, shutdown_block_height: int):
-        sbh: Union[bytes, int] = shutdown_block_height.to_bytes(1, 'big')
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
+            logging.info(f"shutdown block height already stored")
+            return
+
+        byte_length: int = (shutdown_block_height.bit_length() + 7) // 8
+        sbh: Union[bytes, int] = shutdown_block_height.to_bytes(byte_length, 'big')
         self._blockchain_store.put(BlockChain.SHUTDOWN_BLOCK_HEIGHT, sbh)
-        sbh = int.from_bytes(self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT), 'big')
-        logging.warning(f"shutdown block height: {sbh}")
+        logging.warning(f"shutdown block height: {shutdown_block_height}")
 
     def score_invoke(self,
                      _block: Block,
@@ -1381,9 +1379,7 @@ class BlockChain:
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
-        # FIXME : to be determined shutdown key
-        is_shutdown = response.get("is_shutdown")
-        if is_shutdown:
+        if response.get("is_shutdown") == "0x1":
             self._prepare_shutdown(_block.header.height)
 
         tx_receipts_origin = response.get("txResults")
@@ -1446,7 +1442,7 @@ class BlockChain:
         return int.from_bytes(shutdown_block_height, 'big')
 
     def is_shutdown_block(self) -> bool:
-        return self.block_height == self._get_shutdown_block_height()
+        return self.block_height > 0 and self.block_height == self._get_shutdown_block_height()
 
     def is_last_unconfirmed_block(self, height):
         return self.last_unconfirmed_block and self.last_unconfirmed_block.header.height == height
