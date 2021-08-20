@@ -10,10 +10,10 @@ from typing import Union, Dict, List, Tuple
 from earlgrey import *
 from pkg_resources import parse_version
 
-from loopchain import configure as conf, utils
+from loopchain import configure as conf
 from loopchain import utils as util
 from loopchain.baseservice import (BroadcastCommand, BroadcastScheduler, BroadcastSchedulerFactory,
-                                   ScoreResponse, TimerService, Timer)
+                                   ScoreResponse)
 from loopchain.baseservice.module_process import ModuleProcess, ModuleProcessProperties
 from loopchain.blockchain.blocks import Block, BlockSerializer
 from loopchain.blockchain.exception import *
@@ -24,7 +24,7 @@ from loopchain.blockchain.votes import Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
-from loopchain.qos.qos_controller import QosController, QosCountControl
+from loopchain.qos.qos_controller import QosController, QosCountControl, ZeroLimitControl
 from loopchain.utils import exit_and_msg
 from loopchain.utils.dosguard.dosguard import DoSGuard, DOS_OVERFLOW_TX_KEY, DOS_TX_FROM_DENYLIST_KEY
 from loopchain.utils.message_queue import StubCollection
@@ -45,6 +45,8 @@ class ChannelTxCreatorInnerTask:
                                                   is_multiprocessing=True)
         scheduler.start()
         self.__broadcast_scheduler = scheduler
+
+        self._zero_limit_control = None
         self.__qos_controller = QosController()
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
 
@@ -77,11 +79,21 @@ class ChannelTxCreatorInnerTask:
             self._dos_tx_from_denylist = properties[DOS_TX_FROM_DENYLIST_KEY]
 
     @message_queue_task
+    async def add_zero_limit_control(self):
+        if not self._zero_limit_control:
+            util.logger.info(f"add zero limit control")
+            self._zero_limit_control = ZeroLimitControl()
+            self.__qos_controller.append(self._zero_limit_control)
+
+    @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
         tx_hash = None
         relay_target = None
-        if self.__qos_controller.limit():
-            util.logger.debug(f"Out of TPS limit. tx={kwargs}")
+        if self.__qos_controller.has_zero_limit_control():
+            util.logger.info(f"shutting down. tx={kwargs}")
+            return message_code.Response.fail_zero_limit_qos, tx_hash, relay_target
+        elif self.__qos_controller.limit():
+            util.logger.debug(f"Out of TPS limit({self.__qos_controller.get_limit_count()}). tx={kwargs}")
             return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         node_type = self.__properties.get('node_type', None)
@@ -286,7 +298,6 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
         exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc}")
-
 
     @staticmethod
     def main(channel_name: str, amqp_target: str, amqp_key: str,
@@ -836,8 +847,10 @@ class ChannelInnerTask:
         return message_code.Response.success, block_hash, block_data_json
 
     @message_queue_task
-    async def get_block(self, block_height, block_hash) -> Tuple[int, str, bytes, str]:
-        block, block_hash, confirm_info, fail_response_code = await self.__get_block(block_hash, block_height)
+    async def get_block(self, block_height, block_hash, unconfirmed=False) -> Tuple[int, str, bytes, str]:
+        block, block_hash, confirm_info, fail_response_code = (
+            await self.__get_block(block_hash, block_height, unconfirmed)
+        )
 
         if fail_response_code:
             return fail_response_code, block_hash, b"", json.dumps({})
@@ -859,7 +872,7 @@ class ChannelInnerTask:
 
         return message_code.Response.success, json.dumps(block_receipts)
 
-    async def __get_block(self, block_hash, block_height):
+    async def __get_block(self, block_hash, block_height, unconfirmed=False):
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
 
@@ -876,7 +889,13 @@ class ChannelInnerTask:
                     confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             elif block_height != -1:
                 block = self._blockchain.find_block_by_height(block_height)
-                if block is None:
+                is_wrong_block_height: bool = (
+                        block is None or
+                        unconfirmed is False
+                        and self._blockchain.is_last_unconfirmed_block(block.header.height)
+                )
+
+                if is_wrong_block_height:
                     fail_response_code = message_code.Response.fail_wrong_block_height
                     confirm_info = bytes()
                 else:
@@ -1007,6 +1026,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             condition = self._task._citizen_condition_unregister
             async with condition:
                 condition.notify_all()
+
         asyncio.run_coroutine_threadsafe(_notify_unregister(), self.loop)
 
     def init_sub_services(self):
@@ -1017,6 +1037,10 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     async def update_dos_properties(self, properties):
         stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
         await stub.async_task().update_dos_properties(properties)
+
+    def add_zero_limit_control(self):
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        stub.sync_task().add_zero_limit_control()
 
     def update_sub_services_properties(self, **properties):
         stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]

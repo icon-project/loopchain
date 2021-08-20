@@ -12,16 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """loopchain timer service."""
+
 import asyncio
 import logging
 import threading
-import time
 import traceback
 from enum import Enum
-from typing import Dict, Callable, Awaitable, Union, Optional
+from typing import Dict, Callable, Awaitable, Union, Optional, TYPE_CHECKING
+
+import time
 
 from loopchain import utils as util
 from loopchain.baseservice import CommonThread
+
+if TYPE_CHECKING:
+    from concurrent.futures import Future
 
 
 class OffType(Enum):
@@ -29,6 +34,7 @@ class OffType(Enum):
 
     normal = 0
     time_out = 1
+    force_call = 2
 
 
 class Timer:
@@ -93,8 +99,8 @@ class Timer:
 
         :param off_type: type of reason to turn off timer
         """
-        if off_type is OffType.time_out:
-            logging.debug(f'timer({self.target}) is turned off by timeout')
+        if off_type in (OffType.time_out, OffType.force_call):
+            logging.debug(f'timer({self.target}) is turned off by {off_type}')
             if asyncio.iscoroutinefunction(self.__callback):
                 self.try_coroutine()
             else:
@@ -139,7 +145,8 @@ class TimerService(CommonThread):
         self.__loop: asyncio.BaseEventLoop = asyncio.new_event_loop()
         # self.__loop.set_debug(True)
 
-    # Deprecated function, need to review delete.
+        self._futures: Dict[str, Future] = {}
+
     def get_event_loop(self):
         return self.__loop
 
@@ -158,7 +165,8 @@ class TimerService(CommonThread):
         if timer.is_run_at_start:
             asyncio.run_coroutine_threadsafe(self.__run_immediate(key, timer), self.__loop)
         else:
-            asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+            self._futures[key] = asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+            util.logger.debug(f"futures : key = {key}, futures = {self._futures}")
         timer.on()
 
     def add_timer_convenient(self, timer_key, duration, is_repeat=False, callback=None, callback_kwargs=None):
@@ -185,7 +193,7 @@ class TimerService(CommonThread):
         else:
             logging.warning(f'({key}) is not in timer list.')
 
-    def get_timer(self, key) -> Union[Timer]:
+    def get_timer(self, key) -> Optional[Timer]:
         """get a timer by key
 
         :param key: key
@@ -218,7 +226,8 @@ class TimerService(CommonThread):
             timer = self.__timer_list[key]
             timer.off(OffType.time_out)
             timer.reset()
-            asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+            self._futures[key] = asyncio.run_coroutine_threadsafe(self.__run(key, timer), self.__loop)
+            util.logger.debug(f"futures : key = {key}, futures = {self._futures}")
         else:
             logging.warning(f"There is no value by this key: {key}")
 
@@ -236,6 +245,12 @@ class TimerService(CommonThread):
 
             logging.debug(f"TIMER IS STOP ({key})")
             util.logger.spam(f"remain timers after stop_timer: {self.__timer_list.keys()}")
+
+            fut: Future = self._futures.get(key, None)
+            if fut:
+                if off_type is not OffType.time_out and not fut.done():
+                    fut.cancel()
+                del self._futures[key]
         else:
             logging.debug(f'There is no value by this key: {key}')
 
@@ -273,6 +288,10 @@ class TimerService(CommonThread):
     async def __run(self, key, timer: Timer):
         while not timer.is_timeout():
             util.logger.spam(f"sleep {timer.remain_time()}, {key}")
-            await asyncio.sleep(timer.remain_time())
+            try:
+                await asyncio.sleep(timer.remain_time())
+            except asyncio.CancelledError:
+                util.logger.debug(f"sleep cancelled: key={key}")
+                return
 
         await self.__run_immediate(key, timer)

@@ -278,10 +278,16 @@ class ChannelService:
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
 
-        self.__state_machine.complete_subscribe()
+        if self.__block_manager.is_shutdown_block():
+            self.__state_machine.suspend()
+        else:
+            self.__state_machine.complete_subscribe()
 
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.turn_on_leader_complain_timer()
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                self.turn_on_leader_complain_timer()
+
+    def suspend(self):
+        self.stop_leader_complain_timer()
 
     def update_nid(self):
         nid = self.__block_manager.blockchain.find_nid()
