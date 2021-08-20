@@ -1312,7 +1312,7 @@ class BlockChain:
             return
 
         byte_length: int = (shutdown_block_height.bit_length() + 7) // 8
-        sbh: Union[bytes, int] = shutdown_block_height.to_bytes(byte_length, 'big')
+        sbh: bytes = shutdown_block_height.to_bytes(byte_length, 'big')
         self._blockchain_store.put(BlockChain.SHUTDOWN_BLOCK_HEIGHT, sbh)
         logging.warning(f"shutdown block height: {shutdown_block_height}")
 

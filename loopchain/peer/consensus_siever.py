@@ -69,7 +69,7 @@ class ConsensusSiever(ConsensusBase):
 
     def stop(self):
         self.__block_generation_timer.stop()
-        # FIXME : need to stop timer send_unconfirmed_block
+        # force stop timer to send_unconfirmed_block once
         self.stop_broadcast_send_unconfirmed_block_timer(off_type=OffType.force_call)
         if self._loop:
             self.__put_vote(None)
