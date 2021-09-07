@@ -188,7 +188,7 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
         self.__broadcast_thread.start()
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerService] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     def stop(self):
         self.__broadcast_queue.put((None, None))
@@ -239,7 +239,7 @@ class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
     TaskType = ChannelTxCreatorInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 class ChannelTxReceiverInnerTask:
@@ -297,7 +297,7 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     @staticmethod
     def main(channel_name: str, amqp_target: str, amqp_key: str,
@@ -338,7 +338,7 @@ class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
     TaskType = ChannelTxReceiverInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 class _ChannelTxCreatorProcess(ModuleProcess):
@@ -1010,7 +1010,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc}")
+        logging.warning(f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     def notify_new_block(self):
 
@@ -1051,15 +1051,24 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
+        self.notify_unregister()
         self._task.cleanup_sub_services()
         logging.info("Cleanup ChannelInnerService.")
+
+    async def shutdown(self):
+        try:
+            await asyncio.shield(self._channel.close())
+            await asyncio.shield(self._connection.close())
+        except asyncio.CancelledError as e:
+            logging.warning(f"ChannelInnerService connection close cancelled. {e!r}")
+            raise
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 def make_proof_serializable(proof: list):
