@@ -1380,7 +1380,8 @@ class BlockChain:
         response_to_json_query(response)
 
         if response.get("is_shutdown") == "0x1":
-            self._prepare_shutdown(_block.header.height)
+            # set shutdown block height on next block of approved shutdown proposal
+            self._prepare_shutdown(_block.header.height + 1)
 
         tx_receipts_origin = response.get("txResults")
         if not isinstance(tx_receipts_origin, dict):
