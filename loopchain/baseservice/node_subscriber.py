@@ -16,7 +16,7 @@
 import asyncio
 import json
 import logging
-from asyncio import Event
+from typing import List, TYPE_CHECKING
 from urllib import parse
 
 import websockets
@@ -34,6 +34,11 @@ from loopchain.blockchain.blocks import BlockSerializer, BlockVerifier
 from loopchain.blockchain.votes import Votes
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.protos import message_code
+
+
+if TYPE_CHECKING:
+    from asyncio import Event, Task
+
 
 ws_methods = Methods()
 CONNECTION_FAIL_CONDITIONS = {
@@ -76,6 +81,8 @@ class NodeSubscriber:
         scheme = 'wss' if ('https://' in rs_target) else 'ws'
         netloc = parse.urlparse(rs_target).netloc
         self._target_uri = f"{scheme}://{netloc}/api/ws/{channel}"
+        self._tasks: List[Task] = []
+        self._shutdown: bool = False
         self._exception = None
         self._websocket: WebSocketClientProtocol = None
         self._subscribe_event: Event = None
@@ -89,6 +96,14 @@ class NodeSubscriber:
         # TODO: Check usage
         if self._websocket is not None:
             utils.logger.warning(f"Have to close before delete NodeSubscriber instance({self})")
+
+    async def shutdown(self):
+        self._shutdown = True
+        try:
+            await asyncio.shield(self.close())
+        except asyncio.CancelledError as e:
+            logging.warning(f"websocket connection close cancelled. {e!r}")
+            raise
 
     async def close(self):
         if self._websocket is not None:
@@ -149,15 +164,21 @@ class NodeSubscriber:
             while True:
                 if self._exception:
                     raise self._exception
+                if self._shutdown:
+                    logging.debug(f"break by shutdown!")
+                    break
                 await self._recv_until_timeout()
         except AnnounceNewBlockError as e:
-            logging.error(f"{type(e)} during subscribe, caused by: {e}")
+            logging.error(f"during subscribe, caused by: {e!r}")
             raise
         except UnregisteredException as e:
-            logging.info(f"{type(e)} during subscribe, caused by: {e}")
+            logging.info(f"during subscribe, caused by: {e!r}")
             raise
         except Exception as e:
-            logging.info(f"{type(e)} during subscribe, caused by: {e}")
+            logging.warning(f"during subscribe, caused by: {e!r}")
+            if self._shutdown:
+                logging.debug(f"return by shutdown!")
+                return
             raise ConnectionError
         finally:
             await self.close()
