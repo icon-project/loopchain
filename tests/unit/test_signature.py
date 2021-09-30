@@ -18,14 +18,14 @@ class TestSignature(unittest.TestCase):
         cls.temp_dir = tempfile.TemporaryDirectory()
 
         # Private Key
-        cls.private_key = ec.generate_private_key(ec.SECP256K1, default_backend())
+        cls.private_key = ec.generate_private_key(ec.SECP256K1(), default_backend())
 
         cls.private_der_path = os.path.join(cls.temp_dir.name, "private.der")
         with open(cls.private_der_path, "wb") as private_der_file:
             private_der_file.write(
                 cls.private_key.private_bytes(
-                    encoding=serialization.Encoding.DER,
-                    format=serialization.PrivateFormat.PKCS8,
+                    encoding=serialization.Encoding['DER'],
+                    format=serialization.PrivateFormat['PKCS8'],
                     encryption_algorithm=serialization.BestAvailableEncryption(b"TEST")
                 )
             )
@@ -34,15 +34,15 @@ class TestSignature(unittest.TestCase):
         with open(cls.private_pem_path, "wb") as private_pem_file:
             private_pem_file.write(
                 cls.private_key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.PKCS8,
+                    encoding=serialization.Encoding['PEM'],
+                    format=serialization.PrivateFormat['PKCS8'],
                     encryption_algorithm=serialization.BestAvailableEncryption(b"TEST")
                 )
             )
 
         key_info = keys.PrivateKeyInfo.load(cls.private_key.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,
+            encoding=serialization.Encoding['DER'],
+            format=serialization.PrivateFormat['PKCS8'],
             encryption_algorithm=serialization.NoEncryption()
         ))
         cls.private_key_bytes = long_to_bytes(key_info['private_key'].native['private_key'])
@@ -54,8 +54,8 @@ class TestSignature(unittest.TestCase):
         with open(cls.public_der_path, "wb") as public_der_file:
             public_der_file.write(
                 cls.public_key.public_bytes(
-                    encoding=serialization.Encoding.DER,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    encoding=serialization.Encoding['DER'],
+                    format=serialization.PublicFormat['SubjectPublicKeyInfo']
                 )
             )
 
@@ -63,15 +63,15 @@ class TestSignature(unittest.TestCase):
         with open(cls.public_pem_path, "wb") as public_pem_file:
             public_pem_file.write(
                 cls.public_key.public_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PublicFormat.SubjectPublicKeyInfo
+                    encoding=serialization.Encoding['PEM'],
+                    format=serialization.PublicFormat['SubjectPublicKeyInfo']
                 )
             )
 
         key_info = keys.PublicKeyInfo.load(
             cls.public_key.public_bytes(
-                encoding=serialization.Encoding.DER,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
+                encoding=serialization.Encoding['DER'],
+                format=serialization.PublicFormat['SubjectPublicKeyInfo']
             )
         )
         cls.public_key_bytes = key_info['public_key'].native
@@ -231,35 +231,35 @@ class TestSignature(unittest.TestCase):
 
     def test_hash_signatures_equal(self):
         hash_data = os.urandom(32)
-        self.assertEquals(self.signer_private_key_bytes.sign_hash(hash_data),
+        self.assertEqual(self.signer_private_key_bytes.sign_hash(hash_data),
                           self.signer_private_key_der.sign_hash(hash_data))
-        self.assertEquals(self.signer_private_key_bytes.sign_hash(hash_data),
+        self.assertEqual(self.signer_private_key_bytes.sign_hash(hash_data),
                           self.signer_private_key_pem.sign_hash(hash_data))
 
     def test_data_signatures_equal(self):
         data = os.urandom(random.randint(1, 1000))
-        self.assertEquals(self.signer_private_key_bytes.sign_data(data),
+        self.assertEqual(self.signer_private_key_bytes.sign_data(data),
                           self.signer_private_key_der.sign_data(data))
-        self.assertEquals(self.signer_private_key_bytes.sign_data(data),
+        self.assertEqual(self.signer_private_key_bytes.sign_data(data),
                           self.signer_private_key_pem.sign_data(data))
 
     def test_signer_private_keys_equal(self):
-        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+        self.assertEqual(self.signer_private_key_bytes.get_private_secret(),
                           self.signer_private_key_der.get_private_secret())
-        self.assertEquals(self.signer_private_key_bytes.get_private_secret(),
+        self.assertEqual(self.signer_private_key_bytes.get_private_secret(),
                           self.signer_private_key_pem.get_private_secret())
 
     def test_signer_sign_verifier_addresses_equal(self):
-        self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_der.address)
-        self.assertEquals(self.signer_private_key_bytes.address, self.signer_private_key_pem.address)
+        self.assertEqual(self.signer_private_key_bytes.address, self.signer_private_key_der.address)
+        self.assertEqual(self.signer_private_key_bytes.address, self.signer_private_key_pem.address)
 
-        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.signer_private_key_bytes.address)
-        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_der.address)
-        self.assertEquals(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_pem.address)
+        self.assertEqual(self.sign_verifier_private_key_bytes.address, self.signer_private_key_bytes.address)
+        self.assertEqual(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_der.address)
+        self.assertEqual(self.sign_verifier_private_key_bytes.address, self.sign_verifier_private_key_pem.address)
 
-        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.signer_private_key_bytes.address)
-        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_der.address)
-        self.assertEquals(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_pem.address)
+        self.assertEqual(self.sign_verifier_public_key_bytes.address, self.signer_private_key_bytes.address)
+        self.assertEqual(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_der.address)
+        self.assertEqual(self.sign_verifier_public_key_bytes.address, self.sign_verifier_public_key_pem.address)
 
     def test_signer_from_pubkey(self):
         self.assertRaises(TypeError, lambda: Signer.from_pubkey(self.public_key_bytes))
