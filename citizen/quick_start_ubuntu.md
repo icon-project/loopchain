@@ -88,10 +88,13 @@ $ icon_rc -version
 icon_rc vx.y.z, tags()-YYYY-MM-DD-HH:MM:SS
 ```
 
-## Make key file with pass phrase.
+## Make keystore file with pass phrase.
+> _If you have key(der or pem), see [key convert](#key-convert)_
+
 ```
+$ pip3 install tbears
 $ mkdir keys
-$ openssl ecparam -genkey -name secp256k1 | openssl ec -aes-256-cbc -out ./keys/my_private.pem
+$ tbears keystore keys/my_private.json
 ```
 
 ## Change configuration. (password for your key file)
@@ -124,6 +127,13 @@ $ ./stop_all.sh
 ```
 $ rm -rf log
 $ rm -rf .storage*
+```
+
+## Key convert
+> Convert der, pem to json keystore file.
+> After convert key to json, you need to update the conf.
+```
+$ loopchain -o conf/citizen_mainnet.conf -k
 ```
 
 [Downloading and Installing RabbitMQ]: https://www.rabbitmq.com/download.html
