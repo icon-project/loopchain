@@ -64,6 +64,7 @@ class BlockChain:
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
     SHUTDOWN_BLOCK_HEIGHT = b'shutdown_block_height'
+    SHUTDOWN_UNCONFIRMED_BLOCK_KEY = b'shutdown_unconfirmed_block'
 
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
         # last block in block db
@@ -87,9 +88,8 @@ class BlockChain:
         self.__total_tx = 0
         self.__nid: Optional[str] = None
 
-        if conf.CANCEL_SHUTDOWN and self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
-            self._blockchain_store.delete(BlockChain.SHUTDOWN_BLOCK_HEIGHT)
-            logging.info(f"cancel shutdown")
+        if conf.CANCEL_SHUTDOWN:
+            self._cancel_shutdown()
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -1447,3 +1447,22 @@ class BlockChain:
 
     def is_last_unconfirmed_block(self, height):
         return self.last_unconfirmed_block and self.last_unconfirmed_block.header.height == height
+
+    def _cancel_shutdown(self):
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
+            self._blockchain_store.delete(BlockChain.SHUTDOWN_BLOCK_HEIGHT)
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY, default=b''):
+            self._blockchain_store.delete(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY)
+        logging.info(f"cancel shutdown")
+
+    def add_shutdown_unconfirmed_block(self):
+        if self.last_unconfirmed_block is None:
+            logging.info(f"Do not have last unconfirmed block")
+            return
+
+        block = self.last_unconfirmed_block
+
+        block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
+        block_serialized = json.dumps(block_serializer.serialize(block))
+
+        self._blockchain_store.put(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY, block_serialized.encode("UTF-8"))

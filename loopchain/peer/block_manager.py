@@ -771,3 +771,4 @@ class BlockManager:
 
     def start_suspend(self):
         self.__channel_service.state_machine.suspend()
+        self.blockchain.add_shutdown_unconfirmed_block()
