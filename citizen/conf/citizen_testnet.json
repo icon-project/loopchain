@@ -20,7 +20,7 @@
             "crep_root_hash": "0x38ec404f0d0d90a9a8586eccf89e3e78de0d3c7580063b20823308e7f722cd12"
         }
     },
-    "PRIVATE_PATH": "./keys/my_private.pem",
+    "PRIVATE_PATH": "./keys/my_private.json",
     "PRIVATE_PASSWORD": "password",
     "PORT_PEER": 7100,
     "AMQP_KEY": "7100",
