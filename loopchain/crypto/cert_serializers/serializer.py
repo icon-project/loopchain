@@ -24,29 +24,28 @@ class Serializer(ABC):
     encoding = None
 
     @classmethod
-    def serialize_private_key(cls, private_key: bytes, password=Optional[bytes]) -> bytes:
+    def serialize_private_key(cls, private_key: bytes, password: Optional[bytes]) -> bytes:
         pri_key = ec.derive_private_key(int.from_bytes(private_key, byteorder="big"),
-                                        ec.SECP256K1,
+                                        ec.SECP256K1(),
                                         default_backend())
         algorithm = \
             serialization.BestAvailableEncryption(password) if password is not None else serialization.NoEncryption()
         return pri_key.private_bytes(encoding=cls.encoding,
-                                     format=serialization.PrivateFormat.PKCS8,
+                                     format=serialization.PrivateFormat['PKCS8'],
                                      encryption_algorithm=algorithm)
 
     @classmethod
     def serialize_public_key(cls, public_key: bytes) -> bytes:
-        public_numbers = ec.EllipticCurvePublicNumbers.from_encoded_point(ec.SECP256K1, public_key)
-        pub_key = public_numbers.public_key(default_backend())
+        pub_key = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key)
         return pub_key.public_bytes(encoding=cls.encoding,
-                                    format=serialization.PublicFormat.SubjectPublicKeyInfo)
+                                    format=serialization.PublicFormat['SubjectPublicKeyInfo'])
 
     @classmethod
-    def deserialize_private_key(cls, cert_private_key: bytes, password=Optional[bytes]) -> bytes:
+    def deserialize_private_key(cls, cert_private_key: bytes, password: Optional[bytes]) -> bytes:
         temp_private = cls.load_private_key(cert_private_key, password, default_backend())
         no_pass_private = temp_private.private_bytes(
-            encoding=serialization.Encoding.DER,
-            format=serialization.PrivateFormat.PKCS8,  # It must be DER
+            encoding=serialization.Encoding['DER'],
+            format=serialization.PrivateFormat['PKCS8'],  # It must be DER
             encryption_algorithm=serialization.NoEncryption()
         )
         key_info = keys.PrivateKeyInfo.load(no_pass_private)
@@ -56,14 +55,14 @@ class Serializer(ABC):
     def deserialize_public_key(cls, cert_public_key: bytes) -> bytes:
         temp_public = cls.load_public_key(cert_public_key, default_backend())
         temp_public = temp_public.public_bytes(
-            encoding=serialization.Encoding.DER,  # It must be DER
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
+            encoding=serialization.Encoding['DER'],  # It must be DER
+            format=serialization.PublicFormat['SubjectPublicKeyInfo']
         )
         key_info = keys.PublicKeyInfo.load(temp_public)
         return key_info['public_key'].native
 
     @classmethod
-    def serialize_private_key_file(cls, filename: str, private_key: bytes, password=Optional[bytes]):
+    def serialize_private_key_file(cls, filename: str, private_key: bytes, password: Optional[bytes]):
         serialization_bytes = cls.serialize_private_key(private_key, password)
         with open(filename, "wb") as file:
             file.write(serialization_bytes)
@@ -75,7 +74,7 @@ class Serializer(ABC):
             file.write(serialization_bytes)
 
     @classmethod
-    def deserialize_private_key_file(cls, cert_filename: str, password=Optional[bytes]) -> bytes:
+    def deserialize_private_key_file(cls, cert_filename: str, password: Optional[bytes]) -> bytes:
         with open(cert_filename, "rb") as file:
             serialization_bytes = file.read()
         return cls.deserialize_private_key(serialization_bytes, password)

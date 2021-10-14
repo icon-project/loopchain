@@ -72,7 +72,7 @@ class RestClient:
         if not self._latest_targets:
             raise StopIteration(f"latest_targets is empty")
 
-        logging.debug(f"[init_next_target] latest_targets: {self._latest_targets}")
+        logging.debug(f"latest_targets: {self._latest_targets}")
 
         next_target = next(self._latest_targets)['target']
         logging.debug(f"switching target to: {next_target}")

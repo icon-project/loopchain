@@ -24,8 +24,9 @@ from loopchain.blockchain.votes import Vote
 from loopchain.channel.channel_property import ChannelProperty
 from loopchain.jsonrpc.exception import JsonError
 from loopchain.protos import message_code
-from loopchain.qos.qos_controller import QosController, QosCountControl
+from loopchain.qos.qos_controller import QosController, QosCountControl, ZeroLimitControl
 from loopchain.utils import exit_and_msg
+from loopchain.utils.dosguard.dosguard import DoSGuard, DOS_OVERFLOW_TX_KEY, DOS_TX_FROM_DENYLIST_KEY
 from loopchain.utils.message_queue import StubCollection
 
 if TYPE_CHECKING:
@@ -44,8 +45,14 @@ class ChannelTxCreatorInnerTask:
                                                   is_multiprocessing=True)
         scheduler.start()
         self.__broadcast_scheduler = scheduler
+
+        self._zero_limit_control = None
         self.__qos_controller = QosController()
         self.__qos_controller.append(QosCountControl(limit_count=conf.TPS_LIMIT_PER_SEC))
+
+        # DoS
+        self._dos_overflow_tx: bool = False
+        self._dos_tx_from_denylist = set()
 
     def __pre_validate(self, tx: Transaction):
         if not util.is_in_time_boundary(tx.timestamp, conf.TIMESTAMP_BOUNDARY_SECOND):
@@ -56,16 +63,37 @@ class ChannelTxCreatorInnerTask:
         self.__broadcast_scheduler.wait()
         self.__broadcast_scheduler: BroadcastScheduler = None
 
+        self._dos_overflow_tx: bool = False
+        self._dos_tx_from_denylist = set()
+
     @message_queue_task
     async def update_properties(self, properties: dict):
         self.__properties.update(properties)
 
     @message_queue_task
+    async def update_dos_properties(self, properties: dict):
+        util.logger.info(f"update_dos_properties: {properties}")
+        if DOS_OVERFLOW_TX_KEY in properties:
+            self._dos_overflow_tx: bool = properties[DOS_OVERFLOW_TX_KEY]
+        if DOS_TX_FROM_DENYLIST_KEY in properties:
+            self._dos_tx_from_denylist = properties[DOS_TX_FROM_DENYLIST_KEY]
+
+    @message_queue_task
+    async def add_zero_limit_control(self):
+        if not self._zero_limit_control:
+            util.logger.info(f"add zero limit control")
+            self._zero_limit_control = ZeroLimitControl()
+            self.__qos_controller.append(self._zero_limit_control)
+
+    @message_queue_task
     async def create_icx_tx(self, kwargs: dict):
         tx_hash = None
         relay_target = None
-        if self.__qos_controller.limit():
-            util.logger.debug(f"Out of TPS limit. tx={kwargs}")
+        if self.__qos_controller.has_zero_limit_control():
+            util.logger.info(f"shutting down. tx={kwargs}")
+            return message_code.Response.fail_zero_limit_qos, tx_hash, relay_target
+        elif self.__qos_controller.limit():
+            util.logger.debug(f"Out of TPS limit({self.__qos_controller.get_limit_count()}). tx={kwargs}")
             return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         node_type = self.__properties.get('node_type', None)
@@ -75,6 +103,17 @@ class ChannelTxCreatorInnerTask:
         elif node_type != conf.NodeType.CommunityNode.value:
             relay_target = self.__properties.get('relay_target', None)
             return message_code.Response.fail_no_permission, tx_hash, relay_target
+
+        if self._dos_overflow_tx:
+            util.logger.debug(
+                f"create_icx_tx has policy of reject_create_tx(OVERFLOW_TX)")
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
+
+        _from: str = kwargs.get("from", "")
+        if _from in self._dos_tx_from_denylist:
+            util.logger.debug(
+                f"create_icx_tx has policy of reject_create_tx(DoS DETECTED {_from})")
+            return message_code.Response.fail_out_of_tps_limit, tx_hash, relay_target
 
         result_code = None
         exception = None
@@ -149,7 +188,7 @@ class ChannelTxCreatorInnerService(MessageQueueService[ChannelTxCreatorInnerTask
         self.__broadcast_thread.start()
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerService] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     def stop(self):
         self.__broadcast_queue.put((None, None))
@@ -200,7 +239,7 @@ class ChannelTxCreatorInnerStub(MessageQueueStub[ChannelTxCreatorInnerTask]):
     TaskType = ChannelTxCreatorInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxCreatorInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 class ChannelTxReceiverInnerTask:
@@ -258,8 +297,7 @@ class ChannelTxReceiverInnerService(MessageQueueService[ChannelTxReceiverInnerTa
         super().__init__(amqp_target, route_key, username, password, **task_kwargs)
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc}")
-
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     @staticmethod
     def main(channel_name: str, amqp_target: str, amqp_key: str,
@@ -300,7 +338,7 @@ class ChannelTxReceiverInnerStub(MessageQueueStub[ChannelTxReceiverInnerTask]):
     TaskType = ChannelTxReceiverInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelTxReceiverInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 class _ChannelTxCreatorProcess(ModuleProcess):
@@ -383,6 +421,8 @@ class _ChannelTxReceiverProcess(ModuleProcess):
 
 
 class ChannelInnerTask:
+    TIMER_KEY_UPDATE_CREATOR_PROPERTIES = "TIMER_KEY_UPDATE_CREATOR_PROPERTIES"
+
     def __init__(self, channel_service: 'ChannelService'):
         self._channel_service = channel_service
         self._block_manager: 'BlockManager' = None
@@ -397,6 +437,7 @@ class ChannelInnerTask:
 
         self.__sub_processes = []
         self.__loop_for_sub_services = None
+        self.__dos_guard = None
 
     def init_sub_service(self, loop):
         if len(self.__sub_processes) > 0:
@@ -428,13 +469,21 @@ class ChannelInnerTask:
         self.__sub_processes.append(tx_receiver_process)
         logging.info(f"Channel({ChannelProperty().name}) TX Receiver: initialized")
 
-    def update_sub_services_properties(self, **properties):
-        logging.info(f"properties {properties}")
-        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
-
-        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
-        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.__loop_for_sub_services)
+        if conf.DOS_GUARD_ENABLE:
+            self.__dos_guard = DoSGuard(
+                self._block_manager,
+                self._channel_service,
+            )
+            self.__dos_guard.open(
+                loop,
+                count_to_resume_accept=conf.DOS_GUARD_TX_COUNT_TO_RESUME_ACCEPT,
+                count_to_start_reject=conf.DOS_GUARD_TX_COUNT_TO_START_REJECT,
+                boundary_time=conf.DOS_GUARD_TX_FROM_CHECK_BOUNDARY_TIME,
+                reset_time=conf.DOS_GUARD_TX_FROM_RESET_TIME,
+                guard_threshold=conf.DOS_GUARD_THRESHOLD,
+                block_duration=conf.DOS_GUARD_TX_FROM_BLOCK_DURATION,
+                timer_interval=conf.DOS_GUARD_TIMER_INTERVAL,
+            )
 
     def cleanup_sub_services(self):
         for process in self.__sub_processes:
@@ -466,8 +515,8 @@ class ChannelInnerTask:
             if self._blockchain.find_tx_by_key(tx.hash.hex()):
                 util.logger.debug(f"tx hash {tx.hash.hex_0x()} already exists in blockchain.")
                 continue
-
-            self._block_manager.add_tx_obj(tx)
+            if self.__dos_guard is None or not self.__dos_guard.invoke(tx):
+                self._block_manager.add_tx_obj(tx)
 
         if not conf.ALLOW_MAKE_EMPTY_BLOCK:
             self._channel_service.start_leader_complain_timer_if_tx_exists()
@@ -798,8 +847,10 @@ class ChannelInnerTask:
         return message_code.Response.success, block_hash, block_data_json
 
     @message_queue_task
-    async def get_block(self, block_height, block_hash) -> Tuple[int, str, bytes, str]:
-        block, block_hash, confirm_info, fail_response_code = await self.__get_block(block_hash, block_height)
+    async def get_block(self, block_height, block_hash, unconfirmed=False) -> Tuple[int, str, bytes, str]:
+        block, block_hash, confirm_info, fail_response_code = (
+            await self.__get_block(block_hash, block_height, unconfirmed)
+        )
 
         if fail_response_code:
             return fail_response_code, block_hash, b"", json.dumps({})
@@ -821,7 +872,7 @@ class ChannelInnerTask:
 
         return message_code.Response.success, json.dumps(block_receipts)
 
-    async def __get_block(self, block_hash, block_height):
+    async def __get_block(self, block_hash, block_height, unconfirmed=False):
         if block_hash == "" and block_height == -1 and self._blockchain.last_block:
             block_hash = self._blockchain.last_block.header.hash.hex()
 
@@ -838,7 +889,13 @@ class ChannelInnerTask:
                     confirm_info = self._blockchain.find_confirm_info_by_hash(Hash32.fromhex(block_hash, True))
             elif block_height != -1:
                 block = self._blockchain.find_block_by_height(block_height)
-                if block is None:
+                is_wrong_block_height: bool = (
+                        block is None or
+                        unconfirmed is False
+                        and self._blockchain.is_last_unconfirmed_block(block.header.height)
+                )
+
+                if is_wrong_block_height:
                     fail_response_code = message_code.Response.fail_wrong_block_height
                     confirm_info = bytes()
                 else:
@@ -938,6 +995,9 @@ class ChannelInnerTask:
     @message_queue_task(type_=MessageQueueType.Worker)
     def stop(self, message):
         logging.info(f"message({message})")
+        if self.__dos_guard:
+            self.__dos_guard.close()
+            self.__dos_guard = None
         self._channel_service.close()
 
 
@@ -950,7 +1010,7 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         self._task._citizen_condition_unregister = Condition(loop=self.loop)
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc}")
+        logging.warning(f"MQ [ChannelInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
     def notify_new_block(self):
 
@@ -962,11 +1022,11 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
         asyncio.run_coroutine_threadsafe(_notify_new_block(), self.loop)
 
     def notify_unregister(self):
-
         async def _notify_unregister():
             condition = self._task._citizen_condition_unregister
             async with condition:
                 condition.notify_all()
+
         asyncio.run_coroutine_threadsafe(_notify_unregister(), self.loop)
 
     def init_sub_services(self):
@@ -974,21 +1034,41 @@ class ChannelInnerService(MessageQueueService[ChannelInnerTask]):
             raise Exception("Must call this function in thread of self.loop")
         self._task.init_sub_service(self.loop)
 
+    async def update_dos_properties(self, properties):
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        await stub.async_task().update_dos_properties(properties)
+
+    def add_zero_limit_control(self):
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        stub.sync_task().add_zero_limit_control()
+
     def update_sub_services_properties(self, **properties):
-        self._task.update_sub_services_properties(**properties)
+        stub = StubCollection().channel_tx_creator_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
+        stub = StubCollection().channel_tx_receiver_stubs[ChannelProperty().name]
+        asyncio.run_coroutine_threadsafe(stub.async_task().update_properties(properties), self.loop)
 
     def cleanup(self):
         if self.loop != asyncio.get_event_loop():
             raise Exception("Must call this function in thread of self.loop")
+        self.notify_unregister()
         self._task.cleanup_sub_services()
         logging.info("Cleanup ChannelInnerService.")
+
+    async def shutdown(self):
+        try:
+            await asyncio.shield(self._channel.close())
+            await asyncio.shield(self._connection.close())
+        except asyncio.CancelledError as e:
+            logging.warning(f"ChannelInnerService connection close cancelled. {e!r}")
+            raise
 
 
 class ChannelInnerStub(MessageQueueStub[ChannelInnerTask]):
     TaskType = ChannelInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [ChannelInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [ChannelInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 def make_proof_serializable(proof: list):

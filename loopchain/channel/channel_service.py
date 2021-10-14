@@ -47,6 +47,7 @@ class ChannelService:
         self.__rs_client: RestClient = None
         self.__timer_service = TimerService()
         self.__node_subscriber: NodeSubscriber = None
+        self._closing: bool = False
         self._rollback: bool = rollback
 
         loggers.get_preset().channel_name = channel_name
@@ -132,7 +133,7 @@ class ChannelService:
         except Exception as e:
             utils.logger.exception(f"{e!r}")
         finally:
-            loop.run_until_complete(loop.shutdown_asyncgens())
+            self._shutdown(loop)
             self._cancel_tasks(loop)
             self._cleanup()
             loop.close()
@@ -170,21 +171,55 @@ class ChannelService:
 
     def close(self, signum=None):
         utils.logger.info(f"signum = {repr(signum)}")
-        if self.__inner_service:
-            self.__inner_service.cleanup()
+        if self._closing:
+            utils.logger.info(f"already close progressing...")
+            return
 
-        self.__inner_service.loop.stop()
+        self._closing = True
+
+        if self.inner_service:
+            self.inner_service.cleanup()
+
+        self.inner_service.loop.stop()
+
+    def _shutdown(self, loop):
+        tasks = []
+        if self.node_subscriber:
+            tasks.append(loop.create_task(self.node_subscriber.shutdown()))
+
+        tasks.append(loop.create_task(self.inner_service.shutdown()))
+        tasks.append(loop.create_task(loop.shutdown_asyncgens()))
+
+        try:
+            loop.run_until_complete(asyncio.gather(*tasks, return_exceptions=True))
+        except RuntimeError as e:
+            logging.debug(f"shutdown error : {e!r}")
+
+        for task in tasks:
+            if task.cancelled():
+                continue
+            if task.exception() is not None:
+                logging.info(f"task : {task}, error : {task.exception()!r}")
 
     @staticmethod
     def _cancel_tasks(loop):
-        for task in asyncio.Task.all_tasks(loop):
+        logging.info(f"cancel tasks: loop={loop}")
+        all_tasks = asyncio.Task.all_tasks(loop)
+        for task in all_tasks:
             if task.done():
                 continue
             task.cancel()
+
             try:
+                logging.debug(f"waiting cancel complete={task}")
                 loop.run_until_complete(task)
+                logging.debug(f"done cancel complete={task}")
             except asyncio.CancelledError as e:
-                logging.info(f"task : {task}, error : {e}")
+                logging.info(f"task : {task}, cancelled error : {e!r}")
+            except Exception as e:
+                logging.info(f"task : {task}, error : {e!r}")
+
+        logging.info(f"cancel tasks done.")
 
     def _cleanup(self):
         utils.logger.info("Channel Resources.")
@@ -278,10 +313,16 @@ class ChannelService:
             self.__init_node_subscriber()
             await self.subscribe_to_parent()
 
-        self.__state_machine.complete_subscribe()
+        if self.__block_manager.is_shutdown_block():
+            self.__state_machine.suspend()
+        else:
+            self.__state_machine.complete_subscribe()
 
-        if self.is_support_node_function(conf.NodeFunction.Vote):
-            self.turn_on_leader_complain_timer()
+            if self.is_support_node_function(conf.NodeFunction.Vote):
+                self.turn_on_leader_complain_timer()
+
+    def suspend(self):
+        self.stop_leader_complain_timer()
 
     def update_nid(self):
         nid = self.__block_manager.blockchain.find_nid()

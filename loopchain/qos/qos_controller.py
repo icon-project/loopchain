@@ -24,15 +24,20 @@ class QosControl(abc.ABC):
         raise NotImplementedError("limit() function is interface method")
 
 
+class ZeroLimitControl(QosControl):
+    def limit(self) -> bool:
+        return True
+
+
 class QosCountControl(QosControl):
-    def __init__(self, limit_count: int, interval: float=1.0):
+    def __init__(self, limit_count: int, interval: float = 1.0):
         assert limit_count > 0 and interval > 0.0
         self._interval = interval
         self._limit_count = limit_count
         self._start: float = time.monotonic()
         self._count: int = 0
 
-    def limit(self):
+    def limit(self) -> bool:
         monotonic = time.monotonic()
         diff = monotonic - self._start
 
@@ -44,6 +49,9 @@ class QosCountControl(QosControl):
 
         self._count += 1
         return False
+
+    def get_limit_count(self) -> int:
+        return self._limit_count
 
 
 class QosController:
@@ -63,8 +71,21 @@ class QosController:
         except ValueError:
             util.logger.warning(f"The control has not been appended. control={control}")
 
-    def limit(self):
+    def limit(self) -> bool:
         for control in self._controls:
             if control.limit():
                 return True
         return False
+
+    def get_limit_count(self) -> int:
+        limit_count = [0]
+        for control in self._controls:
+            if isinstance(control, ZeroLimitControl):
+                continue
+
+            limit_count.append(control.get_limit_count())
+
+        return min(limit_count)
+
+    def has_zero_limit_control(self) -> bool:
+        return any(isinstance(control, ZeroLimitControl) for control in self._controls)

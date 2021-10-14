@@ -63,6 +63,8 @@ class BlockChain:
     CONFIRM_INFO_KEY = b'confirm_info_key'
     PREPS_KEY = b'preps_key'
     INVOKE_RESULT_BLOCK_HEIGHT_KEY = b'invoke_result_block_height_key'
+    SHUTDOWN_BLOCK_HEIGHT = b'shutdown_block_height'
+    SHUTDOWN_UNCONFIRMED_BLOCK_KEY = b'shutdown_unconfirmed_block'
 
     def __init__(self, channel_name: str, store_id: str, block_manager: 'BlockManager' = None):
         # last block in block db
@@ -85,6 +87,9 @@ class BlockChain:
 
         self.__total_tx = 0
         self.__nid: Optional[str] = None
+
+        if conf.CANCEL_SHUTDOWN:
+            self._cancel_shutdown()
 
         channel_option = conf.CHANNEL_OPTION[channel_name]
 
@@ -974,11 +979,11 @@ class BlockChain:
             logging.debug(f"current_block height({current_block.header.height}), hash({current_block.header.hash})")
 
             try:
-                unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
+                prev_unconfirmed_block = candidate_blocks.blocks[current_block.header.prev_hash].block
                 logging.debug(f"confirmed_block_hash: {current_block.header.prev_hash.hex()}")
-                if unconfirmed_block:
-                    logging.debug(f"unconfirmed_block.block_hash: {unconfirmed_block.header.hash.hex()}")
-                    logging.debug(f"unconfirmed_block.prev_block_hash: {unconfirmed_block.header.prev_hash.hex()}")
+                if prev_unconfirmed_block:
+                    logging.debug(f"unconfirmed_block.block_hash: {prev_unconfirmed_block.header.hash.hex()}")
+                    logging.debug(f"unconfirmed_block.prev_block_hash: {prev_unconfirmed_block.header.prev_hash.hex()}")
                 else:
                     logging.warning("There is no unconfirmed_block in candidate_blocks")
                     return None
@@ -994,10 +999,10 @@ class BlockChain:
                     logging.warning(except_msg)
                     raise BlockchainError(except_msg)
 
-            if unconfirmed_block.header.hash != current_block.header.prev_hash:
+            if prev_unconfirmed_block.header.hash != current_block.header.prev_hash:
                 raise BlockchainError(
                     f"It couldn't be confirmed by the new block. "
-                    f"Hash of last_unconfirmed_block({unconfirmed_block.header.hash})\n"
+                    f"Hash of last_unconfirmed_block({prev_unconfirmed_block.header.hash})\n"
                     f"prev_hash of the new unconfirmed_block({current_block.header.prev_hash})"
                 )
 
@@ -1014,11 +1019,11 @@ class BlockChain:
             else:
                 confirm_info = None
 
-            self.add_block(unconfirmed_block, confirm_info)
+            self.add_block(prev_unconfirmed_block, confirm_info)
             self.last_unconfirmed_block = current_block
             candidate_blocks.remove_block(current_block.header.prev_hash)
 
-            return unconfirmed_block
+            return prev_unconfirmed_block
 
     def _init_blockchain(self):
         # load last block from key value store. if a block does not exist, genesis block will be made
@@ -1301,6 +1306,16 @@ class BlockChain:
                 block_builder.transactions[tx.hash] = tx
                 block_builder.transactions.move_to_end(tx.hash, last=False)  # move to first
 
+    def _prepare_shutdown(self, shutdown_block_height: int):
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
+            logging.info(f"shutdown block height already stored")
+            return
+
+        byte_length: int = (shutdown_block_height.bit_length() + 7) // 8
+        sbh: bytes = shutdown_block_height.to_bytes(byte_length, 'big')
+        self._blockchain_store.put(BlockChain.SHUTDOWN_BLOCK_HEIGHT, sbh)
+        logging.warning(f"shutdown block height: {shutdown_block_height}")
+
     def score_invoke(self,
                      _block: Block,
                      prev_block: Block,
@@ -1364,6 +1379,10 @@ class BlockChain:
         response: dict = cast(dict, stub.sync_task().invoke(request))
         response_to_json_query(response)
 
+        if response.get("is_shutdown") == "0x1":
+            # set shutdown block height on next block of approved shutdown proposal
+            self._prepare_shutdown(_block.header.height + 1)
+
         tx_receipts_origin = response.get("txResults")
         if not isinstance(tx_receipts_origin, dict):
             tx_receipts: dict = {tx_receipt['txHash']: tx_receipt for tx_receipt in cast(list, tx_receipts_origin)}
@@ -1418,3 +1437,32 @@ class BlockChain:
         self.write_preps(roothash=next_reps_hash, preps=preps)
         self.__cache_clear_roothash()
         ObjectManager().channel_service.broadcast_scheduler.reset_audience_reps_hash()
+
+    def _get_shutdown_block_height(self) -> int:
+        shutdown_block_height: bytes = self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b'\x00')
+        return int.from_bytes(shutdown_block_height, 'big')
+
+    def is_shutdown_block(self) -> bool:
+        return self.block_height > 0 and self.block_height == self._get_shutdown_block_height()
+
+    def is_last_unconfirmed_block(self, height):
+        return self.last_unconfirmed_block and self.last_unconfirmed_block.header.height == height
+
+    def _cancel_shutdown(self):
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_BLOCK_HEIGHT, default=b''):
+            self._blockchain_store.delete(BlockChain.SHUTDOWN_BLOCK_HEIGHT)
+        if self._blockchain_store.get(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY, default=b''):
+            self._blockchain_store.delete(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY)
+        logging.info(f"cancel shutdown")
+
+    def add_shutdown_unconfirmed_block(self):
+        if self.last_unconfirmed_block is None:
+            logging.info(f"Do not have last unconfirmed block")
+            return
+
+        block = self.last_unconfirmed_block
+
+        block_serializer = BlockSerializer.new(block.header.version, self.__tx_versioner)
+        block_serialized = json.dumps(block_serializer.serialize(block))
+
+        self._blockchain_store.put(BlockChain.SHUTDOWN_UNCONFIRMED_BLOCK_KEY, block_serialized.encode("UTF-8"))

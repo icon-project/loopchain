@@ -1,7 +1,5 @@
 """peer inner service"""
 
-from typing import TYPE_CHECKING, Optional
-
 from earlgrey import *
 
 from loopchain.utils import exit_and_msg
@@ -49,11 +47,11 @@ class PeerInnerService(MessageQueueService[PeerInnerTask]):
     TaskType = PeerInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [PeerInnerService] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [PeerInnerService] connection closed. sender = {sender}, exc = {exc!r}")
 
 
 class PeerInnerStub(MessageQueueStub[PeerInnerTask]):
     TaskType = PeerInnerTask
 
     def _callback_connection_close(self, sender, exc: Optional[BaseException], *args, **kwargs):
-        exit_and_msg(msg=f"MQ [PeerInnerStub] connection closed. sender = {sender}, exc = {exc}")
+        exit_and_msg(msg=f"MQ [PeerInnerStub] connection closed. sender = {sender}, exc = {exc!r}")
