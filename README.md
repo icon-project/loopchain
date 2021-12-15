@@ -1,3 +1,7 @@
+# This repository archived. Refer to ICON 2.0 aka [goloop](https://github.com/icon-project/goloop).
+
+----
+
 # Loopchain
 
 [![loopchain](https://img.shields.io/badge/ICON-Consensus-blue?logoColor=white&logo=icon&labelColor=31B8BB)](https://shields.io)
